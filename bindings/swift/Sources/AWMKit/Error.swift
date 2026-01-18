@@ -9,6 +9,9 @@ public enum AWMError: Error, LocalizedError {
     case checksumMismatch
     case nullPointer
     case invalidUtf8
+    case audiowmarkNotFound
+    case audiowmarkExec(String)
+    case noWatermarkFound
     case unknown(Int32)
 
     init(code: Int32) {
@@ -25,6 +28,12 @@ public enum AWMError: Error, LocalizedError {
             self = .nullPointer
         case AWM_ERROR_INVALID_UTF8.rawValue:
             self = .invalidUtf8
+        case AWM_ERROR_AUDIOWMARK_NOT_FOUND.rawValue:
+            self = .audiowmarkNotFound
+        case AWM_ERROR_AUDIOWMARK_EXEC.rawValue:
+            self = .audiowmarkExec("Execution failed")
+        case AWM_ERROR_NO_WATERMARK_FOUND.rawValue:
+            self = .noWatermarkFound
         default:
             self = .unknown(code)
         }
@@ -44,6 +53,12 @@ public enum AWMError: Error, LocalizedError {
             return "Null pointer error"
         case .invalidUtf8:
             return "Invalid UTF-8 string"
+        case .audiowmarkNotFound:
+            return "audiowmark binary not found"
+        case .audiowmarkExec(let msg):
+            return "audiowmark execution failed: \(msg)"
+        case .noWatermarkFound:
+            return "No watermark found in audio"
         case .unknown(let code):
             return "Unknown error: \(code)"
         }

@@ -24,6 +24,12 @@ pub enum Error {
 
     #[error("Unsupported message version: {0}")]
     UnsupportedVersion(u8),
+
+    #[error("audiowmark binary not found")]
+    AudiowmarkNotFound,
+
+    #[error("audiowmark execution failed: {0}")]
+    AudiowmarkExec(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

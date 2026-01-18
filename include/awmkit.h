@@ -26,6 +26,9 @@ typedef enum {
     AWM_ERROR_NULL_POINTER = -4,
     AWM_ERROR_INVALID_UTF8 = -5,
     AWM_ERROR_CHECKSUM_MISMATCH = -6,
+    AWM_ERROR_AUDIOWMARK_NOT_FOUND = -7,
+    AWM_ERROR_AUDIOWMARK_EXEC = -8,
+    AWM_ERROR_NO_WATERMARK_FOUND = -9,
 } AWMError;
 
 /**
@@ -168,6 +171,101 @@ uint8_t awm_current_version(void);
  * Get message length constant
  */
 size_t awm_message_length(void);
+
+// ============================================================================
+// Audio Operations (requires audiowmark binary)
+// ============================================================================
+
+/**
+ * Opaque audio handle
+ */
+typedef struct AWMAudioHandle AWMAudioHandle;
+
+/**
+ * Audio detection result
+ */
+typedef struct {
+    bool found;                // Whether watermark was found
+    uint8_t raw_message[16];   // Extracted message (if found)
+    char pattern[16];          // Detection pattern (e.g., "all", "single")
+    uint32_t bit_errors;       // Number of bit errors
+} AWMDetectResult;
+
+/**
+ * Create Audio instance (auto-search for audiowmark)
+ *
+ * @return  Handle or NULL if audiowmark not found
+ */
+AWMAudioHandle* awm_audio_new(void);
+
+/**
+ * Create Audio instance with specific audiowmark path
+ *
+ * @param binary_path  Path to audiowmark binary
+ * @return             Handle or NULL if path invalid
+ */
+AWMAudioHandle* awm_audio_new_with_binary(const char* binary_path);
+
+/**
+ * Free Audio instance
+ *
+ * @param handle  Handle to free
+ */
+void awm_audio_free(AWMAudioHandle* handle);
+
+/**
+ * Set watermark strength (1-30, default: 10)
+ *
+ * @param handle    Audio handle
+ * @param strength  Watermark strength
+ */
+void awm_audio_set_strength(AWMAudioHandle* handle, uint8_t strength);
+
+/**
+ * Set key file for audiowmark
+ *
+ * @param handle    Audio handle
+ * @param key_file  Path to key file
+ */
+void awm_audio_set_key_file(AWMAudioHandle* handle, const char* key_file);
+
+/**
+ * Embed watermark into audio file
+ *
+ * @param handle   Audio handle
+ * @param input    Input audio file path
+ * @param output   Output audio file path
+ * @param message  16-byte message to embed
+ * @return         AWM_SUCCESS or error code
+ */
+int32_t awm_audio_embed(
+    const AWMAudioHandle* handle,
+    const char* input,
+    const char* output,
+    const uint8_t* message
+);
+
+/**
+ * Detect watermark from audio file
+ *
+ * @param handle  Audio handle
+ * @param input   Input audio file path
+ * @param result  Output detection result
+ * @return        AWM_SUCCESS, AWM_ERROR_NO_WATERMARK_FOUND, or error code
+ */
+int32_t awm_audio_detect(
+    const AWMAudioHandle* handle,
+    const char* input,
+    AWMDetectResult* result
+);
+
+/**
+ * Check if audiowmark is available
+ *
+ * @param handle  Audio handle
+ * @return        true if audiowmark can be executed
+ */
+bool awm_audio_is_available(const AWMAudioHandle* handle);
 
 #ifdef __cplusplus
 }

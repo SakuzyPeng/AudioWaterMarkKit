@@ -19,6 +19,9 @@ pub enum AWMError {
     NullPointer = -4,
     InvalidUtf8 = -5,
     ChecksumMismatch = -6,
+    AudiowmarkNotFound = -7,
+    AudiowmarkExec = -8,
+    NoWatermarkFound = -9,
 }
 
 /// 解码结果结构体
@@ -252,4 +255,198 @@ pub extern "C" fn awm_current_version() -> u8 {
 #[no_mangle]
 pub extern "C" fn awm_message_length() -> usize {
     MESSAGE_LEN
+}
+
+// ============================================================================
+// Audio Operations
+// ============================================================================
+
+use crate::audio::Audio;
+
+/// 不透明的 Audio 句柄
+pub struct AWMAudioHandle {
+    inner: Audio,
+}
+
+/// 检测结果结构体
+#[repr(C)]
+pub struct AWMDetectResult {
+    /// 是否检测到水印
+    pub found: bool,
+    /// 原始消息 (16 bytes)
+    pub raw_message: [u8; 16],
+    /// 检测模式 (null-terminated)
+    pub pattern: [c_char; 16],
+    /// 比特错误数
+    pub bit_errors: u32,
+}
+
+/// 创建 Audio 实例（自动搜索 audiowmark）
+///
+/// # Safety
+/// 返回的指针需要通过 `awm_audio_free` 释放
+#[no_mangle]
+pub extern "C" fn awm_audio_new() -> *mut AWMAudioHandle {
+    match Audio::new() {
+        Ok(audio) => Box::into_raw(Box::new(AWMAudioHandle { inner: audio })),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// 创建 Audio 实例（指定 audiowmark 路径）
+///
+/// # Safety
+/// - `binary_path` 必须是有效的 C 字符串
+/// - 返回的指针需要通过 `awm_audio_free` 释放
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_new_with_binary(binary_path: *const c_char) -> *mut AWMAudioHandle {
+    if binary_path.is_null() {
+        return ptr::null_mut();
+    }
+
+    let path_str = match CStr::from_ptr(binary_path).to_str() {
+        Ok(s) => s,
+        Err(_) => return ptr::null_mut(),
+    };
+
+    match Audio::with_binary(path_str) {
+        Ok(audio) => Box::into_raw(Box::new(AWMAudioHandle { inner: audio })),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// 释放 Audio 实例
+///
+/// # Safety
+/// - `handle` 必须是 `awm_audio_new*` 返回的有效指针
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_free(handle: *mut AWMAudioHandle) {
+    if !handle.is_null() {
+        drop(Box::from_raw(handle));
+    }
+}
+
+/// 设置水印强度
+///
+/// # Safety
+/// - `handle` 必须是有效的 Audio 句柄
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_set_strength(handle: *mut AWMAudioHandle, strength: u8) {
+    if !handle.is_null() {
+        let audio = &mut (*handle).inner;
+        *audio = std::mem::take(audio).strength(strength);
+    }
+}
+
+/// 设置密钥文件
+///
+/// # Safety
+/// - `handle` 必须是有效的 Audio 句柄
+/// - `key_file` 必须是有效的 C 字符串
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_set_key_file(handle: *mut AWMAudioHandle, key_file: *const c_char) {
+    if handle.is_null() || key_file.is_null() {
+        return;
+    }
+
+    let path_str = match CStr::from_ptr(key_file).to_str() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+
+    let audio = &mut (*handle).inner;
+    *audio = std::mem::take(audio).key_file(path_str);
+}
+
+/// 嵌入水印到音频
+///
+/// # Safety
+/// - `handle` 必须是有效的 Audio 句柄
+/// - `input`, `output` 必须是有效的 C 字符串
+/// - `message` 必须指向 16 字节
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_embed(
+    handle: *const AWMAudioHandle,
+    input: *const c_char,
+    output: *const c_char,
+    message: *const u8,
+) -> i32 {
+    if handle.is_null() || input.is_null() || output.is_null() || message.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    let input_str = match CStr::from_ptr(input).to_str() {
+        Ok(s) => s,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    let output_str = match CStr::from_ptr(output).to_str() {
+        Ok(s) => s,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    let msg: [u8; 16] = slice::from_raw_parts(message, 16).try_into().unwrap();
+
+    match (*handle).inner.embed(input_str, output_str, &msg) {
+        Ok(_) => AWMError::Success as i32,
+        Err(crate::Error::AudiowmarkNotFound) => AWMError::AudiowmarkNotFound as i32,
+        Err(crate::Error::AudiowmarkExec(_)) => AWMError::AudiowmarkExec as i32,
+        Err(_) => AWMError::AudiowmarkExec as i32,
+    }
+}
+
+/// 从音频检测水印
+///
+/// # Safety
+/// - `handle` 必须是有效的 Audio 句柄
+/// - `input` 必须是有效的 C 字符串
+/// - `result` 必须是有效指针
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_detect(
+    handle: *const AWMAudioHandle,
+    input: *const c_char,
+    result: *mut AWMDetectResult,
+) -> i32 {
+    if handle.is_null() || input.is_null() || result.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    let input_str = match CStr::from_ptr(input).to_str() {
+        Ok(s) => s,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    match (*handle).inner.detect(input_str) {
+        Ok(Some(detect_result)) => {
+            (*result).found = true;
+            (*result).raw_message = detect_result.raw_message;
+            (*result).bit_errors = detect_result.bit_errors;
+
+            // Copy pattern
+            let pattern_bytes = detect_result.pattern.as_bytes();
+            let copy_len = pattern_bytes.len().min(15);
+            for (i, &b) in pattern_bytes[..copy_len].iter().enumerate() {
+                (*result).pattern[i] = b as c_char;
+            }
+            (*result).pattern[copy_len] = 0;
+
+            AWMError::Success as i32
+        }
+        Ok(None) => {
+            (*result).found = false;
+            AWMError::NoWatermarkFound as i32
+        }
+        Err(crate::Error::AudiowmarkNotFound) => AWMError::AudiowmarkNotFound as i32,
+        Err(crate::Error::AudiowmarkExec(_)) => AWMError::AudiowmarkExec as i32,
+        Err(_) => AWMError::AudiowmarkExec as i32,
+    }
+}
+
+/// 检查 audiowmark 是否可用
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_is_available(handle: *const AWMAudioHandle) -> bool {
+    if handle.is_null() {
+        return false;
+    }
+    (*handle).inner.is_available()
 }
