@@ -7,3 +7,4 @@
 # 嵌入的二进制 (用于 simple-cli)
 /audiowmark-x86_64
 /vendor/
+.DS_Store
