@@ -2,6 +2,10 @@
 //!
 //! 提供 C ABI 接口供 ObjC/Swift/其他语言调用
 
+// FFI 模块需要 unsafe 代码
+#![allow(unsafe_code)]
+#![allow(clippy::unwrap_used)]
+
 use std::ffi::{c_char, CStr};
 use std::ptr;
 use std::slice;

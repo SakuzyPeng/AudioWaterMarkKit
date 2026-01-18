@@ -1,5 +1,10 @@
 // swift-tools-version:5.9
 import PackageDescription
+import Foundation
+
+// 获取 Package.swift 所在目录的绝对路径
+let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
+let libPath = "\(packageDir)/../../target/release"
 
 let package = Package(
     name: "AWMKit",
@@ -21,7 +26,7 @@ let package = Package(
             path: "Sources/CAWMKit",
             publicHeadersPath: "include",
             linkerSettings: [
-                .unsafeFlags(["-L../../target/release"]),
+                .unsafeFlags(["-L\(libPath)"]),
                 .linkedLibrary("awmkit"),
             ]
         ),

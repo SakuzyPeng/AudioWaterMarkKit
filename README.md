@@ -101,7 +101,36 @@ if let result = try audio.detectAndDecode(input: outputURL, key: key) {
 }
 ```
 
-### CLI
+### CLI (Swift)
+
+推荐使用 Swift CLI，自带 Keychain 集成和 audiowmark：
+
+```bash
+# 下载分发包
+tar -xzf awm-cli-1.0.0-macos.tar.gz
+cd awm-cli
+
+# 初始化密钥 (存入 macOS Keychain)
+./awm init
+
+# 查看状态
+./awm status
+
+# 嵌入水印
+./awm embed input.wav output.wav --tag SAKUZY
+
+# 检测验证
+./awm detect output.wav
+
+# 密钥管理
+./awm key show
+./awm key export backup.bin
+./awm key import backup.bin
+```
+
+### CLI (Rust)
+
+底层 CLI，用于消息编解码测试：
 
 ```bash
 # 构建
@@ -121,6 +150,26 @@ cargo build --features cli --release
 # → Timestamp: 2026-01-18 12:41:00 (UTC)
 # → Identity: SAKUZY
 # → Status: Valid
+```
+
+### 鲁棒性测试
+
+使用 `awm raw` 透传参数给 audiowmark：
+
+```bash
+# 测试不同强度
+awm raw add input.wav out_s5.wav <hex> --strength 5
+awm raw add input.wav out_s20.wav <hex> --strength 20
+
+# 使用自定义密钥文件
+awm raw gen-key test.key
+awm raw add input.wav output.wav <hex> --key test.key
+
+# 检测并输出 JSON
+awm raw get output.wav --json result.json
+
+# 比较验证
+awm raw cmp output.wav <hex>
 ```
 
 ## API 参考
@@ -215,7 +264,7 @@ try keychain.exportKey(to: url)
 # Rust 库
 cargo build --release
 
-# 带 CLI
+# 带 Rust CLI
 cargo build --features cli --release
 
 # 带 C FFI (生成 .dylib/.a)
@@ -228,7 +277,34 @@ cargo test
 cd bindings/swift
 swift build
 swift test
+
+# Swift CLI (推荐)
+cd cli-swift
+./build.sh
+.build/debug/awm --help
+
+# 分发打包 (需要 audiowmark)
+./dist.sh /path/to/audiowmark
+# 生成: dist/awm-cli-1.0.0-macos.tar.gz
 ```
+
+## 分发包
+
+分发包 `awm-cli-1.0.0-macos.tar.gz` 包含：
+
+```
+awm-cli/
+├── awm              # 启动脚本
+├── bin/
+│   ├── awm          # 主程序
+│   └── audiowmark   # 水印引擎 (x86_64)
+├── lib/
+│   ├── libawmkit.dylib
+│   └── x86_64/      # audiowmark 依赖库
+└── README.txt
+```
+
+解压即用，无需安装依赖。密钥存储在 macOS Keychain。
 
 ## 目录结构
 
@@ -242,7 +318,7 @@ awmkit/
 │   ├── charset.rs      # Base32 字符集
 │   ├── error.rs        # 错误类型
 │   ├── ffi.rs          # C FFI
-│   └── bin/awm.rs      # CLI
+│   └── bin/awm.rs      # Rust CLI
 ├── include/
 │   └── awmkit.h        # C 头文件
 ├── bindings/
@@ -254,6 +330,11 @@ awmkit/
 │           ├── Audio.swift
 │           ├── Keychain.swift
 │           └── Error.swift
+├── cli-swift/          # Swift CLI (推荐)
+│   ├── Package.swift
+│   ├── Sources/awm/main.swift
+│   ├── build.sh        # 构建脚本
+│   └── dist.sh         # 分发打包脚本
 ├── Cargo.toml
 ├── README.md
 └── PRP.md              # 产品规范

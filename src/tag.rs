@@ -75,6 +75,8 @@ impl Tag {
 
         // 验证校验位
         if !tag.verify() {
+            // chars 长度固定为 8，切片 [..7] 必定成功
+            #[allow(clippy::unwrap_used)]
             let expected = calc_checksum(&chars[..7].try_into().unwrap());
             return Err(Error::ChecksumMismatch {
                 expected: expected as char,
@@ -89,11 +91,12 @@ impl Tag {
     pub fn from_packed(data: &[u8; 5]) -> Result<Self> {
         let mut bits: u64 = 0;
         for &b in data {
-            bits = (bits << 8) | (b as u64);
+            bits = (bits << 8) | u64::from(b);
         }
 
         let mut chars = [0u8; 8];
         for i in (0..8).rev() {
+            #[allow(clippy::cast_possible_truncation)]
             let idx = (bits & 0x1F) as u8;
             chars[i] = index_to_char(idx).ok_or(Error::InvalidChar(idx as char))?;
             bits >>= 5;
@@ -102,6 +105,8 @@ impl Tag {
         let tag = Self { chars };
 
         if !tag.verify() {
+            // chars 长度固定为 8，切片 [..7] 必定成功
+            #[allow(clippy::unwrap_used)]
             let expected = calc_checksum(&chars[..7].try_into().unwrap());
             return Err(Error::ChecksumMismatch {
                 expected: expected as char,
@@ -116,13 +121,17 @@ impl Tag {
     pub fn to_packed(&self) -> [u8; 5] {
         let mut bits: u64 = 0;
         for &c in &self.chars {
-            let idx = char_to_index(c).unwrap() as u64;
+            // 字符已验证在 CHARSET 中，char_to_index 必定成功
+            #[allow(clippy::unwrap_used)]
+            let idx = u64::from(char_to_index(c).unwrap());
             bits = (bits << 5) | idx;
         }
 
         let mut out = [0u8; 5];
         for i in (0..5).rev() {
-            out[i] = (bits & 0xFF) as u8;
+            #[allow(clippy::cast_possible_truncation)]
+            let byte = (bits & 0xFF) as u8;
+            out[i] = byte;
             bits >>= 8;
         }
         out
@@ -130,18 +139,24 @@ impl Tag {
 
     /// 验证校验位
     pub fn verify(&self) -> bool {
+        // chars 长度固定为 8，切片 [..7] 必定成功
+        #[allow(clippy::unwrap_used)]
         let expected = calc_checksum(&self.chars[..7].try_into().unwrap());
         self.chars[7] == expected
     }
 
     /// 获取身份部分（去除尾部 _）
     pub fn identity(&self) -> &str {
+        // 所有字符都是 ASCII，from_utf8 必定成功
+        #[allow(clippy::unwrap_used)]
         let s = std::str::from_utf8(&self.chars[..7]).unwrap();
         s.trim_end_matches('_')
     }
 
     /// 获取完整 8 字符 Tag
     pub fn as_str(&self) -> &str {
+        // 所有字符都是 ASCII，from_utf8 必定成功
+        #[allow(clippy::unwrap_used)]
         std::str::from_utf8(&self.chars).unwrap()
     }
 
@@ -175,15 +190,18 @@ fn calc_checksum(tag7: &[u8; 7]) -> u8 {
         .iter()
         .enumerate()
         .map(|(i, &c)| {
-            let idx = char_to_index(c).unwrap_or(0) as u32;
+            let idx = u32::from(char_to_index(c).unwrap_or(0));
             idx * PRIMES[i]
         })
         .sum();
 
-    CHARSET[(total % 32) as usize]
+    #[allow(clippy::cast_possible_truncation)]
+    let index = (total % 32) as usize;
+    CHARSET[index]
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

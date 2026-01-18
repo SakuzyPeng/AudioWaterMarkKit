@@ -106,7 +106,11 @@ pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
         return Err(Error::UnsupportedVersion(version));
     }
 
-    let timestamp_minutes = u32::from_be_bytes(data[1..5].try_into().unwrap());
+    // SAFETY: 已验证 data.len() == 16，切片长度固定为 4
+    let timestamp_bytes: [u8; 4] = data[1..5]
+        .try_into()
+        .map_err(|_| Error::InvalidMessageLength(data.len()))?;
+    let timestamp_minutes = u32::from_be_bytes(timestamp_bytes);
 
     let mut tag_packed = [0u8; 5];
     tag_packed.copy_from_slice(&data[5..10]);
@@ -132,7 +136,9 @@ pub fn verify(data: &[u8], key: &[u8]) -> bool {
 
 /// 计算 HMAC-SHA256 并截取前 6 字节
 fn compute_hmac(key: &[u8], data: &[u8]) -> [u8; HMAC_LEN] {
-    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC key length is valid");
+    // HMAC-SHA256 接受任意长度密钥，new_from_slice 不会失败
+    #[allow(clippy::expect_used)]
+    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC accepts any key length");
     mac.update(data);
     let result = mac.finalize().into_bytes();
 
@@ -156,14 +162,19 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 /// 获取当前 UTC Unix 分钟数
 fn current_utc_minutes() -> u32 {
     use std::time::{SystemTime, UNIX_EPOCH};
+    // 系统时间在 UNIX_EPOCH 之后是合理假设
+    #[allow(clippy::unwrap_used)]
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    (secs / 60) as u32
+    #[allow(clippy::cast_possible_truncation)]
+    let minutes = (secs / 60) as u32;
+    minutes
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
