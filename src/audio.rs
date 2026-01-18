@@ -238,8 +238,16 @@ impl Audio {
         let pair_names = layout.pair_names();
         let pairs = audio.split_stereo_pairs();
 
-        // 创建临时目录
-        let temp_dir = std::env::temp_dir().join(format!("awmkit_{}", std::process::id()));
+        // 创建临时目录（含线程ID和时间戳，避免并行冲突）
+        let temp_dir = std::env::temp_dir().join(format!(
+            "awmkit_{}_{:?}_{}",
+            std::process::id(),
+            std::thread::current().id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
         fs::create_dir_all(&temp_dir)?;
 
         // 处理每个立体声对
@@ -328,8 +336,16 @@ impl Audio {
         let layout = layout.unwrap_or_else(|| audio.layout());
         let pair_names = layout.pair_names();
 
-        // 创建临时目录
-        let temp_dir = std::env::temp_dir().join(format!("awmkit_detect_{}", std::process::id()));
+        // 创建临时目录（含线程ID和时间戳，避免并行冲突）
+        let temp_dir = std::env::temp_dir().join(format!(
+            "awmkit_detect_{}_{:?}_{}",
+            std::process::id(),
+            std::thread::current().id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
         fs::create_dir_all(&temp_dir)?;
 
         let mut pairs_results = Vec::new();

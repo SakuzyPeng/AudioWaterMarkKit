@@ -38,7 +38,7 @@ default = []
 ffi = []
 cli = ["dep:clap", "dep:hex"]
 multichannel = ["dep:hound", "dep:claxon"]
-simple-cli = ["multichannel", "dep:libc", "dep:security-framework", "dep:pbkdf2", "dep:rayon"]
+simple-cli = ["multichannel", "dep:libc", "dep:security-framework", "dep:pbkdf2", "dep:rayon", "dep:sysinfo"]
 
 [dependencies.hound]
 version = "3.5"
@@ -71,6 +71,10 @@ optional = true
 
 [dependencies.rayon]
 version = "1.10"
+optional = true
+
+[dependencies.sysinfo]
+version = "0.32"
 optional = true
 
 [profile.release]
