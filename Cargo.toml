@@ -1,0 +1,43 @@
+[package]
+name = "awmkit"
+version = "0.1.0"
+edition = "2021"
+description = "Audio watermarking toolkit - message encoding/decoding with HMAC authentication"
+license = "MIT"
+repository = "https://github.com/aspect-ratio/awmkit"
+keywords = ["audio", "watermark", "hmac", "ffi"]
+categories = ["multimedia::audio", "cryptography"]
+
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "awm"
+path = "src/bin/awm.rs"
+
+[dependencies]
+hmac = "0.12"
+sha2 = "0.10"
+thiserror = "2"
+
+[dev-dependencies]
+hex = "0.4"
+
+[features]
+default = []
+ffi = []
+cli = ["dep:clap", "dep:hex"]
+
+[dependencies.clap]
+version = "4"
+features = ["derive"]
+optional = true
+
+[dependencies.hex]
+version = "0.4"
+optional = true
+
+[profile.release]
+lto = true
+strip = true
+opt-level = "z"
