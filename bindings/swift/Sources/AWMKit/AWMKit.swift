@@ -36,3 +36,4 @@ public typealias Message = AWMMessage
 public typealias MessageResult = AWMMessageResult
 public typealias Audio = AWMAudio
 public typealias DetectResult = AWMDetectResultSwift
+public typealias Keychain = AWMKeychain
