@@ -535,3 +535,10 @@ if let Some(best) = result.best {
 ## License
 
 MIT License
+
+## TODO
+
+- [ ] API 层自动转换有损格式（mp3/aac/m4a）为 WAV 再检测
+- [ ] dylib 缓存验证使用哈希或版本号
+- [ ] 检测时显示转换进度
+- [ ] 批量处理进度条
