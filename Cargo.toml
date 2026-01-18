@@ -15,6 +15,16 @@ crate-type = ["lib", "cdylib", "staticlib"]
 name = "awm"
 path = "src/bin/awm.rs"
 
+[[bin]]
+name = "awm-detect"
+path = "src/bin/awm-detect.rs"
+required-features = ["simple-cli"]
+
+[[bin]]
+name = "awm-embed"
+path = "src/bin/awm-embed.rs"
+required-features = ["simple-cli"]
+
 [dependencies]
 hmac = "0.12"
 sha2 = "0.10"
@@ -27,6 +37,16 @@ hex = "0.4"
 default = []
 ffi = []
 cli = ["dep:clap", "dep:hex"]
+multichannel = ["dep:hound", "dep:claxon"]
+simple-cli = ["multichannel", "dep:libc"]
+
+[dependencies.hound]
+version = "3.5"
+optional = true
+
+[dependencies.claxon]
+version = "0.4"
+optional = true
 
 [dependencies.clap]
 version = "4"
@@ -35,6 +55,10 @@ optional = true
 
 [dependencies.hex]
 version = "0.4"
+optional = true
+
+[dependencies.libc]
+version = "0.2"
 optional = true
 
 [profile.release]

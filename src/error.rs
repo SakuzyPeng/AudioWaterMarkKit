@@ -30,6 +30,12 @@ pub enum Error {
 
     #[error("audiowmark execution failed: {0}")]
     AudiowmarkExec(String),
+
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

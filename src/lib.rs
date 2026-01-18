@@ -39,6 +39,9 @@ pub mod message;
 pub mod tag;
 pub mod audio;
 
+#[cfg(feature = "multichannel")]
+pub mod multichannel;
+
 #[cfg(feature = "ffi")]
 pub mod ffi;
 
@@ -47,6 +50,12 @@ pub use error::{Error, Result};
 pub use message::MessageResult;
 pub use tag::Tag;
 pub use audio::{Audio, DetectResult};
+
+#[cfg(feature = "multichannel")]
+pub use multichannel::{ChannelLayout, MultichannelAudio, SampleFormat};
+
+#[cfg(feature = "multichannel")]
+pub use audio::MultichannelDetectResult;
 
 /// 消息操作的便捷入口
 pub struct Message;

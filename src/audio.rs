@@ -9,6 +9,9 @@ use crate::error::{Error, Result};
 use crate::message::{self, MESSAGE_LEN};
 use crate::tag::Tag;
 
+#[cfg(feature = "multichannel")]
+use crate::multichannel::{ChannelLayout, MultichannelAudio};
+
 /// audiowmark 默认搜索路径
 const DEFAULT_SEARCH_PATHS: &[&str] = &[
     "audiowmark",
@@ -27,6 +30,16 @@ pub struct DetectResult {
     pub bit_errors: u32,
     /// 是否匹配
     pub match_found: bool,
+}
+
+/// 多声道检测结果
+#[cfg(feature = "multichannel")]
+#[derive(Debug, Clone)]
+pub struct MultichannelDetectResult {
+    /// 各声道对的检测结果 (pair_index, pair_name, result)
+    pub pairs: Vec<(usize, String, Option<DetectResult>)>,
+    /// 最佳结果 (置信度最高的一个)
+    pub best: Option<DetectResult>,
 }
 
 /// 音频水印操作器
@@ -88,8 +101,6 @@ impl Audio {
 
         let mut cmd = Command::new(&self.binary_path);
         cmd.arg("add")
-            .arg("--short")
-            .arg("16")
             .arg("--strength")
             .arg(self.strength.to_string());
 
@@ -134,9 +145,7 @@ impl Audio {
     /// 检测结果，如果没有检测到水印返回 None
     pub fn detect<P: AsRef<Path>>(&self, input: P) -> Result<Option<DetectResult>> {
         let mut cmd = Command::new(&self.binary_path);
-        cmd.arg("get")
-            .arg("--short")
-            .arg("16");
+        cmd.arg("get");
 
         if let Some(ref key_file) = self.key_file {
             cmd.arg("--key").arg(key_file);
@@ -187,6 +196,209 @@ impl Audio {
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         Ok(stdout.trim().to_string())
+    }
+
+    /// 多声道嵌入：将水印嵌入所有立体声对
+    ///
+    /// 流程：
+    /// 1. 加载多声道音频
+    /// 2. 拆分为立体声对
+    /// 3. 对每个立体声对嵌入相同的水印
+    /// 4. 合并回多声道音频
+    ///
+    /// # Arguments
+    /// - `input`: 输入音频路径 (WAV/FLAC)
+    /// - `output`: 输出音频路径 (WAV)
+    /// - `message`: 16 字节消息
+    /// - `layout`: 可选的声道布局 (自动检测或手动指定，用于区分 7.1 和 5.1.2)
+    #[cfg(feature = "multichannel")]
+    pub fn embed_multichannel<P: AsRef<Path>>(
+        &self,
+        input: P,
+        output: P,
+        message: &[u8; MESSAGE_LEN],
+        layout: Option<ChannelLayout>,
+    ) -> Result<()> {
+        use std::fs;
+
+        let input = input.as_ref();
+        let output = output.as_ref();
+
+        // 加载多声道音频
+        let audio = MultichannelAudio::from_file(input)?;
+        let num_channels = audio.num_channels();
+
+        // 如果是立体声，直接使用普通方法
+        if num_channels == 2 {
+            return self.embed(input, output, message);
+        }
+
+        // 确定声道布局
+        let layout = layout.unwrap_or_else(|| audio.layout());
+        let pair_names = layout.pair_names();
+        let pairs = audio.split_stereo_pairs();
+
+        // 创建临时目录
+        let temp_dir = std::env::temp_dir().join(format!("awmkit_{}", std::process::id()));
+        fs::create_dir_all(&temp_dir)?;
+
+        // 处理每个立体声对
+        let mut processed_pairs = Vec::with_capacity(pairs.len());
+
+        for (i, (left, right)) in pairs.into_iter().enumerate() {
+            let pair_name = pair_names.get(i).copied().unwrap_or("Unknown");
+            let temp_input = temp_dir.join(format!("pair_{i}_in.wav"));
+            let temp_output = temp_dir.join(format!("pair_{i}_out.wav"));
+
+            // 保存立体声对到临时文件
+            let stereo = MultichannelAudio::new(
+                vec![left.clone(), right.clone()],
+                audio.sample_rate(),
+                audio.sample_format(),
+            )?;
+            stereo.to_wav(&temp_input)?;
+
+            // 嵌入水印
+            match self.embed(&temp_input, &temp_output, message) {
+                Ok(()) => {
+                    // 加载处理后的立体声
+                    let processed = MultichannelAudio::from_wav(&temp_output)?;
+                    let processed_pairs_data = processed.split_stereo_pairs();
+                    if let Some((l, r)) = processed_pairs_data.into_iter().next() {
+                        processed_pairs.push((l, r));
+                    } else {
+                        processed_pairs.push((left, right));
+                    }
+                }
+                Err(e) => {
+                    // 嵌入失败，保留原始数据
+                    eprintln!("Warning: Failed to embed in {pair_name}: {e}");
+                    processed_pairs.push((left, right));
+                }
+            }
+
+            // 清理临时文件
+            let _ = fs::remove_file(&temp_input);
+            let _ = fs::remove_file(&temp_output);
+        }
+
+        // 合并所有声道对
+        let result = MultichannelAudio::merge_stereo_pairs(
+            &processed_pairs,
+            audio.sample_rate(),
+            audio.sample_format(),
+        )?;
+
+        // 保存输出
+        result.to_wav(output)?;
+
+        // 清理临时目录
+        let _ = fs::remove_dir(&temp_dir);
+
+        Ok(())
+    }
+
+    /// 多声道检测：从所有立体声对检测水印
+    ///
+    /// 返回每个声道对的检测结果，以及最佳结果
+    #[cfg(feature = "multichannel")]
+    pub fn detect_multichannel<P: AsRef<Path>>(
+        &self,
+        input: P,
+        layout: Option<ChannelLayout>,
+    ) -> Result<MultichannelDetectResult> {
+        use std::fs;
+
+        let input = input.as_ref();
+
+        // 加载多声道音频
+        let audio = MultichannelAudio::from_file(input)?;
+        let num_channels = audio.num_channels();
+
+        // 如果是立体声，直接使用普通方法
+        if num_channels == 2 {
+            let result = self.detect(input)?;
+            return Ok(MultichannelDetectResult {
+                pairs: vec![(0, "FL+FR".to_string(), result.clone())],
+                best: result,
+            });
+        }
+
+        // 确定声道布局
+        let layout = layout.unwrap_or_else(|| audio.layout());
+        let pair_names = layout.pair_names();
+
+        // 创建临时目录
+        let temp_dir = std::env::temp_dir().join(format!("awmkit_detect_{}", std::process::id()));
+        fs::create_dir_all(&temp_dir)?;
+
+        let mut pairs_results = Vec::new();
+        let mut best: Option<DetectResult> = None;
+
+        for (i, _) in audio.split_stereo_pairs().iter().enumerate() {
+            let pair_name = pair_names.get(i).copied().unwrap_or("Unknown").to_string();
+            let temp_file = temp_dir.join(format!("pair_{i}.wav"));
+
+            // 保存立体声对
+            audio.save_stereo_pair(i, &temp_file)?;
+
+            // 检测水印
+            let result = self.detect(&temp_file)?;
+
+            // 更新最佳结果 (选择比特错误最少的)
+            if let Some(ref r) = result {
+                if best.is_none() || r.bit_errors < best.as_ref().map_or(u32::MAX, |b| b.bit_errors) {
+                    best = Some(r.clone());
+                }
+            }
+
+            pairs_results.push((i, pair_name, result));
+
+            // 清理临时文件
+            let _ = fs::remove_file(&temp_file);
+        }
+
+        // 清理临时目录
+        let _ = fs::remove_dir(&temp_dir);
+
+        Ok(MultichannelDetectResult {
+            pairs: pairs_results,
+            best,
+        })
+    }
+
+    /// 便捷方法：多声道嵌入 (使用 Tag)
+    #[cfg(feature = "multichannel")]
+    pub fn embed_multichannel_with_tag<P: AsRef<Path>>(
+        &self,
+        input: P,
+        output: P,
+        version: u8,
+        tag: &Tag,
+        hmac_key: &[u8],
+        layout: Option<ChannelLayout>,
+    ) -> Result<[u8; MESSAGE_LEN]> {
+        let message = message::encode(version, tag, hmac_key)?;
+        self.embed_multichannel(input, output, &message, layout)?;
+        Ok(message)
+    }
+
+    /// 便捷方法：多声道检测并解码
+    #[cfg(feature = "multichannel")]
+    pub fn detect_multichannel_and_decode<P: AsRef<Path>>(
+        &self,
+        input: P,
+        hmac_key: &[u8],
+        layout: Option<ChannelLayout>,
+    ) -> Result<Option<crate::message::MessageResult>> {
+        let result = self.detect_multichannel(input, layout)?;
+        match result.best {
+            Some(detect) => {
+                let decoded = message::decode(&detect.raw_message, hmac_key)?;
+                Ok(Some(decoded))
+            }
+            None => Ok(None),
+        }
     }
 
     /// 搜索 audiowmark 二进制
