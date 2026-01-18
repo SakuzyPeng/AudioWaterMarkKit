@@ -15,17 +15,17 @@
 //! # Example
 //!
 //! ```
-//! use awmkit::{Tag, Message};
+//! use awmkit::{Tag, Message, MESSAGE_LEN, CURRENT_VERSION};
 //!
-//! let key = b"your-32-byte-secret-key-here!!!!";
+//! let key = b"your-secret-key!"; // 任意长度，推荐 16 或 32 字节
 //!
 //! // 创建 Tag
 //! let tag = Tag::new("SAKUZY").unwrap();
 //! println!("Tag: {}", tag);  // SAKUZY_X (含校验位)
 //!
 //! // 编码消息
-//! let msg = Message::encode(1, &tag, key).unwrap();
-//! assert_eq!(msg.len(), 16);
+//! let msg = Message::encode(CURRENT_VERSION, &tag, key).unwrap();
+//! assert_eq!(msg.len(), MESSAGE_LEN);  // 16 bytes
 //!
 //! // 解码消息
 //! let result = Message::decode(&msg, key).unwrap();
@@ -47,7 +47,7 @@ pub mod ffi;
 
 // Re-exports
 pub use error::{Error, Result};
-pub use message::MessageResult;
+pub use message::{MessageResult, MESSAGE_LEN, CURRENT_VERSION};
 pub use tag::Tag;
 pub use audio::{Audio, DetectResult};
 
