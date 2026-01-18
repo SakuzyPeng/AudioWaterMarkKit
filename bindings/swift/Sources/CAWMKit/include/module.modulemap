@@ -1,0 +1,4 @@
+module CAWMKit {
+    header "awmkit.h"
+    export *
+}

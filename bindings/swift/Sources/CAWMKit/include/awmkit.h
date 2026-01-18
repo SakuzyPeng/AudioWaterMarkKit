@@ -1,0 +1,176 @@
+/**
+ * AWMKit - Audio Watermark Kit
+ *
+ * C header for FFI bindings
+ */
+
+#ifndef AWMKIT_H
+#define AWMKIT_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * Error codes
+ */
+typedef enum {
+    AWM_SUCCESS = 0,
+    AWM_ERROR_INVALID_TAG = -1,
+    AWM_ERROR_INVALID_MESSAGE_LENGTH = -2,
+    AWM_ERROR_HMAC_MISMATCH = -3,
+    AWM_ERROR_NULL_POINTER = -4,
+    AWM_ERROR_INVALID_UTF8 = -5,
+    AWM_ERROR_CHECKSUM_MISMATCH = -6,
+} AWMError;
+
+/**
+ * Decoded message result
+ */
+typedef struct {
+    uint8_t version;
+    uint64_t timestamp_utc;     // Unix timestamp in seconds
+    uint32_t timestamp_minutes; // Raw value (Unix minutes)
+    char tag[9];                // 8 chars + null terminator
+    char identity[8];           // 7 chars max + null terminator
+} AWMResult;
+
+/**
+ * Message length constant
+ */
+#define AWM_MESSAGE_LENGTH 16
+
+/**
+ * Tag length constant (excluding null terminator)
+ */
+#define AWM_TAG_LENGTH 8
+
+// ============================================================================
+// Tag Operations
+// ============================================================================
+
+/**
+ * Create a new tag from identity string (auto-padding + checksum)
+ *
+ * @param identity  Identity string (1-7 characters)
+ * @param out       Output buffer (at least 9 bytes for 8 chars + null)
+ * @return          AWM_SUCCESS or error code
+ *
+ * Example:
+ *   char tag[9];
+ *   awm_tag_new("SAKUZY", tag);  // tag = "SAKUZY_X"
+ */
+int32_t awm_tag_new(const char* identity, char* out);
+
+/**
+ * Verify tag checksum
+ *
+ * @param tag  8-character tag string
+ * @return     true if valid, false otherwise
+ */
+bool awm_tag_verify(const char* tag);
+
+/**
+ * Extract identity from tag (without padding and checksum)
+ *
+ * @param tag  8-character tag string
+ * @param out  Output buffer (at least 8 bytes)
+ * @return     AWM_SUCCESS or error code
+ */
+int32_t awm_tag_identity(const char* tag, char* out);
+
+// ============================================================================
+// Message Operations
+// ============================================================================
+
+/**
+ * Encode a watermark message
+ *
+ * @param version  Protocol version (use 1)
+ * @param tag      8-character tag string
+ * @param key      HMAC key bytes
+ * @param key_len  Key length
+ * @param out      Output buffer (at least 16 bytes)
+ * @return         AWM_SUCCESS or error code
+ */
+int32_t awm_message_encode(
+    uint8_t version,
+    const char* tag,
+    const uint8_t* key,
+    size_t key_len,
+    uint8_t* out
+);
+
+/**
+ * Encode a watermark message with specific timestamp
+ *
+ * @param version           Protocol version
+ * @param tag               8-character tag string
+ * @param key               HMAC key bytes
+ * @param key_len           Key length
+ * @param timestamp_minutes UTC Unix minutes
+ * @param out               Output buffer (at least 16 bytes)
+ * @return                  AWM_SUCCESS or error code
+ */
+int32_t awm_message_encode_with_timestamp(
+    uint8_t version,
+    const char* tag,
+    const uint8_t* key,
+    size_t key_len,
+    uint32_t timestamp_minutes,
+    uint8_t* out
+);
+
+/**
+ * Decode and verify a watermark message
+ *
+ * @param data     16-byte message
+ * @param key      HMAC key bytes
+ * @param key_len  Key length
+ * @param result   Output result structure
+ * @return         AWM_SUCCESS, AWM_ERROR_HMAC_MISMATCH, or other error
+ */
+int32_t awm_message_decode(
+    const uint8_t* data,
+    const uint8_t* key,
+    size_t key_len,
+    AWMResult* result
+);
+
+/**
+ * Verify message HMAC only (without full decoding)
+ *
+ * @param data     16-byte message
+ * @param key      HMAC key bytes
+ * @param key_len  Key length
+ * @return         true if HMAC is valid
+ */
+bool awm_message_verify(
+    const uint8_t* data,
+    const uint8_t* key,
+    size_t key_len
+);
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+/**
+ * Get current protocol version
+ */
+uint8_t awm_current_version(void);
+
+/**
+ * Get message length constant
+ */
+size_t awm_message_length(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* AWMKIT_H */
