@@ -37,3 +37,8 @@ public typealias MessageResult = AWMMessageResult
 public typealias Audio = AWMAudio
 public typealias DetectResult = AWMDetectResultSwift
 public typealias Keychain = AWMKeychain
+
+// Multichannel types
+public typealias ChannelLayout = AWMChannelLayoutSwift
+public typealias PairResult = AWMPairResultSwift
+public typealias MultichannelDetectResult = AWMMultichannelDetectResultSwift

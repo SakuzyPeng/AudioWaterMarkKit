@@ -267,6 +267,86 @@ int32_t awm_audio_detect(
  */
 bool awm_audio_is_available(const AWMAudioHandle* handle);
 
+// ============================================================================
+// Multichannel Audio Operations
+// ============================================================================
+
+/**
+ * Channel layout for multichannel audio
+ */
+typedef enum {
+    AWM_CHANNEL_LAYOUT_STEREO = 0,      // 2 channels
+    AWM_CHANNEL_LAYOUT_SURROUND_51 = 1, // 6 channels: FL FR FC LFE BL BR
+    AWM_CHANNEL_LAYOUT_SURROUND_512 = 2,// 8 channels: FL FR FC LFE BL BR TFL TFR
+    AWM_CHANNEL_LAYOUT_SURROUND_71 = 3, // 8 channels: FL FR FC LFE BL BR SL SR
+    AWM_CHANNEL_LAYOUT_SURROUND_714 = 4,// 12 channels
+    AWM_CHANNEL_LAYOUT_SURROUND_916 = 5,// 16 channels
+    AWM_CHANNEL_LAYOUT_AUTO = -1,       // Auto-detect from file
+} AWMChannelLayout;
+
+/**
+ * Single channel pair detection result
+ */
+typedef struct {
+    uint32_t pair_index;       // Channel pair index (0-based)
+    bool found;                // Whether watermark was found
+    uint8_t raw_message[16];   // Extracted message (if found)
+    uint32_t bit_errors;       // Number of bit errors
+} AWMPairResult;
+
+/**
+ * Multichannel detection result
+ */
+typedef struct {
+    uint32_t pair_count;          // Number of channel pairs processed
+    AWMPairResult pairs[8];       // Results for each pair (max 8 pairs)
+    bool has_best;                // Whether a best result was found
+    uint8_t best_raw_message[16]; // Best message (lowest bit errors)
+    uint32_t best_bit_errors;     // Best result bit errors
+} AWMMultichannelDetectResult;
+
+/**
+ * Get number of channels for a layout
+ *
+ * @param layout  Channel layout
+ * @return        Number of channels (0 for auto/unknown)
+ */
+uint32_t awm_channel_layout_channels(AWMChannelLayout layout);
+
+/**
+ * Embed watermark into multichannel audio file
+ *
+ * @param handle   Audio handle
+ * @param input    Input audio file path
+ * @param output   Output audio file path
+ * @param message  16-byte message to embed
+ * @param layout   Channel layout (use AWM_CHANNEL_LAYOUT_AUTO for auto-detect)
+ * @return         AWM_SUCCESS or error code
+ */
+int32_t awm_audio_embed_multichannel(
+    const AWMAudioHandle* handle,
+    const char* input,
+    const char* output,
+    const uint8_t* message,
+    AWMChannelLayout layout
+);
+
+/**
+ * Detect watermark from multichannel audio file
+ *
+ * @param handle  Audio handle
+ * @param input   Input audio file path
+ * @param layout  Channel layout (use AWM_CHANNEL_LAYOUT_AUTO for auto-detect)
+ * @param result  Output detection result
+ * @return        AWM_SUCCESS or error code
+ */
+int32_t awm_audio_detect_multichannel(
+    const AWMAudioHandle* handle,
+    const char* input,
+    AWMChannelLayout layout,
+    AWMMultichannelDetectResult* result
+);
+
 #ifdef __cplusplus
 }
 #endif
