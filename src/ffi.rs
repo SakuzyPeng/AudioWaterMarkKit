@@ -454,3 +454,195 @@ pub unsafe extern "C" fn awm_audio_is_available(handle: *const AWMAudioHandle) -
     }
     (*handle).inner.is_available()
 }
+
+// ============================================================================
+// Multichannel Operations
+// ============================================================================
+
+#[cfg(feature = "multichannel")]
+use crate::multichannel::ChannelLayout;
+
+/// 声道布局枚举
+#[repr(i32)]
+#[derive(Clone, Copy)]
+pub enum AWMChannelLayout {
+    /// 立体声 (2ch)
+    Stereo = 0,
+    /// 5.1 环绕 (6ch)
+    Surround51 = 1,
+    /// 5.1.2 (8ch)
+    Surround512 = 2,
+    /// 7.1 环绕 (8ch)
+    Surround71 = 3,
+    /// 7.1.4 Atmos (12ch)
+    Surround714 = 4,
+    /// 9.1.6 Atmos (16ch)
+    Surround916 = 5,
+    /// 自动检测
+    Auto = -1,
+}
+
+#[cfg(feature = "multichannel")]
+impl AWMChannelLayout {
+    fn to_rust_layout(self) -> Option<ChannelLayout> {
+        match self {
+            Self::Stereo => Some(ChannelLayout::Stereo),
+            Self::Surround51 => Some(ChannelLayout::Surround51),
+            Self::Surround512 => Some(ChannelLayout::Surround512),
+            Self::Surround71 => Some(ChannelLayout::Surround71),
+            Self::Surround714 => Some(ChannelLayout::Surround714),
+            Self::Surround916 => Some(ChannelLayout::Surround916),
+            Self::Auto => None,
+        }
+    }
+}
+
+/// 多声道检测结果 - 单个声道对
+#[repr(C)]
+pub struct AWMPairResult {
+    /// 声道对索引
+    pub pair_index: u32,
+    /// 是否检测到水印
+    pub found: bool,
+    /// 原始消息 (16 bytes)
+    pub raw_message: [u8; 16],
+    /// 比特错误数
+    pub bit_errors: u32,
+}
+
+/// 多声道检测结果
+#[repr(C)]
+pub struct AWMMultichannelDetectResult {
+    /// 声道对数量
+    pub pair_count: u32,
+    /// 各声道对结果 (最多 8 对)
+    pub pairs: [AWMPairResult; 8],
+    /// 是否有最佳结果
+    pub has_best: bool,
+    /// 最佳结果的原始消息
+    pub best_raw_message: [u8; 16],
+    /// 最佳结果的比特错误数
+    pub best_bit_errors: u32,
+}
+
+/// 多声道嵌入水印
+///
+/// # Safety
+/// - `handle` 必须是有效的 Audio 句柄
+/// - `input`, `output` 必须是有效的 C 字符串
+/// - `message` 必须指向 16 字节
+#[cfg(feature = "multichannel")]
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_embed_multichannel(
+    handle: *const AWMAudioHandle,
+    input: *const c_char,
+    output: *const c_char,
+    message: *const u8,
+    layout: AWMChannelLayout,
+) -> i32 {
+    if handle.is_null() || input.is_null() || output.is_null() || message.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    let input_str = match CStr::from_ptr(input).to_str() {
+        Ok(s) => s,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    let output_str = match CStr::from_ptr(output).to_str() {
+        Ok(s) => s,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    let msg: [u8; 16] = slice::from_raw_parts(message, 16).try_into().unwrap();
+    let rust_layout = layout.to_rust_layout();
+
+    match (*handle).inner.embed_multichannel(input_str, output_str, &msg, rust_layout) {
+        Ok(_) => AWMError::Success as i32,
+        Err(crate::Error::AudiowmarkNotFound) => AWMError::AudiowmarkNotFound as i32,
+        Err(crate::Error::AudiowmarkExec(_)) => AWMError::AudiowmarkExec as i32,
+        Err(_) => AWMError::AudiowmarkExec as i32,
+    }
+}
+
+/// 多声道检测水印
+///
+/// # Safety
+/// - `handle` 必须是有效的 Audio 句柄
+/// - `input` 必须是有效的 C 字符串
+/// - `result` 必须是有效指针
+#[cfg(feature = "multichannel")]
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_detect_multichannel(
+    handle: *const AWMAudioHandle,
+    input: *const c_char,
+    layout: AWMChannelLayout,
+    result: *mut AWMMultichannelDetectResult,
+) -> i32 {
+    if handle.is_null() || input.is_null() || result.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    let input_str = match CStr::from_ptr(input).to_str() {
+        Ok(s) => s,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    let rust_layout = layout.to_rust_layout();
+
+    match (*handle).inner.detect_multichannel(input_str, rust_layout) {
+        Ok(mc_result) => {
+            // 初始化结果
+            (*result).pair_count = mc_result.pairs.len() as u32;
+            (*result).has_best = mc_result.best.is_some();
+
+            // 复制各声道对结果
+            for (i, (pair_idx, _name, detect_opt)) in mc_result.pairs.iter().enumerate() {
+                if i >= 8 {
+                    break;
+                }
+                (*result).pairs[i].pair_index = *pair_idx as u32;
+                if let Some(detect) = detect_opt {
+                    (*result).pairs[i].found = true;
+                    (*result).pairs[i].raw_message = detect.raw_message;
+                    (*result).pairs[i].bit_errors = detect.bit_errors;
+                } else {
+                    (*result).pairs[i].found = false;
+                    (*result).pairs[i].raw_message = [0; 16];
+                    (*result).pairs[i].bit_errors = 0;
+                }
+            }
+
+            // 复制最佳结果
+            if let Some(best) = &mc_result.best {
+                (*result).best_raw_message = best.raw_message;
+                (*result).best_bit_errors = best.bit_errors;
+            } else {
+                (*result).best_raw_message = [0; 16];
+                (*result).best_bit_errors = 0;
+            }
+
+            if mc_result.best.is_some() {
+                AWMError::Success as i32
+            } else {
+                AWMError::NoWatermarkFound as i32
+            }
+        }
+        Err(crate::Error::AudiowmarkNotFound) => AWMError::AudiowmarkNotFound as i32,
+        Err(crate::Error::AudiowmarkExec(_)) => AWMError::AudiowmarkExec as i32,
+        Err(_) => AWMError::AudiowmarkExec as i32,
+    }
+}
+
+/// 获取声道布局的声道数
+#[no_mangle]
+pub extern "C" fn awm_channel_layout_channels(layout: AWMChannelLayout) -> u32 {
+    match layout {
+        AWMChannelLayout::Stereo => 2,
+        AWMChannelLayout::Surround51 => 6,
+        AWMChannelLayout::Surround512 | AWMChannelLayout::Surround71 => 8,
+        AWMChannelLayout::Surround714 => 12,
+        AWMChannelLayout::Surround916 => 16,
+        AWMChannelLayout::Auto => 0,
+    }
+}
