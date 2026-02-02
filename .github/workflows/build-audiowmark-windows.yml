@@ -97,6 +97,14 @@ jobs:
           echo "=== Available libraries ==="
           ls /usr/lib/libz* 2>/dev/null | head -5
           ls /usr/lib/cygz* 2>/dev/null | head -5
+          echo ""
+
+          # Check pkg-config output
+          echo "=== pkg-config output ==="
+          pkg-config --cflags --libs fftw3f 2>/dev/null || echo "fftw3f: not found"
+          pkg-config --cflags --libs sndfile 2>/dev/null || echo "sndfile: not found"
+          pkg-config --cflags --libs libzita-resampler 2>/dev/null || echo "libzita-resampler: not found"
+          echo ""
 
           cd /tmp
           git clone --depth 1 https://github.com/swesterfeld/audiowmark.git
@@ -119,9 +127,13 @@ jobs:
           fi
 
           # Check linked libraries
-          echo "=== Binary dependencies ==="
-          ldd src/audiowmark.exe | head -20
+          echo "=== Binary dependencies (after build) ==="
+          ldd src/audiowmark.exe
           echo ""
+
+          # Show what was actually linked
+          echo "=== Checking Makefile.am ==="
+          grep -i "audiowmark.*LDADD\|audiowmark.*LIBADD" src/Makefile.am || echo "No LDADD/LIBADD found"
 
           echo "✓ audiowmark build success"
 
