@@ -121,9 +121,11 @@ jobs:
           # Configure for native Cygwin compilation
           ./configure LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS" || exit 1
 
-          # Build - explicitly link audio libraries (but not zlib, let autotools handle it)
+          # Build - explicitly link ALL audio libraries
+          # Since Makefile.am doesn't declare them, we must force link via environment
           make -j$(nproc) \
-            LDFLAGS="$LDFLAGS -lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler"
+            LDFLAGS="$LDFLAGS -lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler" \
+            LIBS="-lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler"
 
           # Check if binary was created
           if [ ! -f src/audiowmark.exe ]; then
