@@ -92,8 +92,6 @@ jobs:
           export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
           export LDFLAGS="-L/usr/lib"
           export CPPFLAGS="-I/usr/include"
-          # Explicitly link all audio libraries
-          export LIBS="-lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler -lz"
 
           cd /tmp
           git clone --depth 1 https://github.com/swesterfeld/audiowmark.git
@@ -102,13 +100,11 @@ jobs:
           ./autogen.sh
 
           # Configure for native Cygwin compilation
-          echo "=== Configuring ==="
-          ./configure LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS" LIBS="$LIBS" 2>&1 | tail -50
+          ./configure LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS" || exit 1
 
-          # Build
-          echo ""
-          echo "=== Building ==="
-          make -j$(nproc)
+          # Build - explicitly link all required libraries at link time
+          make -j$(nproc) \
+            LDFLAGS="$LDFLAGS -lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler -lz"
 
           # Check if binary was created
           if [ ! -f src/audiowmark.exe ]; then
