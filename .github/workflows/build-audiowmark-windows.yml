@@ -92,16 +92,22 @@ jobs:
           export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
           export LDFLAGS="-L/usr/lib"
           export CPPFLAGS="-I/usr/include"
+          # Explicitly link all audio libraries
+          export LIBS="-lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler -lz"
+
           cd /tmp
           git clone --depth 1 https://github.com/swesterfeld/audiowmark.git
           cd audiowmark
           sed -i '1i#define _GNU_SOURCE' src/utils.cc
           ./autogen.sh
 
-          # Configure for native Cygwin compilation (no --host)
-          ./configure LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS" || exit 1
+          # Configure for native Cygwin compilation
+          echo "=== Configuring ==="
+          ./configure LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS" LIBS="$LIBS" 2>&1 | tail -50
 
-          # Build with parallel jobs
+          # Build
+          echo ""
+          echo "=== Building ==="
           make -j$(nproc)
 
           # Check if binary was created
