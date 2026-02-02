@@ -162,8 +162,21 @@ jobs:
         run: |
           set -e
           export PATH="/tmp/audiowmark-dist/bin:/usr/bin:$PATH"
+          export LD_LIBRARY_PATH="/tmp/audiowmark-dist/bin:/usr/lib:$LD_LIBRARY_PATH"
+
           cd /tmp/audiowmark-dist/bin
-          ./audiowmark.exe --version
+
+          echo "=== Environment ==="
+          echo "PATH=$PATH"
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+          echo ""
+
+          echo "=== Files in bin directory ==="
+          ls -lh
+          echo ""
+
+          echo "=== Running audiowmark ==="
+          ./audiowmark.exe --version 2>&1 || (echo "Failed to run audiowmark.exe"; file ./audiowmark.exe; ldd ./audiowmark.exe; exit 1)
           ./audiowmark.exe gen-key test.key
           echo "✓ Audiowmark binary verified"
 
