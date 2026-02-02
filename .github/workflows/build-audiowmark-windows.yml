@@ -190,39 +190,39 @@ jobs:
           echo ""
 
           echo "=== DLL collection ==="
-          EXPECTED_DLLS=(
-            "cygwin1.dll"
-            "cyggcc_s-seh-1.dll"
-            "cygstdc++-6.dll"
-            "cygfftw3f-3.dll"
-            "cygsndfile-1.dll"
-            "cygmpg123-0.dll"
-            "cyggcrypt-20.dll"
-            "cyggpg-error-0.dll"
-            "cygz.dll"
-            "cygFLAC.dll"
-            "cygogg.dll"
-            "cygvorbis.dll"
-            "cygvorbisenc.dll"
-            "cygzita-resampler.dll"
-          )
 
+          # Copy all Cygwin and audio library DLLs
           COLLECTED=0
-          for dll_name in "${EXPECTED_DLLS[@]}"; do
-            dll="/usr/bin/$dll_name"
+          for dll in \
+            /usr/bin/cygwin1.dll \
+            /usr/bin/cyggcc_s-seh-1.dll \
+            /usr/bin/cygstdc++-6.dll \
+            /usr/bin/cygfftw3f-3.dll \
+            /usr/bin/cygsndfile-1.dll \
+            /usr/bin/cygmpg123-0.dll \
+            /usr/bin/cyggcrypt-20.dll \
+            /usr/bin/cyggpg-error-0.dll \
+            /usr/bin/cygz.dll \
+            /usr/bin/cygFLAC.dll \
+            /usr/bin/cygogg.dll \
+            /usr/bin/cygvorbis.dll \
+            /usr/bin/cygvorbisenc.dll \
+            /usr/bin/cygzita-resampler.dll
+          do
             if [ -f "$dll" ]; then
-              cp "$dll" /tmp/audiowmark-dist/bin/ 2>/dev/null && ((COLLECTED++))
+              cp "$dll" /tmp/audiowmark-dist/bin/ 2>/dev/null && ((COLLECTED++)) || true
+              echo "  ✓ $(basename $dll)"
             else
-              echo "  ✗ Missing: $dll_name"
+              echo "  ✗ $(basename $dll) - NOT FOUND"
             fi
           done
 
           echo ""
-          echo "Collected $COLLECTED/${#EXPECTED_DLLS[@]} expected DLLs"
+          echo "Collected $COLLECTED DLLs"
           echo ""
-          echo "=== Actual DLLs in dist directory ==="
-          ls -1 /tmp/audiowmark-dist/bin/*.dll | wc -l
-          ls -lh /tmp/audiowmark-dist/bin/*.dll | awk '{print $NF, "(" $5 ")"}'
+          echo "=== DLLs in dist directory ==="
+          ls -1 /tmp/audiowmark-dist/bin/*.dll 2>/dev/null | wc -l
+          ls -lh /tmp/audiowmark-dist/bin/*.dll 2>/dev/null | tail -20 || echo "No DLLs found!"
           echo ""
           echo "✓ Dependencies collected"
 
