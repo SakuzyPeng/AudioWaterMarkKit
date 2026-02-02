@@ -83,7 +83,12 @@ jobs:
 
       - name: Verify zita-resampler
         run: |
-          ls -lh /usr/bin/cygzita-resampler.dll 2>/dev/null && echo "✓ zita-resampler DLL found" || echo "⚠ zita-resampler DLL not found"
+          echo "=== zita-resampler files ==="
+          ls -lh /usr/bin/cygzita-resampler.dll 2>/dev/null && echo "✓ DLL found" || echo "✗ DLL not found"
+          ls -lh /usr/lib/libzita-resampler.dll.a 2>/dev/null && echo "✓ import lib found" || echo "✗ import lib not found"
+          ls -lh /usr/lib/pkgconfig/zita-resampler.pc 2>/dev/null && echo "✓ pkg-config found" || echo "✗ pkg-config not found"
+          echo ""
+          cat /usr/lib/pkgconfig/zita-resampler.pc 2>/dev/null || echo "ERROR: Cannot read .pc file"
 
       - name: Build audiowmark
         run: |
