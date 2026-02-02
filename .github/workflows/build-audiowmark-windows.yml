@@ -85,16 +85,25 @@ jobs:
         run: |
           ls -lh /usr/bin/cygzita-resampler.dll 2>/dev/null && echo "✓ zita-resampler DLL found" || echo "⚠ zita-resampler DLL not found"
 
+      - name: Verify libraries before build
+        run: |
+          echo "=== Checking library files ==="
+          ls -lh /usr/lib/ | grep -E "(fftw|sndfile|mpg123|gcrypt|zita)" | head -20
+          echo ""
+          ls -lh /usr/lib/*.dll.a 2>/dev/null | wc -l
+          echo "Total import libraries (.dll.a) in /usr/lib"
+
       - name: Build audiowmark
         run: |
           set -e
           export PATH="/usr/bin:$PATH"
+          export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
           cd /tmp
           git clone --depth 1 https://github.com/swesterfeld/audiowmark.git
           cd audiowmark
           sed -i '1i#define _GNU_SOURCE' src/utils.cc
           ./autogen.sh
-          ./configure --host=x86_64-pc-cygwin
+          ./configure --host=x86_64-pc-cygwin LDFLAGS="-L/usr/lib" CPPFLAGS="-I/usr/include"
           make -j$(nproc)
 
           # Check if binary was created
