@@ -75,9 +75,9 @@ jobs:
           mkdir -p /usr/include/zita-resampler
           cp ../source/zita-resampler/*.h /usr/include/zita-resampler/
 
-          # Create pkg-config file
+          # Create pkg-config file (Name must be libzita-resampler for autotools)
           mkdir -p /usr/lib/pkgconfig
-          printf 'prefix=/usr\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: zita-resampler\nDescription: Zita resampler library\nVersion: 1.0\nLibs: -L${libdir} -lzita-resampler\nCflags: -I${includedir}\n' > /usr/lib/pkgconfig/zita-resampler.pc
+          printf 'prefix=/usr\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: libzita-resampler\nDescription: Zita resampler library\nVersion: 1.0\nLibs: -L${libdir} -lzita-resampler\nCflags: -I${includedir}\n' > /usr/lib/pkgconfig/libzita-resampler.pc
 
           echo "✓ zita-resampler build success"
 
@@ -86,7 +86,7 @@ jobs:
           echo "=== Installed files ==="
           ls -lh /usr/bin/cygzita-resampler.dll
           ls -lh /usr/lib/libzita-resampler.dll.a
-          ls -lh /usr/lib/pkgconfig/zita-resampler.pc
+          ls -lh /usr/lib/pkgconfig/libzita-resampler.pc
           echo ""
           echo "=== Library check ==="
           ls -lh /usr/lib/ | grep -E "(fftw|sndfile|mpg123|gcrypt|zita)" | head -20

@@ -30,7 +30,7 @@ jobs:
         with:
           path: |
             /usr/lib/libzita-resampler*
-            /usr/lib/pkgconfig/zita-resampler.pc
+            /usr/lib/pkgconfig/libzita-resampler.pc
             /usr/include/zita-resampler
             /usr/bin/cygzita-resampler.dll
           key: zita-resampler-${{ hashFiles('.github/workflows/build-audiowmark-windows.yml') }}
@@ -75,9 +75,9 @@ jobs:
           mkdir -p /usr/include/zita-resampler
           cp ../source/zita-resampler/*.h /usr/include/zita-resampler/
 
-          # Create pkg-config file
+          # Create pkg-config file (Name must be libzita-resampler for autotools)
           mkdir -p /usr/lib/pkgconfig
-          printf 'prefix=/usr\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: zita-resampler\nDescription: Zita resampler library\nVersion: 1.0\nLibs: -L${libdir} -lzita-resampler\nCflags: -I${includedir}\n' > /usr/lib/pkgconfig/zita-resampler.pc
+          printf 'prefix=/usr\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: libzita-resampler\nDescription: Zita resampler library\nVersion: 1.0\nLibs: -L${libdir} -lzita-resampler\nCflags: -I${includedir}\n' > /usr/lib/pkgconfig/libzita-resampler.pc
 
           echo "✓ zita-resampler build success"
 
@@ -86,9 +86,9 @@ jobs:
           echo "=== zita-resampler files ==="
           ls -lh /usr/bin/cygzita-resampler.dll 2>/dev/null && echo "✓ DLL found" || echo "✗ DLL not found"
           ls -lh /usr/lib/libzita-resampler.dll.a 2>/dev/null && echo "✓ import lib found" || echo "✗ import lib not found"
-          ls -lh /usr/lib/pkgconfig/zita-resampler.pc 2>/dev/null && echo "✓ pkg-config found" || echo "✗ pkg-config not found"
+          ls -lh /usr/lib/pkgconfig/libzita-resampler.pc 2>/dev/null && echo "✓ pkg-config found" || echo "✗ pkg-config not found"
           echo ""
-          cat /usr/lib/pkgconfig/zita-resampler.pc 2>/dev/null || echo "ERROR: Cannot read .pc file"
+          cat /usr/lib/pkgconfig/libzita-resampler.pc 2>/dev/null || echo "ERROR: Cannot read .pc file"
 
       - name: Build audiowmark
         run: |
@@ -100,7 +100,7 @@ jobs:
 
           # Verify zita-resampler files still exist
           echo "=== Checking zita-resampler in Build step ==="
-          ls -lh /usr/lib/pkgconfig/zita-resampler.pc || (echo "ERROR: .pc file missing!"; exit 1)
+          ls -lh /usr/lib/pkgconfig/libzita-resampler.pc || (echo "ERROR: .pc file missing!"; exit 1)
           ls -lh /usr/lib/libzita-resampler.dll.a || (echo "ERROR: import lib missing!"; exit 1)
           ls -lh /usr/bin/cygzita-resampler.dll || (echo "ERROR: DLL missing!"; exit 1)
           echo ""
