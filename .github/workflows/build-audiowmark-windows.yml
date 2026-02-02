@@ -51,8 +51,9 @@ jobs:
           make -j$(nproc)
 
           # Copy DLL and import library
-          cp libzita-resampler.dll /usr/bin/ 2>/dev/null || cp libzita-resampler.dll.a /usr/bin/ || true
-          cp libzita-resampler.dll.a /usr/lib/ 2>/dev/null || true
+          # Cygwin naming: zita-resampler -> cygzita-resampler.dll
+          cp cygzita-resampler.dll /usr/bin/ 2>/dev/null || echo "Warning: cygzita-resampler.dll not found"
+          ls -lh cygzita-resampler.* libzita-resampler.* 2>/dev/null | head -10 || true
           mkdir -p /usr/include/zita-resampler
           cp ../source/zita-resampler/*.h /usr/include/zita-resampler/
           echo "✓ zita-resampler build success"
