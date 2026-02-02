@@ -16,12 +16,12 @@ name = "awm"
 path = "src/bin/awm.rs"
 
 [[bin]]
-name = "awm-detect"
+name = "FTSC-detect"
 path = "src/bin/awm-detect.rs"
 required-features = ["simple-cli"]
 
 [[bin]]
-name = "awm-embed"
+name = "FTSC-embed"
 path = "src/bin/awm-embed.rs"
 required-features = ["simple-cli"]
 
