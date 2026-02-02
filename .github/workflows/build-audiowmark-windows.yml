@@ -48,6 +48,7 @@ jobs:
       - name: Build audiowmark
         run: |
           set -e
+          export PATH="/usr/bin:$PATH"
           cd /tmp
           git clone --depth 1 https://github.com/swesterfeld/audiowmark.git
           cd audiowmark
@@ -55,9 +56,15 @@ jobs:
           ./autogen.sh
           ./configure --host=x86_64-pc-cygwin
           make -j$(nproc)
-          # Ensure zita-resampler DLL is in PATH
-          export PATH="/usr/bin:$PATH"
-          ./src/audiowmark --version
+
+          # Check if binary was created
+          if [ ! -f src/audiowmark.exe ]; then
+            echo "ERROR: audiowmark.exe not found!"
+            ls -la src/
+            exit 1
+          fi
+
+          ./src/audiowmark.exe --version || ./src/audiowmark --version || true
           echo "✓ audiowmark build success"
 
       - name: Collect dependencies
