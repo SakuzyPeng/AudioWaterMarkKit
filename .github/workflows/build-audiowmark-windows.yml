@@ -164,6 +164,14 @@ jobs:
               "#include <sys/types.h>\\n#if defined(_WIN32) && !defined(__CYGWIN__)\\ntypedef unsigned int uint;\\n#endif\\n",
           )
           limiter_path.write_text(limiter_text)
+          
+          hls_path = Path("src/hls.cc")
+          hls_text = hls_path.read_text()
+          hls_text = hls_text.replace(
+              "#include <sys/wait.h>\\n",
+              "#if !defined(_WIN32)\\n#include <sys/wait.h>\\n#endif\\n",
+          )
+          hls_path.write_text(hls_text)
           """))'
           ./autogen.sh
 
