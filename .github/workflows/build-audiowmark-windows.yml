@@ -10,102 +10,107 @@ jobs:
     timeout-minutes: 120
     defaults:
       run:
-        shell: C:\cygwin64\bin\bash.exe -l -o igncr {0}
+        shell: msys2 {0}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Cygwin
-        uses: cygwin/cygwin-install-action@v4
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
         with:
-          packages: >-
-            gcc-core gcc-g++ make autoconf automake libtool pkg-config
-            libfftw3-devel libsndfile-devel libgcrypt-devel libmpg123-devel
-            wget git cmake
-          install-dir: C:\cygwin64
-
-      - name: Cache zita-resampler build
-        uses: actions/cache@v4
-        id: zita_cache
-        with:
-          path: |
-            /usr/lib/libzita-resampler*
-            /usr/lib/pkgconfig/libzita-resampler.pc
-            /usr/include/zita-resampler
-            /usr/bin/cygzita-resampler.dll
-          key: zita-resampler-${{ hashFiles('.github/workflows/build-audiowmark-windows.yml') }}
-          restore-keys: zita-resampler-
+          msystem: MINGW64
+          update: true
+          path-type: inherit
+          install: >-
+            git
+            make
+            autoconf
+            automake
+            libtool
+            pkgconf
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-fftw
+            mingw-w64-x86_64-libsndfile
+            mingw-w64-x86_64-libgcrypt
+            mingw-w64-x86_64-mpg123
+            mingw-w64-x86_64-opus
+            mingw-w64-x86_64-libogg
+            mingw-w64-x86_64-libvorbis
+            mingw-w64-x86_64-flac
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-libiconv
+            mingw-w64-x86_64-gettext
 
       - name: Build zita-resampler
-        if: steps.zita_cache.outputs.cache-hit != 'true'
         run: |
-          set -e
+          set -euo pipefail
+          export PATH="/mingw64/bin:/usr/bin:$PATH"
+
           cd /tmp
           git clone --depth 1 https://github.com/digital-stage/zita-resampler.git
           cd zita-resampler
 
-          # Modify CMakeLists.txt to build SHARED library instead of STATIC
+          # Build shared library
           sed -i 's/add_library(zita-resampler/add_library(zita-resampler SHARED/' CMakeLists.txt
 
           mkdir -p build && cd build
-          cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
+          cmake .. -G "MSYS Makefiles" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/mingw64 \
+            -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
           make -j$(nproc)
 
-          # Install to system paths
           echo "=== Build artifacts ==="
           ls -lh | grep -E "(dll|a)$" || echo "No DLL/A files in build dir"
 
-          # Copy DLL to /usr/bin
-          if [ -f "cygzita-resampler.dll" ]; then
-            cp cygzita-resampler.dll /usr/bin/
-            echo "✓ Copied cygzita-resampler.dll"
+          if [ -f "libzita-resampler.dll" ]; then
+            cp libzita-resampler.dll /mingw64/bin/
+            echo "✓ Copied libzita-resampler.dll"
+          elif [ -f "zita-resampler.dll" ]; then
+            cp zita-resampler.dll /mingw64/bin/
+            echo "✓ Copied zita-resampler.dll"
           else
-            echo "ERROR: cygzita-resampler.dll not found"
+            echo "ERROR: zita-resampler DLL not found"
             ls -lh
             exit 1
           fi
 
-          # Copy import library (.dll.a)
           if [ -f "libzita-resampler.dll.a" ]; then
-            cp libzita-resampler.dll.a /usr/lib/
+            cp libzita-resampler.dll.a /mingw64/lib/
             echo "✓ Copied libzita-resampler.dll.a"
           fi
 
-          # Copy headers
-          mkdir -p /usr/include/zita-resampler
-          cp ../source/zita-resampler/*.h /usr/include/zita-resampler/
+          mkdir -p /mingw64/include/zita-resampler
+          cp ../source/zita-resampler/*.h /mingw64/include/zita-resampler/
 
-          # Create pkg-config file (Name must be libzita-resampler for autotools)
-          mkdir -p /usr/lib/pkgconfig
-          printf 'prefix=/usr\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: libzita-resampler\nDescription: Zita resampler library\nVersion: 1.0\nLibs: -L${libdir} -lzita-resampler\nCflags: -I${includedir}\n' > /usr/lib/pkgconfig/libzita-resampler.pc
+          mkdir -p /mingw64/lib/pkgconfig
+          printf 'prefix=/mingw64\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: libzita-resampler\nDescription: Zita resampler library\nVersion: 1.0\nLibs: -L${libdir} -lzita-resampler\nCflags: -I${includedir}\n' > /mingw64/lib/pkgconfig/libzita-resampler.pc
 
           echo "✓ zita-resampler build success"
 
       - name: Verify zita-resampler
         run: |
           echo "=== zita-resampler files ==="
-          ls -lh /usr/bin/cygzita-resampler.dll 2>/dev/null && echo "✓ DLL found" || echo "✗ DLL not found"
-          ls -lh /usr/lib/libzita-resampler.dll.a 2>/dev/null && echo "✓ import lib found" || echo "✗ import lib not found"
-          ls -lh /usr/lib/pkgconfig/libzita-resampler.pc 2>/dev/null && echo "✓ pkg-config found" || echo "✗ pkg-config not found"
+          ls -lh /mingw64/bin/libzita-resampler.dll 2>/dev/null || ls -lh /mingw64/bin/zita-resampler.dll
+          ls -lh /mingw64/lib/libzita-resampler.dll.a
+          ls -lh /mingw64/lib/pkgconfig/libzita-resampler.pc
           echo ""
-          cat /usr/lib/pkgconfig/libzita-resampler.pc 2>/dev/null || echo "ERROR: Cannot read .pc file"
+          cat /mingw64/lib/pkgconfig/libzita-resampler.pc
 
       - name: Build audiowmark
         run: |
-          set -e
-          export PATH="/usr/bin:$PATH"
-          export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig:$PKG_CONFIG_PATH"
-          export LDFLAGS="-L/usr/lib"
-          export CPPFLAGS="-I/usr/include"
+          set -euo pipefail
+          export PATH="/mingw64/bin:/usr/bin:$PATH"
+          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:/mingw64/share/pkgconfig:$PKG_CONFIG_PATH"
+          export PKG_CONFIG="/mingw64/bin/pkg-config"
+          export LDFLAGS="-L/mingw64/lib"
+          export CPPFLAGS="-I/mingw64/include"
+          export CC="x86_64-w64-mingw32-gcc"
+          export CXX="x86_64-w64-mingw32-g++"
 
-          # Verify zita-resampler files still exist
-          echo "=== Checking zita-resampler in Build step ==="
-          ls -lh /usr/lib/pkgconfig/libzita-resampler.pc || (echo "ERROR: .pc file missing!"; exit 1)
-          ls -lh /usr/lib/libzita-resampler.dll.a || (echo "ERROR: import lib missing!"; exit 1)
-          ls -lh /usr/bin/cygzita-resampler.dll || (echo "ERROR: DLL missing!"; exit 1)
-          echo ""
-
-          # Test pkg-config directly
           echo "=== pkg-config search test ==="
           echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
           pkg-config --list-all | grep zita || echo "zita-resampler not in pkg-config list"
@@ -118,16 +123,17 @@ jobs:
           sed -i '1i#define _GNU_SOURCE' src/utils.cc
           ./autogen.sh
 
-          # Configure for native Cygwin compilation
-          ./configure LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS" || exit 1
+          ./configure \
+            --host=x86_64-w64-mingw32 \
+            --build=x86_64-w64-mingw32 \
+            LDFLAGS="$LDFLAGS" \
+            CPPFLAGS="$CPPFLAGS"
 
-          # Build - show actual link commands with all libraries
           echo "=== Starting build with verbose output ==="
           make -j1 V=1 \
             LDFLAGS="$LDFLAGS -lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler" \
             LIBS="-lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler" 2>&1 | tee /tmp/make.log | grep -E "(LINK|CXXLD|audiowmark\.exe)" || true
 
-          # Check if build succeeded
           if [ ! -f src/audiowmark.exe ]; then
             echo ""
             echo "BUILD FAILED! Checking for link errors in log:"
@@ -135,7 +141,6 @@ jobs:
             exit 1
           fi
 
-          # Check linked libraries - libtool puts real binary in .libs/
           echo "=== Binary files ==="
           file src/audiowmark.exe
           if [ -f src/.libs/audiowmark.exe ]; then
@@ -145,7 +150,6 @@ jobs:
             ls -la src/
             exit 1
           fi
-          echo ""
 
           echo "=== Binary size check ==="
           ls -lh src/audiowmark.exe
@@ -153,33 +157,20 @@ jobs:
           echo ""
 
           echo "=== Binary dependencies (after build) ==="
-          # Check the real binary in .libs/
-          echo "Real binary (from .libs):"
-          ldd src/.libs/audiowmark.exe || (echo "ldd failed, trying file:"; file src/.libs/audiowmark.exe)
-          echo ""
-
-          # Show what was actually linked
-          echo "=== Checking Makefile.am ==="
-          grep -i "audiowmark.*LDADD\|audiowmark.*LIBADD" src/Makefile.am || echo "No LDADD/LIBADD found"
-
-          # Show link line from verbose output
-          echo "=== Link commands from build log ==="
-          grep -i "g++.*-o.*audiowmark\|ld.*audiowmark" /tmp/make.log | head -3 || echo "No link commands found"
+          objdump -p src/.libs/audiowmark.exe | grep -E "DLL Name" || true
 
           echo ""
           echo "✓ audiowmark build success"
 
       - name: Collect dependencies
         run: |
-          set -e
-          export PATH="/usr/bin:$PATH"
+          set -euo pipefail
+          export PATH="/mingw64/bin:/usr/bin:$PATH"
           cd /tmp/audiowmark
           mkdir -p /tmp/audiowmark-dist/bin
 
           echo "=== Binary collection ==="
-          # Use the real binary from .libs/, not the wrapper script
           if [ -f src/.libs/audiowmark.exe ]; then
-            echo "Copying real binary from .libs/"
             cp src/.libs/audiowmark.exe /tmp/audiowmark-dist/bin/
             ls -lh /tmp/audiowmark-dist/bin/audiowmark.exe
           else
@@ -187,54 +178,32 @@ jobs:
             ls -la src/
             exit 1
           fi
+
           echo ""
-
           echo "=== DLL collection ==="
-
-          # Copy all Cygwin and audio library DLLs (including transitive dependencies)
+          cd /tmp/audiowmark-dist/bin
           COLLECTED=0
-          for dll in \
-            /usr/bin/cygwin1.dll \
-            /usr/bin/cyggcc_s-seh-1.dll \
-            /usr/bin/cygstdc++-6.dll \
-            /usr/bin/cygfftw3f-3.dll \
-            /usr/bin/cygsndfile-1.dll \
-            /usr/bin/cygmpg123-0.dll \
-            /usr/bin/cyggcrypt-20.dll \
-            /usr/bin/cyggpg-error-0.dll \
-            /usr/bin/cygz.dll \
-            /usr/bin/cygzita-resampler.dll \
-            /usr/bin/cygiconv-2.dll \
-            /usr/bin/cygintl-8.dll \
-            /usr/bin/cygmp3lame-0.dll \
-            /usr/bin/cygopus-0.dll \
-            /usr/bin/cygFLAC-8.dll \
-            /usr/bin/cygogg-0.dll \
-            /usr/bin/cygvorbis-0.dll \
-            /usr/bin/cygvorbisenc-2.dll
-          do
-            if [ -f "$dll" ]; then
-              cp "$dll" /tmp/audiowmark-dist/bin/ 2>/dev/null && ((COLLECTED++)) || true
-              echo "  ✓ $(basename $dll)"
+          DLLS=$(objdump -p audiowmark.exe | awk '/DLL Name/ {print $3}' | sort -u)
+          for dll in $DLLS; do
+            if [ -f "/mingw64/bin/$dll" ]; then
+              cp "/mingw64/bin/$dll" .
+              echo "  ✓ $dll"
+              COLLECTED=$((COLLECTED+1))
             else
-              echo "  ✗ $(basename $dll) - NOT FOUND"
+              echo "  - $dll (system)"
             fi
           done
 
           echo ""
           echo "Collected $COLLECTED DLLs"
-          echo ""
           echo "=== DLLs in dist directory ==="
           ls -1 /tmp/audiowmark-dist/bin/*.dll 2>/dev/null | wc -l
           ls -lh /tmp/audiowmark-dist/bin/*.dll 2>/dev/null | tail -20 || echo "No DLLs found!"
-          echo ""
-          echo "✓ Dependencies collected"
 
       - name: Verify functionality
         run: |
-          set -e
-          export PATH="/tmp/audiowmark-dist/bin:/usr/bin:$PATH"
-          export LD_LIBRARY_PATH="/tmp/audiowmark-dist/bin:/usr/lib:$LD_LIBRARY_PATH"
+          set -euo pipefail
+          export PATH="/tmp/audiowmark-dist/bin:$PATH"
 
           cd /tmp/audiowmark-dist/bin
 
@@ -247,48 +216,18 @@ jobs:
           echo "=== Verifying audiowmark ==="
           echo "Binary: $(ls -lh audiowmark.exe | awk '{print $5, $NF}')"
           echo "DLLs: $(ls -1 *.dll 2>/dev/null | wc -l) files"
-          if [ $(ls -1 *.dll 2>/dev/null | wc -l) -lt 10 ]; then
-            echo "WARNING: Fewer than 10 DLLs found!"
-            ls -1 *.dll
-          fi
           echo ""
 
-          # Check binary before running
           echo "=== Binary check ==="
           file audiowmark.exe
           echo ""
 
-          # Run audiowmark with verbose error output
           echo "=== Attempting to run audiowmark --version ==="
-          EXIT_CODE=0
-          OUTPUT=$(./audiowmark.exe --version 2>&1) || EXIT_CODE=$?
-
-          if [ $EXIT_CODE -eq 0 ] && [ -n "$OUTPUT" ]; then
-            echo "$OUTPUT"
-            echo ""
-            echo "=== Attempting to generate key ==="
-            ./audiowmark.exe gen-key test.key
-            echo "✓ Audiowmark binary verified successfully"
-          else
-            echo ""
-            echo "ERROR: Failed to run audiowmark.exe"
-            echo "Exit code: $EXIT_CODE"
-            if [ -z "$OUTPUT" ]; then
-              echo "Program produced no output"
-            else
-              echo "Output: $OUTPUT"
-            fi
-            echo ""
-            echo "=== Dependency analysis ==="
-            ldd ./audiowmark.exe 2>&1 | head -30
-            echo ""
-            echo "=== Available DLLs in current dir ==="
-            ls -1 *.dll | sort
-            echo ""
-            echo "=== Attempting direct execution for debug ==="
-            ./audiowmark.exe 2>&1 | head -20 || true
-            exit 1
-          fi
+          ./audiowmark.exe --version
+          echo ""
+          echo "=== Attempting to generate key ==="
+          ./audiowmark.exe gen-key test.key
+          echo "✓ Audiowmark binary verified successfully"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
