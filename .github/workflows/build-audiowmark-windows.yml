@@ -98,8 +98,8 @@ jobs:
           sed -i '1i#define _GNU_SOURCE' src/utils.cc
           ./autogen.sh
 
-          # Try without --host first (native compilation on Cygwin)
-          ./configure LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS" || ./configure --host=x86_64-pc-cygwin LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS"
+          # Configure for native Cygwin compilation (no --host)
+          ./configure LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS" || exit 1
 
           # Build with parallel jobs
           make -j$(nproc)
@@ -111,7 +111,11 @@ jobs:
             exit 1
           fi
 
-          ./src/audiowmark.exe --version || ./src/audiowmark --version || true
+          # Check linked libraries
+          echo "=== Binary dependencies ==="
+          ldd src/audiowmark.exe | head -20
+          echo ""
+
           echo "✓ audiowmark build success"
 
       - name: Collect dependencies
