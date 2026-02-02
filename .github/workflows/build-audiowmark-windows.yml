@@ -1,0 +1,211 @@
+name: Build audiowmark Windows
+
+on:
+  workflow_dispatch:  # 手动触发测试
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/build-audiowmark-windows.yml'
+      - 'scripts/build-zita-resampler-windows.sh'
+      - 'scripts/patch-audiowmark-windows.sh'
+      - 'scripts/collect-dlls-windows.sh'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Cygwin
+        uses: cygwin/cygwin-install-action@v4
+        with:
+          packages: >-
+            gcc-core gcc-g++ make autoconf automake libtool pkg-config
+            libfftw3-devel libsndfile-devel libgcrypt-devel libmpg123-devel
+            wget git cmake python3 dos2unix
+          install-dir: C:\cygwin64
+
+      - name: Build zita-resampler
+        shell: C:\cygwin64\bin\bash.exe -l -o igncr -c ". {0}"
+        run: |
+          set -ex
+          cd /tmp
+
+          # 克隆 zita-resampler
+          git clone --depth 1 https://github.com/digital-stage/zita-resampler.git
+          cd zita-resampler
+
+          # 创建构建目录
+          mkdir -p build && cd build
+
+          # CMake 配置（从 STATIC 改为 SHARED）
+          cmake .. \
+            -G "Unix Makefiles" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_CXX_COMPILER=g++
+
+          # 编译
+          make -j$(nproc)
+
+          # 手动安装
+          cp libzita-resampler.dll /usr/bin/
+          cp libzita-resampler.dll.a /usr/lib/
+          mkdir -p /usr/include/zita-resampler
+          cp ../source/zita-resampler/*.h /usr/include/zita-resampler/
+
+          # 验证安装
+          ls -lh /usr/bin/libzita-resampler.dll
+          echo "✓ zita-resampler build success"
+
+      - name: Build audiowmark
+        shell: C:\cygwin64\bin\bash.exe -l -o igncr -c ". {0}"
+        run: |
+          set -ex
+          cd /tmp
+
+          # 克隆 audiowmark
+          git clone --depth 1 https://github.com/swesterfeld/audiowmark.git
+          cd audiowmark
+
+          # 应用补丁：添加 _GNU_SOURCE
+          sed -i '1i#define _GNU_SOURCE' src/utils.cc
+
+          # 配置，指定 zita-resampler
+          export CPPFLAGS="-I/usr/include"
+          export LDFLAGS="-L/usr/lib"
+          export LD_LIBRARY_PATH="/usr/bin:$LD_LIBRARY_PATH"
+
+          ./autogen.sh
+          ./configure \
+            --host=x86_64-pc-cygwin \
+            --prefix=/tmp/audiowmark-install \
+            CPPFLAGS="$CPPFLAGS" \
+            LDFLAGS="$LDFLAGS"
+
+          # 编译
+          make -j$(nproc)
+
+          # 验证版本
+          ./src/audiowmark --version
+          echo "✓ audiowmark build success"
+
+      - name: Collect dependencies
+        shell: C:\cygwin64\bin\bash.exe -l -o igncr -c ". {0}"
+        run: |
+          set -ex
+          cd /tmp/audiowmark
+
+          # 创建分发目录
+          mkdir -p /tmp/audiowmark-dist/bin
+          cp src/audiowmark.exe /tmp/audiowmark-dist/bin/
+
+          # 收集所有 DLL 依赖
+          mkdir -p /tmp/dll-list
+          ldd src/audiowmark.exe > /tmp/dll-list/dependencies.txt
+          cat /tmp/dll-list/dependencies.txt
+
+          # 复制所有 DLL 到分发目录
+          ldd src/audiowmark.exe | grep -o '/usr/bin/[^ ]*\.dll' | while read dll; do
+            if [ -f "$dll" ]; then
+              cp "$dll" /tmp/audiowmark-dist/bin/
+            fi
+          done
+
+          # 也复制 cygwin1.dll（可能不在 ldd 输出中）
+          cp /usr/bin/cygwin1.dll /tmp/audiowmark-dist/bin/ || true
+
+          # 列出所有 DLL
+          echo "Collected DLLs:"
+          ls -lh /tmp/audiowmark-dist/bin/
+          echo "DLL count: $(ls -1 /tmp/audiowmark-dist/bin/*.dll | wc -l)"
+
+      - name: Verify functionality
+        shell: C:\cygwin64\bin\bash.exe -l -o igncr -c ". {0}"
+        run: |
+          set -ex
+          cd /tmp/audiowmark-dist/bin
+
+          # 验证版本
+          ./audiowmark.exe --version
+
+          # 生成测试密钥
+          ./audiowmark.exe gen-key test.key
+
+          # 创建测试音频（1秒 44kHz 立体声）
+          ffmpeg -f lavfi -i "anullsrc=r=44100:cl=stereo" -t 1 -q:a 9 -acodec libmp3lame input.wav 2>/dev/null || \
+          sox -n -r 44100 -c 2 input.wav trim 0 1
+
+          # 嵌入水印
+          ./audiowmark.exe add input.wav output.wav 0123456789abcdef --key test.key
+
+          # 检测水印
+          ./audiowmark.exe get output.wav --key test.key
+
+          echo "✓ Functionality test passed"
+
+      - name: Create release archive
+        shell: C:\cygwin64\bin\bash.exe -l -o igncr -c ". {0}"
+        run: |
+          set -ex
+
+          # 创建 README
+          cat > /tmp/audiowmark-dist/README.txt << 'EOF'
+          AudioMark Windows x86_64 Binary
+
+          Built on: Windows Latest (Cygwin)
+          Version: 0.6.5
+
+          Usage:
+            ./bin/audiowmark --help
+            ./bin/audiowmark gen-key test.key
+            ./bin/audiowmark add input.wav output.wav <128-bit-hex> --key test.key
+            ./bin/audiowmark get output.wav --key test.key
+
+          Requirements:
+          - Windows 10/11 x86_64
+          - All DLL dependencies are included in ./bin/
+
+          Known Issues:
+          - Requires about 30 Cygwin DLLs (bundled)
+          - Performance may be slightly slower than Linux version due to Cygwin overhead
+          EOF
+
+          # 创建 tar.gz 存档（使用 tar）
+          cd /tmp
+          tar -czf audiowmark-windows-x86_64.tar.gz audiowmark-dist/
+
+          # 也创建 zip（如果需要）
+          cd /tmp/audiowmark-dist
+          zip -r /tmp/audiowmark-windows-x86_64.zip . || true
+
+          # 显示大小
+          ls -lh /tmp/audiowmark-*.{tar.gz,zip} 2>/dev/null || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: audiowmark-windows-x86_64
+          path: |
+            /tmp/audiowmark-dist/
+            /tmp/dll-list/dependencies.txt
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- audiowmark.exe (compiled)" >> $GITHUB_STEP_SUMMARY
+          echo "- ~30 Cygwin DLL dependencies" >> $GITHUB_STEP_SUMMARY
+          echo "- README.txt" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "2. Extract to a directory" >> $GITHUB_STEP_SUMMARY
+          echo "3. Run: \`bin\\audiowmark --version\`" >> $GITHUB_STEP_SUMMARY
