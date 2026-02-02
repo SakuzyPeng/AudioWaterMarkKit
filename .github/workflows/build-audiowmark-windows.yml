@@ -94,21 +94,22 @@ jobs:
         run: |
           set -e
           export PATH="/usr/bin:$PATH"
-          export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
+          export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig:$PKG_CONFIG_PATH"
           export LDFLAGS="-L/usr/lib"
           export CPPFLAGS="-I/usr/include"
 
-          # Check what libraries are available
-          echo "=== Available libraries ==="
-          ls /usr/lib/libz* 2>/dev/null | head -5
-          ls /usr/lib/cygz* 2>/dev/null | head -5
+          # Verify zita-resampler files still exist
+          echo "=== Checking zita-resampler in Build step ==="
+          ls -lh /usr/lib/pkgconfig/zita-resampler.pc || (echo "ERROR: .pc file missing!"; exit 1)
+          ls -lh /usr/lib/libzita-resampler.dll.a || (echo "ERROR: import lib missing!"; exit 1)
+          ls -lh /usr/bin/cygzita-resampler.dll || (echo "ERROR: DLL missing!"; exit 1)
           echo ""
 
-          # Check pkg-config output
-          echo "=== pkg-config output ==="
-          pkg-config --cflags --libs fftw3f 2>/dev/null || echo "fftw3f: not found"
-          pkg-config --cflags --libs sndfile 2>/dev/null || echo "sndfile: not found"
-          pkg-config --cflags --libs libzita-resampler 2>/dev/null || echo "libzita-resampler: not found"
+          # Test pkg-config directly
+          echo "=== pkg-config search test ==="
+          echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+          pkg-config --list-all | grep zita || echo "zita-resampler not in pkg-config list"
+          pkg-config --cflags --libs libzita-resampler || echo "pkg-config libzita-resampler FAILED"
           echo ""
 
           cd /tmp
