@@ -227,12 +227,14 @@ jobs:
           set -euo pipefail
           export PATH="/mingw64/bin:/usr/bin:$PATH"
           cd /tmp/audiowmark
-          mkdir -p /tmp/audiowmark-dist/bin
+          WORKSPACE_POSIX="$(cygpath -u "$GITHUB_WORKSPACE")"
+          DIST_DIR="$WORKSPACE_POSIX/audiowmark-dist"
+          mkdir -p "$DIST_DIR/bin"
 
           echo "=== Binary collection ==="
           if [ -f src/.libs/audiowmark.exe ]; then
-            cp src/.libs/audiowmark.exe /tmp/audiowmark-dist/bin/
-            ls -lh /tmp/audiowmark-dist/bin/audiowmark.exe
+            cp src/.libs/audiowmark.exe "$DIST_DIR/bin/"
+            ls -lh "$DIST_DIR/bin/audiowmark.exe"
           else
             echo "ERROR: Real binary src/.libs/audiowmark.exe not found!"
             ls -la src/
@@ -241,7 +243,7 @@ jobs:
 
           echo ""
           echo "=== DLL collection ==="
-          cd /tmp/audiowmark-dist/bin
+          cd "$DIST_DIR/bin"
           COLLECTED=0
           DLLS=$(objdump -p audiowmark.exe | awk '/DLL Name/ {print $3}' | sort -u)
           for dll in $DLLS; do
@@ -257,15 +259,17 @@ jobs:
           echo ""
           echo "Collected $COLLECTED DLLs"
           echo "=== DLLs in dist directory ==="
-          ls -1 /tmp/audiowmark-dist/bin/*.dll 2>/dev/null | wc -l
-          ls -lh /tmp/audiowmark-dist/bin/*.dll 2>/dev/null | tail -20 || echo "No DLLs found!"
+          ls -1 "$DIST_DIR/bin"/*.dll 2>/dev/null | wc -l
+          ls -lh "$DIST_DIR/bin"/*.dll 2>/dev/null | tail -20 || echo "No DLLs found!"
 
       - name: Verify functionality
         run: |
           set -euo pipefail
-          export PATH="/tmp/audiowmark-dist/bin:$PATH"
+          WORKSPACE_POSIX="$(cygpath -u "$GITHUB_WORKSPACE")"
+          DIST_DIR="$WORKSPACE_POSIX/audiowmark-dist"
+          export PATH="$DIST_DIR/bin:$PATH"
 
-          cd /tmp/audiowmark-dist/bin
+          cd "$DIST_DIR/bin"
 
           echo "=== Pre-verification checks ==="
           echo "Working directory: $(pwd)"
@@ -293,5 +297,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: audiowmark-windows-x86_64
-          path: /tmp/audiowmark-dist/
+          path: ${{ github.workspace }}/audiowmark-dist
           retention-days: 30
