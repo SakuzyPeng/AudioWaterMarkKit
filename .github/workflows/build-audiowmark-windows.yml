@@ -121,42 +121,42 @@ jobs:
           git clone --depth 1 https://github.com/swesterfeld/audiowmark.git
           cd audiowmark
           sed -i '1i#define _GNU_SOURCE' src/utils.cc
-          python - <<'PY'
-from pathlib import Path
-import re
-
-path = Path("src/utils.cc")
-text = path.read_text()
-
-text = text.replace(
-    "#include <sys/resource.h>\n",
-    "#if !defined(_WIN32)\n#include <sys/resource.h>\n#endif\n",
-)
-
-def repl(match):
-    original = match.group(0)
-    stub = (
-        "#else\n"
-        "void\n"
-        "print_memory_usage (const std::string& where)\n"
-        "{\n"
-        "  (void) where;\n"
-        "  printf (\"=== memory usage (%s): unsupported on Windows ===\\n\", where.c_str());\n"
-        "}\n"
-        "#endif\n"
-    )
-    return "#if !defined(_WIN32)\n" + original + stub
-
-text = re.sub(
-    r"void\\s*\\nprint_memory_usage\\s*\\([^\\)]*\\)\\s*\\{.*?\\n\\}\\n",
-    repl,
-    text,
-    count=1,
-    flags=re.S,
-)
-
-path.write_text(text)
-PY
+          python -c 'import textwrap; exec(textwrap.dedent("""
+          from pathlib import Path
+          import re
+          
+          path = Path("src/utils.cc")
+          text = path.read_text()
+          
+          text = text.replace(
+              "#include <sys/resource.h>\\n",
+              "#if !defined(_WIN32)\\n#include <sys/resource.h>\\n#endif\\n",
+          )
+          
+          def repl(match):
+              original = match.group(0)
+              stub = (
+                  "#else\\n"
+                  "void\\n"
+                  "print_memory_usage (const std::string& where)\\n"
+                  "{\\n"
+                  "  (void) where;\\n"
+                  "  printf (\\"=== memory usage (%s): unsupported on Windows ===\\\\n\\", where.c_str());\\n"
+                  "}\\n"
+                  "#endif\\n"
+              )
+              return "#if !defined(_WIN32)\\n" + original + stub
+          
+          text = re.sub(
+              r"void\\s*\\nprint_memory_usage\\s*\\([^\\)]*\\)\\s*\\{.*?\\n\\}\\n",
+              repl,
+              text,
+              count=1,
+              flags=re.S,
+          )
+          
+          path.write_text(text)
+          """))'
           ./autogen.sh
 
           ./configure \
