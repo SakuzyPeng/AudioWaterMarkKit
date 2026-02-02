@@ -203,15 +203,15 @@ jobs:
             /usr/bin/cyggcrypt-20.dll \
             /usr/bin/cyggpg-error-0.dll \
             /usr/bin/cygz.dll \
-            /usr/bin/cygFLAC.dll \
-            /usr/bin/cygogg.dll \
-            /usr/bin/cygvorbis.dll \
-            /usr/bin/cygvorbisenc.dll \
             /usr/bin/cygzita-resampler.dll \
             /usr/bin/cygiconv-2.dll \
             /usr/bin/cygintl-8.dll \
             /usr/bin/cygmp3lame-0.dll \
-            /usr/bin/cygopus-0.dll
+            /usr/bin/cygopus-0.dll \
+            /usr/bin/cygFLAC-8.dll \
+            /usr/bin/cygogg-0.dll \
+            /usr/bin/cygvorbis-0.dll \
+            /usr/bin/cygvorbisenc-2.dll
           do
             if [ -f "$dll" ]; then
               cp "$dll" /tmp/audiowmark-dist/bin/ 2>/dev/null && ((COLLECTED++)) || true
@@ -260,7 +260,11 @@ jobs:
 
           # Run audiowmark with verbose error output
           echo "=== Attempting to run audiowmark --version ==="
-          if ./audiowmark.exe --version 2>&1; then
+          EXIT_CODE=0
+          OUTPUT=$(./audiowmark.exe --version 2>&1) || EXIT_CODE=$?
+
+          if [ $EXIT_CODE -eq 0 ] && [ -n "$OUTPUT" ]; then
+            echo "$OUTPUT"
             echo ""
             echo "=== Attempting to generate key ==="
             ./audiowmark.exe gen-key test.key
@@ -268,12 +272,21 @@ jobs:
           else
             echo ""
             echo "ERROR: Failed to run audiowmark.exe"
+            echo "Exit code: $EXIT_CODE"
+            if [ -z "$OUTPUT" ]; then
+              echo "Program produced no output"
+            else
+              echo "Output: $OUTPUT"
+            fi
             echo ""
             echo "=== Dependency analysis ==="
-            ldd ./audiowmark.exe || (echo "ldd failed"; file ./audiowmark.exe)
+            ldd ./audiowmark.exe 2>&1 | head -30
             echo ""
             echo "=== Available DLLs in current dir ==="
             ls -1 *.dll | sort
+            echo ""
+            echo "=== Attempting direct execution for debug ==="
+            ./audiowmark.exe 2>&1 | head -20 || true
             exit 1
           fi
 
