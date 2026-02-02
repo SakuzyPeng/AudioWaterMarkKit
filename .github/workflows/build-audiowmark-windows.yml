@@ -85,14 +85,6 @@ jobs:
         run: |
           ls -lh /usr/bin/cygzita-resampler.dll 2>/dev/null && echo "✓ zita-resampler DLL found" || echo "⚠ zita-resampler DLL not found"
 
-      - name: Verify libraries before build
-        run: |
-          echo "=== Checking library files ==="
-          ls -lh /usr/lib/ | grep -E "(fftw|sndfile|mpg123|gcrypt|zita)" | head -20
-          echo ""
-          ls -lh /usr/lib/*.dll.a 2>/dev/null | wc -l
-          echo "Total import libraries (.dll.a) in /usr/lib"
-
       - name: Build audiowmark
         run: |
           set -e
@@ -109,8 +101,8 @@ jobs:
           # Try without --host first (native compilation on Cygwin)
           ./configure LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS" || ./configure --host=x86_64-pc-cygwin LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS"
 
-          # Build with verbose output to see full link commands
-          make -j1 V=1
+          # Build with parallel jobs
+          make -j$(nproc)
 
           # Check if binary was created
           if [ ! -f src/audiowmark.exe ]; then
@@ -130,21 +122,7 @@ jobs:
           mkdir -p /tmp/audiowmark-dist/bin
           cp src/audiowmark.exe /tmp/audiowmark-dist/bin/
 
-          # 诊断：输出 ldd 的实际内容
-          echo "=== LDD output ==="
-          ldd src/audiowmark.exe || true
-          echo "=== End LDD ==="
-
-          # 方法 1: 从 ldd 输出提取 DLL 路径（支持多种格式）
-          ldd src/audiowmark.exe 2>/dev/null | grep -oE '(/[^ ]*\.dll|/[^ ]*\.so(\.[0-9]+)?)' | sort -u | while read dll; do
-            if [ -f "$dll" ]; then
-              echo "Copying: $dll"
-              cp "$dll" /tmp/audiowmark-dist/bin/ 2>/dev/null || true
-            fi
-          done
-
-          # 方法 2: 手动复制常见的 Cygwin DLL
-          echo "Copying standard Cygwin libraries..."
+          # Copy all Cygwin and audio library DLLs
           for dll in \
             /usr/bin/cygwin1.dll \
             /usr/bin/cyggcc_s-seh-1.dll \
@@ -166,11 +144,7 @@ jobs:
             fi
           done
 
-          # 显示收集结果
-          echo ""
-          echo "Collected DLLs:"
-          ls -lh /tmp/audiowmark-dist/bin/*.dll 2>/dev/null | wc -l
-          ls -lh /tmp/audiowmark-dist/bin/
+          echo "Collected $(ls -1 /tmp/audiowmark-dist/bin/*.dll 2>/dev/null | wc -l) DLLs"
           echo "✓ Dependencies collected"
 
       - name: Verify functionality
@@ -181,19 +155,21 @@ jobs:
 
           cd /tmp/audiowmark-dist/bin
 
-          echo "=== Environment ==="
-          echo "PATH=$PATH"
-          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+          echo "=== Verifying audiowmark ==="
+          echo "Binary: $(ls -lh audiowmark.exe | awk '{print $5, $NF}')"
+          echo "DLLs: $(ls -1 *.dll 2>/dev/null | wc -l) files"
           echo ""
 
-          echo "=== Files in bin directory ==="
-          ls -lh
-          echo ""
+          # Run audiowmark
+          if ! ./audiowmark.exe --version 2>&1; then
+            echo "ERROR: Failed to run audiowmark.exe"
+            echo "Dependencies (ldd):"
+            ldd ./audiowmark.exe || file ./audiowmark.exe
+            exit 1
+          fi
 
-          echo "=== Running audiowmark ==="
-          ./audiowmark.exe --version 2>&1 || (echo "Failed to run audiowmark.exe"; file ./audiowmark.exe; ldd ./audiowmark.exe; exit 1)
           ./audiowmark.exe gen-key test.key
-          echo "✓ Audiowmark binary verified"
+          echo "✓ Audiowmark binary verified successfully"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
