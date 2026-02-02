@@ -24,7 +24,19 @@ jobs:
             wget git cmake
           install-dir: C:\cygwin64
 
+      - name: Cache zita-resampler build
+        uses: actions/cache@v4
+        id: zita_cache
+        with:
+          path: |
+            /usr/lib/libzita-resampler*
+            /usr/include/zita-resampler
+            /usr/bin/cygzita-resampler.dll
+          key: zita-resampler-${{ hashFiles('.github/workflows/build-audiowmark-windows.yml') }}
+          restore-keys: zita-resampler-
+
       - name: Build zita-resampler
+        if: steps.zita_cache.outputs.cache-hit != 'true'
         run: |
           set -e
           cd /tmp
@@ -44,6 +56,10 @@ jobs:
           mkdir -p /usr/include/zita-resampler
           cp ../source/zita-resampler/*.h /usr/include/zita-resampler/
           echo "✓ zita-resampler build success"
+
+      - name: Verify zita-resampler
+        run: |
+          ls -lh /usr/bin/cygzita-resampler.dll 2>/dev/null && echo "✓ zita-resampler DLL found" || echo "⚠ zita-resampler DLL not found"
 
       - name: Build audiowmark
         run: |
@@ -74,11 +90,48 @@ jobs:
           cd /tmp/audiowmark
           mkdir -p /tmp/audiowmark-dist/bin
           cp src/audiowmark.exe /tmp/audiowmark-dist/bin/
-          ldd src/audiowmark.exe | grep -o '/usr/bin/[^ ]*\.dll' | sort -u | while read dll; do
-            cp "$dll" /tmp/audiowmark-dist/bin/ 2>/dev/null || true
+
+          # 诊断：输出 ldd 的实际内容
+          echo "=== LDD output ==="
+          ldd src/audiowmark.exe || true
+          echo "=== End LDD ==="
+
+          # 方法 1: 从 ldd 输出提取 DLL 路径（支持多种格式）
+          ldd src/audiowmark.exe 2>/dev/null | grep -oE '(/[^ ]*\.dll|/[^ ]*\.so(\.[0-9]+)?)' | sort -u | while read dll; do
+            if [ -f "$dll" ]; then
+              echo "Copying: $dll"
+              cp "$dll" /tmp/audiowmark-dist/bin/ 2>/dev/null || true
+            fi
           done
-          cp /usr/bin/cygwin1.dll /tmp/audiowmark-dist/bin/ 2>/dev/null || true
-          ls -lh /tmp/audiowmark-dist/bin/*.dll | wc -l
+
+          # 方法 2: 手动复制常见的 Cygwin DLL
+          echo "Copying standard Cygwin libraries..."
+          for dll in \
+            /usr/bin/cygwin1.dll \
+            /usr/bin/cyggcc_s-seh-1.dll \
+            /usr/bin/cygstdc++-6.dll \
+            /usr/bin/cygfftw3f-3.dll \
+            /usr/bin/cygsndfile-1.dll \
+            /usr/bin/cygmpg123-0.dll \
+            /usr/bin/cyggcrypt-20.dll \
+            /usr/bin/cyggpg-error-0.dll \
+            /usr/bin/cygz.dll \
+            /usr/bin/cygFLAC.dll \
+            /usr/bin/cygogg.dll \
+            /usr/bin/cygvorbis.dll \
+            /usr/bin/cygvorbisenc.dll \
+            /usr/bin/cygzita-resampler.dll
+          do
+            if [ -f "$dll" ]; then
+              cp "$dll" /tmp/audiowmark-dist/bin/ 2>/dev/null || true
+            fi
+          done
+
+          # 显示收集结果
+          echo ""
+          echo "Collected DLLs:"
+          ls -lh /tmp/audiowmark-dist/bin/*.dll 2>/dev/null | wc -l
+          ls -lh /tmp/audiowmark-dist/bin/
           echo "✓ Dependencies collected"
 
       - name: Verify functionality
