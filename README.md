@@ -267,6 +267,8 @@ try keychain.exportKey(to: url)
 
 ## 构建
 
+### 快速开始
+
 ```bash
 # Rust 库
 cargo build --release
@@ -278,10 +280,10 @@ cargo build --features cli --release
 cargo build --features ffi --release
 
 # 带多声道支持 (WAV/FLAC)
-cargo build --features multichannel --release
+cargo build --features ffi,multichannel --release
 
 # 运行测试
-cargo test --features multichannel
+cargo test --features ffi,multichannel
 
 # Swift Package
 cd bindings/swift
@@ -297,6 +299,14 @@ cd cli-swift
 ./dist.sh /path/to/audiowmark
 # 生成: dist/awm-cli-1.0.0-macos.tar.gz
 ```
+
+### 详细编译说明
+
+参见 [BUILD.md](./BUILD.md)，包括：
+- audiowmark 从源代码编译步骤
+- macOS 和 Linux 编译指南
+- 常见编译问题解决方案
+- 特性和平台配置
 
 ## 分发包
 
