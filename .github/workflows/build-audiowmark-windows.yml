@@ -125,10 +125,10 @@ jobs:
           from pathlib import Path
           import re
           
-          path = Path("src/utils.cc")
-          text = path.read_text()
+          utils_path = Path("src/utils.cc")
+          utils_text = utils_path.read_text()
           
-          text = text.replace(
+          utils_text = utils_text.replace(
               "#include <sys/resource.h>\\n",
               "#if !defined(_WIN32)\\n#include <sys/resource.h>\\n#endif\\n",
           )
@@ -147,15 +147,23 @@ jobs:
               )
               return "#if !defined(_WIN32)\\n" + original + stub
           
-          text = re.sub(
+          utils_text = re.sub(
               r"void\\s*\\nprint_memory_usage\\s*\\([^\\)]*\\)\\s*\\{.*?\\n\\}\\n",
               repl,
-              text,
+              utils_text,
               count=1,
               flags=re.S,
           )
           
-          path.write_text(text)
+          utils_path.write_text(utils_text)
+          
+          limiter_path = Path("src/limiter.hh")
+          limiter_text = limiter_path.read_text()
+          limiter_text = limiter_text.replace(
+              "#include <sys/types.h>\\n",
+              "#include <sys/types.h>\\n#if defined(_WIN32) && !defined(__CYGWIN__)\\ntypedef unsigned int uint;\\n#endif\\n",
+          )
+          limiter_path.write_text(limiter_text)
           """))'
           ./autogen.sh
 
