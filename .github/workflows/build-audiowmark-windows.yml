@@ -121,16 +121,17 @@ jobs:
           # Configure for native Cygwin compilation
           ./configure LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS" || exit 1
 
-          # Build - explicitly link ALL audio libraries
-          # Since Makefile.am doesn't declare them, we must force link via environment
-          make -j$(nproc) \
+          # Build - show actual link commands with all libraries
+          echo "=== Starting build with verbose output ==="
+          make -j1 V=1 \
             LDFLAGS="$LDFLAGS -lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler" \
-            LIBS="-lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler"
+            LIBS="-lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler" 2>&1 | tee /tmp/make.log | grep -E "(LINK|CXXLD|audiowmark\.exe)" || true
 
-          # Check if binary was created
+          # Check if build succeeded
           if [ ! -f src/audiowmark.exe ]; then
-            echo "ERROR: audiowmark.exe not found!"
-            ls -la src/
+            echo ""
+            echo "BUILD FAILED! Checking for link errors in log:"
+            grep -i "error\|undefined" /tmp/make.log | tail -20 || echo "No explicit errors found"
             exit 1
           fi
 
