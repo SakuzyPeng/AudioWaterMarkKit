@@ -135,15 +135,38 @@ jobs:
             exit 1
           fi
 
-          # Check linked libraries
+          # Check linked libraries - libtool puts real binary in .libs/
+          echo "=== Binary files ==="
+          file src/audiowmark.exe
+          if [ -f src/.libs/audiowmark.exe ]; then
+            file src/.libs/audiowmark.exe
+          else
+            echo "ERROR: Real binary src/.libs/audiowmark.exe not found!"
+            ls -la src/
+            exit 1
+          fi
+          echo ""
+
+          echo "=== Binary size check ==="
+          ls -lh src/audiowmark.exe
+          ls -lh src/.libs/audiowmark.exe
+          echo ""
+
           echo "=== Binary dependencies (after build) ==="
-          ldd src/audiowmark.exe
+          # Check the real binary in .libs/
+          echo "Real binary (from .libs):"
+          ldd src/.libs/audiowmark.exe || (echo "ldd failed, trying file:"; file src/.libs/audiowmark.exe)
           echo ""
 
           # Show what was actually linked
           echo "=== Checking Makefile.am ==="
           grep -i "audiowmark.*LDADD\|audiowmark.*LIBADD" src/Makefile.am || echo "No LDADD/LIBADD found"
 
+          # Show link line from verbose output
+          echo "=== Link commands from build log ==="
+          grep -i "g++.*-o.*audiowmark\|ld.*audiowmark" /tmp/make.log | head -3 || echo "No link commands found"
+
+          echo ""
           echo "✓ audiowmark build success"
 
       - name: Collect dependencies
@@ -152,31 +175,55 @@ jobs:
           export PATH="/usr/bin:$PATH"
           cd /tmp/audiowmark
           mkdir -p /tmp/audiowmark-dist/bin
-          cp src/audiowmark.exe /tmp/audiowmark-dist/bin/
 
-          # Copy all Cygwin and audio library DLLs
-          for dll in \
-            /usr/bin/cygwin1.dll \
-            /usr/bin/cyggcc_s-seh-1.dll \
-            /usr/bin/cygstdc++-6.dll \
-            /usr/bin/cygfftw3f-3.dll \
-            /usr/bin/cygsndfile-1.dll \
-            /usr/bin/cygmpg123-0.dll \
-            /usr/bin/cyggcrypt-20.dll \
-            /usr/bin/cyggpg-error-0.dll \
-            /usr/bin/cygz.dll \
-            /usr/bin/cygFLAC.dll \
-            /usr/bin/cygogg.dll \
-            /usr/bin/cygvorbis.dll \
-            /usr/bin/cygvorbisenc.dll \
-            /usr/bin/cygzita-resampler.dll
-          do
+          echo "=== Binary collection ==="
+          # Use the real binary from .libs/, not the wrapper script
+          if [ -f src/.libs/audiowmark.exe ]; then
+            echo "Copying real binary from .libs/"
+            cp src/.libs/audiowmark.exe /tmp/audiowmark-dist/bin/
+            ls -lh /tmp/audiowmark-dist/bin/audiowmark.exe
+          else
+            echo "ERROR: Real binary src/.libs/audiowmark.exe not found!"
+            ls -la src/
+            exit 1
+          fi
+          echo ""
+
+          echo "=== DLL collection ==="
+          EXPECTED_DLLS=(
+            "cygwin1.dll"
+            "cyggcc_s-seh-1.dll"
+            "cygstdc++-6.dll"
+            "cygfftw3f-3.dll"
+            "cygsndfile-1.dll"
+            "cygmpg123-0.dll"
+            "cyggcrypt-20.dll"
+            "cyggpg-error-0.dll"
+            "cygz.dll"
+            "cygFLAC.dll"
+            "cygogg.dll"
+            "cygvorbis.dll"
+            "cygvorbisenc.dll"
+            "cygzita-resampler.dll"
+          )
+
+          COLLECTED=0
+          for dll_name in "${EXPECTED_DLLS[@]}"; do
+            dll="/usr/bin/$dll_name"
             if [ -f "$dll" ]; then
-              cp "$dll" /tmp/audiowmark-dist/bin/ 2>/dev/null || true
+              cp "$dll" /tmp/audiowmark-dist/bin/ 2>/dev/null && ((COLLECTED++))
+            else
+              echo "  ✗ Missing: $dll_name"
             fi
           done
 
-          echo "Collected $(ls -1 /tmp/audiowmark-dist/bin/*.dll 2>/dev/null | wc -l) DLLs"
+          echo ""
+          echo "Collected $COLLECTED/${#EXPECTED_DLLS[@]} expected DLLs"
+          echo ""
+          echo "=== Actual DLLs in dist directory ==="
+          ls -1 /tmp/audiowmark-dist/bin/*.dll | wc -l
+          ls -lh /tmp/audiowmark-dist/bin/*.dll | awk '{print $NF, "(" $5 ")"}'
+          echo ""
           echo "✓ Dependencies collected"
 
       - name: Verify functionality
@@ -187,21 +234,44 @@ jobs:
 
           cd /tmp/audiowmark-dist/bin
 
+          echo "=== Pre-verification checks ==="
+          echo "Working directory: $(pwd)"
+          echo "Directory contents:"
+          ls -lh | head -20
+          echo ""
+
           echo "=== Verifying audiowmark ==="
           echo "Binary: $(ls -lh audiowmark.exe | awk '{print $5, $NF}')"
           echo "DLLs: $(ls -1 *.dll 2>/dev/null | wc -l) files"
+          if [ $(ls -1 *.dll 2>/dev/null | wc -l) -lt 10 ]; then
+            echo "WARNING: Fewer than 10 DLLs found!"
+            ls -1 *.dll
+          fi
           echo ""
 
-          # Run audiowmark
-          if ! ./audiowmark.exe --version 2>&1; then
+          # Check binary before running
+          echo "=== Binary check ==="
+          file audiowmark.exe
+          echo ""
+
+          # Run audiowmark with verbose error output
+          echo "=== Attempting to run audiowmark --version ==="
+          if ./audiowmark.exe --version 2>&1; then
+            echo ""
+            echo "=== Attempting to generate key ==="
+            ./audiowmark.exe gen-key test.key
+            echo "✓ Audiowmark binary verified successfully"
+          else
+            echo ""
             echo "ERROR: Failed to run audiowmark.exe"
-            echo "Dependencies (ldd):"
-            ldd ./audiowmark.exe || file ./audiowmark.exe
+            echo ""
+            echo "=== Dependency analysis ==="
+            ldd ./audiowmark.exe || (echo "ldd failed"; file ./audiowmark.exe)
+            echo ""
+            echo "=== Available DLLs in current dir ==="
+            ls -1 *.dll | sort
             exit 1
           fi
-
-          ./audiowmark.exe gen-key test.key
-          echo "✓ Audiowmark binary verified successfully"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
