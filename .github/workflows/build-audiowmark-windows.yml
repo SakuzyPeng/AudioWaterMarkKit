@@ -172,6 +172,14 @@ jobs:
               "#if !defined(_WIN32)\\n#include <sys/wait.h>\\n#endif\\n",
           )
           hls_path.write_text(hls_text)
+          
+          resample_path = Path("src/resample.cc")
+          resample_text = resample_path.read_text()
+          resample_text = resample_text.replace(
+              "#include <math.h>\\n\\n#include <zita-resampler/resampler.h>\\n",
+              "#include <math.h>\\n\\n#if defined(_WIN32) && !defined(__CYGWIN__)\\ntypedef unsigned int uint;\\n#endif\\n\\n#include <zita-resampler/resampler.h>\\n",
+          )
+          resample_path.write_text(resample_text)
           """))'
           ./autogen.sh
 
