@@ -77,18 +77,7 @@ jobs:
 
           # Create pkg-config file
           mkdir -p /usr/lib/pkgconfig
-          cat > /usr/lib/pkgconfig/zita-resampler.pc << 'PKGEOF'
-prefix=/usr
-exec_prefix=${prefix}
-libdir=${exec_prefix}/lib
-includedir=${prefix}/include
-
-Name: zita-resampler
-Description: Zita resampler library
-Version: 1.0
-Libs: -L${libdir} -lzita-resampler
-Cflags: -I${includedir}
-PKGEOF
+          printf 'prefix=/usr\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: zita-resampler\nDescription: Zita resampler library\nVersion: 1.0\nLibs: -L${libdir} -lzita-resampler\nCflags: -I${includedir}\n' > /usr/lib/pkgconfig/zita-resampler.pc
 
           echo "✓ zita-resampler build success"
 
