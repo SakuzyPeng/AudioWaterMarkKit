@@ -191,7 +191,7 @@ jobs:
 
           echo "=== DLL collection ==="
 
-          # Copy all Cygwin and audio library DLLs
+          # Copy all Cygwin and audio library DLLs (including transitive dependencies)
           COLLECTED=0
           for dll in \
             /usr/bin/cygwin1.dll \
@@ -207,7 +207,11 @@ jobs:
             /usr/bin/cygogg.dll \
             /usr/bin/cygvorbis.dll \
             /usr/bin/cygvorbisenc.dll \
-            /usr/bin/cygzita-resampler.dll
+            /usr/bin/cygzita-resampler.dll \
+            /usr/bin/cygiconv-2.dll \
+            /usr/bin/cygintl-8.dll \
+            /usr/bin/cygmp3lame-0.dll \
+            /usr/bin/cygopus-0.dll
           do
             if [ -f "$dll" ]; then
               cp "$dll" /tmp/audiowmark-dist/bin/ 2>/dev/null && ((COLLECTED++)) || true
