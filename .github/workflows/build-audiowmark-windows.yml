@@ -55,12 +55,15 @@ jobs:
           ./autogen.sh
           ./configure --host=x86_64-pc-cygwin
           make -j$(nproc)
+          # Ensure zita-resampler DLL is in PATH
+          export PATH="/usr/bin:$PATH"
           ./src/audiowmark --version
           echo "✓ audiowmark build success"
 
       - name: Collect dependencies
         run: |
           set -e
+          export PATH="/usr/bin:$PATH"
           cd /tmp/audiowmark
           mkdir -p /tmp/audiowmark-dist/bin
           cp src/audiowmark.exe /tmp/audiowmark-dist/bin/
@@ -74,6 +77,7 @@ jobs:
       - name: Verify functionality
         run: |
           set -e
+          export PATH="/tmp/audiowmark-dist/bin:/usr/bin:$PATH"
           cd /tmp/audiowmark-dist/bin
           ./audiowmark.exe --version
           ./audiowmark.exe gen-key test.key
