@@ -30,6 +30,7 @@ jobs:
         with:
           path: |
             /usr/lib/libzita-resampler*
+            /usr/lib/pkgconfig/zita-resampler.pc
             /usr/include/zita-resampler
             /usr/bin/cygzita-resampler.dll
           key: zita-resampler-${{ hashFiles('.github/workflows/build-audiowmark-windows.yml') }}
@@ -50,12 +51,45 @@ jobs:
           cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
           make -j$(nproc)
 
-          # Copy DLL and import library
-          # Cygwin naming: zita-resampler -> cygzita-resampler.dll
-          cp cygzita-resampler.dll /usr/bin/ 2>/dev/null || echo "Warning: cygzita-resampler.dll not found"
-          ls -lh cygzita-resampler.* libzita-resampler.* 2>/dev/null | head -10 || true
+          # Install to system paths
+          echo "=== Build artifacts ==="
+          ls -lh | grep -E "(dll|a)$" || echo "No DLL/A files in build dir"
+
+          # Copy DLL to /usr/bin
+          if [ -f "cygzita-resampler.dll" ]; then
+            cp cygzita-resampler.dll /usr/bin/
+            echo "✓ Copied cygzita-resampler.dll"
+          else
+            echo "ERROR: cygzita-resampler.dll not found"
+            ls -lh
+            exit 1
+          fi
+
+          # Copy import library (.dll.a)
+          if [ -f "libzita-resampler.dll.a" ]; then
+            cp libzita-resampler.dll.a /usr/lib/
+            echo "✓ Copied libzita-resampler.dll.a"
+          fi
+
+          # Copy headers
           mkdir -p /usr/include/zita-resampler
           cp ../source/zita-resampler/*.h /usr/include/zita-resampler/
+
+          # Create pkg-config file
+          mkdir -p /usr/lib/pkgconfig
+          cat > /usr/lib/pkgconfig/zita-resampler.pc << 'EOF'
+prefix=/usr
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: zita-resampler
+Description: Zita resampler library
+Version: 1.0
+Libs: -L${libdir} -lzita-resampler
+Cflags: -I${includedir}
+EOF
+
           echo "✓ zita-resampler build success"
 
       - name: Verify zita-resampler
