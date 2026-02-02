@@ -30,11 +30,17 @@ jobs:
           cd /tmp
           git clone --depth 1 https://github.com/digital-stage/zita-resampler.git
           cd zita-resampler
+
+          # Modify CMakeLists.txt to build SHARED library instead of STATIC
+          sed -i 's/add_library(zita-resampler/add_library(zita-resampler SHARED/' CMakeLists.txt
+
           mkdir -p build && cd build
           cmake .. -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release
           make -j$(nproc)
-          cp libzita-resampler.dll /usr/bin/
-          cp libzita-resampler.dll.a /usr/lib/
+
+          # Copy DLL and import library
+          cp libzita-resampler.dll /usr/bin/ 2>/dev/null || cp libzita-resampler.dll.a /usr/bin/ || true
+          cp libzita-resampler.dll.a /usr/lib/ 2>/dev/null || true
           mkdir -p /usr/include/zita-resampler
           cp ../source/zita-resampler/*.h /usr/include/zita-resampler/
           echo "✓ zita-resampler build success"
