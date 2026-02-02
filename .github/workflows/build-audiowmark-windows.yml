@@ -93,6 +93,11 @@ jobs:
           export LDFLAGS="-L/usr/lib"
           export CPPFLAGS="-I/usr/include"
 
+          # Check what libraries are available
+          echo "=== Available libraries ==="
+          ls /usr/lib/libz* 2>/dev/null | head -5
+          ls /usr/lib/cygz* 2>/dev/null | head -5
+
           cd /tmp
           git clone --depth 1 https://github.com/swesterfeld/audiowmark.git
           cd audiowmark
@@ -102,9 +107,9 @@ jobs:
           # Configure for native Cygwin compilation
           ./configure LDFLAGS="$LDFLAGS" CPPFLAGS="$CPPFLAGS" || exit 1
 
-          # Build - explicitly link all required libraries at link time
+          # Build - explicitly link audio libraries (but not zlib, let autotools handle it)
           make -j$(nproc) \
-            LDFLAGS="$LDFLAGS -lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler -lz"
+            LDFLAGS="$LDFLAGS -lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler"
 
           # Check if binary was created
           if [ ! -f src/audiowmark.exe ]; then
