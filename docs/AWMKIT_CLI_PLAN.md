@@ -14,6 +14,12 @@
 ```
 awmkit
 ├── init
+├── tag
+│  ├── suggest <username>
+│  ├── save <username> [--tag <TAG>]
+│  ├── list [--json]
+│  ├── remove <username>
+│  └── clear
 ├── key
 │  ├── show
 │  ├── import <file>
@@ -91,4 +97,6 @@ src/bin/awmkit/
 ## 下一步（本地验证）
 - `cargo build --features full-cli --bin awmkit`
 - 本地跑通：`init` → `encode` → `embed` → `detect`
-
+### tag
+- suggest：根据用户名生成推荐 Tag（不落盘）
+- save/list/remove/clear：可选明文 JSON 存储（便于团队约定）

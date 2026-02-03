@@ -64,6 +64,12 @@ enum Commands {
     /// Initialize key storage
     Init,
 
+    /// Tag mapping helpers
+    Tag {
+        #[command(subcommand)]
+        command: commands::tag::TagCommand,
+    },
+
     /// Key management
     Key {
         #[command(subcommand)]
@@ -125,6 +131,7 @@ fn run() -> Result<()> {
 
     match cli.command {
         Commands::Init => commands::init::run(&ctx),
+        Commands::Tag { command } => commands::tag::run(&ctx, command),
         Commands::Key { command } => commands::key::run(&ctx, command),
         Commands::Encode(args) => commands::encode::run(&ctx, &args),
         Commands::Decode(args) => commands::decode::run(&ctx, &args),

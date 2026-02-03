@@ -220,6 +220,34 @@ awmkit status --doctor
 --audiowmark <PATH>  # 指定 audiowmark 路径（覆盖 bundled）
 ```
 
+### tag - 用户名映射（可选）
+
+用于把用户名映射为可用 Tag。默认不落盘，保存时会写入明文 JSON。
+
+```bash
+# 只输出推荐 Tag（不保存）
+awmkit tag suggest username
+
+# 保存映射（用户名 -> Tag）
+awmkit tag save username
+
+# 指定 Tag 保存
+awmkit tag save username --tag SAKUZY_X
+
+# 查看已保存的映射
+awmkit tag list
+
+# 删除映射
+awmkit tag remove username
+
+# 清空所有映射
+awmkit tag clear
+```
+
+**存储位置**：
+- macOS/Linux: `~/.awmkit/tags.json`
+- Windows: `%LOCALAPPDATA%\\awmkit\\tags.json`
+
 ## 消息格式
 
 AWMKit 使用 128-bit 自描述水印消息：

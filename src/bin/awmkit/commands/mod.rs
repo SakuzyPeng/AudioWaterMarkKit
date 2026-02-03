@@ -5,3 +5,4 @@ pub mod encode;
 pub mod init;
 pub mod key;
 pub mod status;
+pub mod tag;
