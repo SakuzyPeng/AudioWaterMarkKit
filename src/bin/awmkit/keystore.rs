@@ -243,21 +243,20 @@ fn dpapi_path() -> Result<PathBuf> {
 #[cfg(windows)]
 fn encrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
     use std::ptr::{null, null_mut};
-    use windows_sys::Win32::Foundation::BOOL;
+    use windows_sys::Win32::Foundation::{BOOL, LocalFree};
     use windows_sys::Win32::Security::Cryptography::{
-        CryptProtectData, DATA_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptProtectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
     };
-    use windows_sys::Win32::System::Memory::LocalFree;
 
     if data.is_empty() {
         return Err(CliError::KeyStore("dpapi encrypt: empty data".to_string()));
     }
 
-    let mut in_blob = DATA_BLOB {
+    let mut in_blob = CRYPT_INTEGER_BLOB {
         cbData: data.len() as u32,
         pbData: data.as_ptr() as *mut u8,
     };
-    let mut out_blob = DATA_BLOB {
+    let mut out_blob = CRYPT_INTEGER_BLOB {
         cbData: 0,
         pbData: null_mut(),
     };
@@ -289,21 +288,20 @@ fn encrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
 #[cfg(windows)]
 fn decrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
     use std::ptr::{null_mut, null};
-    use windows_sys::Win32::Foundation::BOOL;
+    use windows_sys::Win32::Foundation::{BOOL, LocalFree};
     use windows_sys::Win32::Security::Cryptography::{
-        CryptUnprotectData, DATA_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptUnprotectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
     };
-    use windows_sys::Win32::System::Memory::LocalFree;
 
     if data.is_empty() {
         return Err(CliError::KeyStore("dpapi decrypt: empty data".to_string()));
     }
 
-    let mut in_blob = DATA_BLOB {
+    let mut in_blob = CRYPT_INTEGER_BLOB {
         cbData: data.len() as u32,
         pbData: data.as_ptr() as *mut u8,
     };
-    let mut out_blob = DATA_BLOB {
+    let mut out_blob = CRYPT_INTEGER_BLOB {
         cbData: 0,
         pbData: null_mut(),
     };
