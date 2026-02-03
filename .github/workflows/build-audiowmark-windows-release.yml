@@ -262,9 +262,9 @@ jobs:
         run: |
           set -euo pipefail
           WORKSPACE_POSIX="$(cygpath -u "$GITHUB_WORKSPACE")"
-          cd "$WORKSPACE_POSIX"
-          zip -r audiowmark-windows-x86_64.zip audiowmark-dist
-          ls -lh audiowmark-windows-x86_64.zip
+          cd "$WORKSPACE_POSIX/audiowmark-dist"
+          zip -r "$WORKSPACE_POSIX/audiowmark-windows-x86_64.zip" .
+          ls -lh "$WORKSPACE_POSIX/audiowmark-windows-x86_64.zip"
 
       - name: Ensure tag exists
         run: |
