@@ -25,6 +25,11 @@ name = "FTSC-embed"
 path = "src/bin/awm-embed.rs"
 required-features = ["simple-cli"]
 
+[[bin]]
+name = "awmkit"
+path = "src/bin/awmkit/main.rs"
+required-features = ["full-cli"]
+
 [dependencies]
 hmac = "0.12"
 sha2 = "0.10"
@@ -39,6 +44,18 @@ ffi = []
 cli = ["dep:clap", "dep:hex"]
 multichannel = ["dep:hound", "dep:claxon"]
 simple-cli = ["multichannel", "dep:libc", "dep:security-framework", "dep:pbkdf2", "dep:rayon", "dep:sysinfo"]
+full-cli = [
+  "dep:clap",
+  "dep:dirs",
+  "dep:glob",
+  "dep:hex",
+  "dep:indicatif",
+  "dep:keyring",
+  "dep:rand",
+  "dep:serde",
+  "dep:serde_json",
+  "dep:zstd",
+]
 
 [dependencies.hound]
 version = "3.5"
@@ -75,6 +92,39 @@ optional = true
 
 [dependencies.sysinfo]
 version = "0.32"
+optional = true
+
+[dependencies.keyring]
+version = "2.3"
+optional = true
+
+[dependencies.indicatif]
+version = "0.17"
+optional = true
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+optional = true
+
+[dependencies.serde_json]
+version = "1.0"
+optional = true
+
+[dependencies.rand]
+version = "0.8"
+optional = true
+
+[dependencies.glob]
+version = "0.3"
+optional = true
+
+[dependencies.dirs]
+version = "5.0"
+optional = true
+
+[dependencies.zstd]
+version = "0.13"
 optional = true
 
 [profile.release]

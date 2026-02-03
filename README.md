@@ -1,16 +1,227 @@
-# AWMKit - Audio Watermark Kit
+# AWMKit - 音频水印 CLI 工具
 
-跨语言音频水印工具库，提供 128-bit 自描述、可验证的水印消息格式。
+自包含的跨平台音频水印命令行工具，实现 128-bit 可验证水印消息格式。
 
 ## 特性
 
-- **消息层**：128-bit 消息编解码 + HMAC-48 认证
-- **音频层**：封装 audiowmark，一键嵌入/检测
-- **多声道**：支持 5.1 / 5.1.2 / 7.1 / 7.1.4 / 9.1.6 等格式
-- **跨语言**：Rust / C FFI / Swift / (Python/WASM 待添加)
-- **安全存储**：macOS Keychain 集成
+- **完全自包含**：内嵌 audiowmark 二进制，无需手动安装依赖
+- **跨平台支持**：macOS ARM64, Windows x86_64
+- **安全密钥存储**：macOS Keychain / Windows Credential Manager
+- **批量处理**：支持通配符和多文件操作
+- **可验证水印**：128-bit 消息 + HMAC-SHA256 认证
+- **多声道支持**：5.1 / 5.1.2 / 7.1 / 7.1.4 / 9.1.6 等格式
+
+## 快速开始
+
+### 安装
+
+从 [GitHub Releases](https://github.com/SakuzyPeng/AudioWaterMarkKit/releases) 下载对应平台的发行版：
+
+**macOS ARM64**:
+```bash
+tar -xzf awmkit-macos-arm64.tar.gz
+cd awmkit-macos-arm64
+./awmkit --version
+```
+
+**Windows x86_64**:
+```powershell
+Expand-Archive awmkit-windows-x86_64.zip
+cd awmkit-windows-x86_64
+.\awmkit.exe --version
+```
+
+### 初始化
+
+首次使用前，初始化密钥（自动保存到系统密钥库）：
+
+```bash
+awmkit init
+
+# 输出:
+# [OK] 生成 32 字节随机密钥
+# [OK] 保存到系统密钥库 (Keychain)
+# [OK] 初始化完成
+```
+
+### 嵌入水印
+
+```bash
+# 嵌入水印到单个文件
+awmkit embed --tag SAKUZY input.wav
+
+# 批量嵌入（通配符）
+awmkit embed --tag SAKUZY *.wav
+
+# 自定义输出路径和强度
+awmkit embed --tag SAKUZY --output marked.wav --strength 15 input.wav
+```
+
+### 检测水印
+
+```bash
+# 检测并验证
+awmkit detect output_wm.wav
+
+# 输出:
+# File: output_wm.wav
+#   [OK] 检测成功
+#   Identity: SAKUZY
+#   Timestamp: 2026-02-03 14:30:22 UTC
+#   HMAC: 验证通过
+
+# JSON 格式输出
+awmkit detect --json output_wm.wav
+```
+
+### 查看状态
+
+```bash
+awmkit status
+
+# 输出:
+# awmkit v1.0.0
+#
+# 密钥状态:
+#   [OK] 已配置 (32 字节)
+#   存储: macOS Keychain
+#
+# audiowmark 引擎:
+#   [OK] 可用 (bundled)
+#   版本: 0.6.5
+#   路径: ~/.awmkit/bin/audiowmark
+```
+
+## 命令参考
+
+### init - 初始化
+
+生成随机密钥并保存到系统密钥库。
+
+```bash
+awmkit init
+```
+
+### key - 密钥管理
+
+```bash
+# 显示密钥信息（不泄露内容）
+awmkit key show
+
+# 从文件导入
+awmkit key import keyfile.bin
+
+# 导出到文件
+awmkit key export backup.bin
+
+# 轮换密钥
+awmkit key rotate
+```
+
+### encode - 编码消息
+
+将 Tag 编码为 16 字节水印消息（不涉及音频）。
+
+```bash
+awmkit encode --tag SAKUZY
+
+# 输出:
+# Encoded message (hex): 0101c1d05978131b57f7deb8e22a0b78
+```
+
+### decode - 解码消息
+
+解码并验证 16 字节水印消息（不涉及音频）。
+
+```bash
+awmkit decode --hex 0101c1d05978131b57f7deb8e22a0b78
+
+# 输出:
+# Version: 1
+# Timestamp: 2026-02-03 14:30:00 UTC
+# Identity: SAKUZY
+# Tag: SAKUZY_2
+# HMAC: 验证通过
+```
+
+### embed - 嵌入水印
+
+将水印嵌入到音频文件。
+
+```bash
+# 基本用法
+awmkit embed --tag SAKUZY input.wav
+
+# 批量处理
+awmkit embed --tag SAKUZY file1.wav file2.wav file3.wav
+awmkit embed --tag SAKUZY *.wav
+
+# 自定义选项
+awmkit embed --tag SAKUZY \
+  --output custom_output.wav \
+  --strength 15 \
+  input.wav
+```
+
+**参数**:
+- `--tag <TAG>`: 7 字符身份（自动生成校验位）
+- `--output <PATH>`: 输出路径（默认 `<input>_wm.wav`）
+- `--strength <N>`: 水印强度 1-30（默认 10）
+
+### detect - 检测水印
+
+从音频文件检测并验证水印。
+
+```bash
+# 基本用法
+awmkit detect output_wm.wav
+
+# 批量检测
+awmkit detect *.wav
+
+# JSON 输出（机器可读）
+awmkit detect --json output_wm.wav
+
+# 仅检测，不验证 HMAC
+awmkit detect --no-verify output_wm.wav
+```
+
+**参数**:
+- `--json`: JSON 格式输出
+- `--no-verify`: 跳过 HMAC 验证（仅解析消息）
+
+### status - 系统状态
+
+显示系统状态和配置信息。
+
+```bash
+# 基本状态
+awmkit status
+
+# 诊断模式
+awmkit status --doctor
+
+# 输出:
+# 运行诊断检查...
+#
+# [OK] 密钥配置正常
+# [OK] audiowmark 可执行
+# [OK] 临时目录可写
+#
+# 所有检查通过!
+```
+
+### 全局参数
+
+```bash
+--verbose, -v        # 详细输出
+--quiet, -q          # 静默模式
+--audiowmark <PATH>  # 指定 audiowmark 路径（覆盖 bundled）
+```
 
 ## 消息格式
+
+AWMKit 使用 128-bit 自描述水印消息：
 
 ```
 ┌──────────┬────────────┬──────────────────┬────────────┐
@@ -22,44 +233,37 @@
 
 | 字段 | 说明 |
 |------|------|
-| Version | 协议版本 (当前 0x01) |
-| Timestamp | UTC Unix 分钟数 (big-endian) |
-| UserTagPacked | 8 字符 Base32 (7 身份 + 1 校验) |
+| Version | 协议版本（当前 0x01） |
+| Timestamp | UTC Unix 分钟数（big-endian） |
+| UserTagPacked | 8 字符 Base32（7 身份 + 1 校验） |
 | HMAC | HMAC-SHA256 前 6 字节 |
 
-## 安装
+### Tag 格式
 
-### Rust
+Tag 使用 8 字符格式：**7 字符身份 + 1 字符校验位**
+
+**字符集**（32 字符 Base32 变体，排除易混淆字符）：
+```
+A B C D E F G H J K M N P Q R S T U V W X Y Z 2 3 4 5 6 7 8 9 _
+```
+
+排除：`O`, `0`, `I`, `1`, `L`
+
+**示例**：
+- `SAKUZY` → `SAKUZY_2`（自动补齐校验位）
+- `TESTID` → `TESTIDZ`
+- `ABC` → `ABC____V`（自动补齐到 7 字符 + 校验位）
+
+## 库使用
+
+AWMKit 也可作为 Rust/Swift 库使用。
+
+### Rust API
 
 ```toml
 [dependencies]
-awmkit = { path = "/path/to/awmkit" }
+awmkit = { git = "https://github.com/SakuzyPeng/AudioWaterMarkKit" }
 ```
-
-### Swift
-
-```swift
-// Package.swift
-dependencies: [
-    .package(path: "/path/to/awmkit/bindings/swift")
-]
-```
-
-### 前置依赖
-
-音频操作需要 [audiowmark](https://github.com/swesterfeld/audiowmark)：
-
-```bash
-# macOS (x86_64 via Rosetta 或原生编译)
-# 参考项目 vendor/ 目录的预编译版本
-
-# Linux
-sudo apt install audiowmark
-```
-
-## 快速开始
-
-### Rust
 
 ```rust
 use awmkit::{Audio, Tag, Message};
@@ -80,12 +284,38 @@ if let Some(result) = audio.detect_and_decode("output.wav", key)? {
 }
 ```
 
-### Swift
+**多声道支持**:
+```rust
+use awmkit::ChannelLayout;
+
+// 嵌入水印到 7.1.4 音频（自动检测布局）
+audio.embed_multichannel("input_7.1.4.wav", "output.wav", &msg, None)?;
+
+// 嵌入水印到 8ch 音频（手动指定为 5.1.2）
+audio.embed_multichannel("input_8ch.flac", "output.wav", &msg, Some(ChannelLayout::Surround512))?;
+
+// 检测多声道音频
+let result = audio.detect_multichannel("output.wav", None)?;
+for (idx, name, detect) in &result.pairs {
+    if let Some(d) = detect {
+        println!("{}: 检测成功, errors={}", name, d.bit_errors);
+    }
+}
+```
+
+### Swift API
+
+```swift
+// Package.swift
+dependencies: [
+    .package(url: "https://github.com/SakuzyPeng/AudioWaterMarkKit", branch: "main")
+]
+```
 
 ```swift
 import AWMKit
 
-// 密钥管理 (macOS Keychain)
+// 密钥管理（macOS Keychain）
 let key = try AWMKeychain.require()  // 或 generateAndSaveKey()
 
 // 创建 Tag
@@ -102,295 +332,26 @@ if let result = try audio.detectAndDecode(input: outputURL, key: key) {
 }
 ```
 
-### CLI (Swift)
+### C FFI
 
-推荐使用 Swift CLI，自带 Keychain 集成和 audiowmark：
+AWMKit 提供 C 接口用于其他语言绑定：
 
-```bash
-# 下载分发包
-tar -xzf awm-cli-1.0.0-macos.tar.gz
-cd awm-cli
+```c
+#include "awmkit.h"
 
-# 初始化密钥 (存入 macOS Keychain)
-./awm init
+// Tag 创建
+AWMTag tag;
+awm_tag_new("SAKUZY", &tag);
 
-# 查看状态
-./awm status
+// 消息编码
+uint8_t msg[16];
+awm_message_encode(1, &tag, key, 32, msg);
 
-# 嵌入水印
-./awm embed input.wav output.wav --tag SAKUZY
-
-# 检测验证
-./awm detect output.wav
-
-# 密钥管理
-./awm key show
-./awm key export backup.bin
-./awm key import backup.bin
+// 音频嵌入
+AWMAudio audio;
+awm_audio_new(&audio);
+awm_audio_embed(&audio, "input.wav", "output.wav", msg);
 ```
-
-### CLI (Rust)
-
-底层 CLI，用于消息编解码测试：
-
-```bash
-# 构建
-cargo build --features cli --release
-
-# 生成 Tag
-./target/release/awm tag SAKUZY
-# → SAKUZY_2
-
-# 编码消息
-./target/release/awm encode --tag SAKUZY_2 --key-file key.bin
-# → 0101c1d05978131b57f7deb8e22a0b78
-
-# 解码验证
-./target/release/awm decode --hex 0101c1d05978131b57f7deb8e22a0b78 --key-file key.bin
-# → Version: 1
-# → Timestamp: 2026-01-18 12:41:00 (UTC)
-# → Identity: SAKUZY
-# → Status: Valid
-```
-
-### 鲁棒性测试
-
-使用 `awm raw` 透传参数给 audiowmark：
-
-```bash
-# 测试不同强度
-awm raw add input.wav out_s5.wav <hex> --strength 5
-awm raw add input.wav out_s20.wav <hex> --strength 20
-
-# 使用自定义密钥文件
-awm raw gen-key test.key
-awm raw add input.wav output.wav <hex> --key test.key
-
-# 检测并输出 JSON
-awm raw get output.wav --json result.json
-
-# 比较验证
-awm raw cmp output.wav <hex>
-```
-
-## API 参考
-
-### Tag
-
-```rust
-// Rust
-let tag = Tag::new("SAKUZY")?;      // 从身份创建 (自动补齐+校验)
-let tag = Tag::parse("SAKUZY_2")?;  // 解析并验证
-tag.identity()                       // → "SAKUZY"
-tag.as_str()                         // → "SAKUZY_2"
-tag.verify()                         // → true
-```
-
-```swift
-// Swift
-let tag = try AWMTag(identity: "SAKUZY")
-let tag = try AWMTag(tag: "SAKUZY_2")
-tag.identity  // → "SAKUZY"
-tag.value     // → "SAKUZY_2"
-tag.isValid   // → true
-```
-
-### Message
-
-```rust
-// Rust
-let msg = Message::encode(1, &tag, key)?;
-let msg = Message::encode_with_timestamp(1, &tag, key, ts_minutes)?;
-let result = Message::decode(&msg, key)?;
-let valid = Message::verify(&msg, key);
-```
-
-```swift
-// Swift
-let msg = try AWMMessage.encode(tag: tag, key: key)
-let result = try AWMMessage.decode(msg, key: key)
-let valid = AWMMessage.verify(msg, key: key)
-```
-
-### Audio
-
-```rust
-// Rust
-let audio = Audio::new()?;                          // 自动搜索 audiowmark
-let audio = Audio::with_binary("/path/to/bin")?;   // 指定路径
-let audio = audio.strength(10).key_file("key");    // 配置
-
-audio.embed(input, output, &msg)?;
-audio.embed_with_tag(input, output, 1, &tag, key)?;
-let result = audio.detect(input)?;
-let decoded = audio.detect_and_decode(input, key)?;
-
-// 多声道支持 (需要 multichannel feature)
-use awmkit::ChannelLayout;
-audio.embed_multichannel(input, output, &msg, None)?;           // 自动检测布局
-audio.embed_multichannel(input, output, &msg, Some(ChannelLayout::Surround512))?;  // 指定 5.1.2
-let result = audio.detect_multichannel(input, None)?;           // 检测所有声道对
-```
-
-```swift
-// Swift
-let audio = try AWMAudio()
-let audio = try AWMAudio(binaryPath: "/path/to/audiowmark")
-audio.setStrength(10)
-audio.setKeyFile("/path/to/key")
-
-try audio.embed(input: url, output: url, message: msg)
-try audio.embed(input: url, output: url, tag: tag, key: key)
-let result = try audio.detect(input: url)
-let decoded = try audio.detectAndDecode(input: url, key: key)
-```
-
-### Keychain (Swift)
-
-```swift
-let keychain = AWMKeychain()  // 或 .shared
-
-// 存储
-try keychain.saveKey(data)
-try keychain.importKey(from: url)
-try keychain.generateAndSaveKey()
-
-// 读取
-let key = try keychain.loadKey()     // Data?
-let key = try AWMKeychain.require()  // Data (不存在抛错)
-
-// 其他
-keychain.hasKey
-try keychain.deleteKey()
-try keychain.exportKey(to: url)
-```
-
-## 构建
-
-### 快速开始
-
-```bash
-# Rust 库
-cargo build --release
-
-# 带 Rust CLI
-cargo build --features cli --release
-
-# 带 C FFI (生成 .dylib/.a)
-cargo build --features ffi --release
-
-# 带多声道支持 (WAV/FLAC)
-cargo build --features ffi,multichannel --release
-
-# 运行测试
-cargo test --features ffi,multichannel
-
-# Swift Package
-cd bindings/swift
-swift build
-swift test
-
-# Swift CLI (推荐)
-cd cli-swift
-./build.sh
-.build/debug/awm --help
-
-# 分发打包 (需要 audiowmark)
-./dist.sh /path/to/audiowmark
-# 生成: dist/awm-cli-1.0.0-macos.tar.gz
-```
-
-### 详细编译说明
-
-参见 [BUILD.md](./BUILD.md)，包括：
-- audiowmark 从源代码编译步骤
-- macOS 和 Linux 编译指南
-- 常见编译问题解决方案
-- 特性和平台配置
-
-## 分发包
-
-分发包 `awm-cli-1.0.0-macos.tar.gz` 包含：
-
-```
-awm-cli/
-├── awm              # 启动脚本
-├── bin/
-│   ├── awm          # 主程序
-│   └── audiowmark   # 水印引擎 (x86_64)
-├── lib/
-│   ├── libawmkit.dylib
-│   └── x86_64/      # audiowmark 依赖库
-└── README.txt
-```
-
-解压即用，无需安装依赖。密钥存储在 macOS Keychain。
-
-## 目录结构
-
-```
-awmkit/
-├── src/
-│   ├── lib.rs          # 公共 API
-│   ├── tag.rs          # Tag 编解码
-│   ├── message.rs      # 消息编解码
-│   ├── audio.rs        # audiowmark 封装
-│   ├── multichannel.rs # 多声道处理
-│   ├── charset.rs      # Base32 字符集
-│   ├── error.rs        # 错误类型
-│   ├── ffi.rs          # C FFI
-│   └── bin/awm.rs      # Rust CLI
-├── include/
-│   └── awmkit.h        # C 头文件
-├── bindings/
-│   └── swift/          # Swift Package
-│       ├── Package.swift
-│       └── Sources/AWMKit/
-│           ├── Tag.swift
-│           ├── Message.swift
-│           ├── Audio.swift
-│           ├── Keychain.swift
-│           └── Error.swift
-├── cli-swift/          # Swift CLI (推荐)
-│   ├── Package.swift
-│   ├── Sources/awm/main.swift
-│   ├── build.sh        # 构建脚本
-│   └── dist.sh         # 分发打包脚本
-├── Cargo.toml
-├── README.md
-└── PRP.md              # 产品规范
-```
-
-## 字符集
-
-Tag 使用 32 字符 Base32 变体（排除易混淆字符）：
-
-```
-A B C D E F G H J K M N P Q R S T U V W X Y Z 2 3 4 5 6 7 8 9 _
-```
-
-排除：`O`, `0`, `I`, `1`, `L`
-
-## 鲁棒性
-
-水印基于 [audiowmark](https://github.com/swesterfeld/audiowmark) 扩频技术，经 30 项测试验证：
-
-| 处理类型 | 测试结果 |
-|----------|----------|
-| AAC 64kbps 压缩 | ✓ 100% 检测率 |
-| 多声道下混/上混 | ✓ 通过 |
-| HRTF 双耳化处理 | ✓ 通过 |
-| 音频叠加 (1:4 比例) | ✓ 通过 |
-| 重采样 (22k/44k/96k) | ✓ 通过 |
-| 位深转换 (16/24/32bit) | ✓ 通过 |
-| EQ/压缩/限制器 | ✓ 通过 |
-| 回声/混响/噪声 | ✓ 通过 |
-| 变速/变调 | ✗ 不支持 |
-
-**通过率**: 22/30 (73%)
-**推荐配置**: strength=10 (默认)，置信度 0.96，SNR 40.8dB
-
-详细测试数据见 [EXPERIMENTS.md](./EXPERIMENTS.md)
 
 ## 多声道支持
 
@@ -407,7 +368,7 @@ AWMKit 支持多声道音频的水印嵌入和检测，通过将音频拆分为�
 | 7.1.4 | 12 | FL FR FC LFE BL BR SL SR TFL TFR TBL TBR | 6 |
 | 9.1.6 | 16 | FL FR FC LFE BL BR SL SR FLC FRC TFL TFR TBL TBR TSL TSR | 8 |
 
-> **注意**：8 声道可能是 7.1 或 5.1.2 格式，默认按 7.1 处理。可通过 `ChannelLayout::Surround512` 手动指定。
+**注意**：8 声道可能是 7.1 或 5.1.2 格式，默认按 7.1 处理。可通过 `ChannelLayout::Surround512` 手动指定。
 
 ### 支持的文件格式
 
@@ -416,51 +377,151 @@ AWMKit 支持多声道音频的水印嵌入和检测，通过将音频拆分为�
 | WAV | ✓ | ✓ | 无限制 |
 | FLAC | ✓ | ✗ | 8 |
 
-### 处理流程
+处理流程：多声道音频 → 拆分立体声对 → 每对嵌入水印 → 合并 → 输出 WAV
 
-```
-多声道音频 → 拆分立体声对 → 每对嵌入水印 → 合并 → 输出 WAV
-```
+## 从源码构建
 
-### 使用示例
+### 使用 Cargo
 
-```rust
-use awmkit::{Audio, ChannelLayout, Tag, Message};
+```bash
+# 克隆仓库
+git clone https://github.com/SakuzyPeng/AudioWaterMarkKit
+cd awmkit
 
-let audio = Audio::new()?;
-let key = b"your-32-byte-secret-key-here!!!!";
-let tag = Tag::new("SAKUZY")?;
-let msg = Message::encode(1, &tag, key)?;
+# 构建 CLI
+cargo build --bin awmkit --features full-cli --release
 
-// 嵌入水印到 7.1.4 音频 (自动检测布局)
-audio.embed_multichannel("input_7.1.4.wav", "output.wav", &msg, None)?;
-
-// 嵌入水印到 8ch 音频 (手动指定为 5.1.2)
-audio.embed_multichannel("input_8ch.flac", "output.wav", &msg, Some(ChannelLayout::Surround512))?;
-
-// 检测并查看各声道对结果
-let result = audio.detect_multichannel("output.wav", None)?;
-for (idx, name, detect) in &result.pairs {
-    if let Some(d) = detect {
-        println!("{}: 检测成功, errors={}", name, d.bit_errors);
-    } else {
-        println!("{}: 未检测到", name);
-    }
-}
-
-// 获取最佳结果
-if let Some(best) = result.best {
-    let decoded = Message::decode(&best.raw_message, key)?;
-    println!("Identity: {}", decoded.identity());
-}
+# 运行
+./target/release/awmkit --version
 ```
 
-## 安全考虑
+### 使用 CI/CD
+
+项目配置了 GitHub Actions 自动构建流程：
+
+**触发方式 1：推送 tag**
+```bash
+git tag awmkit-0.1.0
+git push origin awmkit-0.1.0
+```
+
+**触发方式 2：手动触发**
+```bash
+gh workflow run build-awmkit.yml \
+  -f tag="awmkit-0.1.0" \
+  -f prerelease=false
+```
+
+CI 会自动：
+1. 下载对应平台的 audiowmark release
+2. 压缩为 zstd 格式
+3. 编译嵌入到 awmkit 二进制
+4. 打包为 tar.gz（macOS）或 zip（Windows）
+5. 创建 GitHub Release 并上传
+
+详见 [AWMKIT_CI_PLAN.md](docs/AWMKIT_CI_PLAN.md)
+
+### Features
+
+```bash
+# 仅库（不含 CLI）
+cargo build --release
+
+# 完整 CLI（包含所有功能）
+cargo build --features full-cli --release
+
+# C FFI
+cargo build --features ffi --release
+
+# 多声道支持
+cargo build --features multichannel --release
+```
+
+## 技术细节
+
+### 鲁棒性测试
+
+水印基于 [audiowmark](https://github.com/swesterfeld/audiowmark) 扩频技术，经 30 项测试验证：
+
+| 处理类型 | 测试结果 |
+|----------|----------|
+| AAC 64kbps 压缩 | ✓ 100% 检测率 |
+| 多声道下混/上混 | ✓ 通过 |
+| HRTF 双耳化处理 | ✓ 通过 |
+| 音频叠加（1:4 比例） | ✓ 通过 |
+| 重采样（22k/44k/96k） | ✓ 通过 |
+| 位深转换（16/24/32bit） | ✓ 通过 |
+| EQ/压缩/限制器 | ✓ 通过 |
+| 回声/混响/噪声 | ✓ 通过 |
+| 变速/变调 | ✗ 不支持 |
+
+**通过率**：22/30（73%）
+**推荐配置**：strength=10（默认），置信度 0.96，SNR 40.8dB
+
+详细测试数据见 [EXPERIMENTS.md](./EXPERIMENTS.md)
+
+### 安全考虑
 
 - **48-bit HMAC**：对离线场景足够（在线攻击成本高）
 - **校验位**：防止 OCR/手抄错误，非安全功能
 - **Keychain**：使用 `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
-- **密钥管理**：库不存储密钥，由调用方负责
+- **密钥管理**：CLI 不存储明文密钥，仅通过系统密钥库访问
+- **常量时间比较**：HMAC 验证使用常量时间比较防止时序攻击
+
+### 自包含分发
+
+awmkit 使用嵌入式二进制分发策略：
+
+1. **编译时嵌入**：使用 `include_bytes!` 宏嵌入 zstd 压缩的 audiowmark
+2. **运行时解压**：首次运行自动解压到 `~/.awmkit/bin/`
+3. **校验和验证**：SHA256 校验确保二进制完整性
+4. **平台特定**：每个平台仅包含对应的二进制（macOS ~206KB，Windows ~250KB）
+
+最终发行版大小：macOS ~1.2MB，Windows ~1.5MB
+
+## 目录结构
+
+```
+awmkit/
+├── src/
+│   ├── lib.rs              # 公共 API
+│   ├── tag.rs              # Tag 编解码
+│   ├── message.rs          # 消息编解码 + HMAC
+│   ├── audio.rs            # audiowmark 封装
+│   ├── bundled.rs          # Bundled 二进制管理
+│   ├── multichannel.rs     # 多声道处理
+│   ├── charset.rs          # Base32 字符集
+│   ├── error.rs            # 错误类型
+│   ├── ffi.rs              # C FFI
+│   └── bin/awmkit/         # Rust CLI
+│       ├── main.rs
+│       ├── commands/       # 子命令实现
+│       ├── keystore.rs     # 密钥存储
+│       ├── output.rs       # 输出格式化
+│       └── util.rs
+├── bundled/                # 嵌入式二进制
+│   ├── audiowmark-macos-arm64.zst
+│   └── audiowmark-windows-x86_64.exe.zst
+├── include/
+│   └── awmkit.h            # C 头文件
+├── bindings/
+│   └── swift/              # Swift Package
+├── .github/workflows/
+│   └── build-awmkit.yml    # CI/CD 配置
+├── docs/
+│   ├── AWMKIT_CLI_PLAN.md
+│   └── AWMKIT_CI_PLAN.md
+├── Cargo.toml
+└── README.md
+```
+
+## 相关文档
+
+- [AWMKIT_CLI_PLAN.md](docs/AWMKIT_CLI_PLAN.md) - CLI 设计文档
+- [AWMKIT_CI_PLAN.md](docs/AWMKIT_CI_PLAN.md) - CI/CD 使用指南
+- [BUILD.md](BUILD.md) - 从源码构建指南
+- [EXPERIMENTS.md](EXPERIMENTS.md) - 鲁棒性测试详情
+- [PRP.md](PRP.md) - 产品规范
 
 ## License
 
@@ -468,7 +529,8 @@ MIT License
 
 ## TODO
 
+- [ ] Linux 平台支持（需要 Secret Service）
+- [ ] macOS x86_64 支持
 - [ ] API 层自动转换有损格式（mp3/aac/m4a）为 WAV 再检测
-- [ ] dylib 缓存验证使用哈希或版本号
-- [ ] 检测时显示转换进度
-- [ ] 批量处理进度条
+- [ ] 批量处理进度条优化
+- [ ] 配置文件支持（~/.awmkit/config.toml）

@@ -90,6 +90,11 @@ impl Audio {
         self
     }
 
+    /// 返回 audiowmark 二进制路径
+    pub fn binary_path(&self) -> &Path {
+        &self.binary_path
+    }
+
     /// 嵌入水印消息到音频
     ///
     /// # Arguments

@@ -45,6 +45,9 @@ pub mod multichannel;
 #[cfg(feature = "ffi")]
 pub mod ffi;
 
+#[cfg(feature = "full-cli")]
+pub mod bundled;
+
 // Re-exports
 pub use error::{Error, Result};
 pub use message::{MessageResult, MESSAGE_LEN, CURRENT_VERSION};

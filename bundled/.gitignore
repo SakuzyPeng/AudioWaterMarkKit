@@ -1,0 +1,10 @@
+# 忽略临时下载的 tar.gz
+*.tar.gz
+*.zip
+
+# 忽略解压的目录
+audiowmark-dist/
+
+# 保留压缩的 zstd 文件和校验和
+!*.zst
+!*.sha256
