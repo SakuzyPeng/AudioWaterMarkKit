@@ -69,6 +69,7 @@ jobs:
             echo "✓ Copied libzita-resampler.a"
           fi
 
+          sudo mkdir -p /usr/local/include/zita-resampler
           sudo cp ../source/zita-resampler/*.h /usr/local/include/zita-resampler/
 
           # Create pkg-config file for static library
