@@ -1,8 +1,7 @@
 name: Build audiowmark Windows
 
 on:
-  push:
-    branches: [main, master]
+  workflow_dispatch:
 
 jobs:
   build-windows:
