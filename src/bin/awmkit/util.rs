@@ -49,15 +49,15 @@ pub fn ensure_file(path: &Path) -> Result<()> {
 
 pub fn audio_from_context(ctx: &Context) -> Result<Audio> {
     match ctx.audiowmark.as_ref() {
-        // 用户显式指定路径
         Some(path) => Audio::with_binary(path).map_err(|_| CliError::AudiowmarkNotFound),
-        // 只使用 bundled 二进制（无回退）
         None => {
-            let bundled = awmkit::bundled::BundledBinary::new()
-                .map_err(|_| CliError::AudiowmarkNotFound)?;
-            let path = bundled.ensure_extracted()
-                .map_err(|_| CliError::AudiowmarkNotFound)?;
-            Audio::with_binary(&path).map_err(|_| CliError::AudiowmarkNotFound)
+            #[cfg(feature = "bundled")]
+            {
+                if let Ok(path) = crate::bundled::ensure_extracted() {
+                    return Audio::with_binary(path).map_err(|_| CliError::AudiowmarkNotFound);
+                }
+            }
+            Audio::new().map_err(|_| CliError::AudiowmarkNotFound)
         }
     }
 }

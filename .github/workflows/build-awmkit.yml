@@ -29,19 +29,15 @@ jobs:
             target: aarch64-apple-darwin
             audiowmark_asset: audiowmark-macos-arm64.tar.gz
             audiowmark_release: audiowmark-macos-arm64-2026-02-03
-            audiowmark_binary: audiowmark
             output_name: awmkit-macos-arm64
             output_ext: tar.gz
-            zstd_name: audiowmark-macos-arm64.zst
 
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             audiowmark_asset: audiowmark-windows-x86_64.zip
             audiowmark_release: audiowmark-win-2026-02-03
-            audiowmark_binary: audiowmark.exe
             output_name: awmkit-windows-x86_64
             output_ext: zip
-            zstd_name: audiowmark-windows-x86_64.exe.zst
 
     runs-on: ${{ matrix.os }}
 
@@ -65,14 +61,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-${{ matrix.target }}-
 
-      - name: Install zstd (macOS)
-        if: runner.os == 'macOS'
-        run: brew install zstd
-
-      - name: Install zstd (Windows)
-        if: runner.os == 'Windows'
-        run: choco install zstandard
-
       - name: Download audiowmark release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -80,30 +68,27 @@ jobs:
         run: |
           gh release download "${{ matrix.audiowmark_release }}" --repo "${{ github.repository }}" -p "${{ matrix.audiowmark_asset }}"
 
-      - name: Extract and prepare audiowmark (macOS)
+      - name: Prepare bundled audiowmark (macOS)
         if: runner.os == 'macOS'
         run: |
           mkdir -p bundled
           tar -xzf ${{ matrix.audiowmark_asset }}
-          cp audiowmark-dist/bin/${{ matrix.audiowmark_binary }} ${{ matrix.audiowmark_binary }}
-          rm -rf audiowmark-dist ${{ matrix.audiowmark_asset }}
-          zstd -19 --force ${{ matrix.audiowmark_binary }} -o bundled/${{ matrix.zstd_name }}
-          ls -lh bundled/${{ matrix.zstd_name }}
-          shasum -a 256 bundled/${{ matrix.zstd_name }}
+          rm -f audiowmark-dist/bin/test.key
+          cd audiowmark-dist
+          zip -r "$GITHUB_WORKSPACE/bundled/audiowmark-macos-arm64.zip" bin
+          cd "$GITHUB_WORKSPACE"
+          ls -lh bundled/audiowmark-macos-arm64.zip
 
-      - name: Extract and prepare audiowmark (Windows)
+      - name: Prepare bundled audiowmark (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
           mkdir -p bundled
-          unzip -q ${{ matrix.audiowmark_asset }}
-          cp audiowmark-dist/bin/${{ matrix.audiowmark_binary }} ${{ matrix.audiowmark_binary }}
-          rm -rf audiowmark-dist ${{ matrix.audiowmark_asset }}
-          zstd -19 --force ${{ matrix.audiowmark_binary }} -o bundled/${{ matrix.zstd_name }}
-          ls -lh bundled/${{ matrix.zstd_name }}
+          cp "${{ matrix.audiowmark_asset }}" bundled/audiowmark-windows-x86_64.zip
+          ls -lh bundled/audiowmark-windows-x86_64.zip
 
       - name: Build awmkit
-        run: cargo build --bin awmkit --features full-cli --release --target ${{ matrix.target }}
+        run: cargo build --bin awmkit --features full-cli,bundled --release --target ${{ matrix.target }}
 
       - name: Verify build (macOS)
         if: runner.os == 'macOS'

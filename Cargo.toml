@@ -56,6 +56,7 @@ full-cli = [
   "dep:serde_json",
   "dep:zstd",
 ]
+bundled = ["dep:zip"]
 
 [dependencies.hound]
 version = "3.5"
@@ -117,6 +118,10 @@ optional = true
 
 [dependencies.glob]
 version = "0.3"
+optional = true
+
+[dependencies.zip]
+version = "0.6"
 optional = true
 
 [target.'cfg(windows)'.dependencies.windows-sys]

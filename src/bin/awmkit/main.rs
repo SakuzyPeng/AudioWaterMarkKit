@@ -16,6 +16,8 @@ fn main() {
 
 #[cfg(feature = "full-cli")]
 mod commands;
+#[cfg(all(feature = "full-cli", feature = "bundled"))]
+mod bundled;
 #[cfg(feature = "full-cli")]
 mod error;
 #[cfg(feature = "full-cli")]
