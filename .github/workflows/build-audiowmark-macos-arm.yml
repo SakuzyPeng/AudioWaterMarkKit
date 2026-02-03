@@ -73,18 +73,7 @@ jobs:
 
           # Create pkg-config file for static library
           sudo mkdir -p /usr/local/lib/pkgconfig
-          cat | sudo tee /usr/local/lib/pkgconfig/zita-resampler.pc > /dev/null << 'PCEOF'
-prefix=/usr/local
-exec_prefix=${prefix}
-libdir=${exec_prefix}/lib
-includedir=${prefix}/include
-
-Name: zita-resampler
-Description: Zita resampler library
-Version: 1.0
-Libs: -L${libdir} -lzita-resampler
-Cflags: -I${includedir}
-PCEOF
+          printf 'prefix=/usr/local\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: zita-resampler\nDescription: Zita resampler library\nVersion: 1.0\nLibs: -L${libdir} -lzita-resampler\nCflags: -I${includedir}\n' | sudo tee /usr/local/lib/pkgconfig/zita-resampler.pc > /dev/null
 
           ccache -s
           echo "✓ zita-resampler build success"
