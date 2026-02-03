@@ -157,7 +157,7 @@ jobs:
         run: |
           set -euo pipefail
           DIST_DIR="$GITHUB_WORKSPACE/audiowmark-dist"
-          export DYLD_LIBRARY_PATH="$DIST_DIR/bin:$DYLD_LIBRARY_PATH"
+          export DYLD_LIBRARY_PATH="$DIST_DIR/bin:${DYLD_LIBRARY_PATH:-}"
 
           cd "$DIST_DIR/bin"
           echo "=== Testing audiowmark ==="
