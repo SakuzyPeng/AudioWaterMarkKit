@@ -1,0 +1,195 @@
+name: Build audiowmark macOS ARM64
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. audiowmark-macos-2026-02-03)"
+        required: true
+      prerelease:
+        description: "Mark as prerelease"
+        type: boolean
+        default: false
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/build-audiowmark-macos-arm.yml'
+
+jobs:
+  build-macos-arm:
+    runs-on: macos-14
+    timeout-minutes: 60
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install pkg-config libsndfile libmpg123 fftw libgcrypt ccache
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-macos-arm64-${{ hashFiles('.github/workflows/build-audiowmark-macos-arm.yml') }}
+          restore-keys: |
+            ccache-macos-arm64-
+
+      - name: Build libzita-resampler
+        run: |
+          set -euo pipefail
+          export CC="ccache clang"
+          export CXX="ccache clang++"
+          export CCACHE_DIR=~/.ccache
+          mkdir -p "$CCACHE_DIR"
+          ccache -M 2G
+
+          cd /tmp
+          rm -rf zita-resampler
+          git clone --depth 1 https://github.com/digital-stage/zita-resampler.git
+          cd zita-resampler
+
+          mkdir -p build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr/local \
+            -DCMAKE_C_COMPILER="ccache clang" \
+            -DCMAKE_CXX_COMPILER="ccache clang++"
+          make -j$(sysctl -n hw.ncpu)
+
+          echo "=== Build artifacts ==="
+          ls -lh | grep -E "(dylib|a)$" || echo "No dylib/a files in build dir"
+
+          if [ -f "libzita-resampler.a" ]; then
+            sudo cp libzita-resampler.a /usr/local/lib/
+            echo "✓ Copied libzita-resampler.a"
+          fi
+
+          sudo mkdir -p /usr/local/include/zita-resampler
+          sudo cp ../source/zita-resampler/*.h /usr/local/include/zita-resampler/
+
+          # Create pkg-config file for static library
+          sudo mkdir -p /usr/local/lib/pkgconfig
+          cat | sudo tee /usr/local/lib/pkgconfig/zita-resampler.pc > /dev/null << 'PCEOF'
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: zita-resampler
+Description: Zita resampler library
+Version: 1.0
+Libs: -L${libdir} -lzita-resampler
+Cflags: -I${includedir}
+PCEOF
+
+          ccache -s
+          echo "✓ zita-resampler build success"
+
+      - name: Build audiowmark
+        run: |
+          set -euo pipefail
+          export CC="ccache clang"
+          export CXX="ccache clang++"
+          export CCACHE_DIR=~/.ccache
+          mkdir -p "$CCACHE_DIR"
+          ccache -M 2G
+          export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
+          export LDFLAGS="-L/usr/local/lib"
+          export CPPFLAGS="-I/usr/local/include"
+
+          cd /tmp
+          rm -rf audiowmark
+          git clone --depth 1 https://github.com/swesterfeld/audiowmark.git
+          cd audiowmark
+
+          ./autogen.sh
+          ./configure \
+            LDFLAGS="$LDFLAGS" \
+            CPPFLAGS="$CPPFLAGS"
+
+          make -j$(sysctl -n hw.ncpu) V=1
+
+          if [ ! -f src/audiowmark ]; then
+            echo "ERROR: Binary src/audiowmark not found!"
+            ls -la src/
+            exit 1
+          fi
+
+          ccache -s
+          echo "✓ audiowmark build success"
+
+      - name: Collect dependencies
+        run: |
+          set -euo pipefail
+          DIST_DIR="$GITHUB_WORKSPACE/audiowmark-dist"
+          mkdir -p "$DIST_DIR/bin"
+
+          cd /tmp/audiowmark
+          cp src/audiowmark "$DIST_DIR/bin/"
+
+          cd "$DIST_DIR/bin"
+          echo "=== Collecting dylib dependencies ==="
+          DYLIBS=$(otool -L audiowmark | grep "/usr/local" | awk '{print $1}' | sort -u)
+          for dylib in $DYLIBS; do
+            if [ -f "$dylib" ]; then
+              cp "$dylib" .
+              echo "  ✓ $(basename $dylib)"
+            fi
+          done
+
+          echo ""
+          echo "=== Distribution contents ==="
+          ls -lh
+          echo "Total files: $(find . -type f | wc -l)"
+
+      - name: Verify functionality
+        run: |
+          set -euo pipefail
+          DIST_DIR="$GITHUB_WORKSPACE/audiowmark-dist"
+          export DYLD_LIBRARY_PATH="$DIST_DIR/bin:$DYLD_LIBRARY_PATH"
+
+          cd "$DIST_DIR/bin"
+          echo "=== Testing audiowmark ==="
+          ./audiowmark --version
+          ./audiowmark gen-key test.key
+          echo "✓ Audiowmark binary verified successfully"
+
+      - name: Package artifact
+        run: |
+          set -euo pipefail
+          DIST_DIR="$GITHUB_WORKSPACE/audiowmark-dist"
+          cd "$(dirname $DIST_DIR)"
+          tar -czf "$GITHUB_WORKSPACE/audiowmark-macos-arm64.tar.gz" "$(basename $DIST_DIR)"
+          echo "Package size: $(du -h $GITHUB_WORKSPACE/audiowmark-macos-arm64.tar.gz | awk '{print $1}')"
+
+      - name: Ensure tag exists
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          git fetch --tags --force 2>/dev/null || true
+          if ! git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            git tag "$TAG" "$GITHUB_SHA"
+            git push origin "$TAG"
+          fi
+
+      - name: Create GitHub release
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.tag }}
+          prerelease: ${{ inputs.prerelease }}
+          files: ${{ github.workspace }}/audiowmark-macos-arm64.tar.gz
+
+      - name: Upload artifacts
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: audiowmark-macos-arm64
+          path: audiowmark-dist/
+          retention-days: 30
