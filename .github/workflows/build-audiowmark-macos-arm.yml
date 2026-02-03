@@ -55,9 +55,7 @@ jobs:
           mkdir -p build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr/local \
-            -DCMAKE_C_COMPILER="ccache clang" \
-            -DCMAKE_CXX_COMPILER="ccache clang++"
+            -DCMAKE_INSTALL_PREFIX=/usr/local
           make -j$(sysctl -n hw.ncpu)
 
           echo "=== Build artifacts ==="
