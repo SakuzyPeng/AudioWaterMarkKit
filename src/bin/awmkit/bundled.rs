@@ -5,26 +5,28 @@ use std::io::{self, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 
 #[cfg(target_os = "windows")]
-const BUNDLE_NAME: &str = "audiowmark-windows-x86_64.zip";
-#[cfg(target_os = "windows")]
 const BIN_REL: &str = "bin/audiowmark.exe";
 
 #[cfg(target_os = "macos")]
-const BUNDLE_NAME: &str = "audiowmark-macos-arm64.zip";
-#[cfg(target_os = "macos")]
 const BIN_REL: &str = "bin/audiowmark";
 
-#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
-const BUNDLE_NAME: &str = "";
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
 const BIN_REL: &str = "";
 
 #[cfg(all(feature = "bundled", not(any(target_os = "windows", target_os = "macos"))))]
 compile_error!("bundled feature is only supported on windows and macos.");
 
-#[cfg(feature = "bundled")]
-const BUNDLE_BYTES: &[u8] =
-    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bundled/", BUNDLE_NAME));
+#[cfg(all(feature = "bundled", target_os = "windows"))]
+const BUNDLE_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/bundled/audiowmark-windows-x86_64.zip"
+));
+
+#[cfg(all(feature = "bundled", target_os = "macos"))]
+const BUNDLE_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/bundled/audiowmark-macos-arm64.zip"
+));
 
 pub fn ensure_extracted() -> Result<PathBuf> {
     let cache_root = cache_root()?;
