@@ -133,10 +133,11 @@ jobs:
 
           echo ""
           echo "=== Collecting dylib dependencies ==="
-          DYLIBS=$(otool -L audiowmark | grep "/usr/local" | awk '{print $1}' | sort -u) || true
+          # Collect from /opt/homebrew (Apple Silicon Homebrew location)
+          DYLIBS=$(otool -L audiowmark | grep -E "(/usr/local|/opt/homebrew)" | awk '{print $1}' | sort -u) || true
 
           if [ -z "$DYLIBS" ]; then
-            echo "No /usr/local dylibs found (all deps likely from system)"
+            echo "No custom dylibs found (all deps likely from system)"
           else
             for dylib in $DYLIBS; do
               if [ -f "$dylib" ]; then
@@ -153,17 +154,50 @@ jobs:
           ls -lh
           echo "Total files: $(find . -type f | wc -l)"
 
-      - name: Verify functionality
+      - name: Test in clean environment (no system libraries)
+        run: |
+          set -euo pipefail
+          DIST_DIR="$GITHUB_WORKSPACE/audiowmark-dist"
+
+          cd "$DIST_DIR/bin"
+          echo "=== Testing in isolated environment ==="
+          echo "Clearing DYLD_LIBRARY_PATH to test bundled dependencies..."
+
+          # Test with only bundled libraries
+          unset DYLD_LIBRARY_PATH || true
+          export DYLD_LIBRARY_PATH="$DIST_DIR/bin"
+
+          echo "Testing: ./audiowmark --version"
+          if ./audiowmark --version; then
+            echo "✓ Binary works with bundled dependencies"
+          else
+            echo "✗ FAILED: Binary doesn't work with only bundled dependencies"
+            echo "Missing dependencies or incompatible versions"
+            exit 1
+          fi
+
+          echo ""
+          echo "Testing: ./audiowmark gen-key"
+          if ./audiowmark gen-key test.key; then
+            echo "✓ Key generation works"
+          else
+            echo "✗ FAILED: Key generation failed"
+            exit 1
+          fi
+
+          echo ""
+          echo "✓ All tests passed - distribution is self-contained"
+
+      - name: Verify functionality with system libraries
         run: |
           set -euo pipefail
           DIST_DIR="$GITHUB_WORKSPACE/audiowmark-dist"
           export DYLD_LIBRARY_PATH="$DIST_DIR/bin:${DYLD_LIBRARY_PATH:-}"
 
           cd "$DIST_DIR/bin"
-          echo "=== Testing audiowmark ==="
+          echo "=== Verify with system libraries available ==="
           ./audiowmark --version
-          ./audiowmark gen-key test.key
-          echo "✓ Audiowmark binary verified successfully"
+          echo "✓ All functionality verified"
 
       - name: Package artifact
         run: |
