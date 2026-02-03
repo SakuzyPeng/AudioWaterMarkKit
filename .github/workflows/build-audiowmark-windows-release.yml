@@ -1,0 +1,270 @@
+name: Build audiowmark Windows Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. audiowmark-win-2026-02-03)"
+        required: true
+      prerelease:
+        description: "Mark as prerelease"
+        type: boolean
+        default: false
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          path-type: inherit
+          install: >-
+            git
+            make
+            autoconf
+            automake
+            libtool
+            pkgconf
+            ccache
+            zip
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-fftw
+            mingw-w64-x86_64-libsndfile
+            mingw-w64-x86_64-libgcrypt
+            mingw-w64-x86_64-mpg123
+            mingw-w64-x86_64-opus
+            mingw-w64-x86_64-libogg
+            mingw-w64-x86_64-libvorbis
+            mingw-w64-x86_64-flac
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-libiconv
+            mingw-w64-x86_64-gettext
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-windows-${{ hashFiles('.github/workflows/build-audiowmark-windows-release.yml') }}
+          restore-keys: |
+            ccache-windows-
+
+      - name: Build zita-resampler
+        run: |
+          set -euo pipefail
+          export PATH="/mingw64/bin:/usr/bin:$PATH"
+          WORKSPACE_POSIX="$(cygpath -u "$GITHUB_WORKSPACE")"
+          export CCACHE_DIR="$WORKSPACE_POSIX/.ccache"
+          mkdir -p "$CCACHE_DIR"
+          ccache -M 2G
+          export CC="ccache x86_64-w64-mingw32-gcc"
+          export CXX="ccache x86_64-w64-mingw32-g++"
+
+          cd /tmp
+          git clone --depth 1 https://github.com/digital-stage/zita-resampler.git
+          cd zita-resampler
+
+          # Build shared library
+          sed -i 's/add_library(zita-resampler/add_library(zita-resampler SHARED/' CMakeLists.txt
+
+          mkdir -p build && cd build
+          cmake .. -G "MSYS Makefiles" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/mingw64 \
+            -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          make -j"$(nproc)"
+
+          echo "=== Build artifacts ==="
+          ls -lh | grep -E "(dll|a)$" || echo "No DLL/A files in build dir"
+
+          if [ -f "libzita-resampler.dll" ]; then
+            cp libzita-resampler.dll /mingw64/bin/
+            echo "✓ Copied libzita-resampler.dll"
+          elif [ -f "zita-resampler.dll" ]; then
+            cp zita-resampler.dll /mingw64/bin/
+            echo "✓ Copied zita-resampler.dll"
+          else
+            echo "ERROR: zita-resampler DLL not found"
+            ls -lh
+            exit 1
+          fi
+
+          if [ -f "libzita-resampler.dll.a" ]; then
+            cp libzita-resampler.dll.a /mingw64/lib/
+            echo "✓ Copied libzita-resampler.dll.a"
+          fi
+
+          mkdir -p /mingw64/include/zita-resampler
+          cp ../source/zita-resampler/*.h /mingw64/include/zita-resampler/
+
+          mkdir -p /mingw64/lib/pkgconfig
+          printf 'prefix=/mingw64\nexec_prefix=${prefix}\nlibdir=${exec_prefix}/lib\nincludedir=${prefix}/include\n\nName: libzita-resampler\nDescription: Zita resampler library\nVersion: 1.0\nLibs: -L${libdir} -lzita-resampler\nCflags: -I${includedir}\n' > /mingw64/lib/pkgconfig/libzita-resampler.pc
+
+          ccache -s
+          echo "✓ zita-resampler build success"
+
+      - name: Build audiowmark
+        run: |
+          set -euo pipefail
+          export PATH="/mingw64/bin:/usr/bin:$PATH"
+          WORKSPACE_POSIX="$(cygpath -u "$GITHUB_WORKSPACE")"
+          export CCACHE_DIR="$WORKSPACE_POSIX/.ccache"
+          mkdir -p "$CCACHE_DIR"
+          ccache -M 2G
+          export CC="ccache x86_64-w64-mingw32-gcc"
+          export CXX="ccache x86_64-w64-mingw32-g++"
+          export PKG_CONFIG_PATH="/mingw64/lib/pkgconfig:/mingw64/share/pkgconfig:$PKG_CONFIG_PATH"
+          export PKG_CONFIG="/mingw64/bin/pkg-config"
+          export LDFLAGS="-L/mingw64/lib"
+          export CPPFLAGS="-I/mingw64/include"
+
+          cd /tmp
+          git clone --depth 1 https://github.com/swesterfeld/audiowmark.git
+          cd audiowmark
+          sed -i '1i#define _GNU_SOURCE' src/utils.cc
+          python -c 'import textwrap; exec(textwrap.dedent("""
+          from pathlib import Path
+          import re
+
+          utils_path = Path("src/utils.cc")
+          utils_text = utils_path.read_text()
+          utils_text = utils_text.replace(
+              "#include <sys/resource.h>\\n",
+              "#if !defined(_WIN32)\\n#include <sys/resource.h>\\n#endif\\n",
+          )
+          def repl(match):
+              original = match.group(0)
+              stub = (
+                  "#else\\n"
+                  "void\\n"
+                  "print_memory_usage (const std::string& where)\\n"
+                  "{\\n"
+                  "  (void) where;\\n"
+                  "  printf (\\"=== memory usage (%s): unsupported on Windows ===\\\\n\\", where.c_str());\\n"
+                  "}\\n"
+                  "#endif\\n"
+              )
+              return "#if !defined(_WIN32)\\n" + original + stub
+          utils_text = re.sub(
+              r"void\\s*\\nprint_memory_usage\\s*\\([^\\)]*\\)\\s*\\{.*?\\n\\}\\n",
+              repl,
+              utils_text,
+              count=1,
+              flags=re.S,
+          )
+          utils_path.write_text(utils_text)
+
+          limiter_path = Path("src/limiter.hh")
+          limiter_text = limiter_path.read_text()
+          limiter_text = limiter_text.replace(
+              "#include <sys/types.h>\\n",
+              "#include <sys/types.h>\\n#if defined(_WIN32) && !defined(__CYGWIN__)\\ntypedef unsigned int uint;\\n#endif\\n",
+          )
+          limiter_path.write_text(limiter_text)
+
+          hls_path = Path("src/hls.cc")
+          hls_text = hls_path.read_text()
+          hls_text = hls_text.replace(
+              "#include <sys/wait.h>\\n",
+              "#if !defined(_WIN32)\\n#include <sys/wait.h>\\n#endif\\n",
+          )
+          hls_path.write_text(hls_text)
+
+          resample_path = Path("src/resample.cc")
+          resample_text = resample_path.read_text()
+          resample_text = resample_text.replace(
+              "#include <math.h>\\n\\n#include <zita-resampler/resampler.h>\\n",
+              "#include <math.h>\\n\\n#if defined(_WIN32) && !defined(__CYGWIN__)\\ntypedef unsigned int uint;\\n#endif\\n\\n#include <zita-resampler/resampler.h>\\n",
+          )
+          resample_path.write_text(resample_text)
+          """))'
+          ./autogen.sh
+
+          ./configure \
+            --host=x86_64-w64-mingw32 \
+            --build=x86_64-w64-mingw32 \
+            LDFLAGS="$LDFLAGS" \
+            CPPFLAGS="$CPPFLAGS"
+
+          make -j"$(nproc)" V=1 \
+            LDFLAGS="$LDFLAGS -lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler" \
+            LIBS="-lfftw3f -lsndfile -lmpg123 -lgcrypt -lzita-resampler"
+
+          if [ ! -f src/.libs/audiowmark.exe ]; then
+            echo "ERROR: Real binary src/.libs/audiowmark.exe not found!"
+            ls -la src/
+            exit 1
+          fi
+
+          ccache -s
+          echo "✓ audiowmark build success"
+
+      - name: Collect dependencies
+        run: |
+          set -euo pipefail
+          export PATH="/mingw64/bin:/usr/bin:$PATH"
+          WORKSPACE_POSIX="$(cygpath -u "$GITHUB_WORKSPACE")"
+          DIST_DIR="$WORKSPACE_POSIX/audiowmark-dist"
+          mkdir -p "$DIST_DIR/bin"
+
+          cd /tmp/audiowmark
+          cp src/.libs/audiowmark.exe "$DIST_DIR/bin/"
+
+          cd "$DIST_DIR/bin"
+          DLLS=$(objdump -p audiowmark.exe | awk '/DLL Name/ {print $3}' | sort -u)
+          for dll in $DLLS; do
+            if [ -f "/mingw64/bin/$dll" ]; then
+              cp "/mingw64/bin/$dll" .
+            fi
+          done
+
+      - name: Verify functionality
+        run: |
+          set -euo pipefail
+          WORKSPACE_POSIX="$(cygpath -u "$GITHUB_WORKSPACE")"
+          DIST_DIR="$WORKSPACE_POSIX/audiowmark-dist"
+          export PATH="$DIST_DIR/bin:$PATH"
+
+          cd "$DIST_DIR/bin"
+          ./audiowmark.exe --version
+          ./audiowmark.exe gen-key test.key
+
+      - name: Package artifact
+        run: |
+          set -euo pipefail
+          WORKSPACE_POSIX="$(cygpath -u "$GITHUB_WORKSPACE")"
+          DIST_DIR="$WORKSPACE_POSIX/audiowmark-dist"
+          cd "$DIST_DIR"
+          zip -r "$WORKSPACE_POSIX/audiowmark-windows-x86_64.zip" .
+
+      - name: Ensure tag exists
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          git fetch --tags --force
+          if ! git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            git tag "$TAG" "$GITHUB_SHA"
+            git push origin "$TAG"
+          fi
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.tag }}
+          prerelease: ${{ inputs.prerelease }}
+          files: ${{ github.workspace }}/audiowmark-windows-x86_64.zip
