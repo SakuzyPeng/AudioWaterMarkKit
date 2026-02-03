@@ -17,9 +17,10 @@ pub fn run(ctx: &Context, args: &StatusArgs) -> Result<()> {
 
     let store = KeyStore::new()?;
     if store.exists() {
-        let key = store.load()?;
+        let (key, backend) = store.load_with_backend()?;
         ctx.out
             .info(format!("Key: configured ({} bytes)", key.len()));
+        ctx.out.info(format!("Key storage: {}", backend.label()));
         if key.len() != KEY_LEN {
             ctx.out.warn("Key length does not match expected size");
         }

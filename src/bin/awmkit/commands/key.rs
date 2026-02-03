@@ -35,7 +35,7 @@ pub fn run(ctx: &Context, command: KeyCommand) -> Result<()> {
 
 fn show(ctx: &Context) -> Result<()> {
     let store = KeyStore::new()?;
-    let key = store.load()?;
+    let (key, backend) = store.load_with_backend()?;
 
     let mut hasher = Sha256::new();
     hasher.update(&key);
@@ -45,7 +45,7 @@ fn show(ctx: &Context) -> Result<()> {
     ctx.out.info(format!("Length: {KEY_LEN} bytes"));
     ctx.out
         .info(format!("Fingerprint (SHA256): {fingerprint}"));
-    ctx.out.info("Storage: keyring (service: com.awmkit.watermark)");
+    ctx.out.info(format!("Storage: {}", backend.label()));
     Ok(())
 }
 
