@@ -16,6 +16,9 @@ on:
     tags:
       - 'awmkit-*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -28,6 +31,7 @@ jobs:
             audiowmark_release: audiowmark-macos-arm64-2026-02-03
             audiowmark_binary: audiowmark
             output_name: awmkit-macos-arm64
+            output_ext: tar.gz
             zstd_name: audiowmark-macos-arm64.zst
 
           - os: windows-latest
@@ -36,6 +40,7 @@ jobs:
             audiowmark_release: audiowmark-win-2026-02-03
             audiowmark_binary: audiowmark.exe
             output_name: awmkit-windows-x86_64
+            output_ext: zip
             zstd_name: audiowmark-windows-x86_64.exe.zst
 
     runs-on: ${{ matrix.os }}
@@ -79,6 +84,7 @@ jobs:
       - name: Extract and prepare audiowmark (macOS)
         if: runner.os == 'macOS'
         run: |
+          mkdir -p bundled
           tar -xzf ${{ matrix.audiowmark_asset }}
           cp audiowmark-dist/bin/${{ matrix.audiowmark_binary }} ${{ matrix.audiowmark_binary }}
           rm -rf audiowmark-dist ${{ matrix.audiowmark_asset }}
@@ -90,6 +96,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
+          mkdir -p bundled
           unzip -q ${{ matrix.audiowmark_asset }}
           cp audiowmark-dist/bin/${{ matrix.audiowmark_binary }} ${{ matrix.audiowmark_binary }}
           rm -rf audiowmark-dist ${{ matrix.audiowmark_asset }}
@@ -148,7 +155,5 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ steps.tag.outputs.tag }}
           prerelease: ${{ inputs.prerelease || false }}
-          files: |
-            ${{ matrix.output_name }}.tar.gz
-            ${{ matrix.output_name }}.zip
+          files: ${{ matrix.output_name }}.${{ matrix.output_ext }}
           token: ${{ secrets.GITHUB_TOKEN }}
