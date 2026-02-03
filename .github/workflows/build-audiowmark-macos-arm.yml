@@ -113,22 +113,40 @@ jobs:
 
       - name: Collect dependencies
         run: |
-          set -euo pipefail
+          set -eo pipefail
           DIST_DIR="$GITHUB_WORKSPACE/audiowmark-dist"
           mkdir -p "$DIST_DIR/bin"
 
           cd /tmp/audiowmark
+          if [ ! -f src/audiowmark ]; then
+            echo "ERROR: src/audiowmark not found!"
+            ls -la src/
+            exit 1
+          fi
           cp src/audiowmark "$DIST_DIR/bin/"
+          echo "✓ Copied audiowmark binary"
 
           cd "$DIST_DIR/bin"
+          echo ""
+          echo "=== Binary dependencies ==="
+          otool -L audiowmark || true
+
+          echo ""
           echo "=== Collecting dylib dependencies ==="
-          DYLIBS=$(otool -L audiowmark | grep "/usr/local" | awk '{print $1}' | sort -u)
-          for dylib in $DYLIBS; do
-            if [ -f "$dylib" ]; then
-              cp "$dylib" .
-              echo "  ✓ $(basename $dylib)"
-            fi
-          done
+          DYLIBS=$(otool -L audiowmark | grep "/usr/local" | awk '{print $1}' | sort -u) || true
+
+          if [ -z "$DYLIBS" ]; then
+            echo "No /usr/local dylibs found (all deps likely from system)"
+          else
+            for dylib in $DYLIBS; do
+              if [ -f "$dylib" ]; then
+                cp "$dylib" .
+                echo "  ✓ $(basename $dylib)"
+              else
+                echo "  ✗ Not found: $dylib"
+              fi
+            done
+          fi
 
           echo ""
           echo "=== Distribution contents ==="
