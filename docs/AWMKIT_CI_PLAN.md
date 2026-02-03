@@ -9,7 +9,7 @@
 - ✅ Windows x86_64
 - ⏸️ Linux (暂缓)
 
-**产物**: 完全自包含的 awmkit CLI（内嵌 audiowmark 二进制）
+**产物**: 完全自包含的 awmkit CLI（内嵌 audiowmark 二进制，运行时解压到缓存）
 
 ## 触发方式
 
@@ -49,15 +49,14 @@ gh workflow run build-awmkit.yml \
    - macOS: `audiowmark-macos-arm64-2026-02-03`
    - Windows: `audiowmark-win-2026-02-03`
 
-2. **解压并压缩**：
+2. **解压并打包**：
    - 解压 tar.gz/zip
-   - 提取 `audiowmark` 二进制
-   - 使用 zstd -19 重新压缩
-   - 覆盖 `bundled/*.zst`
+   - 组织为 `bin/` 目录
+   - 打包为 zip：`bundled/audiowmark-<platform>.zip`
 
-3. **编译 awmkit**：
+3. **编译 awmkit**（启用 bundling）：
    ```bash
-   cargo build --bin awmkit --features full-cli --release --target <target>
+   cargo build --bin awmkit --features full-cli,bundled --release --target <target>
    ```
 
 4. **验证**：
@@ -127,18 +126,17 @@ CI 依赖以下 audiowmark releases 存在：
 - audiowmark_release: audiowmark-win-YYYY-MM-DD          # 修改这里
 ```
 
-### Bundled 占位文件
+### Bundled 文件
 
-仓库中 `bundled/` 目录包含占位文件：
+`bundled/` 目录已被 `.gitignore` 排除，不提交二进制。CI 在构建时生成：
 
 ```
 bundled/
-├── audiowmark-macos-arm64.zst       (206KB, 真实压缩文件)
-├── audiowmark-windows-x86_64.exe.zst (25B, 占位文件)
-└── .gitignore
+├── audiowmark-macos-arm64.zip
+└── audiowmark-windows-x86_64.zip
 ```
 
-**CI 会在构建时覆盖这些文件，不会提交回仓库。**
+**注意**：本地启用 `bundled` 编译前也需要先准备这些文件，否则编译会失败。
 
 ## 缓存优化
 
@@ -160,11 +158,12 @@ gh release download audiowmark-macos-arm64-2026-02-03 \
 
 # 解压并准备
 tar -xzf audiowmark-macos-arm64.tar.gz
-cp audiowmark-dist/bin/audiowmark .
-zstd -19 --force audiowmark -o bundled/audiowmark-macos-arm64.zst
+rm -f audiowmark-dist/bin/test.key
+mkdir -p bundled
+(cd audiowmark-dist && zip -r "$PWD/../bundled/audiowmark-macos-arm64.zip" bin)
 
 # 编译
-cargo build --bin awmkit --features full-cli --release
+cargo build --bin awmkit --features full-cli,bundled --release
 
 # 验证
 ./target/release/awmkit --version
@@ -224,4 +223,3 @@ cargo build --bin awmkit --features full-cli --release
 audiowmark: available
 audiowmark path: ~/.awmkit/bin/audiowmark
 ```
-
