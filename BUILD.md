@@ -9,7 +9,7 @@
 - Homebrew 包管理器
 - 必要工具：
   ```bash
-  brew install pkg-config libsndfile libmpg123 fftw libgcrypt
+  brew install pkg-config libsndfile mpg123 fftw libgcrypt
   ```
 
 ### Linux (Ubuntu/Debian)

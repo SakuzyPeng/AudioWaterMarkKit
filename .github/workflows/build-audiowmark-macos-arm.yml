@@ -28,7 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install pkg-config libsndfile libmpg123 fftw libgcrypt ccache
+          brew install pkg-config libsndfile mpg123 fftw libgcrypt ccache
 
       - name: Cache ccache
         uses: actions/cache@v4
