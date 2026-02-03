@@ -122,9 +122,7 @@ jobs:
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
-          mkdir -p ${{ matrix.output_name }}
-          cp target/${{ matrix.target }}/release/awmkit ${{ matrix.output_name }}/
-          tar -czf ${{ matrix.output_name }}.tar.gz ${{ matrix.output_name }}
+          tar -czf ${{ matrix.output_name }}.tar.gz -C target/${{ matrix.target }}/release awmkit
           ls -lh ${{ matrix.output_name }}.tar.gz
           shasum -a 256 ${{ matrix.output_name }}.tar.gz
 
@@ -132,9 +130,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path ${{ matrix.output_name }}
-          Copy-Item target/${{ matrix.target }}/release/awmkit.exe ${{ matrix.output_name }}/
-          Compress-Archive -Path ${{ matrix.output_name }} -DestinationPath ${{ matrix.output_name }}.zip
+          Compress-Archive -Path target/${{ matrix.target }}/release/awmkit.exe -DestinationPath ${{ matrix.output_name }}.zip -Force
           Get-ChildItem ${{ matrix.output_name }}.zip
           Get-FileHash -Algorithm SHA256 ${{ matrix.output_name }}.zip
 
