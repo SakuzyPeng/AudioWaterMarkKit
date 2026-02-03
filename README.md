@@ -6,7 +6,7 @@
 
 - **完全自包含**：内嵌 audiowmark 二进制，无需手动安装依赖
 - **跨平台支持**：macOS ARM64, Windows x86_64
-- **安全密钥存储**：macOS Keychain / Windows Credential Manager
+- **安全密钥存储**：macOS Keychain / Windows Credential Manager（失败时回退 DPAPI）
 - **批量处理**：支持通配符和多文件操作
 - **可验证水印**：128-bit 消息 + HMAC-SHA256 认证
 - **多声道支持**：5.1 / 5.1.2 / 7.1 / 7.1.4 / 9.1.6 等格式
@@ -22,6 +22,10 @@
 tar -xzf awmkit-macos-arm64.tar.gz
 cd awmkit-macos-arm64
 ./awmkit --version
+```
+如果 macOS 提示无法打开或来自未识别的开发者：
+```bash
+xattr -d com.apple.quarantine ./awmkit
 ```
 
 **Windows x86_64**:
@@ -80,7 +84,7 @@ awmkit detect --json output_wm.wav
 awmkit status
 
 # 输出:
-# awmkit v1.0.0
+# awmkit v0.1.2
 #
 # 密钥状态:
 #   [OK] 已配置 (32 字节)
@@ -89,7 +93,7 @@ awmkit status
 # audiowmark 引擎:
 #   [OK] 可用 (bundled)
 #   版本: 0.6.5
-#   路径: ~/.awmkit/bin/audiowmark
+#   路径: ~/.awmkit/bundled/bin/audiowmark
 ```
 
 ## 命令参考
@@ -182,13 +186,10 @@ awmkit detect *.wav
 # JSON 输出（机器可读）
 awmkit detect --json output_wm.wav
 
-# 仅检测，不验证 HMAC
-awmkit detect --no-verify output_wm.wav
 ```
 
 **参数**:
 - `--json`: JSON 格式输出
-- `--no-verify`: 跳过 HMAC 验证（仅解析消息）
 
 ### status - 系统状态
 
