@@ -1,6 +1,6 @@
 [package]
 name = "awmkit"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "Audio watermarking toolkit - message encoding/decoding with HMAC authentication"
 license = "MIT"

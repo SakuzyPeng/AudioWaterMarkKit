@@ -1,4 +1,4 @@
-# AWMKit 0.1.2
+# AWMKit 0.1.3
 
 ## 使用说明
 
@@ -36,3 +36,4 @@ awmkit detect input_wm.wav
 - **Bundled audiowmark**：内嵌引擎，首次运行自动解压到 `~/.awmkit/bundled/bin/`。
 - **Windows DPAPI 回退**：当 Credential Manager 不可用时自动使用 DPAPI。
 - **打包结构优化**：发布包内为扁平结构，直接包含可执行文件。
+- **Tag 映射工具**：新增 `tag suggest/save/list/remove/clear`（JSON 明文存储，可选保存）。
