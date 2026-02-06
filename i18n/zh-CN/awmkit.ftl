@@ -81,9 +81,13 @@ ui-action-refresh_mappings = 刷新
 ui-action-overwrite = 覆盖
 ui-action-skip = 跳过
 ui-action-browse = 浏览
-ui-action-clear_queue = 清理队列
+ui-action-clear_queue = 清空队列
 ui-action-clear_all = 全部清除
 ui-action-copy_md = 复制 Markdown
+ui-action-clear_input = 清空输入
+ui-action-clear_output = 清空输出
+ui-action-start_process = 开始处理
+ui-action-clear_log = 清空日志
 
 ui-label-tag = 标签
 ui-label-username_optional = 用户名（可选）
@@ -158,6 +162,8 @@ ui-status-card-language = 语言
 ui-card-embed_settings = 嵌入设置
 ui-card-file_queue = 文件队列
 ui-card-result_log = 结果日志
+ui-card-input_dir = 输入目录
+ui-card-output_dir = 输出目录
 ui-card-system_status = 系统状态
 ui-card-saved_mappings = 已保存映射
 ui-card-add_mapping = 添加映射
@@ -165,7 +171,12 @@ ui-card-actions = 操作
 ui-card-danger_zone = 危险区域
 
 ui-drop-hint = 拖拽 WAV/FLAC 文件或文件夹到此处
+ui-drop-hint-detailed = 拖拽音频文件或目录
+ui-drop-hint-sub = 支持混合拖入，目录会递归提取
 ui-drop-compact = 拖拽文件或
+
+ui-status-no_input = 尚未添加文件
+ui-status-no_output = 尚未选择（默认写回各文件目录）
 
 ui-empty-no_files = 还没有添加文件
 ui-empty-no_results = 结果将显示在此处

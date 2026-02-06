@@ -84,6 +84,10 @@ ui-action-browse = Browse
 ui-action-clear_queue = Clear Queue
 ui-action-clear_all = Clear All
 ui-action-copy_md = Copy Markdown
+ui-action-clear_input = Clear Input
+ui-action-clear_output = Clear Output
+ui-action-start_process = Start Processing
+ui-action-clear_log = Clear Log
 
 ui-label-tag = Tag
 ui-label-username_optional = Username (optional)
@@ -158,6 +162,8 @@ ui-status-card-language = Language
 ui-card-embed_settings = Embed Settings
 ui-card-file_queue = File Queue
 ui-card-result_log = Result Log
+ui-card-input_dir = Input Directory
+ui-card-output_dir = Output Directory
 ui-card-system_status = System Status
 ui-card-saved_mappings = Saved Mappings
 ui-card-add_mapping = Add Mapping
@@ -165,7 +171,12 @@ ui-card-actions = Actions
 ui-card-danger_zone = Danger Zone
 
 ui-drop-hint = Drop WAV/FLAC files or folders here
+ui-drop-hint-detailed = Drop audio files or directories
+ui-drop-hint-sub = Supports mixed input, directories will be recursively extracted
 ui-drop-compact = Drop files or
+
+ui-status-no_input = No files added yet
+ui-status-no_output = Not selected (default: write back to original directories)
 
 ui-empty-no_files = No files added yet
 ui-empty-no_results = Results will appear here
