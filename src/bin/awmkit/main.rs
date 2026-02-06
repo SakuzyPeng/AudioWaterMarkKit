@@ -3,7 +3,7 @@
 #[cfg(feature = "full-cli")]
 fn main() {
     if let Err(err) = run() {
-        eprintln!("{err}");
+        eprintln!("{}", err.user_message());
         std::process::exit(1);
     }
 }
@@ -16,12 +16,8 @@ fn main() {
 
 #[cfg(feature = "full-cli")]
 mod commands;
-#[cfg(all(feature = "full-cli", feature = "bundled"))]
-mod bundled;
 #[cfg(feature = "full-cli")]
 mod error;
-#[cfg(feature = "full-cli")]
-mod keystore;
 #[cfg(feature = "full-cli")]
 mod output;
 #[cfg(feature = "full-cli")]
@@ -35,6 +31,8 @@ use error::{CliError, Result};
 use output::Output;
 #[cfg(feature = "full-cli")]
 use std::path::PathBuf;
+#[cfg(feature = "full-cli")]
+use awmkit::app::{AppSettings, i18n};
 
 #[cfg(feature = "full-cli")]
 #[derive(Parser)]
@@ -53,6 +51,10 @@ struct Cli {
     /// Override audiowmark path
     #[arg(long, global = true, value_name = "PATH")]
     audiowmark: Option<PathBuf>,
+
+    /// Language (e.g. zh-CN, en-US)
+    #[arg(long, global = true, value_name = "LANG")]
+    lang: Option<String>,
 
     #[command(subcommand)]
     command: Commands,
@@ -118,10 +120,19 @@ struct Context {
 fn run() -> Result<()> {
     let cli = Cli::parse();
 
+    let settings = AppSettings::load().unwrap_or_default();
+    let env_lang = i18n::env_language();
+    let lang = cli
+        .lang
+        .as_deref()
+        .or_else(|| env_lang.as_deref())
+        .or_else(|| settings.language.as_deref());
+    i18n::set_language(lang).map_err(CliError::from)?;
+
     if cli.quiet && cli.verbose {
-        return Err(CliError::Message(
-            "--quiet and --verbose cannot be used together".to_string(),
-        ));
+        return Err(CliError::Message(i18n::tr(
+            "cli-error-quiet_verbose_conflict",
+        )));
     }
 
     let ctx = Context {

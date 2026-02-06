@@ -246,7 +246,7 @@ mod tests {
         // 验证结构
         assert_eq!(msg[0], 0x01); // version
         assert_eq!(&msg[1..5], &[0x01, 0x02, 0x03, 0x04]); // timestamp big-endian
-        // msg[5..10] = tag packed
-        // msg[10..16] = hmac
+                                                           // msg[5..10] = tag packed
+                                                           // msg[10..16] = hmac
     }
 }

@@ -33,11 +33,11 @@
 //! println!("Time: {}", result.timestamp_utc);
 //! ```
 
+pub mod audio;
 pub mod charset;
 pub mod error;
 pub mod message;
 pub mod tag;
-pub mod audio;
 
 #[cfg(feature = "multichannel")]
 pub mod multichannel;
@@ -45,14 +45,14 @@ pub mod multichannel;
 #[cfg(feature = "ffi")]
 pub mod ffi;
 
-#[cfg(feature = "full-cli")]
-pub mod bundled;
+#[cfg(feature = "app")]
+pub mod app;
 
 // Re-exports
-pub use error::{Error, Result};
-pub use message::{MessageResult, MESSAGE_LEN, CURRENT_VERSION};
-pub use tag::Tag;
 pub use audio::{Audio, DetectResult};
+pub use error::{Error, Result};
+pub use message::{MessageResult, CURRENT_VERSION, MESSAGE_LEN};
+pub use tag::Tag;
 
 #[cfg(feature = "multichannel")]
 pub use multichannel::{ChannelLayout, MultichannelAudio, SampleFormat};

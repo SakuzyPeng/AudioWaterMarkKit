@@ -1,10 +1,11 @@
 use crate::error::{CliError, Result};
-use crate::keystore::KeyStore;
 use crate::util::{audio_from_context, ensure_file, expand_inputs};
 use crate::Context;
+use awmkit::app::{i18n, KeyStore};
 use awmkit::Message;
 use clap::Args;
 use indicatif::{ProgressBar, ProgressStyle};
+use fluent_bundle::FluentArgs;
 use serde::Serialize;
 
 #[derive(Args)]
@@ -103,7 +104,8 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
                 if let Some(ref bar) = progress {
                     bar.println(format!("[INVALID] {}: {err}", input.display()));
                 } else {
-                    ctx.out.error(format!("[INVALID] {}: {err}", input.display()));
+                    ctx.out
+                        .error(format!("[INVALID] {}: {err}", input.display()));
                 }
             }
             Err(err) => {
@@ -126,12 +128,15 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
     }
 
     if !ctx.out.quiet() {
-        ctx.out
-            .info(format!("Done: {ok} ok, {miss} missing, {invalid} invalid"));
+        let mut args = FluentArgs::new();
+        args.set("ok", ok.to_string());
+        args.set("miss", miss.to_string());
+        args.set("invalid", invalid.to_string());
+        ctx.out.info(i18n::tr_args("cli-detect-done", &args));
     }
 
     if invalid > 0 {
-        Err(CliError::Message("one or more files failed".to_string()))
+        Err(CliError::Message(i18n::tr("cli-detect-failed")))
     } else {
         Ok(())
     }
@@ -143,11 +148,7 @@ enum DetectOutcome {
     Invalid(String),
 }
 
-fn detect_one(
-    audio: &awmkit::Audio,
-    key: &[u8],
-    input: &std::path::Path,
-) -> Result<DetectOutcome> {
+fn detect_one(audio: &awmkit::Audio, key: &[u8], input: &std::path::Path) -> Result<DetectOutcome> {
     match audio.detect(input)? {
         None => Ok(DetectOutcome::NotFound),
         Some(result) => match Message::decode(&result.raw_message, key) {
@@ -160,11 +161,7 @@ fn detect_one(
     }
 }
 
-fn detect_one_json(
-    audio: &awmkit::Audio,
-    key: &[u8],
-    input: &std::path::Path,
-) -> DetectJson {
+fn detect_one_json(audio: &awmkit::Audio, key: &[u8], input: &std::path::Path) -> DetectJson {
     match audio.detect(input) {
         Ok(None) => DetectJson {
             file: input.display().to_string(),

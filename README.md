@@ -35,6 +35,10 @@ cd awmkit-windows-x86_64
 .\awmkit.exe --version
 ```
 
+### GUI（可选）
+
+GUI 使用说明已单独整理：`docs/AWMKIT_GUI.md`
+
 ### 初始化
 
 首次使用前，初始化密钥（自动保存到系统密钥库）：
@@ -95,6 +99,12 @@ awmkit status
 #   版本: 0.6.5
 #   路径: ~/.awmkit/bundled/bin/audiowmark
 ```
+
+### 语言设置
+
+- CLI：支持 `--lang zh-CN|en-US`，也会读取 `LANG/LC_ALL` 环境变量
+- GUI：在 Status / Init 页的 Language 下拉中切换，自动保存
+- 配置文件：`~/.awmkit/config.toml`（Windows: `%LOCALAPPDATA%\\awmkit\\config.toml`）
 
 ## 命令参考
 

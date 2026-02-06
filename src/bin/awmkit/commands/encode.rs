@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::keystore::KeyStore;
+use awmkit::app::KeyStore;
 use crate::util::parse_tag;
 use crate::Context;
 use awmkit::{Message, CURRENT_VERSION};

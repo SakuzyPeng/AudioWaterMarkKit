@@ -1,8 +1,9 @@
 use crate::error::Result;
-use crate::keystore::KeyStore;
+use awmkit::app::{i18n, KeyStore};
 use crate::Context;
 use awmkit::Message;
 use clap::Args;
+use fluent_bundle::FluentArgs;
 
 #[derive(Args)]
 pub struct DecodeArgs {
@@ -18,13 +19,23 @@ pub fn run(ctx: &Context, args: &DecodeArgs) -> Result<()> {
 
     let decoded = Message::decode(&bytes, &key)?;
 
-    ctx.out.info(format!("Version: {}", decoded.version));
+    let mut args = FluentArgs::new();
+    args.set("version", decoded.version.to_string());
+    ctx.out.info(i18n::tr_args("cli-decode-version", &args));
+    let mut args = FluentArgs::new();
+    args.set("minutes", decoded.timestamp_minutes.to_string());
     ctx.out
-        .info(format!("Timestamp (minutes): {}", decoded.timestamp_minutes));
+        .info(i18n::tr_args("cli-decode-timestamp_minutes", &args));
+    let mut args = FluentArgs::new();
+    args.set("seconds", decoded.timestamp_utc.to_string());
     ctx.out
-        .info(format!("Timestamp (UTC seconds): {}", decoded.timestamp_utc));
-    ctx.out.info(format!("Tag: {}", decoded.tag));
-    ctx.out.info(format!("Identity: {}", decoded.identity()));
-    ctx.out.info("Status: valid");
+        .info(i18n::tr_args("cli-decode-timestamp_utc", &args));
+    let mut args = FluentArgs::new();
+    args.set("tag", decoded.tag.to_string());
+    ctx.out.info(i18n::tr_args("cli-decode-tag", &args));
+    let mut args = FluentArgs::new();
+    args.set("identity", decoded.identity().to_string());
+    ctx.out.info(i18n::tr_args("cli-decode-identity", &args));
+    ctx.out.info(i18n::tr("cli-decode-status_valid"));
     Ok(())
 }

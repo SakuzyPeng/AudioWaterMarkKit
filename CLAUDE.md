@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-AWMKit 是一个跨语言的音频水印消息编解码库，实现 128-bit 自描述、可验证的水印消息格式。核心用 Rust 实现，通过 C FFI 提供 Swift/ObjC 绑定。
+AWMKit 是一个跨语言的音频水印消息编解码库，实现 128-bit 自描述、可验证的水印消息格式。核心用 Rust 实现，通过 C FFI 提供 Swift/ObjC 绑定，同时提供基于 Tauri 2 的桌面 GUI 应用。
 
 ## 常用命令
 
@@ -23,11 +23,33 @@ cargo test --features ffi
 # 运行带 CLI 的测试
 cargo test --features cli
 
+# 运行带 app 层的测试
+cargo test --features app
+
 # 运行单个测试
 cargo test test_name
 
 # 检查代码
 cargo clippy --all-features
+```
+
+### GUI 开发 (Tauri + React)
+
+```bash
+# 安装前端依赖
+cd ui && npm install
+
+# 启动 Tauri 开发模式（自动启动 Vite HMR + Tauri WebView）
+cd src-tauri && cargo tauri dev
+
+# 仅启动前端开发服务（端口 1420）
+cd ui && npm run dev
+
+# 构建前端
+cd ui && npm run build
+
+# 类型检查
+cd ui && npx tsc --noEmit
 ```
 
 ### Swift 绑定
@@ -67,6 +89,30 @@ cd cli-swift && ./dist.sh
 
 8 字符 = 7 字符身份 + 1 字符校验位，使用 32 字符集（排除 O/0/I/1/L）。
 
+### 整体架构
+
+```
+┌─ GUI (Tauri 2) ──────────────────────────┐
+│  React 19 + TypeScript + Vite            │
+│  @pikoloo/darwin-ui 组件库               │
+│  4 标签页: 嵌入 / 检测 / 状态 / 标签    │
+└──────────── Tauri IPC ───────────────────┘
+                  ↓
+┌─ Rust App 层 (src/app/, feature: app) ───┐
+│  i18n / keystore / tag_store /           │
+│  audio_engine / settings / bundled       │
+└──────────────────────────────────────────┘
+                  ↓
+┌─ Rust 核心库 ────────────────────────────┐
+│  charset / tag / message / audio / ffi   │
+└──────────────────────────────────────────┘
+                  ↓
+┌─ 跨语言绑定 ─────────────────────────────┐
+│  C FFI → Swift/AWMKit → Swift CLI        │
+│       → C 头文件 (include/awmkit.h)      │
+└──────────────────────────────────────────┘
+```
+
 ### Rust 核心模块
 
 - `src/charset.rs` - 32 字符 Base32 变体字符集
@@ -74,13 +120,37 @@ cd cli-swift && ./dist.sh
 - `src/message.rs` - 消息编解码 + HMAC-SHA256
 - `src/audio.rs` - audiowmark 命令行封装
 - `src/ffi.rs` - C FFI 导出接口 (feature: ffi)
+- `src/multichannel.rs` - 多声道水印处理
 
-### 跨语言架构
+### Rust App 层 (feature: app)
 
-```
-Rust 核心 → C FFI → Swift/AWMKit → Swift CLI
-                  → C 头文件 (include/awmkit.h)
-```
+为 GUI 提供后端功能的模块，位于 `src/app/`：
+
+- `keystore.rs` - 系统密钥安全存储（macOS Keychain / Windows Credential Manager）
+- `tag_store.rs` - 用户-标签映射管理（JSON 持久化于 `~/.awmkit/tags.json`）
+- `i18n.rs` - Fluent 国际化框架集成
+- `audio_engine.rs` - audiowmark 命令行封装（GUI 专用）
+- `settings.rs` - 配置管理（TOML 持久化于 `~/.awmkit/config.toml`）
+- `bundled.rs` - 内嵌 audiowmark 二进制管理
+
+### Tauri 后端 (src-tauri/)
+
+`src-tauri/src/main.rs` 通过 `#[tauri::command]` 暴露 14 个 IPC 命令供前端调用，包括：
+`get_i18n_bundle`, `get_status`, `init_key`, `embed_files`, `detect_files`, `list_tags`, `save_tag`, `remove_tag` 等。
+
+### 前端 (ui/)
+
+React 19 + TypeScript + Vite 应用，使用 @pikoloo/darwin-ui macOS 风格组件库：
+
+- `src/App.tsx` - 根组件，Tab 路由和全局状态管理
+- `src/pages/` - 4 个页面：EmbedPage, DetectPage, StatusPage, TagPage
+- `src/lib/api.ts` - Tauri IPC 调用封装层，所有后端通信入口
+- `src/styles/tokens.css` - 设计令牌（颜色、字体、间距）
+- `src/types/ui.ts` - TypeScript 类型定义
+
+### 国际化 (i18n/)
+
+使用 Fluent 格式（.ftl 文件），支持 en-US 和 zh-CN。UI 文本键以 `ui-` 前缀，CLI 文本以 `cli-` 前缀。
 
 Swift 绑定位于 `bindings/swift/`，CLI 位于 `cli-swift/`。
 

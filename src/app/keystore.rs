@@ -1,7 +1,8 @@
-use crate::error::{CliError, Result};
+use crate::app::error::{AppError, Result};
 use keyring::Entry;
 use rand::rngs::OsRng;
 use rand::RngCore;
+#[cfg(windows)]
 use std::path::PathBuf;
 
 const SERVICE: &str = "com.awmkit.watermark";
@@ -40,7 +41,7 @@ impl KeyStore {
         #[cfg(not(windows))]
         {
             let entry =
-                Entry::new(SERVICE, USERNAME).map_err(|e| CliError::KeyStore(e.to_string()))?;
+                Entry::new(SERVICE, USERNAME).map_err(|e| AppError::KeyStore(e.to_string()))?;
             Ok(Self { entry })
         }
 
@@ -82,7 +83,9 @@ impl KeyStore {
         }
         #[cfg(not(windows))]
         {
-            Err(CliError::KeyStore("failed to store key in keyring".to_string()))
+            Err(AppError::KeyStore(
+                "failed to store key in keyring".to_string(),
+            ))
         }
     }
 
@@ -99,7 +102,7 @@ impl KeyStore {
             }
         }
         if !removed {
-            return Err(CliError::KeyNotFound);
+            return Err(AppError::KeyNotFound);
         }
         Ok(())
     }
@@ -125,8 +128,8 @@ impl KeyStore {
             let hex_key = self
                 .entry
                 .get_password()
-                .map_err(|_| CliError::KeyNotFound)?;
-            let key = hex::decode(hex_key)?;
+                .map_err(|_| AppError::KeyNotFound)?;
+            let key = hex::decode(hex_key).map_err(|e| AppError::Message(e.to_string()))?;
             validate_key_len(key.len())?;
             Ok(key)
         }
@@ -136,11 +139,9 @@ impl KeyStore {
             let entry = self
                 .entry
                 .as_ref()
-                .ok_or_else(|| CliError::KeyStore("keyring unavailable".to_string()))?;
-            let hex_key = entry
-                .get_password()
-                .map_err(|_| CliError::KeyNotFound)?;
-            let key = hex::decode(hex_key)?;
+                .ok_or_else(|| AppError::KeyStore("keyring unavailable".to_string()))?;
+            let hex_key = entry.get_password().map_err(|_| AppError::KeyNotFound)?;
+            let key = hex::decode(hex_key).map_err(|e| AppError::Message(e.to_string()))?;
             validate_key_len(key.len())?;
             Ok(key)
         }
@@ -151,7 +152,7 @@ impl KeyStore {
         {
             self.entry
                 .set_password(&hex::encode(key))
-                .map_err(|e| CliError::KeyStore(e.to_string()))?;
+                .map_err(|e| AppError::KeyStore(e.to_string()))?;
             Ok(())
         }
 
@@ -160,10 +161,10 @@ impl KeyStore {
             let entry = self
                 .entry
                 .as_ref()
-                .ok_or_else(|| CliError::KeyStore("keyring unavailable".to_string()))?;
+                .ok_or_else(|| AppError::KeyStore("keyring unavailable".to_string()))?;
             entry
                 .set_password(&hex::encode(key))
-                .map_err(|e| CliError::KeyStore(e.to_string()))?;
+                .map_err(|e| AppError::KeyStore(e.to_string()))?;
             Ok(())
         }
     }
@@ -173,7 +174,7 @@ impl KeyStore {
         {
             self.entry
                 .delete_password()
-                .map_err(|e| CliError::KeyStore(e.to_string()))?;
+                .map_err(|e| AppError::KeyStore(e.to_string()))?;
             Ok(())
         }
 
@@ -182,10 +183,10 @@ impl KeyStore {
             let entry = self
                 .entry
                 .as_ref()
-                .ok_or_else(|| CliError::KeyStore("keyring unavailable".to_string()))?;
+                .ok_or_else(|| AppError::KeyStore("keyring unavailable".to_string()))?;
             entry
                 .delete_password()
-                .map_err(|e| CliError::KeyStore(e.to_string()))?;
+                .map_err(|e| AppError::KeyStore(e.to_string()))?;
             Ok(())
         }
     }
@@ -222,7 +223,7 @@ fn validate_key_len(len: usize) -> Result<()> {
     if len == KEY_LEN {
         Ok(())
     } else {
-        Err(CliError::InvalidKeyLength {
+        Err(AppError::InvalidKeyLength {
             expected: KEY_LEN,
             actual: len,
         })
@@ -233,7 +234,7 @@ fn validate_key_len(len: usize) -> Result<()> {
 fn dpapi_path() -> Result<PathBuf> {
     let base = std::env::var_os("LOCALAPPDATA")
         .or_else(|| std::env::var_os("APPDATA"))
-        .ok_or_else(|| CliError::KeyStore("LOCALAPPDATA/APPDATA not set".to_string()))?;
+        .ok_or_else(|| AppError::KeyStore("LOCALAPPDATA/APPDATA not set".to_string()))?;
     let mut path = PathBuf::from(base);
     path.push("awmkit");
     path.push("key.dpapi");
@@ -243,13 +244,13 @@ fn dpapi_path() -> Result<PathBuf> {
 #[cfg(windows)]
 fn encrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
     use std::ptr::{null, null_mut};
-    use windows_sys::Win32::Foundation::{BOOL, LocalFree};
+    use windows_sys::Win32::Foundation::{LocalFree, BOOL};
     use windows_sys::Win32::Security::Cryptography::{
-        CryptProtectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptProtectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
     };
 
     if data.is_empty() {
-        return Err(CliError::KeyStore("dpapi encrypt: empty data".to_string()));
+        return Err(AppError::KeyStore("dpapi encrypt: empty data".to_string()));
     }
 
     let mut in_blob = CRYPT_INTEGER_BLOB {
@@ -274,7 +275,7 @@ fn encrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
     };
 
     if ok == 0 {
-        return Err(CliError::KeyStore("dpapi encrypt failed".to_string()));
+        return Err(AppError::KeyStore("dpapi encrypt failed".to_string()));
     }
 
     let bytes = unsafe { std::slice::from_raw_parts(out_blob.pbData, out_blob.cbData as usize) };
@@ -287,14 +288,14 @@ fn encrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
 
 #[cfg(windows)]
 fn decrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
-    use std::ptr::{null_mut, null};
-    use windows_sys::Win32::Foundation::{BOOL, LocalFree};
+    use std::ptr::{null, null_mut};
+    use windows_sys::Win32::Foundation::{LocalFree, BOOL};
     use windows_sys::Win32::Security::Cryptography::{
-        CryptUnprotectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
     };
 
     if data.is_empty() {
-        return Err(CliError::KeyStore("dpapi decrypt: empty data".to_string()));
+        return Err(AppError::KeyStore("dpapi decrypt: empty data".to_string()));
     }
 
     let mut in_blob = CRYPT_INTEGER_BLOB {
@@ -326,7 +327,7 @@ fn decrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
     }
 
     if ok == 0 {
-        return Err(CliError::KeyStore("dpapi decrypt failed".to_string()));
+        return Err(AppError::KeyStore("dpapi decrypt failed".to_string()));
     }
 
     let bytes = unsafe { std::slice::from_raw_parts(out_blob.pbData, out_blob.cbData as usize) };

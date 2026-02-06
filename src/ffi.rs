@@ -34,7 +34,7 @@ pub struct AWMResult {
     pub version: u8,
     pub timestamp_utc: u64,
     pub timestamp_minutes: u32,
-    pub tag: [c_char; 9],     // 8 chars + null terminator
+    pub tag: [c_char; 9],      // 8 chars + null terminator
     pub identity: [c_char; 8], // 7 chars max + null terminator
 }
 
@@ -303,7 +303,9 @@ pub extern "C" fn awm_audio_new() -> *mut AWMAudioHandle {
 /// - `binary_path` 必须是有效的 C 字符串
 /// - 返回的指针需要通过 `awm_audio_free` 释放
 #[no_mangle]
-pub unsafe extern "C" fn awm_audio_new_with_binary(binary_path: *const c_char) -> *mut AWMAudioHandle {
+pub unsafe extern "C" fn awm_audio_new_with_binary(
+    binary_path: *const c_char,
+) -> *mut AWMAudioHandle {
     if binary_path.is_null() {
         return ptr::null_mut();
     }
@@ -348,7 +350,10 @@ pub unsafe extern "C" fn awm_audio_set_strength(handle: *mut AWMAudioHandle, str
 /// - `handle` 必须是有效的 Audio 句柄
 /// - `key_file` 必须是有效的 C 字符串
 #[no_mangle]
-pub unsafe extern "C" fn awm_audio_set_key_file(handle: *mut AWMAudioHandle, key_file: *const c_char) {
+pub unsafe extern "C" fn awm_audio_set_key_file(
+    handle: *mut AWMAudioHandle,
+    key_file: *const c_char,
+) {
     if handle.is_null() || key_file.is_null() {
         return;
     }
@@ -557,7 +562,10 @@ pub unsafe extern "C" fn awm_audio_embed_multichannel(
     let msg: [u8; 16] = slice::from_raw_parts(message, 16).try_into().unwrap();
     let rust_layout = layout.to_rust_layout();
 
-    match (*handle).inner.embed_multichannel(input_str, output_str, &msg, rust_layout) {
+    match (*handle)
+        .inner
+        .embed_multichannel(input_str, output_str, &msg, rust_layout)
+    {
         Ok(_) => AWMError::Success as i32,
         Err(crate::Error::AudiowmarkNotFound) => AWMError::AudiowmarkNotFound as i32,
         Err(crate::Error::AudiowmarkExec(_)) => AWMError::AudiowmarkExec as i32,

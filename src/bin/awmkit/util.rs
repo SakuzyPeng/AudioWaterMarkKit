@@ -1,8 +1,8 @@
 use crate::error::{CliError, Result};
 use crate::Context;
-use awmkit::{Audio, Tag};
+use awmkit::app::{i18n, AppConfig, AudioEngine};
+use awmkit::Tag;
 use glob::glob;
-use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 pub fn parse_tag(input: &str) -> Result<Tag> {
@@ -33,7 +33,7 @@ pub fn expand_inputs(values: &[String]) -> Result<Vec<PathBuf>> {
     }
 
     if out.is_empty() {
-        return Err(CliError::Message("no input files provided".to_string()));
+        return Err(CliError::Message(i18n::tr("cli-util-no_input_files")));
     }
 
     Ok(out)
@@ -47,40 +47,21 @@ pub fn ensure_file(path: &Path) -> Result<()> {
     }
 }
 
-pub fn audio_from_context(ctx: &Context) -> Result<Audio> {
-    match ctx.audiowmark.as_ref() {
-        Some(path) => Audio::with_binary(path).map_err(|_| CliError::AudiowmarkNotFound),
-        None => {
-            #[cfg(feature = "bundled")]
-            {
-                if let Ok(path) = crate::bundled::ensure_extracted() {
-                    return Audio::with_binary(path).map_err(|_| CliError::AudiowmarkNotFound);
-                }
-            }
-            Audio::new().map_err(|_| CliError::AudiowmarkNotFound)
+pub fn audio_from_context(ctx: &Context) -> Result<awmkit::Audio> {
+    let config = AppConfig {
+        audiowmark_override: ctx.audiowmark.clone(),
+    };
+    let engine = AudioEngine::new(&config).map_err(|err| match err {
+        awmkit::app::AppError::Awmkit(awmkit::Error::AudiowmarkNotFound) => {
+            CliError::AudiowmarkNotFound
         }
-    }
+        other => CliError::from(other),
+    })?;
+    Ok(engine.audio().clone())
 }
 
 pub fn default_output_path(input: &Path) -> Result<PathBuf> {
-    let stem = input
-        .file_stem()
-        .ok_or_else(|| CliError::Message("invalid input file name".to_string()))?;
-
-    let mut name = OsString::from(stem);
-    name.push("_wm");
-
-    if let Some(ext) = input.extension() {
-        name.push(".");
-        name.push(ext);
-    }
-
-    let output = input.with_file_name(name);
-    if output == input {
-        return Err(CliError::Message("output path would overwrite input".to_string()));
-    }
-
-    Ok(output)
+    awmkit::app::audio_engine::default_output_path(input).map_err(CliError::from)
 }
 
 fn is_glob_pattern(value: &str) -> bool {

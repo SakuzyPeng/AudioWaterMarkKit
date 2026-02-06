@@ -9,7 +9,7 @@
 - ✅ Windows x86_64
 - ⏸️ Linux (暂缓)
 
-**产物**: 完全自包含的 awmkit CLI（内嵌 audiowmark 二进制，运行时解压到缓存）
+**产物**: 完全自包含的 awmkit CLI + GUI（内嵌 audiowmark 二进制，运行时解压到缓存）
 
 ## 触发方式
 
@@ -65,8 +65,10 @@ gh workflow run build-awmkit.yml \
    ```
 
 5. **打包**：
-   - macOS: `awmkit-macos-arm64.tar.gz`
-   - Windows: `awmkit-windows-x86_64.zip`
+   - macOS CLI: `awmkit-macos-arm64.tar.gz`
+   - macOS GUI: `awmkit-gui-macos-arm64.tar.gz`
+   - Windows CLI: `awmkit-windows-x86_64.zip`
+   - Windows GUI: `awmkit-gui-windows-x86_64.zip`
 
 6. **发布**：
    - 创建 GitHub Release
@@ -96,6 +98,18 @@ cd awmkit-macos-arm64
 awmkit-windows-x86_64.zip  (~1.5 MB)
 ├── awmkit-windows-x86_64/
     └── awmkit.exe         (可执行文件，包含内嵌 audiowmark)
+```
+
+### GUI 产物示例
+
+```
+awmkit-gui-macos-arm64.tar.gz
+└── awmkit-gui
+```
+
+```
+awmkit-gui-windows-x86_64.zip
+└── awmkit-gui.exe
 ```
 
 **使用**：

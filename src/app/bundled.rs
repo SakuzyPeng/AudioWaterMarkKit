@@ -1,8 +1,10 @@
-use crate::error::{CliError, Result};
-use sha2::{Digest, Sha256};
+use crate::app::error::{AppError, Result};
 use std::fs::{self, File};
-use std::io::{self, Cursor, Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
+
+#[cfg(feature = "bundled")]
+use sha2::{Digest, Sha256};
 
 #[cfg(target_os = "windows")]
 const BIN_REL: &str = "bin/audiowmark.exe";
@@ -13,7 +15,10 @@ const BIN_REL: &str = "bin/audiowmark";
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
 const BIN_REL: &str = "";
 
-#[cfg(all(feature = "bundled", not(any(target_os = "windows", target_os = "macos"))))]
+#[cfg(all(
+    feature = "bundled",
+    not(any(target_os = "windows", target_os = "macos"))
+))]
 compile_error!("bundled feature is only supported on windows and macos.");
 
 #[cfg(all(feature = "bundled", target_os = "windows"))]
@@ -67,7 +72,7 @@ fn bundle_hash() -> String {
     {
         let mut hasher = Sha256::new();
         hasher.update(BUNDLE_BYTES);
-        hex::encode(hasher.finalize())
+        to_hex(&hasher.finalize())
     }
     #[cfg(not(feature = "bundled"))]
     {
@@ -75,12 +80,12 @@ fn bundle_hash() -> String {
     }
 }
 
-fn cache_root() -> Result<PathBuf> {
+pub fn cache_root() -> Result<PathBuf> {
     #[cfg(target_os = "windows")]
     {
         let base = std::env::var_os("LOCALAPPDATA")
             .or_else(|| std::env::var_os("APPDATA"))
-            .ok_or_else(|| CliError::Message("LOCALAPPDATA/APPDATA not set".to_string()))?;
+            .ok_or_else(|| AppError::Message("LOCALAPPDATA/APPDATA not set".to_string()))?;
         let mut path = PathBuf::from(base);
         path.push("awmkit");
         path.push("bundled");
@@ -90,7 +95,7 @@ fn cache_root() -> Result<PathBuf> {
     #[cfg(not(target_os = "windows"))]
     {
         let home = std::env::var_os("HOME")
-            .ok_or_else(|| CliError::Message("HOME not set".to_string()))?;
+            .ok_or_else(|| AppError::Message("HOME not set".to_string()))?;
         let mut path = PathBuf::from(home);
         path.push(".awmkit");
         path.push("bundled");
@@ -102,19 +107,21 @@ fn extract_zip(dest: &Path) -> Result<()> {
     #[cfg(not(feature = "bundled"))]
     {
         let _ = dest;
-        return Err(CliError::Message("bundled feature not enabled".to_string()));
+        return Err(AppError::Message("bundled feature not enabled".to_string()));
     }
 
     #[cfg(feature = "bundled")]
     {
+        use std::io::{self, Cursor};
+
         let reader = Cursor::new(BUNDLE_BYTES);
         let mut archive = zip::ZipArchive::new(reader)
-            .map_err(|e| CliError::Message(format!("zip open error: {e}")))?;
+            .map_err(|e| AppError::Message(format!("zip open error: {e}")))?;
 
         for i in 0..archive.len() {
             let mut file = archive
                 .by_index(i)
-                .map_err(|e| CliError::Message(format!("zip read error: {e}")))?;
+                .map_err(|e| AppError::Message(format!("zip read error: {e}")))?;
             let name = file.name().to_string();
             let outpath = dest.join(&name);
 
@@ -142,4 +149,15 @@ fn ensure_executable(path: &Path) -> Result<()> {
     perms.set_mode(perms.mode() | 0o111);
     fs::set_permissions(path, perms)?;
     Ok(())
+}
+
+#[cfg(feature = "bundled")]
+fn to_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        out.push(HEX[(b >> 4) as usize] as char);
+        out.push(HEX[(b & 0x0F) as usize] as char);
+    }
+    out
 }

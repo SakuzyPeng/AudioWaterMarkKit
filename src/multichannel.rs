@@ -416,11 +416,7 @@ impl MultichannelAudio {
 
     /// 保存立体声对到临时 WAV 文件
     #[cfg(feature = "multichannel")]
-    pub fn save_stereo_pair<P: AsRef<Path>>(
-        &self,
-        pair_index: usize,
-        path: P,
-    ) -> Result<()> {
+    pub fn save_stereo_pair<P: AsRef<Path>>(&self, pair_index: usize, path: P) -> Result<()> {
         let pairs = self.split_stereo_pairs();
         if pair_index >= pairs.len() {
             return Err(Error::InvalidInput(format!(
@@ -440,11 +436,7 @@ impl MultichannelAudio {
 
     /// 从立体声 WAV 文件加载并替换指定声道对
     #[cfg(feature = "multichannel")]
-    pub fn load_stereo_pair<P: AsRef<Path>>(
-        &mut self,
-        pair_index: usize,
-        path: P,
-    ) -> Result<()> {
+    pub fn load_stereo_pair<P: AsRef<Path>>(&mut self, pair_index: usize, path: P) -> Result<()> {
         let stereo = Self::from_wav(path)?;
         if stereo.num_channels() != 2 {
             return Err(Error::InvalidInput("expected stereo WAV".into()));
@@ -494,9 +486,8 @@ mod tests {
             vec![13, 14, 15, 16],
         ];
 
-        let audio =
-            MultichannelAudio::new(channels.clone(), 48000, SampleFormat::Int24)
-                .expect("create audio");
+        let audio = MultichannelAudio::new(channels.clone(), 48000, SampleFormat::Int24)
+            .expect("create audio");
 
         let pairs = audio.split_stereo_pairs();
         assert_eq!(pairs.len(), 2);
@@ -505,9 +496,8 @@ mod tests {
         assert_eq!(pairs[1].0, vec![9, 10, 11, 12]);
         assert_eq!(pairs[1].1, vec![13, 14, 15, 16]);
 
-        let merged =
-            MultichannelAudio::merge_stereo_pairs(&pairs, 48000, SampleFormat::Int24)
-                .expect("merge");
+        let merged = MultichannelAudio::merge_stereo_pairs(&pairs, 48000, SampleFormat::Int24)
+            .expect("merge");
         assert_eq!(merged.num_channels(), 4);
     }
 }

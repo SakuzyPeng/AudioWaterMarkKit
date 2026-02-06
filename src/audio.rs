@@ -101,7 +101,13 @@ impl Audio {
     /// - `input`: 输入音频路径
     /// - `output`: 输出音频路径
     /// - `message`: 16 字节消息
-    pub fn embed<P: AsRef<Path>>(&self, input: P, output: P, message: &[u8; MESSAGE_LEN]) -> Result<()> {
+    pub fn embed<P: AsRef<Path>>(
+        &self,
+        input: P,
+        output: P,
+        message: &[u8; MESSAGE_LEN],
+    ) -> Result<()> {
+        validate_input_format(input.as_ref())?;
         let hex = bytes_to_hex(message);
 
         let mut cmd = Command::new(&self.binary_path);
@@ -113,11 +119,11 @@ impl Audio {
             cmd.arg("--key").arg(key_file);
         }
 
-        cmd.arg(input.as_ref())
-            .arg(output.as_ref())
-            .arg(&hex);
+        cmd.arg(input.as_ref()).arg(output.as_ref()).arg(&hex);
 
-        let output = cmd.output().map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+        let output = cmd
+            .output()
+            .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -149,6 +155,7 @@ impl Audio {
     /// # Returns
     /// 检测结果，如果没有检测到水印返回 None
     pub fn detect<P: AsRef<Path>>(&self, input: P) -> Result<Option<DetectResult>> {
+        validate_input_format(input.as_ref())?;
         let mut cmd = Command::new(&self.binary_path);
         cmd.arg("get");
 
@@ -158,7 +165,9 @@ impl Audio {
 
         cmd.arg(input.as_ref());
 
-        let output = cmd.output().map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+        let output = cmd
+            .output()
+            .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
 
         // audiowmark 在没有检测到水印时可能返回非零状态
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -368,7 +377,8 @@ impl Audio {
 
             // 更新最佳结果 (选择比特错误最少的)
             if let Some(ref r) = result {
-                if best.is_none() || r.bit_errors < best.as_ref().map_or(u32::MAX, |b| b.bit_errors) {
+                if best.is_none() || r.bit_errors < best.as_ref().map_or(u32::MAX, |b| b.bit_errors)
+                {
                     best = Some(r.clone());
                 }
             }
@@ -493,6 +503,22 @@ fn parse_detect_output(stdout: &str, stderr: &str) -> Result<Option<DetectResult
     Ok(None)
 }
 
+fn validate_input_format(path: &Path) -> Result<()> {
+    let ext = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase());
+    match ext.as_deref() {
+        Some("wav") | Some("flac") => Ok(()),
+        Some(ext) => Err(Error::InvalidInput(format!(
+            "unsupported audio format: .{ext} (supported: wav, flac)"
+        ))),
+        None => Err(Error::InvalidInput(
+            "input file has no extension (supported: wav, flac)".to_string(),
+        )),
+    }
+}
+
 /// 字节数组转 hex 字符串
 fn bytes_to_hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
@@ -518,8 +544,10 @@ mod tests {
 
     #[test]
     fn test_bytes_to_hex() {
-        let bytes = [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
-                     0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef];
+        let bytes = [
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab,
+            0xcd, 0xef,
+        ];
         assert_eq!(bytes_to_hex(&bytes), "0123456789abcdef0123456789abcdef");
     }
 

@@ -1,10 +1,11 @@
 use crate::error::{CliError, Result};
-use crate::keystore::KeyStore;
 use crate::util::{audio_from_context, default_output_path, ensure_file, expand_inputs, parse_tag};
 use crate::Context;
+use awmkit::app::{i18n, KeyStore};
 use awmkit::Message;
 use clap::Args;
 use indicatif::{ProgressBar, ProgressStyle};
+use fluent_bundle::FluentArgs;
 use std::path::PathBuf;
 
 #[derive(Args)]
@@ -29,9 +30,7 @@ pub struct EmbedArgs {
 pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
     let mut inputs = expand_inputs(&args.inputs)?;
     if args.output.is_some() && inputs.len() != 1 {
-        return Err(CliError::Message(
-            "--output only supports a single input file".to_string(),
-        ));
+        return Err(CliError::Message(i18n::tr("cli-embed-output_single")));
     }
 
     for input in &inputs {
@@ -100,11 +99,14 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
     }
 
     if !ctx.out.quiet() {
-        ctx.out.info(format!("Done: {success} succeeded, {failed} failed"));
+        let mut args = FluentArgs::new();
+        args.set("success", success.to_string());
+        args.set("failed", failed.to_string());
+        ctx.out.info(i18n::tr_args("cli-embed-done", &args));
     }
 
     if failed > 0 {
-        Err(CliError::Message("one or more files failed".to_string()))
+        Err(CliError::Message(i18n::tr("cli-embed-failed")))
     } else {
         Ok(())
     }

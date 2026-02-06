@@ -1,0 +1,22 @@
+[     116ms] [ERROR] bootstrap failed TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (http://localhost:1420/node_modules/.vite/deps/chunk-G7S6KQDI.js?v=b79eedc1:109:37)
+    at getI18nBundle (http://localhost:1420/src/lib/api.ts:3:10)
+    at http://localhost:1420/src/context/AppContext.tsx:165:18
+    at Object.react_stack_bottom_frame (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:18567:20)
+    at runWithFiberInDEV (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:997:72)
+    at commitHookEffectListMount (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:9411:163)
+    at commitHookPassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:9465:60)
+    at commitPassiveMountOnFiber (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:11040:29)
+    at recursivelyTraversePassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:11010:13)
+    at commitPassiveMountOnFiber (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:11201:13) @ http://localhost:1420/src/context/AppContext.tsx:173
+[     116ms] [ERROR] bootstrap failed TypeError: Cannot read properties of undefined (reading 'invoke')
+    at invoke (http://localhost:1420/node_modules/.vite/deps/chunk-G7S6KQDI.js?v=b79eedc1:109:37)
+    at getI18nBundle (http://localhost:1420/src/lib/api.ts:3:10)
+    at http://localhost:1420/src/context/AppContext.tsx:165:18
+    at Object.react_stack_bottom_frame (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:18567:20)
+    at runWithFiberInDEV (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:997:72)
+    at commitHookEffectListMount (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:9411:163)
+    at commitHookPassiveMountEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:9465:60)
+    at reconnectPassiveEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:11273:13)
+    at recursivelyTraverseReconnectPassiveEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:11240:11)
+    at reconnectPassiveEffects (http://localhost:1420/node_modules/.vite/deps/react-dom_client.js?v=b79eedc1:11317:13) @ http://localhost:1420/src/context/AppContext.tsx:173

@@ -136,5 +136,7 @@ jobs:
           name: ${{ steps.tag.outputs.tag }}
           prerelease: ${{ inputs.prerelease || false }}
           body_path: docs/AWMKIT_RELEASE_NOTES.md
-          files: ${{ matrix.output_name }}.${{ matrix.output_ext }}
+          files: |
+            ${{ matrix.output_name }}.${{ matrix.output_ext }}
+            ${{ matrix.gui_output_name }}.${{ matrix.gui_output_ext }}
           token: ${{ secrets.GITHUB_TOKEN }}

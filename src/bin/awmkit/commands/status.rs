@@ -1,8 +1,9 @@
 use crate::error::{CliError, Result};
-use crate::keystore::{KeyStore, KEY_LEN};
 use crate::util::audio_from_context;
 use crate::Context;
+use awmkit::app::{i18n, KeyStore, KEY_LEN};
 use clap::Args;
+use fluent_bundle::FluentArgs;
 
 #[derive(Args)]
 pub struct StatusArgs {
@@ -12,42 +13,55 @@ pub struct StatusArgs {
 }
 
 pub fn run(ctx: &Context, args: &StatusArgs) -> Result<()> {
-    ctx.out
-        .info(format!("awmkit v{}", env!("CARGO_PKG_VERSION")));
+    let mut fmt_args = FluentArgs::new();
+    fmt_args.set("version", env!("CARGO_PKG_VERSION"));
+    ctx.out.info(i18n::tr_args("cli-status-version", &fmt_args));
 
     let store = KeyStore::new()?;
     if store.exists() {
         let (key, backend) = store.load_with_backend()?;
-        ctx.out
-            .info(format!("Key: configured ({} bytes)", key.len()));
-        ctx.out.info(format!("Key storage: {}", backend.label()));
+        let mut fmt_args = FluentArgs::new();
+        fmt_args.set("bytes", key.len().to_string());
+        ctx.out.info(i18n::tr_args("cli-status-key_configured", &fmt_args));
+        let mut fmt_args = FluentArgs::new();
+        fmt_args.set("backend", backend.label());
+        ctx.out.info(i18n::tr_args("cli-status-key_storage", &fmt_args));
         if key.len() != KEY_LEN {
-            ctx.out.warn("Key length does not match expected size");
+            ctx.out.warn(i18n::tr("cli-status-key_len_mismatch"));
         }
     } else {
-        ctx.out.info("Key: not configured");
+        ctx.out.info(i18n::tr("cli-status-key_not_configured"));
     }
 
     match audio_from_context(ctx) {
         Ok(audio) => {
             if args.doctor {
                 if audio.is_available() {
-                    ctx.out.info("audiowmark: available");
+                    ctx.out.info(i18n::tr("cli-status-audiowmark_available"));
                 } else {
-                    ctx.out.warn("audiowmark: not responding");
+                    ctx.out.warn(i18n::tr("cli-status-audiowmark_not_responding"));
                 }
                 match audio.version() {
-                    Ok(version) => ctx.out.info(format!("audiowmark version: {version}")),
-                    Err(err) => ctx.out.warn(format!("audiowmark version error: {err}")),
+                    Ok(version) => {
+                        let mut fmt_args = FluentArgs::new();
+                        fmt_args.set("version", version.as_str());
+                        ctx.out.info(i18n::tr_args("cli-status-audiowmark_version", &fmt_args));
+                    }
+                    Err(err) => {
+                        let mut fmt_args = FluentArgs::new();
+                        fmt_args.set("error", err.to_string());
+                        ctx.out.warn(i18n::tr_args("cli-status-audiowmark_version_error", &fmt_args));
+                    }
                 }
-                ctx.out
-                    .info(format!("audiowmark path: {}", audio.binary_path().display()));
+                let mut fmt_args = FluentArgs::new();
+                fmt_args.set("path", audio.binary_path().display().to_string());
+                ctx.out.info(i18n::tr_args("cli-status-audiowmark_path", &fmt_args));
             } else {
-                ctx.out.info("audiowmark: found");
+                ctx.out.info(i18n::tr("cli-status-audiowmark_found"));
             }
         }
         Err(CliError::AudiowmarkNotFound) => {
-            ctx.out.warn("audiowmark: not found");
+            ctx.out.warn(i18n::tr("cli-status-audiowmark_not_found"));
         }
         Err(err) => return Err(err),
     }
