@@ -80,6 +80,10 @@ ui-action-clear_mappings = Clear
 ui-action-refresh_mappings = Refresh
 ui-action-overwrite = Overwrite
 ui-action-skip = Skip
+ui-action-browse = Browse
+ui-action-clear_queue = Clear Queue
+ui-action-clear_all = Clear All
+ui-action-copy_md = Copy Markdown
 
 ui-label-tag = Tag
 ui-label-username_optional = Username (optional)
@@ -151,11 +155,34 @@ ui-status-card-engine = audiowmark
 ui-status-card-actions = Actions
 ui-status-card-language = Language
 
+ui-card-embed_settings = Embed Settings
+ui-card-file_queue = File Queue
+ui-card-result_log = Result Log
+ui-card-system_status = System Status
+ui-card-saved_mappings = Saved Mappings
+ui-card-add_mapping = Add Mapping
+ui-card-actions = Actions
+ui-card-danger_zone = Danger Zone
+
+ui-drop-hint = Drop WAV/FLAC files or folders here
+ui-drop-compact = Drop files or
+
+ui-empty-no_files = No files added yet
+ui-empty-no_results = Results will appear here
+ui-empty-no_tags = No saved mappings yet
+ui-empty-detect = Add files to detect watermarks
+
+ui-status-embed_done = Done
+ui-status-detect_done = Detection complete
+
 ui-danger-title = Danger zone
 ui-danger-expand = Expand
 ui-danger-collapse = Collapse
 ui-danger-clear_cache = Clear cache/config
+ui-danger-clear_cache_title = Clear Cache/Config
 ui-danger-reset_all = Reset all (delete key)
+ui-danger-reset_all_title = Reset All
+ui-danger-clear_tags_title = Clear All Mappings
 ui-danger-confirm_title = Confirm action
 ui-danger-confirm_message_clear = This will remove cached binaries and config files. Your key will NOT be deleted.
 ui-danger-confirm_message_reset = This will delete the key, tags, and local config/cache. This action cannot be undone.
@@ -169,6 +196,7 @@ ui-status-clear_cache_failed = Clear cache failed: { $error }
 ui-status-reset_failed = Reset failed: { $error }
 
 ui-error-tag_required = tag is required
+ui-error-username_required = username is required
 ui-tag-none = no saved tags
 ui-error-key_exists = key already exists
 ui-tag-load_failed = load failed: { $error }
@@ -230,10 +258,32 @@ ui-status-field-backend = Backend
 ui-status-field-error = Error
 ui-status-field-path = Path
 ui-status-field-version = Version
+ui-field-state = State
+ui-field-bytes = Bytes
+ui-field-backend = Backend
+ui-field-error = Error
+ui-field-path = Path
+ui-field-version = Version
 
-ui-confirm-clear_tags = Clear all mappings?
+ui-table-created = Created At
+ui-status-key_title = Key Status
+
+ui-detect-summary-missing = Missing
+ui-detect-summary-invalid = Invalid
+ui-detect-summary-errors = Errors
+
+ui-toast-copied = Copied to clipboard
+ui-toast-tag_saved = Tag mapping saved
+ui-toast-tag_removed = Tag mapping removed
+ui-toast-tags_cleared = All mappings cleared
+ui-toast-cache_cleared = Cache cleared
+ui-toast-reset_done = Reset completed
+
 ui-placeholder-username = Input username
 ui-placeholder-tag = Input or generate tag
+ui-placeholder-tag_optional = (Optional)
+
+ui-confirm-clear_tags = Clear all mappings?
 
 ui-tag-table-username = Username
 ui-tag-table-tag = Tag

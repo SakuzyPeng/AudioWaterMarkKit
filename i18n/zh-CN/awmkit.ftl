@@ -80,6 +80,10 @@ ui-action-clear_mappings = 清空
 ui-action-refresh_mappings = 刷新
 ui-action-overwrite = 覆盖
 ui-action-skip = 跳过
+ui-action-browse = 浏览
+ui-action-clear_queue = 清理队列
+ui-action-clear_all = 全部清除
+ui-action-copy_md = 复制 Markdown
 
 ui-label-tag = 标签
 ui-label-username_optional = 用户名（可选）
@@ -151,11 +155,34 @@ ui-status-card-engine = audiowmark
 ui-status-card-actions = 操作
 ui-status-card-language = 语言
 
+ui-card-embed_settings = 嵌入设置
+ui-card-file_queue = 文件队列
+ui-card-result_log = 结果日志
+ui-card-system_status = 系统状态
+ui-card-saved_mappings = 已保存映射
+ui-card-add_mapping = 添加映射
+ui-card-actions = 操作
+ui-card-danger_zone = 危险区域
+
+ui-drop-hint = 拖拽 WAV/FLAC 文件或文件夹到此处
+ui-drop-compact = 拖拽文件或
+
+ui-empty-no_files = 还没有添加文件
+ui-empty-no_results = 结果将显示在此处
+ui-empty-no_tags = 还没有保存映射
+ui-empty-detect = 添加文件以检测水印
+
+ui-status-embed_done = 完成
+ui-status-detect_done = 检测完成
+
 ui-danger-title = 危险操作
 ui-danger-expand = 展开
 ui-danger-collapse = 收起
 ui-danger-clear_cache = 清理缓存/配置
+ui-danger-clear_cache_title = 清理缓存/配置
 ui-danger-reset_all = 完全重置（删除密钥）
+ui-danger-reset_all_title = 完全重置
+ui-danger-clear_tags_title = 清空全部映射
 ui-danger-confirm_title = 确认操作
 ui-danger-confirm_message_clear = 将删除缓存二进制与配置文件，但不会删除密钥。
 ui-danger-confirm_message_reset = 将删除密钥、标签映射与本地配置/缓存，且不可恢复。
@@ -169,6 +196,7 @@ ui-status-clear_cache_failed = 清理失败：{ $error }
 ui-status-reset_failed = 重置失败：{ $error }
 
 ui-error-tag_required = 必须填写标签
+ui-error-username_required = 必须填写用户名
 ui-tag-none = 没有已保存的映射
 ui-error-key_exists = 密钥已存在
 ui-tag-load_failed = 加载失败：{ $error }
@@ -230,10 +258,34 @@ ui-status-field-backend = 后端
 ui-status-field-error = 错误
 ui-status-field-path = 路径
 ui-status-field-version = 版本
+ui-field-state = 状态
+ui-field-bytes = 字节数
+ui-field-backend = 后端
+ui-field-error = 错误
+ui-field-path = 路径
+ui-field-version = 版本
 
-ui-confirm-clear_tags = 确认清空全部映射？
+ui-table-created = 创建时间
+ui-status-key_title = 密钥状态
+
+ui-detect-summary-missing = 未发现
+ui-detect-summary-invalid = 无效
+ui-detect-summary-errors = 错误
+
+ui-toast-copied = 已复制到剪贴板
+ui-toast-tag_saved = 标签映射已保存
+ui-toast-tag_removed = 标签映射已移除
+ui-toast-tags_cleared = 全部映射已清除
+ui-toast-cache_cleared = 缓存已清理
+ui-toast-reset_done = 重置完成
+
 ui-placeholder-username = 输入用户名
 ui-placeholder-tag = 输入或生成标签
+ui-placeholder-tag_optional = （可选）
+
+ui-label-auto_mapping = 自动映射
+
+ui-confirm-clear_tags = 确认清空全部映射？
 
 ui-tag-table-username = 用户名
 ui-tag-table-tag = 标签
