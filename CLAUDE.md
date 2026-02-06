@@ -45,8 +45,11 @@ cd src-tauri && cargo tauri dev
 # 仅启动前端开发服务（端口 1420）
 cd ui && npm run dev
 
-# 构建前端
+# 构建前端（自动运行 i18n 键检查）
 cd ui && npm run build
+
+# 检查国际化键一致性
+cd ui && npm run check:i18n
 
 # 类型检查
 cd ui && npx tsc --noEmit
@@ -94,7 +97,7 @@ cd cli-swift && ./dist.sh
 ```
 ┌─ GUI (Tauri 2) ──────────────────────────┐
 │  React 19 + TypeScript + Vite            │
-│  @pikoloo/darwin-ui 组件库               │
+│  HeroUI 组件库 (@heroui/react)           │
 │  4 标签页: 嵌入 / 检测 / 状态 / 标签    │
 └──────────── Tauri IPC ───────────────────┘
                   ↓
@@ -128,10 +131,12 @@ cd cli-swift && ./dist.sh
 
 - `keystore.rs` - 系统密钥安全存储（macOS Keychain / Windows Credential Manager）
 - `tag_store.rs` - 用户-标签映射管理（JSON 持久化于 `~/.awmkit/tags.json`）
-- `i18n.rs` - Fluent 国际化框架集成
-- `audio_engine.rs` - audiowmark 命令行封装（GUI 专用）
+- `i18n.rs` - Fluent 国际化框架集成（支持 en-US 和 zh-CN）
+- `audio_engine.rs` - audiowmark 命令行封装（GUI 专用，处理批量操作和进度回调）
 - `settings.rs` - 配置管理（TOML 持久化于 `~/.awmkit/config.toml`）
-- `bundled.rs` - 内嵌 audiowmark 二进制管理
+- `bundled.rs` - 内嵌 audiowmark 二进制管理（zstd 压缩，运行时解压）
+- `maintenance.rs` - 维护功能（清除缓存、重置配置）
+- `error.rs` - App 层统一错误类型
 
 ### Tauri 后端 (src-tauri/)
 
@@ -140,13 +145,14 @@ cd cli-swift && ./dist.sh
 
 ### 前端 (ui/)
 
-React 19 + TypeScript + Vite 应用，使用 @pikoloo/darwin-ui macOS 风格组件库：
+React 19 + TypeScript + Vite 应用，使用 HeroUI 组件库 (@heroui/react)：
 
 - `src/App.tsx` - 根组件，Tab 路由和全局状态管理
 - `src/pages/` - 4 个页面：EmbedPage, DetectPage, StatusPage, TagPage
 - `src/lib/api.ts` - Tauri IPC 调用封装层，所有后端通信入口
 - `src/styles/tokens.css` - 设计令牌（颜色、字体、间距）
 - `src/types/ui.ts` - TypeScript 类型定义
+- `scripts/check-i18n-keys.mjs` - 检查国际化键是否在所有语言文件中定义
 
 ### 国际化 (i18n/)
 
@@ -156,11 +162,32 @@ Swift 绑定位于 `bindings/swift/`，CLI 位于 `cli-swift/`。
 
 ## 代码规范
 
-项目使用严格的 Clippy 配置（见 Cargo.toml），禁止：
-- `unwrap`, `expect`, `panic`, `todo`
+项目使用严格的 Clippy 配置（见 Cargo.toml lints 部分），禁止：
+- `unwrap`, `expect`, `panic`, `todo`, `unimplemented`, `unreachable`
 - 必须处理所有 Result
+- 必须为所有公共和私有 API 编写文档注释（missing_docs_in_private_items）
 
 HMAC 验证必须使用常量时间比较（防止时序攻击）。
+
+### 二进制构建
+
+项目包含多个二进制命令：
+- `awmkit` - 完整 CLI（需要 `full-cli` feature）
+- `awm` - 默认二进制（基础库模式）
+- `FTSC-detect` / `FTSC-embed` - 简化版命令（需要 `simple-cli` feature）
+
+构建特定二进制：
+```bash
+# 完整 CLI（推荐用于分发）
+cargo build --bin awmkit --features full-cli --release
+
+# 简化版命令
+cargo build --bin FTSC-detect --features simple-cli --release
+cargo build --bin FTSC-embed --features simple-cli --release
+
+# GUI 应用（包含 Tauri 后端）
+cd src-tauri && cargo tauri build
+```
 
 ## 外部依赖
 
