@@ -7,6 +7,7 @@ struct DetectView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isDropTargeted = false
     @State private var selectedResultLogID: UUID?
+    @State private var hideDetectDetailWhenNoSelection = false
     @State private var logSearchText = ""
 
     var body: some View {
@@ -41,12 +42,23 @@ struct DetectView: View {
         .onChange(of: viewModel.logs) { _, logs in
             if logs.isEmpty {
                 selectedResultLogID = nil
+                hideDetectDetailWhenNoSelection = false
                 logSearchText = ""
                 return
             }
             if let selectedResultLogID,
                !logs.contains(where: { $0.id == selectedResultLogID }) {
                 self.selectedResultLogID = nil
+                hideDetectDetailWhenNoSelection = false
+            }
+        }
+        .onChange(of: viewModel.detectRecords.count) { oldCount, newCount in
+            if newCount == 0 {
+                hideDetectDetailWhenNoSelection = false
+                return
+            }
+            if newCount > oldCount {
+                hideDetectDetailWhenNoSelection = false
             }
         }
     }
@@ -452,7 +464,13 @@ struct DetectView: View {
 
         if selectable {
             Button {
-                selectedResultLogID = entry.id
+                if isSelected {
+                    selectedResultLogID = nil
+                    hideDetectDetailWhenNoSelection = true
+                } else {
+                    selectedResultLogID = entry.id
+                    hideDetectDetailWhenNoSelection = false
+                }
             } label: {
                 logEntryContent(entry: entry, isSelectable: true, isSelected: isSelected)
             }
@@ -556,6 +574,9 @@ struct DetectView: View {
            let relatedRecordId = selectedLog.relatedRecordId,
            let selectedRecord = viewModel.detectRecords.first(where: { $0.id == relatedRecordId }) {
             return selectedRecord
+        }
+        if hideDetectDetailWhenNoSelection {
+            return nil
         }
         return viewModel.detectRecords.first
     }

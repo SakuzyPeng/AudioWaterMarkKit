@@ -73,6 +73,11 @@ class DetectViewModel: ObservableObject {
 
     private let maxLogCount = 200
     private let supportedAudioExtensions: Set<String> = ["wav", "flac"]
+    private var progressResetTask: Task<Void, Never>?
+
+    deinit {
+        progressResetTask?.cancel()
+    }
 
     // MARK: - 日志
 
@@ -261,6 +266,7 @@ class DetectViewModel: ObservableObject {
             return
         }
 
+        progressResetTask?.cancel()
         isProcessing = true
         progress = 0
         currentProcessingIndex = 0
@@ -281,10 +287,12 @@ class DetectViewModel: ObservableObject {
                 return
             }
 
-            let total = Double(selectedFiles.count)
+            let initialTotal = selectedFiles.count
+            let total = Double(initialTotal)
 
-            for (index, fileURL) in selectedFiles.enumerated() {
-                currentProcessingIndex = index
+            for processedCount in 0..<initialTotal {
+                guard let fileURL = selectedFiles.first else { break }
+                currentProcessingIndex = 0
                 let filePath = fileURL.path(percentEncoded: false)
                 let fileName = fileURL.lastPathComponent
 
@@ -356,13 +364,33 @@ class DetectViewModel: ObservableObject {
                     )
                 }
                 totalDetected += 1
-                progress = Double(index + 1) / total
+                if !selectedFiles.isEmpty {
+                    selectedFiles.removeFirst()
+                }
+                progress = Double(processedCount + 1) / total
             }
 
             log("检测完成", detail: "已检测: \(totalDetected), 发现水印: \(totalFound)")
 
             currentProcessingIndex = -1
             isProcessing = false
+            scheduleProgressResetIfNeeded()
+        }
+    }
+
+    private func scheduleProgressResetIfNeeded() {
+        guard progress >= 1 else { return }
+
+        progressResetTask?.cancel()
+        progressResetTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    self.progress = 0
+                }
+            }
         }
     }
 

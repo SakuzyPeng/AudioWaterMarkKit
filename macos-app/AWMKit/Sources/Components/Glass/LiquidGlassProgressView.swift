@@ -58,7 +58,7 @@ struct LiquidGlassProgressView: View {
                     .allowedDynamicRange(progress == 1.0 && colorScheme == .dark ? .high : .standard)
                     .animation(.easeOut(duration: 1.2), value: isFlashing)
                     .frame(width: geometry.size.width * progress)
-                    .animation(.easeInOut(duration: 0.4), value: progress)
+                    .animation(progress == 0 ? .easeOut(duration: 0.2) : .easeInOut(duration: 0.4), value: progress)
             }
         }
         .frame(height: height)

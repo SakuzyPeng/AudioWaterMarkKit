@@ -29,6 +29,11 @@ class EmbedViewModel: ObservableObject {
 
     private let maxLogCount = 200
     private let supportedAudioExtensions: Set<String> = ["wav", "flac"]
+    private var progressResetTask: Task<Void, Never>?
+
+    deinit {
+        progressResetTask?.cancel()
+    }
 
     // MARK: - 日志
 
@@ -215,6 +220,7 @@ class EmbedViewModel: ObservableObject {
             return
         }
 
+        progressResetTask?.cancel()
         isProcessing = true
         isCancelling = false
         progress = 0
@@ -235,14 +241,16 @@ class EmbedViewModel: ObservableObject {
                 return
             }
 
-            let total = Double(selectedFiles.count)
+            let initialTotal = selectedFiles.count
+            let total = Double(initialTotal)
             let suffix = customSuffix.isEmpty ? "_wm" : customSuffix
             var successCount = 0
             var failureCount = 0
 
-            for (index, fileURL) in selectedFiles.enumerated() {
+            for processedCount in 0..<initialTotal {
                 if isCancelling { break }
-                currentProcessingIndex = index
+                guard let fileURL = selectedFiles.first else { break }
+                currentProcessingIndex = 0
 
                 do {
                     let tag = try AWMTag(identity: tagInput)
@@ -260,11 +268,14 @@ class EmbedViewModel: ObservableObject {
                     log("失败: \(fileURL.lastPathComponent)", detail: error.localizedDescription, isSuccess: false)
                     failureCount += 1
                 }
-                progress = Double(index + 1) / total
+                if !selectedFiles.isEmpty {
+                    selectedFiles.removeFirst()
+                }
+                progress = Double(processedCount + 1) / total
             }
 
             if isCancelling {
-                log("已取消", detail: "已完成 \(successCount + failureCount) / \(selectedFiles.count) 个文件", isSuccess: false)
+                log("已取消", detail: "已完成 \(successCount + failureCount) / \(initialTotal) 个文件", isSuccess: false)
             } else {
                 log("处理完成", detail: "成功: \(successCount), 失败: \(failureCount)")
             }
@@ -272,6 +283,23 @@ class EmbedViewModel: ObservableObject {
             currentProcessingIndex = -1
             isProcessing = false
             isCancelling = false
+            scheduleProgressResetIfNeeded()
+        }
+    }
+
+    private func scheduleProgressResetIfNeeded() {
+        guard progress >= 1 else { return }
+
+        progressResetTask?.cancel()
+        progressResetTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self else { return }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    self.progress = 0
+                }
+            }
         }
     }
 
