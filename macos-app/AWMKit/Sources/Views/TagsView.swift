@@ -6,7 +6,6 @@ struct TagsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var tags: [TagEntry] = []
     @State private var newUsername: String = ""
-    @State private var newTagIdentity: String = ""
     @State private var showingAddSheet = false
     @State private var errorMessage: String?
 
@@ -91,7 +90,6 @@ struct TagsView: View {
         .sheet(isPresented: $showingAddSheet) {
             AddTagSheet(
                 username: $newUsername,
-                tagIdentity: $newTagIdentity,
                 onSave: saveNewTag
             )
         }
@@ -122,12 +120,8 @@ struct TagsView: View {
         guard !newUsername.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         do {
-            tags = try TagStoreBridge.save(
-                username: newUsername,
-                identityHint: newTagIdentity
-            )
+            tags = try TagStoreBridge.save(username: newUsername)
             newUsername = ""
-            newTagIdentity = ""
             showingAddSheet = false
         } catch {
             errorMessage = error.localizedDescription
@@ -190,10 +184,13 @@ struct TagEntryRow: View {
 
 struct AddTagSheet: View {
     @Binding var username: String
-    @Binding var tagIdentity: String
     let onSave: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+
+    private var suggestedTag: String? {
+        TagStoreBridge.previewTag(username: username)
+    }
 
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.card) {
@@ -221,13 +218,17 @@ struct AddTagSheet: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("标签（可选）")
+                    Text("自动生成 Tag")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondary.opacity(0.85))
 
                     GlassEffectContainer {
-                        TextField("留空自动生成", text: $tagIdentity)
-                            .textFieldStyle(.plain)
+                        HStack {
+                            Text(suggestedTag ?? "-")
+                                .font(.system(.body, design: .monospaced).weight(.semibold))
+                                .foregroundStyle(suggestedTag == nil ? .tertiary : .primary)
+                            Spacer()
+                        }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                     }
@@ -238,7 +239,7 @@ struct AddTagSheet: View {
                             .stroke(DesignSystem.Colors.border(colorScheme), lineWidth: DesignSystem.BorderWidth.standard)
                     )
 
-                    Text("7 个字符，留空按用户名稳定生成")
+                    Text("基于用户名稳定生成（预览即最终保存值）")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
@@ -254,11 +255,11 @@ struct AddTagSheet: View {
                     onSave()
                 }
                 .buttonStyle(GlassButtonStyle(accentOn: true))
-                .disabled(username.isEmpty)
+                .disabled(username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(30)
-        .frame(width: 400)
+        .frame(width: 420)
     }
 }
 
@@ -310,16 +311,9 @@ private enum TagStoreBridge {
             .map { TagEntry(username: $0.username, tag: $0.tag) }
     }
 
-    static func save(username: String, identityHint: String) throws -> [TagEntry] {
+    static func save(username: String) throws -> [TagEntry] {
         let normalizedUsername = try normalize(username)
-        let normalizedHint = identityHint.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let tag: AWMTag
-        if normalizedHint.isEmpty {
-            tag = try AWMTag(identity: suggestedIdentity(from: normalizedUsername))
-        } else {
-            tag = try AWMTag(identity: normalizedHint)
-        }
+        let tag = try AWMTag(identity: suggestedIdentity(from: normalizedUsername))
 
         var payload = try loadPayload()
         let now = UInt64(Date().timeIntervalSince1970)
@@ -342,6 +336,12 @@ private enum TagStoreBridge {
         payload.entries.sort { $0.username.localizedCaseInsensitiveCompare($1.username) == .orderedAscending }
         try persist(payload)
         return payload.entries.map { TagEntry(username: $0.username, tag: $0.tag) }
+    }
+
+    static func previewTag(username: String) -> String? {
+        let normalized = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+        return try? AWMTag(identity: suggestedIdentity(from: normalized)).value
     }
 
     static func remove(username: String) throws -> [TagEntry] {
