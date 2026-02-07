@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 class EmbedViewModel: ObservableObject {
     // MARK: - 文件队列
     @Published var selectedFiles: [URL] = []
+    @Published var inputSource: URL?
     @Published var outputDirectory: URL?
 
     // MARK: - 嵌入设置
@@ -27,6 +28,7 @@ class EmbedViewModel: ObservableObject {
     @Published var isClearLogsSuccess = false
 
     private let maxLogCount = 200
+    private let supportedAudioExtensions: Set<String> = ["wav", "flac"]
 
     // MARK: - 日志
 
@@ -50,13 +52,15 @@ class EmbedViewModel: ObservableObject {
 
     func selectFiles() {
         let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
         panel.canChooseFiles = true
-        panel.allowedContentTypes = [.audio]
+        panel.allowedContentTypes = []
 
-        if panel.runModal() == .OK {
-            selectedFiles.append(contentsOf: panel.urls)
+        if panel.runModal() == .OK, let source = panel.url {
+            inputSource = source
+            let files = resolveAudioFiles(from: source)
+            appendFilesWithDedup(files)
         }
     }
 
@@ -88,8 +92,84 @@ class EmbedViewModel: ObservableObject {
         }
         group.notify(queue: .main) { [weak self] in
             guard let self else { return }
-            self.selectedFiles.append(contentsOf: urls)
+            self.appendFilesWithDedup(urls)
         }
+    }
+
+    private func resolveAudioFiles(from source: URL) -> [URL] {
+        if isDirectory(source) {
+            do {
+                let items = try FileManager.default.contentsOfDirectory(
+                    at: source,
+                    includingPropertiesForKeys: [.isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                )
+                let files = items.filter { isSupportedAudioFile($0) }
+                if files.isEmpty {
+                    log(
+                        "目录无可用音频",
+                        detail: "当前目录未找到 WAV / FLAC 文件",
+                        isSuccess: false,
+                        isEphemeral: true
+                    )
+                }
+                return files
+            } catch {
+                log("读取目录失败", detail: error.localizedDescription, isSuccess: false)
+                return []
+            }
+        }
+
+        guard isSupportedAudioFile(source) else {
+            log(
+                "不支持的输入源",
+                detail: "请选择 WAV / FLAC 文件或包含这些文件的目录",
+                isSuccess: false,
+                isEphemeral: true
+            )
+            return []
+        }
+        return [source]
+    }
+
+    private func appendFilesWithDedup(_ files: [URL]) {
+        guard !files.isEmpty else { return }
+
+        var existing = Set(selectedFiles.map(Self.normalizedPathKey))
+        var deduped: [URL] = []
+        var duplicateCount = 0
+
+        for file in files {
+            let key = Self.normalizedPathKey(file)
+            if existing.insert(key).inserted {
+                deduped.append(file)
+            } else {
+                duplicateCount += 1
+            }
+        }
+
+        if !deduped.isEmpty {
+            selectedFiles.append(contentsOf: deduped)
+        }
+        if duplicateCount > 0 {
+            log("已去重", detail: "跳过 \(duplicateCount) 个重复文件", isEphemeral: true)
+        }
+    }
+
+    private func isSupportedAudioFile(_ url: URL) -> Bool {
+        guard !isDirectory(url) else { return false }
+        return supportedAudioExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    private func isDirectory(_ url: URL) -> Bool {
+        if let value = try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory {
+            return value
+        }
+        return url.hasDirectoryPath
+    }
+
+    private static func normalizedPathKey(_ url: URL) -> String {
+        url.standardizedFileURL.path(percentEncoded: false)
     }
 
     // MARK: - 清空操作
@@ -197,14 +277,8 @@ class EmbedViewModel: ObservableObject {
 
     // MARK: - 计算属性
 
-    var inputSummaryText: String {
-        if selectedFiles.isEmpty { return "尚未添加文件" }
-        if selectedFiles.count == 1 { return selectedFiles[0].lastPathComponent }
-        let dirs = Set(selectedFiles.map { $0.deletingLastPathComponent().path(percentEncoded: false) })
-        if dirs.count == 1, let dir = dirs.first {
-            return "\(dir) (\(selectedFiles.count) 个文件)"
-        }
-        return "多目录 (\(selectedFiles.count) 个文件)"
+    var inputSourceText: String {
+        inputSource?.path(percentEncoded: false) ?? "尚未选择输入源"
     }
 
     var outputDirectoryText: String {

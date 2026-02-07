@@ -49,11 +49,12 @@ struct DetectView: View {
                     Button(action: { viewModel.selectFiles() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "folder")
-                            Text("选择文件")
+                            Text("选择")
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
+                    .accessibilityLabel("选择输入源")
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.detectFiles(audio: appState.audio) }) {
@@ -65,28 +66,31 @@ struct DetectView: View {
                         }
                     }
                     .buttonStyle(GlassButtonStyle(accentOn: !viewModel.isProcessing, size: .compact))
+                    .accessibilityLabel(viewModel.isProcessing ? "停止检测" : "开始检测")
                     .disabled(viewModel.selectedFiles.isEmpty || viewModel.isProcessing)
 
                     Button(action: { viewModel.clearQueue() }) {
                         HStack(spacing: 6) {
                             Image(systemName: viewModel.isClearQueueSuccess ? "checkmark.circle" : "xmark.circle")
                                 .foregroundColor(viewModel.isClearQueueSuccess ? .green : .primary)
-                            Text("清空队列")
+                            Text("清空")
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
+                    .accessibilityLabel("清空队列")
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.clearLogs() }) {
                         HStack(spacing: 6) {
                             Image(systemName: viewModel.isClearLogsSuccess ? "checkmark.circle" : "line.3.horizontal.decrease.circle")
                                 .foregroundColor(viewModel.isClearLogsSuccess ? .green : .primary)
-                            Text("清空日志")
+                            Text("清空")
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
+                    .accessibilityLabel("清空日志")
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
 
@@ -123,7 +127,7 @@ struct DetectView: View {
         VStack(spacing: 10) {
             directoryInfoRow(
                 title: "待检测文件",
-                value: viewModel.inputSummaryText,
+                value: viewModel.inputSourceText,
                 systemImage: "tray.and.arrow.down",
                 onTap: { viewModel.selectFiles() }
             )
