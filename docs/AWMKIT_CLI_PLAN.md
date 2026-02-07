@@ -34,7 +34,7 @@ awmkit
 
 全局标志：
 - `--verbose` / `--quiet`
-- `--audiowmark <PATH>`（覆盖默认查找）
+- `--audiowmark <PATH>`（bundled 不可用时作为回退路径）
 
 ## 数据与安全
 - **密钥长度固定 32 bytes**

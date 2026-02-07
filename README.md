@@ -227,7 +227,7 @@ awmkit status --doctor
 ```bash
 --verbose, -v        # 详细输出
 --quiet, -q          # 静默模式
---audiowmark <PATH>  # 指定 audiowmark 路径（覆盖 bundled）
+--audiowmark <PATH>  # 指定 audiowmark 回退路径（bundled 不可用时使用）
 ```
 
 ### tag - 用户名映射（可选）
@@ -427,6 +427,9 @@ AWMKit 支持多声道音频的水印嵌入和检测，通过将音频拆分为�
 git clone https://github.com/SakuzyPeng/AudioWaterMarkKit
 cd awmkit
 
+# 准备 bundled 资源（macOS arm64）
+# 需要存在 bundled/audiowmark-macos-arm64.zip
+
 # 构建 CLI
 cargo build --bin awmkit --features full-cli --release
 
@@ -453,7 +456,7 @@ gh workflow run build-awmkit.yml \
 
 CI 会自动：
 1. 下载对应平台的 audiowmark release
-2. 压缩为 zstd 格式
+2. 组装 bundled zip 资源
 3. 编译嵌入到 awmkit 二进制
 4. 打包为 tar.gz（macOS）或 zip（Windows）
 5. 创建 GitHub Release 并上传
@@ -466,14 +469,27 @@ CI 会自动：
 # 仅库（不含 CLI）
 cargo build --release
 
-# 完整 CLI（包含所有功能）
+# 完整 CLI（bundled 优先，回退 --audiowmark/PATH）
 cargo build --features full-cli --release
 
-# C FFI
-cargo build --features ffi --release
+# C FFI（macOS 原生 App 推荐）
+cargo build --features ffi,bundled --release
 
 # 多声道支持
 cargo build --features multichannel --release
+```
+
+### 本地最小命令（自包含优先）
+
+```bash
+# Rust CLI
+cargo build --bin awmkit --features full-cli --release
+
+# Tauri GUI 后端
+cargo check -p awmkit-gui
+
+# macOS 原生 App 的 Rust 库
+cargo build --features ffi,bundled --release
 ```
 
 ## 技术细节
@@ -511,8 +527,8 @@ cargo build --features multichannel --release
 
 awmkit 使用嵌入式二进制分发策略：
 
-1. **编译时嵌入**：使用 `include_bytes!` 宏嵌入 zstd 压缩的 audiowmark
-2. **运行时解压**：首次运行自动解压到 `~/.awmkit/bin/`
+1. **编译时嵌入**：使用 `include_bytes!` 宏嵌入 `bundled/audiowmark-*.zip`
+2. **运行时解压**：首次运行自动解压到 `~/.awmkit/bundled/bin/`
 3. **校验和验证**：SHA256 校验确保二进制完整性
 4. **平台特定**：每个平台仅包含对应的二进制（macOS ~206KB，Windows ~250KB）
 
@@ -539,8 +555,8 @@ awmkit/
 │       ├── output.rs       # 输出格式化
 │       └── util.rs
 ├── bundled/                # 嵌入式二进制
-│   ├── audiowmark-macos-arm64.zst
-│   └── audiowmark-windows-x86_64.exe.zst
+│   ├── audiowmark-macos-arm64.zip
+│   └── audiowmark-windows-x86_64.zip
 ├── include/
 │   └── awmkit.h            # C 头文件
 ├── bindings/

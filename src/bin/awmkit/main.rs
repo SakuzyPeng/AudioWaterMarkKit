@@ -24,6 +24,8 @@ mod output;
 mod util;
 
 #[cfg(feature = "full-cli")]
+use awmkit::app::{i18n, AppSettings};
+#[cfg(feature = "full-cli")]
 use clap::{Parser, Subcommand};
 #[cfg(feature = "full-cli")]
 use error::{CliError, Result};
@@ -31,8 +33,6 @@ use error::{CliError, Result};
 use output::Output;
 #[cfg(feature = "full-cli")]
 use std::path::PathBuf;
-#[cfg(feature = "full-cli")]
-use awmkit::app::{AppSettings, i18n};
 
 #[cfg(feature = "full-cli")]
 #[derive(Parser)]
@@ -48,7 +48,7 @@ struct Cli {
     #[arg(short, long, global = true)]
     quiet: bool,
 
-    /// Override audiowmark path
+    /// Fallback audiowmark path (used when bundled binary is unavailable)
     #[arg(long, global = true, value_name = "PATH")]
     audiowmark: Option<PathBuf>,
 

@@ -1,4 +1,4 @@
-use crate::app::error::{AppError, Result};
+use crate::error::{Error, Result};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -85,7 +85,7 @@ pub fn cache_root() -> Result<PathBuf> {
     {
         let base = std::env::var_os("LOCALAPPDATA")
             .or_else(|| std::env::var_os("APPDATA"))
-            .ok_or_else(|| AppError::Message("LOCALAPPDATA/APPDATA not set".to_string()))?;
+            .ok_or_else(|| Error::InvalidInput("LOCALAPPDATA/APPDATA not set".to_string()))?;
         let mut path = PathBuf::from(base);
         path.push("awmkit");
         path.push("bundled");
@@ -95,7 +95,7 @@ pub fn cache_root() -> Result<PathBuf> {
     #[cfg(not(target_os = "windows"))]
     {
         let home = std::env::var_os("HOME")
-            .ok_or_else(|| AppError::Message("HOME not set".to_string()))?;
+            .ok_or_else(|| Error::InvalidInput("HOME not set".to_string()))?;
         let mut path = PathBuf::from(home);
         path.push(".awmkit");
         path.push("bundled");
@@ -107,7 +107,9 @@ fn extract_zip(dest: &Path) -> Result<()> {
     #[cfg(not(feature = "bundled"))]
     {
         let _ = dest;
-        return Err(AppError::Message("bundled feature not enabled".to_string()));
+        Err(Error::InvalidInput(
+            "bundled feature not enabled".to_string(),
+        ))
     }
 
     #[cfg(feature = "bundled")]
@@ -116,12 +118,12 @@ fn extract_zip(dest: &Path) -> Result<()> {
 
         let reader = Cursor::new(BUNDLE_BYTES);
         let mut archive = zip::ZipArchive::new(reader)
-            .map_err(|e| AppError::Message(format!("zip open error: {e}")))?;
+            .map_err(|e| Error::InvalidInput(format!("zip open error: {e}")))?;
 
         for i in 0..archive.len() {
             let mut file = archive
                 .by_index(i)
-                .map_err(|e| AppError::Message(format!("zip read error: {e}")))?;
+                .map_err(|e| Error::InvalidInput(format!("zip read error: {e}")))?;
             let name = file.name().to_string();
             let outpath = dest.join(&name);
 

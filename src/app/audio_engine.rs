@@ -2,9 +2,6 @@ use crate::app::error::{AppError, Result};
 use crate::{Audio, DetectResult, Message, MessageResult, Tag, CURRENT_VERSION};
 use std::path::{Path, PathBuf};
 
-#[cfg(feature = "bundled")]
-use crate::app::bundled;
-
 #[derive(Default, Clone)]
 pub struct AppConfig {
     pub audiowmark_override: Option<PathBuf>,
@@ -29,20 +26,8 @@ pub enum DetectOutcome {
 
 impl AudioEngine {
     pub fn new(config: &AppConfig) -> Result<Self> {
-        let audio = match config.audiowmark_override.as_ref() {
-            Some(path) => Audio::with_binary(path).map_err(AppError::from)?,
-            None => {
-                #[cfg(feature = "bundled")]
-                {
-                    if let Ok(path) = bundled::ensure_extracted() {
-                        return Ok(Self {
-                            audio: Audio::with_binary(path).map_err(AppError::from)?,
-                        });
-                    }
-                }
-                Audio::new().map_err(AppError::from)?
-            }
-        };
+        let audio = Audio::new_with_fallback_path(config.audiowmark_override.as_deref())
+            .map_err(AppError::from)?;
         Ok(Self { audio })
     }
 

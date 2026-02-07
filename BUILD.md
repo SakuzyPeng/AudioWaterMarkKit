@@ -84,22 +84,32 @@ make install
 
 ## 2. 编译 AWMKit
 
+### bundled 前置资源
+
+自包含构建依赖仓库内的 bundled 资源：
+
+```bash
+bundled/audiowmark-macos-arm64.zip
+```
+
+若缺失该文件，`--features bundled` 的本地构建无法产出自包含二进制。
+
 ### 基础库编译
 
 ```bash
 cd /path/to/awmkit
 
-# 基础库 (仅消息编解码)
+# 基础库（默认含 multichannel）
 cargo build --release
 
-# 库 + FFI (生成 .dylib)
-cargo build --features ffi --release
+# 库 + FFI（macOS 原生 App 推荐，bundled 优先）
+cargo build --features ffi,bundled --release
 
 # 库 + 多声道支持
 cargo build --features ffi,multichannel --release
 
-# 库 + 所有特性
-cargo build --features ffi,multichannel,cli --release
+# 自包含 CLI（bundled 优先，回退 --audiowmark/PATH）
+cargo build --bin awmkit --features full-cli --release
 ```
 
 编译输出：

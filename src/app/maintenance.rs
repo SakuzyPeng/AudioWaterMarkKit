@@ -1,8 +1,8 @@
-use crate::app::bundled;
 use crate::app::error::Result;
 use crate::app::keystore::KeyStore;
 use crate::app::settings::AppSettings;
 use crate::app::tag_store::TagStore;
+use crate::bundled;
 use std::fs;
 
 pub fn clear_local_cache() -> Result<()> {

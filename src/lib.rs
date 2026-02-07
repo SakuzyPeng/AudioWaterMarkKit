@@ -34,6 +34,7 @@
 //! ```
 
 pub mod audio;
+pub(crate) mod bundled;
 pub mod charset;
 pub mod error;
 pub mod message;

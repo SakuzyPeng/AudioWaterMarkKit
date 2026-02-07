@@ -56,13 +56,16 @@ pub struct Audio {
 impl Audio {
     /// 创建 Audio 实例，自动搜索 audiowmark
     pub fn new() -> Result<Self> {
-        Self::find_binary()
-            .map(|path| Self {
-                binary_path: path,
-                strength: 10,
-                key_file: None,
-            })
-            .ok_or_else(|| Error::AudiowmarkNotFound)
+        Self::new_with_fallback_path(None)
+    }
+
+    pub(crate) fn new_with_fallback_path(fallback_path: Option<&Path>) -> Result<Self> {
+        let binary_path = Self::resolve_binary(fallback_path)?;
+        Ok(Self {
+            binary_path,
+            strength: 10,
+            key_file: None,
+        })
     }
 
     /// 指定 audiowmark 路径创建实例
@@ -452,6 +455,23 @@ impl Audio {
         }
 
         None
+    }
+
+    fn resolve_binary(fallback_path: Option<&Path>) -> Result<PathBuf> {
+        #[cfg(feature = "bundled")]
+        {
+            if let Ok(path) = crate::bundled::ensure_extracted() {
+                return Ok(path);
+            }
+        }
+
+        if let Some(path) = fallback_path {
+            if let Ok(audio) = Self::with_binary(path) {
+                return Ok(audio.binary_path);
+            }
+        }
+
+        Self::find_binary().ok_or(Error::AudiowmarkNotFound)
     }
 }
 
