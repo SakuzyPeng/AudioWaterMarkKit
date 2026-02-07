@@ -32,11 +32,13 @@ public class AWMKeychain {
         // 先尝试删除已有的
         try? deleteKey()
 
+        // 与 Rust CLI 统一：Keychain 内按 hex 文本保存
+        let storedData = Data(key.hexEncodedString().utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecValueData as String: key,
+            kSecValueData as String: storedData,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             kSecAttrLabel as String: "AWMKit Watermark Signing Key",
             kSecAttrDescription as String: "HMAC key for audio watermark signing"
@@ -67,7 +69,18 @@ public class AWMKeychain {
 
         switch status {
         case errSecSuccess:
-            return result as? Data
+            guard let storedData = result as? Data else {
+                return nil
+            }
+
+            // 兼容两种历史存储格式：
+            // 1) 当前 Rust/Swift 统一的 hex 文本
+            // 2) 旧版 Swift 的原始字节
+            if let text = String(data: storedData, encoding: .utf8),
+               let decoded = Data(hexEncoded: text) {
+                return decoded
+            }
+            return storedData
         case errSecItemNotFound:
             return nil
         default:
@@ -136,6 +149,31 @@ public class AWMKeychain {
         let key = Data(bytes)
         try saveKey(key)
         return key
+    }
+}
+
+private extension Data {
+    init?(hexEncoded string: String) {
+        let cleaned = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard cleaned.count % 2 == 0, !cleaned.isEmpty else { return nil }
+
+        var out = Data()
+        out.reserveCapacity(cleaned.count / 2)
+
+        var index = cleaned.startIndex
+        while index < cleaned.endIndex {
+            let next = cleaned.index(index, offsetBy: 2)
+            let byteString = cleaned[index..<next]
+            guard let value = UInt8(byteString, radix: 16) else { return nil }
+            out.append(value)
+            index = next
+        }
+
+        self = out
+    }
+
+    func hexEncodedString() -> String {
+        map { String(format: "%02x", $0) }.joined()
     }
 }
 
