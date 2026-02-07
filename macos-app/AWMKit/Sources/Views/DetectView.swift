@@ -71,7 +71,7 @@ struct DetectView: View {
 
                     Button(action: { viewModel.clearQueue() }) {
                         HStack(spacing: 6) {
-                            Image(systemName: viewModel.isClearQueueSuccess ? "checkmark.circle" : "xmark.circle")
+                            Image(systemName: "xmark.circle")
                                 .foregroundColor(viewModel.isClearQueueSuccess ? .green : .primary)
                             Text("清空")
                                 .lineLimit(1)
@@ -83,7 +83,7 @@ struct DetectView: View {
 
                     Button(action: { viewModel.clearLogs() }) {
                         HStack(spacing: 6) {
-                            Image(systemName: viewModel.isClearLogsSuccess ? "checkmark.circle" : "line.3.horizontal.decrease.circle")
+                            Image(systemName: "line.3.horizontal.decrease.circle")
                                 .foregroundColor(viewModel.isClearLogsSuccess ? .green : .primary)
                             Text("清空")
                                 .lineLimit(1)
@@ -426,7 +426,7 @@ struct DetectView: View {
     }
 
     private func handleEphemeralEntry(_ entry: LogEntry) {
-        guard entry.isEphemeral else { return }
+        guard entry.isEphemeral, entry.title == "已清空日志" else { return }
         Task {
             try? await Task.sleep(for: .seconds(3))
             withAnimation(.easeInOut(duration: 0.3)) {
