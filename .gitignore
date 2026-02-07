@@ -1,14 +1,35 @@
+# Rust
 /target
+/src-tauri/target
+
+# Build artifacts
+/macos-app/.build
+/macos-app/AWMKit.xcodeproj/xcuserdata
+/macos-app/AWMKit.xcodeproj/project.xcworkspace/xcuserdata
+
+# Audio files
 *.wav
 *.flac
+
+# Test outputs
 /test_output/
+
+# Scripts (user may not want to track local scripts)
 *.sh
 
-# 嵌入的二进制 (用于 simple-cli)
+# Vendor & bundled binaries
 /audiowmark-x86_64
 /vendor/
 /bundled/
-.DS_Store
+
+# Node/UI
 /ui/node_modules/
 /ui/dist/
-/src-tauri/target/
+
+# OS
+.DS_Store
+*.swp
+*.swo
+*~
+.AppleDouble
+.LSOverride
