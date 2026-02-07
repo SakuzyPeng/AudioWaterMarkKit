@@ -1,5 +1,6 @@
 import SwiftUI
 import AWMKit
+import CryptoKit
 
 struct TagsView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -7,6 +8,7 @@ struct TagsView: View {
     @State private var newUsername: String = ""
     @State private var newTagIdentity: String = ""
     @State private var showingAddSheet = false
+    @State private var errorMessage: String?
 
     var body: some View {
         GeometryReader { proxy in
@@ -93,34 +95,59 @@ struct TagsView: View {
                 onSave: saveNewTag
             )
         }
+        .alert("操作失败", isPresented: .init(
+            get: { errorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    errorMessage = nil
+                }
+            }
+        )) {
+            Button("确定", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
         .onAppear(perform: loadTags)
     }
 
     private func loadTags() {
-        // TODO: 从存储加载标签（使用 AWMKit 的 TagStore）
-        tags = []
+        do {
+            tags = try TagStoreBridge.list()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func saveNewTag() {
-        guard !newUsername.isEmpty else { return }
+        guard !newUsername.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         do {
-            let tag = try AWMTag(identity: newTagIdentity.isEmpty ? newUsername : newTagIdentity)
-            tags.append(TagEntry(username: newUsername, tag: tag.value))
+            tags = try TagStoreBridge.save(
+                username: newUsername,
+                identityHint: newTagIdentity
+            )
             newUsername = ""
             newTagIdentity = ""
             showingAddSheet = false
         } catch {
-            print("创建标签失败: \(error)")
+            errorMessage = error.localizedDescription
         }
     }
 
     private func removeTag(username: String) {
-        tags.removeAll { $0.username == username }
+        do {
+            tags = try TagStoreBridge.remove(username: username)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func clearAllTags() {
-        tags.removeAll()
+        do {
+            tags = try TagStoreBridge.clear()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -211,7 +238,7 @@ struct AddTagSheet: View {
                             .stroke(DesignSystem.Colors.border(colorScheme), lineWidth: DesignSystem.BorderWidth.standard)
                     )
 
-                    Text("7 个字符，留空则使用用户名前 7 位")
+                    Text("7 个字符，留空按用户名稳定生成")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
@@ -225,7 +252,6 @@ struct AddTagSheet: View {
 
                 Button("保存") {
                     onSave()
-                    dismiss()
                 }
                 .buttonStyle(GlassButtonStyle(accentOn: true))
                 .disabled(username.isEmpty)
@@ -233,5 +259,175 @@ struct AddTagSheet: View {
         }
         .padding(30)
         .frame(width: 400)
+    }
+}
+
+private struct StoredTagEntry: Codable {
+    let username: String
+    let tag: String
+    let createdAt: UInt64
+
+    enum CodingKeys: String, CodingKey {
+        case username
+        case tag
+        case createdAt = "created_at"
+    }
+}
+
+private struct StoredTagPayload: Codable {
+    var version: UInt8
+    var entries: [StoredTagEntry]
+
+    init(version: UInt8 = 1, entries: [StoredTagEntry] = []) {
+        self.version = version
+        self.entries = entries
+    }
+}
+
+private enum TagStoreBridgeError: LocalizedError {
+    case emptyUsername
+    case homeDirectoryMissing
+    case mappingNotFound(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyUsername:
+            return "用户名不能为空"
+        case .homeDirectoryMissing:
+            return "无法定位用户目录"
+        case .mappingNotFound(let username):
+            return "未找到用户映射: \(username)"
+        }
+    }
+}
+
+private enum TagStoreBridge {
+    private static let charset = Array("ABCDEFGHJKMNPQRSTUVWXYZ23456789_")
+
+    static func list() throws -> [TagEntry] {
+        try loadPayload().entries
+            .sorted(by: { $0.username.localizedCaseInsensitiveCompare($1.username) == .orderedAscending })
+            .map { TagEntry(username: $0.username, tag: $0.tag) }
+    }
+
+    static func save(username: String, identityHint: String) throws -> [TagEntry] {
+        let normalizedUsername = try normalize(username)
+        let normalizedHint = identityHint.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let tag: AWMTag
+        if normalizedHint.isEmpty {
+            tag = try AWMTag(identity: suggestedIdentity(from: normalizedUsername))
+        } else {
+            tag = try AWMTag(identity: normalizedHint)
+        }
+
+        var payload = try loadPayload()
+        let now = UInt64(Date().timeIntervalSince1970)
+
+        if let index = payload.entries.firstIndex(where: { $0.username == normalizedUsername }) {
+            payload.entries[index] = StoredTagEntry(
+                username: normalizedUsername,
+                tag: tag.value,
+                createdAt: now
+            )
+        } else {
+            payload.entries.append(StoredTagEntry(
+                username: normalizedUsername,
+                tag: tag.value,
+                createdAt: now
+            ))
+        }
+
+        payload.version = 1
+        payload.entries.sort { $0.username.localizedCaseInsensitiveCompare($1.username) == .orderedAscending }
+        try persist(payload)
+        return payload.entries.map { TagEntry(username: $0.username, tag: $0.tag) }
+    }
+
+    static func remove(username: String) throws -> [TagEntry] {
+        let normalizedUsername = try normalize(username)
+        var payload = try loadPayload()
+        let before = payload.entries.count
+        payload.entries.removeAll { $0.username == normalizedUsername }
+        if payload.entries.count == before {
+            throw TagStoreBridgeError.mappingNotFound(normalizedUsername)
+        }
+        try persist(payload)
+        return payload.entries.map { TagEntry(username: $0.username, tag: $0.tag) }
+    }
+
+    static func clear() throws -> [TagEntry] {
+        let url = try tagsFileURL()
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
+        }
+        return []
+    }
+
+    private static func normalize(_ username: String) throws -> String {
+        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            throw TagStoreBridgeError.emptyUsername
+        }
+        return trimmed
+    }
+
+    private static func suggestedIdentity(from username: String) -> String {
+        let digest = SHA256.hash(data: Data(username.utf8))
+        var acc: UInt64 = 0
+        var accBits: UInt8 = 0
+        var output = ""
+        output.reserveCapacity(7)
+
+        for byte in digest {
+            acc = (acc << 8) | UInt64(byte)
+            accBits += 8
+
+            while accBits >= 5 && output.count < 7 {
+                let shift = accBits - 5
+                let index = Int((acc >> UInt64(shift)) & 0x1F)
+                output.append(charset[index])
+                accBits -= 5
+            }
+
+            if output.count >= 7 {
+                break
+            }
+        }
+
+        return output
+    }
+
+    private static func loadPayload() throws -> StoredTagPayload {
+        let url = try tagsFileURL()
+        if !FileManager.default.fileExists(atPath: url.path) {
+            return StoredTagPayload()
+        }
+
+        let raw = try String(contentsOf: url, encoding: .utf8)
+        if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return StoredTagPayload()
+        }
+        return try JSONDecoder().decode(StoredTagPayload.self, from: Data(raw.utf8))
+    }
+
+    private static func persist(_ payload: StoredTagPayload) throws {
+        let url = try tagsFileURL()
+        let directory = url.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        try data.write(to: url, options: .atomic)
+    }
+
+    private static func tagsFileURL() throws -> URL {
+        let homePath = NSHomeDirectory()
+        if homePath.isEmpty {
+            throw TagStoreBridgeError.homeDirectoryMissing
+        }
+        return URL(fileURLWithPath: homePath, isDirectory: true)
+            .appendingPathComponent(".awmkit", isDirectory: true)
+            .appendingPathComponent("tags.json", isDirectory: false)
     }
 }
