@@ -421,8 +421,8 @@ struct EmbedView: View {
     private func logEntryRow(entry: LogEntry) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
-                Image(systemName: entry.isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundStyle(entry.isSuccess ? DesignSystem.Colors.success : DesignSystem.Colors.error)
+                Image(systemName: entry.iconName)
+                    .foregroundStyle(logIconColor(for: entry.iconTone))
 
                 if colorScheme == .dark {
                     HDRGlowText(
@@ -463,6 +463,19 @@ struct EmbedView: View {
             withAnimation(.easeInOut(duration: 0.3)) {
                 viewModel.logs.removeAll(where: { $0.id == entry.id })
             }
+        }
+    }
+
+    private func logIconColor(for tone: LogEntry.IconTone) -> Color {
+        switch tone {
+        case .success:
+            return DesignSystem.Colors.success
+        case .info:
+            return .accentColor
+        case .warning:
+            return DesignSystem.Colors.warning
+        case .error:
+            return DesignSystem.Colors.error
         }
     }
 }
