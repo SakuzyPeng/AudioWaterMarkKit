@@ -7,7 +7,14 @@ struct TagsView: View {
     @State private var tags: [TagEntry] = []
     @State private var newUsername: String = ""
     @State private var showingAddSheet = false
+    @State private var isDeleteMode = false
+    @State private var selectedUsernames: Set<String> = []
+    @State private var showingDeleteConfirm = false
+    @State private var deleteConfirmInput = ""
     @State private var errorMessage: String?
+    private let tagColumns = [
+        GridItem(.adaptive(minimum: 180, maximum: 260), spacing: DesignSystem.Spacing.compact)
+    ]
 
     var body: some View {
         GeometryReader { proxy in
@@ -46,36 +53,79 @@ struct TagsView: View {
                             .frame(minHeight: 120)
                         } else {
                             ScrollView {
-                                LazyVStack(spacing: DesignSystem.Spacing.compact) {
+                                LazyVGrid(columns: tagColumns, spacing: DesignSystem.Spacing.compact) {
                                     ForEach(tags, id: \.username) { entry in
-                                        TagEntryRow(entry: entry) {
-                                            removeTag(username: entry.username)
-                                        }
+                                        TagEntryRow(
+                                            entry: entry,
+                                            isDeleteMode: isDeleteMode,
+                                            isSelected: selectedUsernames.contains(entry.username),
+                                            onToggleSelected: {
+                                                toggleSelection(username: entry.username)
+                                            }
+                                        )
                                     }
                                 }
+                                .padding(.vertical, 2)
                             }
+                            .scrollIndicators(.hidden)
                         }
                     }
                 }
 
                 // 操作按钮
                 HStack(spacing: DesignSystem.Spacing.item) {
-                    Button(action: { showingAddSheet = true }) {
-                        HStack {
-                            Image(systemName: "plus.circle")
-                            Text("添加标签")
-                        }
-                    }
-                    .buttonStyle(GlassButtonStyle(accentOn: true))
-
-                    if !tags.isEmpty {
-                        Button(action: clearAllTags) {
+                    if isDeleteMode {
+                        Button(action: exitDeleteMode) {
                             HStack {
-                                Image(systemName: "trash")
-                                Text("清空所有")
+                                Image(systemName: "xmark.circle")
+                                Text("退出删除")
                             }
                         }
                         .buttonStyle(GlassButtonStyle())
+                        .accessibilityLabel("退出删除模式")
+
+                        Button(action: selectAllTags) {
+                            HStack {
+                                Image(systemName: "checkmark.circle")
+                                Text("全选")
+                            }
+                        }
+                        .buttonStyle(GlassButtonStyle())
+                        .disabled(tags.isEmpty)
+
+                        Button(action: clearSelection) {
+                            HStack {
+                                Image(systemName: "circle.dashed")
+                                Text("全不选")
+                            }
+                        }
+                        .buttonStyle(GlassButtonStyle())
+                        .disabled(selectedUsernames.isEmpty)
+
+                        Button(action: handleDeleteAction) {
+                            HStack {
+                                Image(systemName: "trash")
+                                Text("执行删除")
+                            }
+                        }
+                        .buttonStyle(GlassButtonStyle(accentOn: true))
+                    } else {
+                        Button(action: { showingAddSheet = true }) {
+                            HStack {
+                                Image(systemName: "plus.circle")
+                                Text("添加标签")
+                            }
+                        }
+                        .buttonStyle(GlassButtonStyle(accentOn: true))
+
+                        Button(action: enterDeleteMode) {
+                            HStack {
+                                Image(systemName: "trash")
+                                Text("删除模式")
+                            }
+                        }
+                        .buttonStyle(GlassButtonStyle())
+                        .disabled(tags.isEmpty)
                     }
 
                     Spacer()
@@ -93,6 +143,17 @@ struct TagsView: View {
                 onSave: saveNewTag
             )
         }
+        .sheet(isPresented: $showingDeleteConfirm) {
+            DeleteConfirmSheet(
+                expectedCount: selectedUsernames.count,
+                input: $deleteConfirmInput,
+                onCancel: { showingDeleteConfirm = false },
+                onConfirm: {
+                    showingDeleteConfirm = false
+                    performBatchDelete()
+                }
+            )
+        }
         .alert("操作失败", isPresented: .init(
             get: { errorMessage != nil },
             set: { isPresented in
@@ -104,6 +165,13 @@ struct TagsView: View {
             Button("确定", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
+        }
+        .onChange(of: tags.map(\.username)) { _, usernames in
+            let available = Set(usernames)
+            selectedUsernames = selectedUsernames.intersection(available)
+            if usernames.isEmpty {
+                exitDeleteMode()
+            }
         }
         .onAppear(perform: loadTags)
     }
@@ -128,17 +196,50 @@ struct TagsView: View {
         }
     }
 
-    private func removeTag(username: String) {
-        do {
-            tags = try TagStoreBridge.remove(username: username)
-        } catch {
-            errorMessage = error.localizedDescription
+    private func enterDeleteMode() {
+        isDeleteMode = true
+        selectedUsernames.removeAll()
+        deleteConfirmInput = ""
+    }
+
+    private func exitDeleteMode() {
+        isDeleteMode = false
+        selectedUsernames.removeAll()
+        deleteConfirmInput = ""
+        showingDeleteConfirm = false
+    }
+
+    private func toggleSelection(username: String) {
+        guard isDeleteMode else { return }
+        if selectedUsernames.contains(username) {
+            selectedUsernames.remove(username)
+        } else {
+            selectedUsernames.insert(username)
         }
     }
 
-    private func clearAllTags() {
+    private func selectAllTags() {
+        selectedUsernames = Set(tags.map(\.username))
+    }
+
+    private func clearSelection() {
+        selectedUsernames.removeAll()
+    }
+
+    private func handleDeleteAction() {
+        guard isDeleteMode else { return }
+        if selectedUsernames.isEmpty {
+            exitDeleteMode()
+            return
+        }
+        deleteConfirmInput = ""
+        showingDeleteConfirm = true
+    }
+
+    private func performBatchDelete() {
         do {
-            tags = try TagStoreBridge.clear()
+            tags = try TagStoreBridge.remove(usernames: selectedUsernames)
+            exitDeleteMode()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -151,34 +252,52 @@ struct TagEntry {
 }
 
 struct TagEntryRow: View {
-    @Environment(\.colorScheme) private var colorScheme
     let entry: TagEntry
-    let onRemove: () -> Void
+    let isDeleteMode: Bool
+    let isSelected: Bool
+    let onToggleSelected: () -> Void
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.item) {
             Image(systemName: "person.circle.fill")
                 .foregroundStyle(.secondary)
-                .font(.title3)
+                .font(.system(size: 17, weight: .medium))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.username)
                     .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
 
                 Text(entry.tag)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
-            Spacer()
-
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
+            Spacer(minLength: 6)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .entryRowStyle()
+        .overlay {
+            if isDeleteMode && isSelected {
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.row, style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.9), lineWidth: 1.5)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if isDeleteMode && isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(6)
+            }
+        }
+        .contentShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.row, style: .continuous))
+        .onTapGesture {
+            if isDeleteMode {
+                onToggleSelected()
+            }
+        }
     }
 }
 
@@ -259,6 +378,76 @@ struct AddTagSheet: View {
             }
         }
         .padding(30)
+        .frame(width: 420)
+    }
+}
+
+struct DeleteConfirmSheet: View {
+    let expectedCount: Int
+    @Binding var input: String
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var trimmedInput: String {
+        input.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isValid: Bool {
+        Int(trimmedInput) == expectedCount
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.card) {
+            Text("确认删除")
+                .font(.title3.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("此操作不可恢复，请输入数量确认。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Text("我确认删除 \(expectedCount) 条标签")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("请输入数字：\(expectedCount)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                GlassEffectContainer {
+                    TextField("输入 \(expectedCount)", text: $input)
+                        .textFieldStyle(.plain)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                }
+                .background(DesignSystem.Colors.rowBackground(colorScheme))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(DesignSystem.Colors.border(colorScheme), lineWidth: DesignSystem.BorderWidth.standard)
+                )
+            }
+
+            HStack(spacing: DesignSystem.Spacing.item) {
+                Button("取消") {
+                    onCancel()
+                    dismiss()
+                }
+                .buttonStyle(GlassButtonStyle())
+
+                Button("确认删除") {
+                    onConfirm()
+                    dismiss()
+                }
+                .buttonStyle(GlassButtonStyle(accentOn: true))
+                .disabled(!isValid)
+            }
+        }
+        .padding(24)
         .frame(width: 420)
     }
 }
@@ -362,6 +551,16 @@ private enum TagStoreBridge {
             try FileManager.default.removeItem(at: url)
         }
         return []
+    }
+
+    static func remove(usernames: Set<String>) throws -> [TagEntry] {
+        guard !usernames.isEmpty else {
+            return try list()
+        }
+        var payload = try loadPayload()
+        payload.entries.removeAll { usernames.contains($0.username) }
+        try persist(payload)
+        return payload.entries.map { TagEntry(username: $0.username, tag: $0.tag) }
     }
 
     private static func normalize(_ username: String) throws -> String {
