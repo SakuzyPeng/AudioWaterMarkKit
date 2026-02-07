@@ -15,13 +15,21 @@ struct LogEntry: Identifiable, Equatable {
     let timestamp: Date
     let isSuccess: Bool
     var isEphemeral: Bool
+    let relatedRecordId: UUID?
 
-    init(title: String, detail: String = "", isSuccess: Bool = true, isEphemeral: Bool = false) {
+    init(
+        title: String,
+        detail: String = "",
+        isSuccess: Bool = true,
+        isEphemeral: Bool = false,
+        relatedRecordId: UUID? = nil
+    ) {
         self.title = title
         self.detail = detail
         self.timestamp = Date()
         self.isSuccess = isSuccess
         self.isEphemeral = isEphemeral
+        self.relatedRecordId = relatedRecordId
     }
 
     static func == (lhs: LogEntry, rhs: LogEntry) -> Bool {

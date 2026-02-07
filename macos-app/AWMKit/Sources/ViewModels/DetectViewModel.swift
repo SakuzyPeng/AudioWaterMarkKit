@@ -2,6 +2,52 @@ import SwiftUI
 import AWMKit
 import UniformTypeIdentifiers
 
+struct DetectRecord: Identifiable, Equatable {
+    let id: UUID
+    let file: String
+    let status: String
+    let tag: String?
+    let identity: String?
+    let version: UInt8?
+    let timestampMinutes: UInt32?
+    let timestampUTC: UInt64?
+    let pattern: String?
+    let bitErrors: UInt32?
+    let matchFound: Bool?
+    let error: String?
+    let timestamp: Date
+
+    init(
+        id: UUID = UUID(),
+        file: String,
+        status: String,
+        tag: String? = nil,
+        identity: String? = nil,
+        version: UInt8? = nil,
+        timestampMinutes: UInt32? = nil,
+        timestampUTC: UInt64? = nil,
+        pattern: String? = nil,
+        bitErrors: UInt32? = nil,
+        matchFound: Bool? = nil,
+        error: String? = nil,
+        timestamp: Date = Date()
+    ) {
+        self.id = id
+        self.file = file
+        self.status = status
+        self.tag = tag
+        self.identity = identity
+        self.version = version
+        self.timestampMinutes = timestampMinutes
+        self.timestampUTC = timestampUTC
+        self.pattern = pattern
+        self.bitErrors = bitErrors
+        self.matchFound = matchFound
+        self.error = error
+        self.timestamp = timestamp
+    }
+}
+
 @MainActor
 class DetectViewModel: ObservableObject {
     // MARK: - 文件队列
@@ -15,6 +61,7 @@ class DetectViewModel: ObservableObject {
 
     // MARK: - 日志
     @Published var logs: [LogEntry] = []
+    @Published var detectRecords: [DetectRecord] = []
 
     // MARK: - 统计
     @Published var totalDetected: Int = 0
@@ -29,11 +76,30 @@ class DetectViewModel: ObservableObject {
 
     // MARK: - 日志
 
-    func log(_ title: String, detail: String = "", isSuccess: Bool = true, isEphemeral: Bool = false) {
-        let entry = LogEntry(title: title, detail: detail, isSuccess: isSuccess, isEphemeral: isEphemeral)
+    func log(
+        _ title: String,
+        detail: String = "",
+        isSuccess: Bool = true,
+        isEphemeral: Bool = false,
+        relatedRecordId: UUID? = nil
+    ) {
+        let entry = LogEntry(
+            title: title,
+            detail: detail,
+            isSuccess: isSuccess,
+            isEphemeral: isEphemeral,
+            relatedRecordId: relatedRecordId
+        )
         logs.insert(entry, at: 0)
         if logs.count > maxLogCount {
             logs.removeLast(logs.count - maxLogCount)
+        }
+    }
+
+    private func insertDetectRecord(_ record: DetectRecord) {
+        detectRecords.insert(record, at: 0)
+        if detectRecords.count > maxLogCount {
+            detectRecords.removeLast(detectRecords.count - maxLogCount)
         }
     }
 
@@ -178,6 +244,7 @@ class DetectViewModel: ObservableObject {
         }
         let count = logs.count
         logs.removeAll()
+        detectRecords.removeAll()
         totalDetected = 0
         totalFound = 0
         log("已清空日志", detail: "移除了 \(count) 条日志记录", isEphemeral: true)
@@ -218,29 +285,74 @@ class DetectViewModel: ObservableObject {
 
             for (index, fileURL) in selectedFiles.enumerated() {
                 currentProcessingIndex = index
+                let filePath = fileURL.path(percentEncoded: false)
+                let fileName = fileURL.lastPathComponent
 
                 do {
-                    if let msgResult = try audio.detectAndDecode(input: fileURL, key: key) {
-                        var detailParts: [String] = []
-                        detailParts.append("标签: \(msgResult.identity)")
-                        detailParts.append("时间: \(msgResult.date.formatted())")
-                        log(
-                            "成功: \(fileURL.lastPathComponent)",
-                            detail: detailParts.joined(separator: " | ")
-                        )
-                        totalFound += 1
+                    if let detectResult = try audio.detect(input: fileURL) {
+                        do {
+                            let decoded = try AWMMessage.decode(detectResult.rawMessage, key: key)
+                            let record = DetectRecord(
+                                file: filePath,
+                                status: "ok",
+                                tag: decoded.tag.value,
+                                identity: decoded.identity,
+                                version: decoded.version,
+                                timestampMinutes: decoded.timestampMinutes,
+                                timestampUTC: decoded.timestampUTC,
+                                pattern: detectResult.pattern,
+                                bitErrors: detectResult.bitErrors,
+                                matchFound: detectResult.found
+                            )
+                            insertDetectRecord(record)
+                            log(
+                                "成功: \(fileName)",
+                                detail: "标签: \(decoded.identity) | 时间: \(decoded.date.formatted())",
+                                relatedRecordId: record.id
+                            )
+                            totalFound += 1
+                        } catch {
+                            let record = DetectRecord(
+                                file: filePath,
+                                status: "invalid_hmac",
+                                pattern: detectResult.pattern,
+                                bitErrors: detectResult.bitErrors,
+                                matchFound: detectResult.found,
+                                error: error.localizedDescription
+                            )
+                            insertDetectRecord(record)
+                            log(
+                                "失败: \(fileName)",
+                                detail: "HMAC 校验失败: \(error.localizedDescription)",
+                                isSuccess: false,
+                                relatedRecordId: record.id
+                            )
+                        }
                     } else {
+                        let record = DetectRecord(
+                            file: filePath,
+                            status: "not_found"
+                        )
+                        insertDetectRecord(record)
                         log(
-                            "无标记: \(fileURL.lastPathComponent)",
+                            "无标记: \(fileName)",
                             detail: "未检测到水印",
-                            isSuccess: false
+                            isSuccess: false,
+                            relatedRecordId: record.id
                         )
                     }
                 } catch {
+                    let record = DetectRecord(
+                        file: filePath,
+                        status: "error",
+                        error: error.localizedDescription
+                    )
+                    insertDetectRecord(record)
                     log(
-                        "失败: \(fileURL.lastPathComponent)",
+                        "失败: \(fileName)",
                         detail: error.localizedDescription,
-                        isSuccess: false
+                        isSuccess: false,
+                        relatedRecordId: record.id
                     )
                 }
                 totalDetected += 1
@@ -263,7 +375,16 @@ class DetectViewModel: ObservableObject {
     func fileStatusText(for url: URL, at index: Int) -> (text: String, isActive: Bool) {
         let fileName = url.lastPathComponent
         if let entry = logs.first(where: { $0.title.hasSuffix(fileName) && !$0.isEphemeral }) {
-            let status = entry.isSuccess ? "已检测" : "无标记"
+            let status: String
+            if entry.title.hasPrefix("成功:") {
+                status = "已检测"
+            } else if entry.title.hasPrefix("无标记:") {
+                status = "无标记"
+            } else if entry.title.hasPrefix("失败:") {
+                status = "失败"
+            } else {
+                status = entry.isSuccess ? "已检测" : "无标记"
+            }
             return (status, false)
         } else if isProcessing && index == currentProcessingIndex {
             return ("检测中", true)

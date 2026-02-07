@@ -6,6 +6,8 @@ struct DetectView: View {
     @ObservedObject var viewModel: DetectViewModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var isDropTargeted = false
+    @State private var selectedResultLogID: UUID?
+    @State private var logSearchText = ""
 
     var body: some View {
         GeometryReader { proxy in
@@ -35,6 +37,17 @@ struct DetectView: View {
             .padding(.vertical, padV)
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
             .id(colorScheme)
+        }
+        .onChange(of: viewModel.logs) { _, logs in
+            if logs.isEmpty {
+                selectedResultLogID = nil
+                logSearchText = ""
+                return
+            }
+            if let selectedResultLogID,
+               !logs.contains(where: { $0.id == selectedResultLogID }) {
+                self.selectedResultLogID = nil
+            }
         }
     }
 
@@ -184,6 +197,12 @@ struct DetectView: View {
                 Text("检测信息")
                     .font(.headline)
                 Spacer()
+                if viewModel.totalDetected > 0 {
+                    Text("\(viewModel.totalFound)（成功）/\(viewModel.totalDetected)（总）")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(viewModel.totalFound > 0 ? DesignSystem.Colors.success : .secondary)
+                        .monospacedDigit()
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -200,45 +219,83 @@ struct DetectView: View {
 
             Divider().opacity(0.5)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("水印检测会扫描音频文件中嵌入的 128-bit 消息，解码后获取标签身份和嵌入时间戳。")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+            VStack(spacing: 8) {
+                singleLineFieldRow(
+                    label: "文件",
+                    value: detailValue(from: displayedDetectRecord?.file),
+                    valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
+                    truncationMode: .middle
+                )
 
-                Text("支持格式: WAV, FLAC")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                tripleFieldRow(
+                    (
+                        label: "状态",
+                        value: detailValue(from: displayedDetectRecord?.status),
+                        valueColor: fieldValueColor(for: .status, record: displayedDetectRecord),
+                        monospaced: true
+                    ),
+                    (
+                        label: "匹配标记",
+                        value: detailValue(from: displayedDetectRecord?.matchFound.map { $0 ? "true" : "false" }),
+                        valueColor: fieldValueColor(for: .matchFound, record: displayedDetectRecord),
+                        monospaced: true
+                    ),
+                    (
+                        label: "检测模式",
+                        value: detailValue(from: displayedDetectRecord?.pattern),
+                        valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
+                        monospaced: true
+                    )
+                )
 
-                Text("检测不会修改原文件。")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+                tripleFieldRow(
+                    (
+                        label: "标签",
+                        value: detailValue(from: displayedDetectRecord?.tag),
+                        valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
+                        monospaced: true
+                    ),
+                    (
+                        label: "身份",
+                        value: detailValue(from: displayedDetectRecord?.identity),
+                        valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
+                        monospaced: true
+                    ),
+                    (
+                        label: "版本",
+                        value: detailValue(from: displayedDetectRecord?.version.map { String($0) }),
+                        valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
+                        monospaced: true
+                    )
+                )
 
-            Spacer()
+                tripleFieldRow(
+                    (
+                        label: "UTC 分钟",
+                        value: detailValue(from: displayedDetectRecord?.timestampMinutes.map { String($0) }),
+                        valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
+                        monospaced: true
+                    ),
+                    (
+                        label: "UTC 秒",
+                        value: detailValue(from: displayedDetectRecord?.timestampUTC.map { String($0) }),
+                        valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
+                        monospaced: true
+                    ),
+                    (
+                        label: "位错误",
+                        value: detailValue(from: displayedDetectRecord?.bitErrors.map { String($0) }),
+                        valueColor: fieldValueColor(for: .bitErrors, record: displayedDetectRecord),
+                        monospaced: true
+                    )
+                )
 
-            if viewModel.totalDetected > 0 {
-                VStack(spacing: DesignSystem.Spacing.compact) {
-                    HStack {
-                        Text("已检测")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(viewModel.totalDetected) 个文件")
-                            .font(.system(.subheadline, design: .monospaced))
-                    }
-                    .entryRowStyle()
-
-                    HStack {
-                        Text("发现水印")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(viewModel.totalFound) 个")
-                            .font(.system(.subheadline, design: .monospaced))
-                            .foregroundStyle(viewModel.totalFound > 0 ? DesignSystem.Colors.success : .primary)
-                    }
-                    .entryRowStyle()
-                }
+                singleLineFieldRow(
+                    label: "错误信息",
+                    value: detailValue(from: displayedDetectRecord?.error),
+                    valueColor: fieldValueColor(for: .error, record: displayedDetectRecord),
+                    truncationMode: .middle
+                )
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -355,23 +412,32 @@ struct DetectView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                         .transition(.opacity)
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(viewModel.logs) { entry in
-                                logEntryRow(entry: entry)
-                                    .transition(.asymmetric(
-                                        insertion: .move(edge: .top).combined(with: .opacity),
-                                        removal: .move(edge: .top).combined(with: .opacity)
-                                    ))
-                                    .onAppear {
-                                        handleEphemeralEntry(entry)
-                                    }
+                    logSearchField
+
+                    if filteredLogs.isEmpty {
+                        Text("无匹配日志")
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                            .transition(.opacity)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                ForEach(filteredLogs) { entry in
+                                    logEntryRow(entry: entry)
+                                        .transition(.asymmetric(
+                                            insertion: .move(edge: .top).combined(with: .opacity),
+                                            removal: .move(edge: .top).combined(with: .opacity)
+                                        ))
+                                        .onAppear {
+                                            handleEphemeralEntry(entry)
+                                        }
+                                }
                             }
+                            .padding(.vertical, 4)
                         }
-                        .padding(.vertical, 4)
+                        .scrollIndicators(.hidden)
+                        .transition(.opacity)
                     }
-                    .scrollIndicators(.hidden)
-                    .transition(.opacity)
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: viewModel.logs.count)
@@ -379,7 +445,24 @@ struct DetectView: View {
         }
     }
 
+    @ViewBuilder
     private func logEntryRow(entry: LogEntry) -> some View {
+        let selectable = isSelectableResultLog(entry)
+        let isSelected = selectedResultLogID == entry.id
+
+        if selectable {
+            Button {
+                selectedResultLogID = entry.id
+            } label: {
+                logEntryContent(entry: entry, isSelectable: true, isSelected: isSelected)
+            }
+            .buttonStyle(.plain)
+        } else {
+            logEntryContent(entry: entry, isSelectable: false, isSelected: false)
+        }
+    }
+
+    private func logEntryContent(entry: LogEntry, isSelectable: Bool, isSelected: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top) {
                 Image(systemName: entry.iconName)
@@ -415,6 +498,241 @@ struct DetectView: View {
             }
         }
         .entryRowStyle()
+        .overlay {
+            if isSelected {
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.row, style: .continuous)
+                    .stroke(Color.accentColor, lineWidth: 1.5)
+            }
+        }
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.row, style: .continuous)
+                    .fill(Color.accentColor.opacity(colorScheme == .dark ? 0.12 : 0.08))
+            }
+        }
+        .contentShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.row, style: .continuous))
+        .accessibilityLabel(
+            isSelectable
+                ? "结果日志，可选中查看详情"
+                : "流程日志"
+        )
+    }
+
+    private var logSearchField: some View {
+        GlassEffectContainer {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("搜索日志（标题/详情）", text: $logSearchText)
+                    .textFieldStyle(.plain)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+        }
+        .background(DesignSystem.Colors.rowBackground(colorScheme))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    DesignSystem.Colors.border(colorScheme),
+                    lineWidth: DesignSystem.BorderWidth.standard
+                )
+        )
+    }
+
+    private var filteredLogs: [LogEntry] {
+        let query = logSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return viewModel.logs }
+
+        return viewModel.logs.filter { entry in
+            entry.title.localizedCaseInsensitiveContains(query) ||
+            entry.detail.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private var displayedDetectRecord: DetectRecord? {
+        if let selectedResultLogID,
+           let selectedLog = viewModel.logs.first(where: { $0.id == selectedResultLogID }),
+           let relatedRecordId = selectedLog.relatedRecordId,
+           let selectedRecord = viewModel.detectRecords.first(where: { $0.id == relatedRecordId }) {
+            return selectedRecord
+        }
+        return viewModel.detectRecords.first
+    }
+
+    private enum FieldSemantic {
+        case generic
+        case status
+        case matchFound
+        case bitErrors
+        case error
+    }
+
+    private var fieldKeyColor: Color {
+        colorScheme == .dark
+            ? Color.primary.opacity(0.78)
+            : Color.primary.opacity(0.68)
+    }
+
+    private func singleLineFieldRow(
+        label: String,
+        value: String,
+        valueColor: Color,
+        monospaced: Bool = false,
+        truncationMode: Text.TruncationMode = .tail
+    ) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(fieldKeyColor)
+                .frame(width: 84, alignment: .leading)
+
+            valueText(
+                value,
+                color: valueColor,
+                monospaced: monospaced,
+                truncationMode: truncationMode
+            )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(DesignSystem.Colors.rowBackground(colorScheme))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    DesignSystem.Colors.border(colorScheme),
+                    lineWidth: DesignSystem.BorderWidth.standard
+                )
+        )
+    }
+
+    private func tripleFieldRow(
+        _ first: (label: String, value: String, valueColor: Color, monospaced: Bool),
+        _ second: (label: String, value: String, valueColor: Color, monospaced: Bool),
+        _ third: (label: String, value: String, valueColor: Color, monospaced: Bool)
+    ) -> some View {
+        HStack(spacing: 8) {
+            compactFieldCell(
+                label: first.label,
+                value: first.value,
+                valueColor: first.valueColor,
+                monospaced: first.monospaced
+            )
+            compactFieldCell(
+                label: second.label,
+                value: second.value,
+                valueColor: second.valueColor,
+                monospaced: second.monospaced
+            )
+            compactFieldCell(
+                label: third.label,
+                value: third.value,
+                valueColor: third.valueColor,
+                monospaced: third.monospaced
+            )
+        }
+    }
+
+    private func compactFieldCell(
+        label: String,
+        value: String,
+        valueColor: Color,
+        monospaced: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(fieldKeyColor)
+
+            valueText(
+                value,
+                color: valueColor,
+                monospaced: monospaced,
+                truncationMode: .tail
+            )
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DesignSystem.Colors.rowBackground(colorScheme))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    DesignSystem.Colors.border(colorScheme),
+                    lineWidth: DesignSystem.BorderWidth.standard
+                )
+        )
+    }
+
+    private func valueText(
+        _ value: String,
+        color: Color,
+        monospaced: Bool,
+        truncationMode: Text.TruncationMode
+    ) -> some View {
+        let resolvedColor: Color = value == "-" ? .secondary : color
+
+        return Group {
+            if monospaced {
+                Text(value)
+                    .font(.system(.subheadline, design: .monospaced))
+            } else {
+                Text(value)
+                    .font(.subheadline)
+            }
+        }
+        .foregroundStyle(resolvedColor)
+        .lineLimit(1)
+        .truncationMode(truncationMode)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .help(value)
+    }
+
+    private func fieldValueColor(for semantic: FieldSemantic, record: DetectRecord?) -> Color {
+        switch semantic {
+        case .generic:
+            return .primary
+        case .status:
+            guard let status = record?.status else { return .secondary }
+            switch status {
+            case "ok":
+                return DesignSystem.Colors.success
+            case "not_found":
+                return .secondary
+            case "invalid_hmac":
+                return DesignSystem.Colors.warning
+            case "error":
+                return DesignSystem.Colors.error
+            default:
+                return .secondary
+            }
+        case .matchFound:
+            guard let found = record?.matchFound else { return .secondary }
+            return found ? DesignSystem.Colors.success : .secondary
+        case .bitErrors:
+            guard let bitErrors = record?.bitErrors else { return .secondary }
+            if bitErrors == 0 {
+                return DesignSystem.Colors.success
+            }
+            if bitErrors <= 3 {
+                return DesignSystem.Colors.warning
+            }
+            return DesignSystem.Colors.error
+        case .error:
+            guard let err = record?.error, !err.isEmpty else { return .secondary }
+            return err == "-" ? .secondary : DesignSystem.Colors.error
+        }
+    }
+
+    private func detailValue(from raw: String?) -> String {
+        guard let raw, !raw.isEmpty else { return "-" }
+        return raw
+    }
+
+    private func isSelectableResultLog(_ entry: LogEntry) -> Bool {
+        entry.relatedRecordId != nil
     }
 
     private func handleEphemeralEntry(_ entry: LogEntry) {
