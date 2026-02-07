@@ -19,7 +19,7 @@ struct ContentView: View {
             })
             .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         }
-        .background(WindowConfigurator())
+        .background(WindowConfigurator(appState: appState))
     }
 
     private var sidebar: some View {
@@ -73,8 +73,6 @@ struct ContentView: View {
             EmbedView(viewModel: embedVM)
         case .detect:
             DetectView(viewModel: detectVM)
-        case .status:
-            StatusView()
         case .tags:
             TagsView()
         }
