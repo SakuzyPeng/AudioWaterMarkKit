@@ -1,6 +1,7 @@
 import SwiftUI
 import AWMKit
 import UniformTypeIdentifiers
+import CryptoKit
 
 @MainActor
 class EmbedViewModel: ObservableObject {
@@ -10,7 +11,13 @@ class EmbedViewModel: ObservableObject {
     @Published var outputDirectory: URL?
 
     // MARK: - 嵌入设置
-    @Published var tagInput: String = ""
+    @Published var usernameInput: String = "" {
+        didSet {
+            updateMappingSuggestions()
+        }
+    }
+    @Published private(set) var allMappings: [EmbedTagMappingOption] = []
+    @Published private(set) var mappingSuggestions: [EmbedTagMappingOption] = []
     @Published var strength: Double = 10
     @Published var customSuffix: String = "_wm"
 
@@ -30,6 +37,10 @@ class EmbedViewModel: ObservableObject {
     private let maxLogCount = 200
     private let supportedAudioExtensions: Set<String> = ["wav", "flac"]
     private var progressResetTask: Task<Void, Never>?
+
+    init() {
+        refreshTagMappings()
+    }
 
     deinit {
         progressResetTask?.cancel()
@@ -215,8 +226,10 @@ class EmbedViewModel: ObservableObject {
             return
         }
 
-        guard !tagInput.isEmpty else {
-            log("标签未填写", detail: "请输入 7 字符身份标签", isSuccess: false, isEphemeral: true)
+        refreshTagMappings()
+        let normalizedUsername = normalizedUsernameInput
+        guard let resolvedTag = resolvedTagValue, !normalizedUsername.isEmpty else {
+            log("用户名未填写", detail: "请输入用户名以自动生成 Tag", isSuccess: false, isEphemeral: true)
             return
         }
 
@@ -226,7 +239,7 @@ class EmbedViewModel: ObservableObject {
         progress = 0
         currentProcessingIndex = 0
 
-        let settingsStr = "Tag: \(tagInput) | 强度: \(Int(strength))"
+        let settingsStr = "用户: \(normalizedUsername) | Tag: \(resolvedTag) | 强度: \(Int(strength))"
         log("开始处理", detail: "准备处理 \(selectedFiles.count) 个文件 | \(settingsStr)")
 
         Task {
@@ -253,7 +266,7 @@ class EmbedViewModel: ObservableObject {
                 currentProcessingIndex = 0
 
                 do {
-                    let tag = try AWMTag(identity: tagInput)
+                    let tag = try AWMTag(tag: resolvedTag)
                     let baseName = fileURL.deletingPathExtension().lastPathComponent
                     let ext = fileURL.pathExtension
                     let outputDir = outputDirectory ?? fileURL.deletingLastPathComponent()
@@ -280,11 +293,50 @@ class EmbedViewModel: ObservableObject {
                 log("处理完成", detail: "成功: \(successCount), 失败: \(failureCount)")
             }
 
+            if successCount > 0 {
+                do {
+                    let saveResult = try EmbedTagMappingStore.saveIfAbsent(
+                        username: normalizedUsername,
+                        tag: resolvedTag
+                    )
+                    if saveResult == .inserted {
+                        refreshTagMappings()
+                        log("已保存映射", detail: "\(normalizedUsername) -> \(resolvedTag)")
+                    }
+                } catch {
+                    log("保存映射失败", detail: error.localizedDescription, isSuccess: false, isEphemeral: true)
+                }
+            }
+
             currentProcessingIndex = -1
             isProcessing = false
             isCancelling = false
             scheduleProgressResetIfNeeded()
         }
+    }
+
+    // MARK: - 标签映射
+
+    func refreshTagMappings() {
+        allMappings = EmbedTagMappingStore.loadMappings()
+        updateMappingSuggestions()
+    }
+
+    func selectMapping(_ option: EmbedTagMappingOption) {
+        usernameInput = option.username
+    }
+
+    var hasMappingSuggestions: Bool {
+        !allMappings.isEmpty
+    }
+
+    var previewTagText: String {
+        resolvedTagValue ?? "-"
+    }
+
+    var matchedMappingHintText: String? {
+        guard matchedMappingForInput != nil else { return nil }
+        return "已存在映射，自动复用"
     }
 
     private func scheduleProgressResetIfNeeded() {
@@ -301,6 +353,65 @@ class EmbedViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    private var normalizedUsernameInput: String {
+        usernameInput.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var resolvedTagValue: String? {
+        let username = normalizedUsernameInput
+        guard !username.isEmpty else { return nil }
+
+        if let mapped = matchedMappingForInput {
+            return mapped.tag
+        }
+
+        return EmbedTagMappingStore.previewTag(username: username)
+    }
+
+    private func updateMappingSuggestions() {
+        let keyword = normalizedUsernameInput
+        guard !allMappings.isEmpty else {
+            mappingSuggestions = []
+            return
+        }
+
+        if keyword.isEmpty {
+            mappingSuggestions = allMappings
+            return
+        }
+
+        mappingSuggestions = allMappings.sorted {
+            let lhsRank = mappingRank(for: $0, keyword: keyword)
+            let rhsRank = mappingRank(for: $1, keyword: keyword)
+            if lhsRank != rhsRank {
+                return lhsRank < rhsRank
+            }
+            return $0.username.localizedCaseInsensitiveCompare($1.username) == .orderedAscending
+        }
+    }
+
+    private var matchedMappingForInput: EmbedTagMappingOption? {
+        let username = normalizedUsernameInput
+        guard !username.isEmpty else { return nil }
+        return allMappings.first(where: {
+            $0.username.compare(username, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        })
+    }
+
+    private func mappingRank(for option: EmbedTagMappingOption, keyword: String) -> Int {
+        let user = option.username
+        if user.compare(keyword, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame {
+            return 0
+        }
+        if user.range(of: keyword, options: [.caseInsensitive, .diacriticInsensitive, .anchored]) != nil {
+            return 1
+        }
+        if user.range(of: keyword, options: [.caseInsensitive, .diacriticInsensitive]) != nil {
+            return 2
+        }
+        return 3
     }
 
     // MARK: - 计算属性
@@ -326,4 +437,166 @@ class EmbedViewModel: ObservableObject {
             return ("就绪", false)
         }
     }
+}
+
+struct EmbedTagMappingOption: Equatable {
+    let username: String
+    let tag: String
+}
+
+private struct EmbedStoredTagEntry: Codable {
+    let username: String
+    let tag: String
+    let createdAt: UInt64
+
+    enum CodingKeys: String, CodingKey {
+        case username
+        case tag
+        case createdAt = "created_at"
+    }
+
+    init(username: String, tag: String, createdAt: UInt64 = 0) {
+        self.username = username
+        self.tag = tag
+        self.createdAt = createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        username = try container.decode(String.self, forKey: .username)
+        tag = try container.decode(String.self, forKey: .tag)
+        createdAt = try container.decodeIfPresent(UInt64.self, forKey: .createdAt) ?? 0
+    }
+}
+
+private struct EmbedStoredTagPayload: Codable {
+    var version: UInt8
+    var entries: [EmbedStoredTagEntry]
+
+    init(version: UInt8 = 1, entries: [EmbedStoredTagEntry] = []) {
+        self.version = version
+        self.entries = entries
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case version
+        case entries
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decodeIfPresent(UInt8.self, forKey: .version) ?? 1
+        entries = try container.decodeIfPresent([EmbedStoredTagEntry].self, forKey: .entries) ?? []
+    }
+}
+
+private enum EmbedTagMappingStore {
+    private static let charset = Array("ABCDEFGHJKMNPQRSTUVWXYZ23456789_")
+
+    static func loadMappings() -> [EmbedTagMappingOption] {
+        let payload = loadPayload()
+        return payload.entries
+            .compactMap { entry in
+                let username = entry.username.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !username.isEmpty else { return nil }
+                guard (try? AWMTag(tag: entry.tag)) != nil else { return nil }
+                return EmbedTagMappingOption(username: username, tag: entry.tag.uppercased())
+            }
+            .sorted(by: { $0.username.localizedCaseInsensitiveCompare($1.username) == .orderedAscending })
+    }
+
+    static func saveIfAbsent(username: String, tag: String) throws -> EmbedTagSaveResult {
+        let normalizedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedUsername.isEmpty else { return .existed }
+
+        let normalizedTag = tag.uppercased()
+        guard (try? AWMTag(tag: normalizedTag)) != nil else { return .existed }
+
+        var payload = loadPayload()
+        if payload.entries.contains(where: {
+            $0.username.compare(normalizedUsername, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        }) {
+            return .existed
+        }
+
+        payload.version = 1
+        payload.entries.append(
+            EmbedStoredTagEntry(
+                username: normalizedUsername,
+                tag: normalizedTag,
+                createdAt: UInt64(Date().timeIntervalSince1970)
+            )
+        )
+        payload.entries.sort {
+            $0.username.localizedCaseInsensitiveCompare($1.username) == .orderedAscending
+        }
+        try persist(payload)
+        return .inserted
+    }
+
+    static func previewTag(username: String) -> String? {
+        let normalized = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+        return try? AWMTag(identity: suggestedIdentity(from: normalized)).value
+    }
+
+    private static func suggestedIdentity(from username: String) -> String {
+        let digest = SHA256.hash(data: Data(username.utf8))
+        var acc: UInt64 = 0
+        var accBits: UInt8 = 0
+        var output = ""
+        output.reserveCapacity(7)
+
+        for byte in digest {
+            acc = (acc << 8) | UInt64(byte)
+            accBits += 8
+
+            while accBits >= 5 && output.count < 7 {
+                let shift = accBits - 5
+                let index = Int((acc >> UInt64(shift)) & 0x1F)
+                output.append(charset[index])
+                accBits -= 5
+            }
+
+            if output.count >= 7 {
+                break
+            }
+        }
+
+        return output
+    }
+
+    private static func loadPayload() -> EmbedStoredTagPayload {
+        guard let url = tagsFileURL() else { return EmbedStoredTagPayload() }
+        guard FileManager.default.fileExists(atPath: url.path) else { return EmbedStoredTagPayload() }
+        guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return EmbedStoredTagPayload() }
+        guard !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return EmbedStoredTagPayload()
+        }
+        return (try? JSONDecoder().decode(EmbedStoredTagPayload.self, from: Data(raw.utf8))) ?? EmbedStoredTagPayload()
+    }
+
+    private static func persist(_ payload: EmbedStoredTagPayload) throws {
+        guard let url = tagsFileURL() else { return }
+        let directory = url.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        try data.write(to: url, options: .atomic)
+    }
+
+    private static func tagsFileURL() -> URL? {
+        let homePath = NSHomeDirectory()
+        guard !homePath.isEmpty else { return nil }
+        return URL(fileURLWithPath: homePath, isDirectory: true)
+            .appendingPathComponent(".awmkit", isDirectory: true)
+            .appendingPathComponent("tags.json", isDirectory: false)
+    }
+}
+
+private enum EmbedTagSaveResult {
+    case inserted
+    case existed
 }

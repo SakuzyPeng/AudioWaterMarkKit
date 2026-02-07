@@ -220,10 +220,29 @@ struct EmbedView: View {
             Divider().opacity(0.5)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("标签 (Tag)")
-                    .font(.subheadline)
+                HStack {
+                    Text("用户名")
+                        .font(.subheadline)
+                    Spacer()
+                    HStack(spacing: 8) {
+                        if let hint = viewModel.matchedMappingHintText {
+                            Text(hint)
+                                .font(.caption2)
+                                .foregroundStyle(.green)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                        Text("Tag: \(viewModel.previewTagText)")
+                            .font(.system(.caption, design: .monospaced).weight(.semibold))
+                            .foregroundStyle(
+                                viewModel.matchedMappingHintText != nil
+                                    ? Color.green
+                                    : (viewModel.previewTagText == "-" ? .secondary : .primary)
+                            )
+                    }
+                }
                 GlassEffectContainer {
-                    TextField("例如: SAKUZY", text: $viewModel.tagInput)
+                    TextField("例如: SakuzyPeng", text: $viewModel.usernameInput)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -237,9 +256,47 @@ struct EmbedView: View {
                             lineWidth: 1
                         )
                 )
-                Text("7 字符身份标签，用于追溯水印来源")
+                if viewModel.hasMappingSuggestions {
+                    Menu {
+                        ForEach(viewModel.mappingSuggestions, id: \.username) { option in
+                            Button {
+                                viewModel.selectMapping(option)
+                            } label: {
+                                Text(
+                                    "\(Text(option.username).fontWeight(.semibold))\(Text("（\(option.tag)）").font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary))"
+                                )
+                                .lineLimit(1)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "list.bullet")
+                            Text("已存储的映射")
+                                .lineLimit(1)
+                            Spacer()
+                            Image(systemName: "chevron.down")
+                                .font(.caption2)
+                        }
+                        .font(.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .background(DesignSystem.Colors.rowBackground(colorScheme))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(
+                                colorScheme == .light ? Color.black.opacity(0.14) : Color.white.opacity(0.18),
+                                lineWidth: 1
+                            )
+                    )
+                }
+                Text("按用户名稳定生成 Tag；命中映射时优先使用已保存 Tag")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -281,6 +338,9 @@ struct EmbedView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onAppear {
+            viewModel.refreshTagMappings()
+        }
     }
 
     // MARK: - 文件列表卡片（左下）
