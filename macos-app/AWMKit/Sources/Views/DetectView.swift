@@ -131,14 +131,6 @@ struct DetectView: View {
                 systemImage: "tray.and.arrow.down",
                 onTap: { viewModel.selectFiles() }
             )
-            Divider()
-                .background(Color.white.opacity(colorScheme == .dark ? 0.2 : 0.4))
-            directoryInfoRow(
-                title: "检测模式",
-                value: "扫描 128-bit 水印消息，解码标签与时间戳",
-                systemImage: "doc.text.magnifyingglass",
-                onTap: { viewModel.selectFiles() }
-            )
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
