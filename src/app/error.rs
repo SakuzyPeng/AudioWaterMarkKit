@@ -27,6 +27,9 @@ pub enum AppError {
     Json(#[from] serde_json::Error),
 
     #[error(transparent)]
+    Sqlite(#[from] rusqlite::Error),
+
+    #[error(transparent)]
     TomlDe(#[from] toml::de::Error),
 
     #[error(transparent)]

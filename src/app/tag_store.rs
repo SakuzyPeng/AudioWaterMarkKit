@@ -1,103 +1,111 @@
 use crate::app::error::{AppError, Result};
 use crate::charset::CHARSET;
 use crate::Tag;
-use serde::{Deserialize, Serialize};
+use rusqlite::{params, Connection, OptionalExtension};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Clone)]
 pub struct TagEntry {
     pub username: String,
     pub tag: String,
     pub created_at: u64,
 }
 
-#[derive(Default, Serialize, Deserialize)]
-struct TagStoreData {
-    version: u8,
-    entries: Vec<TagEntry>,
-}
-
 pub struct TagStore {
     path: PathBuf,
-    data: TagStoreData,
+    conn: Connection,
+    entries: Vec<TagEntry>,
 }
 
 impl TagStore {
     pub fn load() -> Result<Self> {
-        let path = tags_path()?;
-        let data = load_store(&path)?;
-        Ok(Self { path, data })
+        let path = db_path()?;
+        let conn = open_db(&path)?;
+        let entries = load_entries(&conn)?;
+        Ok(Self {
+            path,
+            conn,
+            entries,
+        })
     }
 
     #[cfg(test)]
     fn load_at(path: PathBuf) -> Result<Self> {
-        let data = load_store(&path)?;
-        Ok(Self { path, data })
+        let conn = open_db(&path)?;
+        let entries = load_entries(&conn)?;
+        Ok(Self {
+            path,
+            conn,
+            entries,
+        })
     }
 
     pub fn list(&self) -> &[TagEntry] {
-        &self.data.entries
+        &self.entries
     }
 
     pub fn has_tag(&self, tag: &str) -> bool {
-        self.data.entries.iter().any(|e| e.tag == tag)
+        self.entries.iter().any(|e| e.tag == tag)
     }
 
     pub fn save(&mut self, username: &str, tag: &Tag, force: bool) -> Result<()> {
         let username = normalize_username(username)?;
         let tag_str = tag.as_str().to_string();
+        let existing = self
+            .conn
+            .query_row(
+                "SELECT username, tag FROM tag_mappings WHERE username = ?1 COLLATE NOCASE LIMIT 1",
+                params![username],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            )
+            .optional()?;
 
-        if let Some(existing) = self
-            .data
-            .entries
-            .iter_mut()
-            .find(|entry| entry.username == username)
-        {
-            if existing.tag == tag_str {
+        let now = now_ts()?;
+        if let Some((existing_username, existing_tag)) = existing {
+            if existing_tag == tag_str {
                 return Ok(());
             }
             if !force {
                 return Err(AppError::MappingExists {
                     username,
-                    existing_tag: existing.tag.clone(),
+                    existing_tag,
                 });
             }
-            existing.tag = tag_str;
-            existing.created_at = now_ts()?;
+            self.conn.execute(
+                "UPDATE tag_mappings
+                 SET username = ?1, tag = ?2, created_at = ?3
+                 WHERE username = ?4 COLLATE NOCASE",
+                params![username, tag_str, now, existing_username],
+            )?;
         } else {
-            self.data.entries.push(TagEntry {
-                username,
-                tag: tag_str,
-                created_at: now_ts()?,
-            });
+            self.conn.execute(
+                "INSERT INTO tag_mappings (username, tag, created_at) VALUES (?1, ?2, ?3)",
+                params![username, tag_str, now],
+            )?;
         }
 
-        self.data.version = 1;
-        self.data
-            .entries
-            .sort_by(|a, b| a.username.cmp(&b.username));
-        self.persist()
+        self.refresh_entries()
     }
 
     pub fn remove(&mut self, username: &str) -> Result<()> {
         let username = normalize_username(username)?;
-        let before = self.data.entries.len();
-        self.data.entries.retain(|entry| entry.username != username);
-        if self.data.entries.len() == before {
+        let affected = self.conn.execute(
+            "DELETE FROM tag_mappings WHERE username = ?1 COLLATE NOCASE",
+            params![username],
+        )?;
+        if affected == 0 {
             return Err(AppError::Message(format!("mapping not found: {username}")));
         }
-        self.persist()
+        self.refresh_entries()
     }
 
     pub fn clear(&mut self) -> Result<()> {
-        self.data.entries.clear();
-        if self.path.exists() {
-            fs::remove_file(&self.path)?;
-        }
-        Ok(())
+        self.conn.execute("DELETE FROM tag_mappings", [])?;
+        self.refresh_entries()
     }
 
     pub fn suggest(username: &str) -> Result<Tag> {
@@ -113,12 +121,8 @@ impl TagStore {
         &self.path
     }
 
-    fn persist(&self) -> Result<()> {
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        let data = serde_json::to_string_pretty(&self.data)?;
-        fs::write(&self.path, data)?;
+    fn refresh_entries(&mut self) -> Result<()> {
+        self.entries = load_entries(&self.conn)?;
         Ok(())
     }
 }
@@ -131,7 +135,7 @@ fn normalize_username(username: &str) -> Result<String> {
     Ok(trimmed.to_string())
 }
 
-fn tags_path() -> Result<PathBuf> {
+fn db_path() -> Result<PathBuf> {
     #[cfg(target_os = "windows")]
     {
         let base = std::env::var_os("LOCALAPPDATA")
@@ -139,7 +143,7 @@ fn tags_path() -> Result<PathBuf> {
             .ok_or_else(|| AppError::Message("LOCALAPPDATA/APPDATA not set".to_string()))?;
         let mut path = PathBuf::from(base);
         path.push("awmkit");
-        path.push("tags.json");
+        path.push("awmkit.db");
         Ok(path)
     }
 
@@ -149,21 +153,48 @@ fn tags_path() -> Result<PathBuf> {
             .ok_or_else(|| AppError::Message("HOME not set".to_string()))?;
         let mut path = PathBuf::from(home);
         path.push(".awmkit");
-        path.push("tags.json");
+        path.push("awmkit.db");
         Ok(path)
     }
 }
 
-fn load_store(path: &Path) -> Result<TagStoreData> {
-    if !path.exists() {
-        return Ok(TagStoreData::default());
+fn open_db(path: &Path) -> Result<Connection> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
     }
-    let raw = fs::read_to_string(path)?;
-    if raw.trim().is_empty() {
-        return Ok(TagStoreData::default());
+    let conn = Connection::open(path)?;
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS tag_mappings (
+            username TEXT NOT NULL COLLATE NOCASE PRIMARY KEY,
+            tag TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_tag_mappings_created_at
+        ON tag_mappings(created_at DESC);",
+    )?;
+    Ok(conn)
+}
+
+fn load_entries(conn: &Connection) -> Result<Vec<TagEntry>> {
+    let mut stmt = conn.prepare(
+        "SELECT username, tag, created_at
+         FROM tag_mappings
+         ORDER BY username COLLATE NOCASE ASC",
+    )?;
+
+    let rows = stmt.query_map([], |row| {
+        Ok(TagEntry {
+            username: row.get(0)?,
+            tag: row.get(1)?,
+            created_at: row.get(2)?,
+        })
+    })?;
+
+    let mut entries = Vec::new();
+    for row in rows {
+        entries.push(row?);
     }
-    let store: TagStoreData = serde_json::from_str(&raw)?;
-    Ok(store)
+    Ok(entries)
 }
 
 fn now_ts() -> Result<u64> {
@@ -196,8 +227,12 @@ fn hash_to_identity(hash: &[u8]) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 
     fn temp_path() -> PathBuf {
         let mut path = std::env::temp_dir();
@@ -205,7 +240,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        path.push(format!("awmkit-tags-{nanos}.json"));
+        let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+        path.push(format!("awmkit-tags-{nanos}-{id}.db"));
         path
     }
 
@@ -225,13 +261,13 @@ mod tests {
 
         store.clear().unwrap();
         assert!(store.list().is_empty());
-        assert!(!path.exists());
+        let _ = fs::remove_file(path);
     }
 
     #[test]
     fn tag_store_detects_conflict() {
         let path = temp_path();
-        let mut store = TagStore::load_at(path).unwrap();
+        let mut store = TagStore::load_at(path.clone()).unwrap();
         let tag1 = TagStore::suggest("alice").unwrap();
         let tag2 = Tag::new("TESTA").unwrap();
 
@@ -241,5 +277,6 @@ mod tests {
             AppError::MappingExists { .. } => {}
             _ => panic!("unexpected error"),
         }
+        let _ = fs::remove_file(path);
     }
 }

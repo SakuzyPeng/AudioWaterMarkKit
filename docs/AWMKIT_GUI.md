@@ -51,8 +51,8 @@ Expand-Archive awmkit-gui-windows-x86_64.zip
   - macOS/Linux: `~/.awmkit/bundled/`
   - Windows: `%LOCALAPPDATA%\\awmkit\\bundled\\`
 - Tag 映射：
-  - macOS/Linux: `~/.awmkit/tags.json`
-  - Windows: `%LOCALAPPDATA%\\awmkit\\tags.json`
+  - macOS/Linux: `~/.awmkit/awmkit.db`（表：`tag_mappings`）
+  - Windows: `%LOCALAPPDATA%\\awmkit\\awmkit.db`（表：`tag_mappings`）
 - 配置文件：
   - macOS/Linux: `~/.awmkit/config.toml`
   - Windows: `%LOCALAPPDATA%\\awmkit\\config.toml`
@@ -81,4 +81,3 @@ xattr -d com.apple.quarantine "AWMKit GUI.app"
 
 **Windows SmartScreen 阻止**  
 选择“仍要运行”。如为企业环境，需管理员策略允许。
-

@@ -53,6 +53,7 @@ app = [
   "dep:rust-embed",
   "dep:once_cell",
   "dep:toml",
+  "dep:rusqlite",
   "dep:keyring",
   "dep:rand",
   "dep:serde",
@@ -163,6 +164,11 @@ optional = true
 
 [dependencies.toml]
 version = "0.8"
+optional = true
+
+[dependencies.rusqlite]
+version = "0.32"
+features = ["bundled"]
 optional = true
 
 

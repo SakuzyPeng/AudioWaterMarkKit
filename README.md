@@ -232,7 +232,7 @@ awmkit status --doctor
 
 ### tag - 用户名映射（可选）
 
-用于把用户名映射为可用 Tag。默认不落盘，保存时会写入明文 JSON。
+用于把用户名映射为可用 Tag。默认不落盘，保存时会写入本地 SQLite 数据库。
 
 ```bash
 # 只输出推荐 Tag（不保存）
@@ -255,8 +255,8 @@ awmkit tag clear
 ```
 
 **存储位置**：
-- macOS/Linux: `~/.awmkit/tags.json`
-- Windows: `%LOCALAPPDATA%\\awmkit\\tags.json`
+- macOS/Linux: `~/.awmkit/awmkit.db`（表：`tag_mappings`）
+- Windows: `%LOCALAPPDATA%\\awmkit\\awmkit.db`（表：`tag_mappings`）
 
 ## 消息格式
 

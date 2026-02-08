@@ -1,6 +1,7 @@
 import SwiftUI
 import AWMKit
 import CryptoKit
+import SQLite3
 
 struct TagsView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -452,32 +453,11 @@ struct DeleteConfirmSheet: View {
     }
 }
 
-private struct StoredTagEntry: Codable {
-    let username: String
-    let tag: String
-    let createdAt: UInt64
-
-    enum CodingKeys: String, CodingKey {
-        case username
-        case tag
-        case createdAt = "created_at"
-    }
-}
-
-private struct StoredTagPayload: Codable {
-    var version: UInt8
-    var entries: [StoredTagEntry]
-
-    init(version: UInt8 = 1, entries: [StoredTagEntry] = []) {
-        self.version = version
-        self.entries = entries
-    }
-}
-
 private enum TagStoreBridgeError: LocalizedError {
     case emptyUsername
     case homeDirectoryMissing
     case mappingNotFound(String)
+    case sqlite(String)
 
     var errorDescription: String? {
         switch self {
@@ -487,44 +467,81 @@ private enum TagStoreBridgeError: LocalizedError {
             return "无法定位用户目录"
         case .mappingNotFound(let username):
             return "未找到用户映射: \(username)"
+        case .sqlite(let message):
+            return "标签数据库错误: \(message)"
         }
     }
 }
 
 private enum TagStoreBridge {
     private static let charset = Array("ABCDEFGHJKMNPQRSTUVWXYZ23456789_")
+    private static let databaseFileName = "awmkit.db"
+    private static let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
     static func list() throws -> [TagEntry] {
-        try loadPayload().entries
-            .sorted(by: { $0.username.localizedCaseInsensitiveCompare($1.username) == .orderedAscending })
-            .map { TagEntry(username: $0.username, tag: $0.tag) }
+        try withDatabase { db in
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            let sql = """
+            SELECT username, tag
+            FROM tag_mappings
+            ORDER BY username COLLATE NOCASE ASC
+            """
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw databaseError(db)
+            }
+
+            var entries: [TagEntry] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                guard
+                    let usernamePtr = sqlite3_column_text(statement, 0),
+                    let tagPtr = sqlite3_column_text(statement, 1)
+                else {
+                    continue
+                }
+
+                let username = String(cString: usernamePtr).trimmingCharacters(in: .whitespacesAndNewlines)
+                let tag = String(cString: tagPtr).uppercased()
+                guard !username.isEmpty, (try? AWMTag(tag: tag)) != nil else {
+                    continue
+                }
+                entries.append(TagEntry(username: username, tag: tag))
+            }
+            return entries
+        }
     }
 
     static func save(username: String) throws -> [TagEntry] {
         let normalizedUsername = try normalize(username)
         let tag = try AWMTag(identity: suggestedIdentity(from: normalizedUsername))
+        let now = Int64(Date().timeIntervalSince1970)
 
-        var payload = try loadPayload()
-        let now = UInt64(Date().timeIntervalSince1970)
+        try withDatabase { db in
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            let sql = """
+            INSERT INTO tag_mappings (username, tag, created_at)
+            VALUES (?1, ?2, ?3)
+            ON CONFLICT(username)
+            DO UPDATE SET
+                username = excluded.username,
+                tag = excluded.tag,
+                created_at = excluded.created_at
+            """
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw databaseError(db)
+            }
 
-        if let index = payload.entries.firstIndex(where: { $0.username == normalizedUsername }) {
-            payload.entries[index] = StoredTagEntry(
-                username: normalizedUsername,
-                tag: tag.value,
-                createdAt: now
-            )
-        } else {
-            payload.entries.append(StoredTagEntry(
-                username: normalizedUsername,
-                tag: tag.value,
-                createdAt: now
-            ))
+            try bind(normalizedUsername, at: 1, in: statement, db: db)
+            try bind(tag.value, at: 2, in: statement, db: db)
+            guard sqlite3_bind_int64(statement, 3, now) == SQLITE_OK else {
+                throw databaseError(db)
+            }
+            guard sqlite3_step(statement) == SQLITE_DONE else {
+                throw databaseError(db)
+            }
         }
-
-        payload.version = 1
-        payload.entries.sort { $0.username.localizedCaseInsensitiveCompare($1.username) == .orderedAscending }
-        try persist(payload)
-        return payload.entries.map { TagEntry(username: $0.username, tag: $0.tag) }
+        return try list()
     }
 
     static func previewTag(username: String) -> String? {
@@ -535,20 +552,30 @@ private enum TagStoreBridge {
 
     static func remove(username: String) throws -> [TagEntry] {
         let normalizedUsername = try normalize(username)
-        var payload = try loadPayload()
-        let before = payload.entries.count
-        payload.entries.removeAll { $0.username == normalizedUsername }
-        if payload.entries.count == before {
+        let affected = try withDatabase { db -> Int32 in
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            let sql = "DELETE FROM tag_mappings WHERE username = ?1 COLLATE NOCASE"
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw databaseError(db)
+            }
+            try bind(normalizedUsername, at: 1, in: statement, db: db)
+            guard sqlite3_step(statement) == SQLITE_DONE else {
+                throw databaseError(db)
+            }
+            return sqlite3_changes(db)
+        }
+        if affected == 0 {
             throw TagStoreBridgeError.mappingNotFound(normalizedUsername)
         }
-        try persist(payload)
-        return payload.entries.map { TagEntry(username: $0.username, tag: $0.tag) }
+        return try list()
     }
 
     static func clear() throws -> [TagEntry] {
-        let url = try tagsFileURL()
-        if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
+        try withDatabase { db in
+            guard sqlite3_exec(db, "DELETE FROM tag_mappings", nil, nil, nil) == SQLITE_OK else {
+                throw databaseError(db)
+            }
         }
         return []
     }
@@ -557,10 +584,24 @@ private enum TagStoreBridge {
         guard !usernames.isEmpty else {
             return try list()
         }
-        var payload = try loadPayload()
-        payload.entries.removeAll { usernames.contains($0.username) }
-        try persist(payload)
-        return payload.entries.map { TagEntry(username: $0.username, tag: $0.tag) }
+        try withDatabase { db in
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            let sql = "DELETE FROM tag_mappings WHERE username = ?1 COLLATE NOCASE"
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw databaseError(db)
+            }
+
+            for username in usernames {
+                sqlite3_reset(statement)
+                sqlite3_clear_bindings(statement)
+                try bind(username, at: 1, in: statement, db: db)
+                guard sqlite3_step(statement) == SQLITE_DONE else {
+                    throw databaseError(db)
+                }
+            }
+        }
+        return try list()
     }
 
     private static func normalize(_ username: String) throws -> String {
@@ -597,36 +638,66 @@ private enum TagStoreBridge {
         return output
     }
 
-    private static func loadPayload() throws -> StoredTagPayload {
-        let url = try tagsFileURL()
-        if !FileManager.default.fileExists(atPath: url.path) {
-            return StoredTagPayload()
-        }
+    private static func withDatabase<T>(_ body: (OpaquePointer?) throws -> T) throws -> T {
+        let url = try databaseURL()
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
 
-        let raw = try String(contentsOf: url, encoding: .utf8)
-        if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return StoredTagPayload()
+        var db: OpaquePointer?
+        guard sqlite3_open(url.path, &db) == SQLITE_OK else {
+            let message = db.flatMap { sqliteMessage(from: $0) } ?? "无法打开数据库"
+            if let db {
+                sqlite3_close(db)
+            }
+            throw TagStoreBridgeError.sqlite(message)
         }
-        return try JSONDecoder().decode(StoredTagPayload.self, from: Data(raw.utf8))
+        defer { sqlite3_close(db) }
+
+        try ensureSchema(in: db)
+        return try body(db)
     }
 
-    private static func persist(_ payload: StoredTagPayload) throws {
-        let url = try tagsFileURL()
-        let directory = url.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(payload)
-        try data.write(to: url, options: .atomic)
+    private static func ensureSchema(in db: OpaquePointer?) throws {
+        let sql = """
+        CREATE TABLE IF NOT EXISTS tag_mappings (
+            username TEXT NOT NULL COLLATE NOCASE PRIMARY KEY,
+            tag TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_tag_mappings_created_at
+        ON tag_mappings(created_at DESC);
+        """
+        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
+            throw databaseError(db)
+        }
     }
 
-    private static func tagsFileURL() throws -> URL {
+    private static func bind(_ value: String, at index: Int32, in statement: OpaquePointer?, db: OpaquePointer?) throws {
+        guard sqlite3_bind_text(statement, index, value, -1, sqliteTransient) == SQLITE_OK else {
+            throw databaseError(db)
+        }
+    }
+
+    private static func databaseError(_ db: OpaquePointer?) -> TagStoreBridgeError {
+        .sqlite(sqliteMessage(from: db))
+    }
+
+    private static func sqliteMessage(from db: OpaquePointer?) -> String {
+        guard let db, let cString = sqlite3_errmsg(db) else {
+            return "unknown sqlite error"
+        }
+        return String(cString: cString)
+    }
+
+    private static func databaseURL() throws -> URL {
         let homePath = NSHomeDirectory()
         if homePath.isEmpty {
             throw TagStoreBridgeError.homeDirectoryMissing
         }
         return URL(fileURLWithPath: homePath, isDirectory: true)
             .appendingPathComponent(".awmkit", isDirectory: true)
-            .appendingPathComponent("tags.json", isDirectory: false)
+            .appendingPathComponent(databaseFileName, isDirectory: false)
     }
 }

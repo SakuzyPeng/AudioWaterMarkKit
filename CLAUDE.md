@@ -130,7 +130,7 @@ cd cli-swift && ./dist.sh
 为 GUI 提供后端功能的模块，位于 `src/app/`：
 
 - `keystore.rs` - 系统密钥安全存储（macOS Keychain / Windows Credential Manager）
-- `tag_store.rs` - 用户-标签映射管理（JSON 持久化于 `~/.awmkit/tags.json`）
+- `tag_store.rs` - 用户-标签映射管理（SQLite 持久化于 `~/.awmkit/awmkit.db` 的 `tag_mappings` 表）
 - `i18n.rs` - Fluent 国际化框架集成（支持 en-US 和 zh-CN）
 - `audio_engine.rs` - audiowmark 命令行封装（GUI 专用，处理批量操作和进度回调）
 - `settings.rs` - 配置管理（TOML 持久化于 `~/.awmkit/config.toml`）

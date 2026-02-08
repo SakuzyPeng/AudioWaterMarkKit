@@ -62,6 +62,7 @@ impl From<awmkit::app::AppError> for CliError {
             } => CliError::MappingExists(username),
             AppError::Io(err) => CliError::Io(err),
             AppError::Json(err) => CliError::Json(err),
+            AppError::Sqlite(err) => CliError::Message(err.to_string()),
             AppError::Awmkit(err) => CliError::Awmkit(err),
             AppError::TomlDe(err) => CliError::Message(err.to_string()),
             AppError::TomlSer(err) => CliError::Message(err.to_string()),
