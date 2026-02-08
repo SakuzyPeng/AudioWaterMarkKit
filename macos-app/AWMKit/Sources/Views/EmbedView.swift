@@ -242,7 +242,7 @@ struct EmbedView: View {
                     }
                 }
                 GlassEffectContainer {
-                    TextField("例如: SakuzyPeng", text: $viewModel.usernameInput)
+                    TextField("例如: user_001", text: $viewModel.usernameInput)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)

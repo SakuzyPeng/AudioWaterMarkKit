@@ -700,7 +700,7 @@ private struct AddTagSheet: View {
                         .foregroundStyle(.secondary)
 
                     GlassEffectContainer {
-                        TextField("例如: SakuzyPeng", text: $username)
+                        TextField("例如: user_001", text: $username)
                             .textFieldStyle(.plain)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
