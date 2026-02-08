@@ -54,6 +54,7 @@ app = [
   "dep:once_cell",
   "dep:toml",
   "dep:rusqlite",
+  "dep:rusty-chromaprint",
   "dep:keyring",
   "dep:rand",
   "dep:serde",
@@ -169,6 +170,10 @@ optional = true
 [dependencies.rusqlite]
 version = "0.32"
 features = ["bundled"]
+optional = true
+
+[dependencies.rusty-chromaprint]
+version = "0.3"
 optional = true
 
 

@@ -18,6 +18,8 @@ const DEFAULT_SEARCH_PATHS: &[&str] = &[
     "/usr/local/bin/audiowmark",
     "/opt/homebrew/bin/audiowmark",
 ];
+/// audiowmark 0.6.x 候选分数阈值（低于此值通常为伪命中）
+const MIN_PATTERN_SCORE: f32 = 1.0;
 
 /// 水印嵌入/检测结果
 #[derive(Debug, Clone)]
@@ -26,6 +28,8 @@ pub struct DetectResult {
     pub raw_message: [u8; MESSAGE_LEN],
     /// 检测模式 (all/single)
     pub pattern: String,
+    /// audiowmark 候选分数（仅新输出格式可用）
+    pub detect_score: Option<f32>,
     /// 比特错误数
     pub bit_errors: u32,
     /// 是否匹配
@@ -490,6 +494,7 @@ fn parse_detect_output(stdout: &str, stderr: &str) -> Result<Option<DetectResult
     // 查找 pattern 行
     // 格式: "pattern  all 0101c1d05978131b57f7deb8e22a0b78"
     // 或:   "pattern   single 0101c1d05978131b57f7deb8e22a0b78 0"
+    // 或:   "pattern  0:00 00000000000000000000000000000000 0.000 -0.001 CLIP-B" (audiowmark 0.6.x)
 
     let combined = format!("{}\n{}", stdout, stderr);
 
@@ -502,6 +507,25 @@ fn parse_detect_output(stdout: &str, stderr: &str) -> Result<Option<DetectResult
                 let hex = parts[2];
 
                 if let Some(raw_message) = hex_to_bytes(hex) {
+                    // audiowmark 在未命中时会输出全 0 消息；这不应视为有效水印。
+                    if raw_message.iter().all(|byte| *byte == 0) {
+                        continue;
+                    }
+
+                    // audiowmark 0.6.x 输出中，第 4 列是浮点分数，低分通常是伪命中。
+                    // 旧版格式第 4 列是 bit_errors（整数），此时不做 score 过滤。
+                    let mut detect_score = None;
+                    if let Some(score_token) = parts.get(3) {
+                        if score_token.contains('.') {
+                            if let Ok(score) = score_token.parse::<f32>() {
+                                detect_score = Some(score);
+                                if score < MIN_PATTERN_SCORE {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
                     let bit_errors = if parts.len() >= 4 {
                         parts[3].parse().unwrap_or(0)
                     } else {
@@ -511,6 +535,7 @@ fn parse_detect_output(stdout: &str, stderr: &str) -> Result<Option<DetectResult
                     return Ok(Some(DetectResult {
                         raw_message,
                         pattern,
+                        detect_score,
                         bit_errors,
                         match_found: true,
                     }));
@@ -584,6 +609,7 @@ mod tests {
         let stdout = "pattern  all 0101c1d05978131b57f7deb8e22a0b78\n";
         let result = parse_detect_output(stdout, "").unwrap().unwrap();
         assert_eq!(result.pattern, "all");
+        assert_eq!(result.detect_score, None);
         assert_eq!(result.raw_message[0], 0x01);
     }
 
@@ -592,6 +618,49 @@ mod tests {
         let stdout = "pattern   single 0101c1d05978131b57f7deb8e22a0b78 3\n";
         let result = parse_detect_output(stdout, "").unwrap().unwrap();
         assert_eq!(result.pattern, "single");
+        assert_eq!(result.detect_score, None);
         assert_eq!(result.bit_errors, 3);
+    }
+
+    #[test]
+    fn test_parse_detect_zero_message_as_not_found() {
+        let stdout = "pattern  0:00 00000000000000000000000000000000 0.000 -0.001 CLIP-B\n";
+        let result = parse_detect_output(stdout, "").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_detect_skip_zero_and_take_next() {
+        let stdout = concat!(
+            "pattern  0:00 00000000000000000000000000000000 0.000 -0.001 CLIP-B\n",
+            "pattern  0:00 0101c1d05978131b57f7deb8e22a0b78 1.792 0.121 CLIP-B\n"
+        );
+        let result = parse_detect_output(stdout, "").unwrap().unwrap();
+        assert_eq!(result.raw_message[0], 0x01);
+        assert!(
+            result
+                .detect_score
+                .is_some_and(|value| (value - 1.792).abs() < 0.0001)
+        );
+        assert_eq!(result.bit_errors, 0);
+    }
+
+    #[test]
+    fn test_parse_detect_ignore_low_score_candidate() {
+        let stdout = "pattern  1:28 bb4aaa05ad77bf5e73c8eb37e44f0c94 0.209 0.379 A\n";
+        let result = parse_detect_output(stdout, "").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_detect_accept_high_score_candidate() {
+        let stdout = "pattern  0:05 023848c0200045fffff7d8743d035cda 1.427 0.065 A\n";
+        let result = parse_detect_output(stdout, "").unwrap().unwrap();
+        assert_eq!(result.raw_message[0], 0x02);
+        assert!(
+            result
+                .detect_score
+                .is_some_and(|value| (value - 1.427).abs() < 0.0001)
+        );
     }
 }

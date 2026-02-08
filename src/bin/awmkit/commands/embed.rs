@@ -1,7 +1,7 @@
 use crate::error::{CliError, Result};
 use crate::util::{audio_from_context, default_output_path, ensure_file, expand_inputs, parse_tag};
 use crate::Context;
-use awmkit::app::{i18n, KeyStore};
+use awmkit::app::{build_audio_proof, i18n, EvidenceStore, KeyStore, NewAudioEvidence};
 use awmkit::Message;
 use clap::Args;
 use fluent_bundle::FluentArgs;
@@ -41,6 +41,14 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
     let key = store.load()?;
     let tag = parse_tag(&args.tag)?;
     let message = Message::encode(awmkit::CURRENT_VERSION, &tag, &key)?;
+    let decoded_message = Message::decode(&message, &key)?;
+    let evidence_store = match EvidenceStore::load() {
+        Ok(store) => Some(store),
+        Err(err) => {
+            ctx.out.warn(format!("[WARN] evidence: {err}"));
+            None
+        }
+    };
 
     let audio = audio_from_context(ctx)?.strength(args.strength);
 
@@ -70,6 +78,41 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
         match result {
             Ok(()) => {
                 success += 1;
+                if let Some(evidence_store) = evidence_store.as_ref() {
+                    match build_audio_proof(&output) {
+                        Ok(proof) => {
+                            let insert = NewAudioEvidence {
+                                file_path: output.display().to_string(),
+                                tag: decoded_message.tag.to_string(),
+                                identity: decoded_message.identity().to_string(),
+                                version: decoded_message.version,
+                                key_slot: decoded_message.key_slot,
+                                timestamp_minutes: decoded_message.timestamp_minutes,
+                                message_hex: hex::encode(message),
+                                sample_rate: proof.sample_rate,
+                                channels: proof.channels,
+                                sample_count: proof.sample_count,
+                                pcm_sha256: proof.pcm_sha256,
+                                chromaprint: proof.chromaprint,
+                                fp_config_id: proof.fp_config_id,
+                            };
+                            if let Err(err) = evidence_store.insert(&insert) {
+                                ctx.out.warn(format!(
+                                    "[WARN] evidence: {} -> {} ({err})",
+                                    input.display(),
+                                    output.display()
+                                ));
+                            }
+                        }
+                        Err(err) => {
+                            ctx.out.warn(format!(
+                                "[WARN] evidence: {} -> {} ({err})",
+                                input.display(),
+                                output.display()
+                            ));
+                        }
+                    }
+                }
                 if ctx.out.verbose() && !ctx.out.quiet() {
                     if let Some(ref bar) = progress {
                         bar.println(format!("[OK] {} -> {}", input.display(), output.display()));
