@@ -1,138 +1,69 @@
 import SwiftUI
-import AWMKit
-import CryptoKit
-import SQLite3
 
 struct TagsView: View {
+    @EnvironmentObject private var appState: AppState
     @Environment(\.colorScheme) private var colorScheme
-    @State private var tags: [TagEntry] = []
+
+    @State private var mappings: [TagMappingEntry] = []
+    @State private var evidenceEntries: [EvidenceEntry] = []
+    @State private var queryText: String = ""
+    @State private var queryScope: QueryScope = .all
+
     @State private var newUsername: String = ""
     @State private var showingAddSheet = false
-    @State private var isDeleteMode = false
+
+    @State private var deleteMode: DeleteMode = .none
     @State private var selectedUsernames: Set<String> = []
+    @State private var selectedEvidenceIDs: Set<Int64> = []
     @State private var showingDeleteConfirm = false
+    @State private var deleteConfirmTarget: DeleteTarget = .mappings
     @State private var deleteConfirmInput = ""
+
     @State private var errorMessage: String?
-    private let tagColumns = [
+
+    private let mappingColumns = [
         GridItem(.adaptive(minimum: 180, maximum: 260), spacing: DesignSystem.Spacing.compact)
     ]
+
+    private enum QueryScope: String, CaseIterable, Identifiable {
+        case all = "全部"
+        case mappings = "映射"
+        case evidence = "证据"
+
+        var id: String { rawValue }
+    }
+
+    private enum DeleteMode {
+        case none
+        case mappings
+        case evidence
+    }
+
+    private enum DeleteTarget {
+        case mappings
+        case evidence
+
+        var noun: String {
+            switch self {
+            case .mappings:
+                return "标签"
+            case .evidence:
+                return "证据"
+            }
+        }
+    }
 
     var body: some View {
         GeometryReader { proxy in
             VStack(spacing: DesignSystem.Spacing.card) {
-                // 标签列表
-                GlassCard {
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.section) {
-                        HStack {
-                            Text("用户标签映射")
-                                .font(.headline.weight(.semibold))
+                toolbarSection
 
-                            Spacer()
+                panelSection
+                    .frame(maxHeight: .infinity)
 
-                            StatusCapsule(
-                                status: "\(tags.count) 个标签",
-                                isHighlight: !tags.isEmpty
-                            )
-                        }
+                actionSection
 
-                        if tags.isEmpty {
-                            HStack {
-                                Spacer()
-                                VStack(spacing: 8) {
-                                    Image(systemName: "tag")
-                                        .font(.system(size: 32))
-                                        .foregroundStyle(.secondary)
-                                    Text("暂无标签映射")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                    Text("点击下方按钮添加用户标签")
-                                        .font(.caption)
-                                        .foregroundStyle(.tertiary)
-                                }
-                                Spacer()
-                            }
-                            .frame(minHeight: 120)
-                        } else {
-                            ScrollView {
-                                LazyVGrid(columns: tagColumns, spacing: DesignSystem.Spacing.compact) {
-                                    ForEach(tags, id: \.username) { entry in
-                                        TagEntryRow(
-                                            entry: entry,
-                                            isDeleteMode: isDeleteMode,
-                                            isSelected: selectedUsernames.contains(entry.username),
-                                            onToggleSelected: {
-                                                toggleSelection(username: entry.username)
-                                            }
-                                        )
-                                    }
-                                }
-                                .padding(.vertical, 2)
-                            }
-                            .scrollIndicators(.hidden)
-                        }
-                    }
-                }
-
-                // 操作按钮
-                HStack(spacing: DesignSystem.Spacing.item) {
-                    if isDeleteMode {
-                        Button(action: exitDeleteMode) {
-                            HStack {
-                                Image(systemName: "xmark.circle")
-                                Text("退出删除")
-                            }
-                        }
-                        .buttonStyle(GlassButtonStyle())
-                        .accessibilityLabel("退出删除模式")
-
-                        Button(action: selectAllTags) {
-                            HStack {
-                                Image(systemName: "checkmark.circle")
-                                Text("全选")
-                            }
-                        }
-                        .buttonStyle(GlassButtonStyle())
-                        .disabled(tags.isEmpty)
-
-                        Button(action: clearSelection) {
-                            HStack {
-                                Image(systemName: "circle.dashed")
-                                Text("全不选")
-                            }
-                        }
-                        .buttonStyle(GlassButtonStyle())
-                        .disabled(selectedUsernames.isEmpty)
-
-                        Button(action: handleDeleteAction) {
-                            HStack {
-                                Image(systemName: "trash")
-                                Text("执行删除")
-                            }
-                        }
-                        .buttonStyle(GlassButtonStyle(accentOn: true))
-                    } else {
-                        Button(action: { showingAddSheet = true }) {
-                            HStack {
-                                Image(systemName: "plus.circle")
-                                Text("添加标签")
-                            }
-                        }
-                        .buttonStyle(GlassButtonStyle(accentOn: true))
-
-                        Button(action: enterDeleteMode) {
-                            HStack {
-                                Image(systemName: "trash")
-                                Text("删除模式")
-                            }
-                        }
-                        .buttonStyle(GlassButtonStyle())
-                        .disabled(tags.isEmpty)
-                    }
-
-                    Spacer()
-                }
-
-                Spacer()
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, DesignSystem.Spacing.horizontal)
             .padding(.vertical, DesignSystem.Spacing.vertical)
@@ -146,12 +77,15 @@ struct TagsView: View {
         }
         .sheet(isPresented: $showingDeleteConfirm) {
             DeleteConfirmSheet(
-                expectedCount: selectedUsernames.count,
+                expectedCount: deleteTargetCount,
+                itemLabel: deleteConfirmTarget.noun,
                 input: $deleteConfirmInput,
-                onCancel: { showingDeleteConfirm = false },
+                onCancel: {
+                    showingDeleteConfirm = false
+                },
                 onConfirm: {
                     showingDeleteConfirm = false
-                    performBatchDelete()
+                    performBatchDelete(target: deleteConfirmTarget)
                 }
             )
         }
@@ -167,51 +101,405 @@ struct TagsView: View {
         } message: {
             Text(errorMessage ?? "")
         }
-        .onChange(of: tags.map(\.username)) { _, usernames in
-            let available = Set(usernames)
-            selectedUsernames = selectedUsernames.intersection(available)
-            if usernames.isEmpty {
+        .onChange(of: mappings.map(\.username)) { _, usernames in
+            selectedUsernames = selectedUsernames.intersection(Set(usernames))
+            if mappings.isEmpty, deleteMode == .mappings {
                 exitDeleteMode()
             }
         }
-        .onAppear(perform: loadTags)
+        .onChange(of: evidenceEntries.map(\.id)) { _, ids in
+            selectedEvidenceIDs = selectedEvidenceIDs.intersection(Set(ids))
+            if evidenceEntries.isEmpty, deleteMode == .evidence {
+                exitDeleteMode()
+            }
+        }
+        .onAppear(perform: loadData)
     }
 
-    private func loadTags() {
+    private var toolbarSection: some View {
+        HStack(spacing: DesignSystem.Spacing.item) {
+            searchField
+
+            GlassEffectContainer {
+                Picker("", selection: $queryScope) {
+                    ForEach(QueryScope.allCases) { scope in
+                        Text(scope.rawValue)
+                            .tag(scope)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.large)
+            }
+            .frame(width: 230)
+            .disabled(deleteMode != .none)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 8) {
+                StatusCapsule(
+                    status: "\(appState.mappingCount) 映射",
+                    isHighlight: appState.mappingCount > 0
+                )
+                StatusCapsule(
+                    status: "\(appState.evidenceCount) 证据",
+                    isHighlight: appState.evidenceCount > 0
+                )
+            }
+        }
+    }
+
+    private var searchField: some View {
+        GlassEffectContainer {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+
+                TextField("搜索用户名 / Tag / Identity / 路径 / SHA256", text: $queryText)
+                    .textFieldStyle(.plain)
+
+                if !queryText.isEmpty {
+                    Button {
+                        queryText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+        }
+        .background(DesignSystem.Colors.rowBackground(colorScheme))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    DesignSystem.Colors.border(colorScheme),
+                    lineWidth: DesignSystem.BorderWidth.standard
+                )
+        )
+    }
+
+    @ViewBuilder
+    private var panelSection: some View {
+        switch queryScope {
+        case .all:
+            HStack(spacing: DesignSystem.Spacing.item) {
+                mappingPanel
+                evidencePanel
+            }
+        case .mappings:
+            mappingPanel
+        case .evidence:
+            evidencePanel
+        }
+    }
+
+    private var mappingPanel: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.section) {
+                HStack {
+                    Text("标签映射")
+                        .font(.headline.weight(.semibold))
+
+                    Spacer()
+
+                    StatusCapsule(
+                        status: "\(displayedMappings.count)/\(mappings.count)",
+                        isHighlight: !displayedMappings.isEmpty
+                    )
+                }
+
+                if mappings.isEmpty {
+                    emptyState(
+                        icon: "tag",
+                        title: "暂无标签映射",
+                        subtitle: "点击下方按钮添加用户标签"
+                    )
+                } else if displayedMappings.isEmpty {
+                    emptyState(
+                        icon: "magnifyingglass",
+                        title: "未找到匹配映射",
+                        subtitle: "尝试更换关键词"
+                    )
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: mappingColumns, spacing: DesignSystem.Spacing.compact) {
+                            ForEach(displayedMappings, id: \.username) { entry in
+                                TagEntryRow(
+                                    entry: entry,
+                                    isDeleteMode: deleteMode == .mappings,
+                                    isSelected: selectedUsernames.contains(entry.username),
+                                    onToggleSelected: {
+                                        toggleMappingSelection(username: entry.username)
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .scrollIndicators(.hidden)
+                }
+            }
+        }
+    }
+
+    private var evidencePanel: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.section) {
+                HStack {
+                    Text("音频证据")
+                        .font(.headline.weight(.semibold))
+
+                    Spacer()
+
+                    StatusCapsule(
+                        status: "\(displayedEvidence.count)/\(evidenceEntries.count)",
+                        isHighlight: !displayedEvidence.isEmpty
+                    )
+                }
+
+                if evidenceEntries.isEmpty {
+                    emptyState(
+                        icon: "waveform",
+                        title: "暂无证据记录",
+                        subtitle: "完成嵌入后会自动写入证据数据库"
+                    )
+                } else if displayedEvidence.isEmpty {
+                    emptyState(
+                        icon: "magnifyingglass",
+                        title: "未找到匹配证据",
+                        subtitle: "尝试更换关键词"
+                    )
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: DesignSystem.Spacing.compact) {
+                            ForEach(displayedEvidence) { entry in
+                                EvidenceEntryRow(
+                                    entry: entry,
+                                    isDeleteMode: deleteMode == .evidence,
+                                    isSelected: selectedEvidenceIDs.contains(entry.id),
+                                    onToggleSelected: {
+                                        toggleEvidenceSelection(id: entry.id)
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .scrollIndicators(.hidden)
+                }
+            }
+        }
+    }
+
+    private func emptyState(icon: String, title: String, subtitle: String) -> some View {
+        HStack {
+            Spacer()
+            VStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 28))
+                    .foregroundStyle(.secondary)
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer()
+        }
+        .frame(minHeight: 140)
+    }
+
+    private var actionSection: some View {
+        HStack(spacing: DesignSystem.Spacing.item) {
+            switch deleteMode {
+            case .none:
+                Button(action: { showingAddSheet = true }) {
+                    HStack {
+                        Image(systemName: "plus.circle")
+                        Text("添加标签")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle(accentOn: true))
+
+                Button(action: { enterDeleteMode(.mappings) }) {
+                    HStack {
+                        Image(systemName: "tag")
+                        Text("删除标签")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle())
+                .disabled(mappings.isEmpty)
+
+                Button(action: { enterDeleteMode(.evidence) }) {
+                    HStack {
+                        Image(systemName: "waveform")
+                        Text("删除证据")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle())
+                .disabled(evidenceEntries.isEmpty)
+
+            case .mappings:
+                Button(action: exitDeleteMode) {
+                    HStack {
+                        Image(systemName: "xmark.circle")
+                        Text("退出删除")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle())
+                .accessibilityLabel("退出标签删除模式")
+
+                Button(action: selectAllMappings) {
+                    HStack {
+                        Image(systemName: "checkmark.circle")
+                        Text("全选")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle())
+                .disabled(mappings.isEmpty)
+
+                Button(action: clearMappingSelection) {
+                    HStack {
+                        Image(systemName: "circle.dashed")
+                        Text("全不选")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle())
+                .disabled(selectedUsernames.isEmpty)
+
+                Button(action: { handleDeleteAction(target: .mappings) }) {
+                    HStack {
+                        Image(systemName: "trash")
+                        Text("执行删除")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle(accentOn: true))
+
+            case .evidence:
+                Button(action: exitDeleteMode) {
+                    HStack {
+                        Image(systemName: "xmark.circle")
+                        Text("退出删除")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle())
+                .accessibilityLabel("退出证据删除模式")
+
+                Button(action: selectAllEvidence) {
+                    HStack {
+                        Image(systemName: "checkmark.circle")
+                        Text("全选")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle())
+                .disabled(evidenceEntries.isEmpty)
+
+                Button(action: clearEvidenceSelection) {
+                    HStack {
+                        Image(systemName: "circle.dashed")
+                        Text("全不选")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle())
+                .disabled(selectedEvidenceIDs.isEmpty)
+
+                Button(action: { handleDeleteAction(target: .evidence) }) {
+                    HStack {
+                        Image(systemName: "trash")
+                        Text("执行删除")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle(accentOn: true))
+            }
+
+            Spacer()
+        }
+    }
+
+    private var trimmedQuery: String {
+        queryText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var displayedMappings: [TagMappingEntry] {
+        guard queryScope != .evidence else { return [] }
+        guard !trimmedQuery.isEmpty else { return mappings }
+
+        return mappings.filter { entry in
+            entry.username.localizedCaseInsensitiveContains(trimmedQuery) ||
+            entry.tag.localizedCaseInsensitiveContains(trimmedQuery)
+        }
+    }
+
+    private var displayedEvidence: [EvidenceEntry] {
+        guard queryScope != .mappings else { return [] }
+        guard !trimmedQuery.isEmpty else { return evidenceEntries }
+
+        return evidenceEntries.filter { entry in
+            entry.identity.localizedCaseInsensitiveContains(trimmedQuery) ||
+            entry.tag.localizedCaseInsensitiveContains(trimmedQuery) ||
+            entry.filePath.localizedCaseInsensitiveContains(trimmedQuery) ||
+            entry.pcmSha256.localizedCaseInsensitiveContains(trimmedQuery)
+        }
+    }
+
+    private var deleteTargetCount: Int {
+        switch deleteConfirmTarget {
+        case .mappings:
+            return selectedUsernames.count
+        case .evidence:
+            return selectedEvidenceIDs.count
+        }
+    }
+
+    private func loadData() {
         do {
-            tags = try TagStoreBridge.list()
+            mappings = try DatabaseQueryStore.listTagMappings()
+            evidenceEntries = try DatabaseQueryStore.listEvidence()
+            refreshDatabaseStatus()
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     private func saveNewTag() {
-        guard !newUsername.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !newUsername.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
 
         do {
-            tags = try TagStoreBridge.save(username: newUsername)
+            mappings = try DatabaseQueryStore.saveTagMapping(username: newUsername)
             newUsername = ""
             showingAddSheet = false
+            refreshDatabaseStatus()
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    private func enterDeleteMode() {
-        isDeleteMode = true
+    private func enterDeleteMode(_ mode: DeleteMode) {
+        deleteMode = mode
+        queryScope = mode == .mappings ? .mappings : .evidence
         selectedUsernames.removeAll()
-        deleteConfirmInput = ""
-    }
-
-    private func exitDeleteMode() {
-        isDeleteMode = false
-        selectedUsernames.removeAll()
+        selectedEvidenceIDs.removeAll()
         deleteConfirmInput = ""
         showingDeleteConfirm = false
     }
 
-    private func toggleSelection(username: String) {
-        guard isDeleteMode else { return }
+    private func exitDeleteMode() {
+        deleteMode = .none
+        selectedUsernames.removeAll()
+        selectedEvidenceIDs.removeAll()
+        deleteConfirmInput = ""
+        showingDeleteConfirm = false
+    }
+
+    private func toggleMappingSelection(username: String) {
+        guard deleteMode == .mappings else { return }
         if selectedUsernames.contains(username) {
             selectedUsernames.remove(username)
         } else {
@@ -219,41 +507,70 @@ struct TagsView: View {
         }
     }
 
-    private func selectAllTags() {
-        selectedUsernames = Set(tags.map(\.username))
+    private func toggleEvidenceSelection(id: Int64) {
+        guard deleteMode == .evidence else { return }
+        if selectedEvidenceIDs.contains(id) {
+            selectedEvidenceIDs.remove(id)
+        } else {
+            selectedEvidenceIDs.insert(id)
+        }
     }
 
-    private func clearSelection() {
+    private func selectAllMappings() {
+        selectedUsernames = Set(mappings.map(\.username))
+    }
+
+    private func clearMappingSelection() {
         selectedUsernames.removeAll()
     }
 
-    private func handleDeleteAction() {
-        guard isDeleteMode else { return }
-        if selectedUsernames.isEmpty {
+    private func selectAllEvidence() {
+        selectedEvidenceIDs = Set(evidenceEntries.map(\.id))
+    }
+
+    private func clearEvidenceSelection() {
+        selectedEvidenceIDs.removeAll()
+    }
+
+    private func handleDeleteAction(target: DeleteTarget) {
+        switch target {
+        case .mappings where selectedUsernames.isEmpty:
             exitDeleteMode()
             return
+        case .evidence where selectedEvidenceIDs.isEmpty:
+            exitDeleteMode()
+            return
+        default:
+            break
         }
+
+        deleteConfirmTarget = target
         deleteConfirmInput = ""
         showingDeleteConfirm = true
     }
 
-    private func performBatchDelete() {
+    private func performBatchDelete(target: DeleteTarget) {
         do {
-            tags = try TagStoreBridge.remove(usernames: selectedUsernames)
+            switch target {
+            case .mappings:
+                mappings = try DatabaseQueryStore.removeTagMappings(usernames: selectedUsernames)
+            case .evidence:
+                evidenceEntries = try DatabaseQueryStore.removeEvidence(ids: selectedEvidenceIDs)
+            }
             exitDeleteMode()
+            refreshDatabaseStatus()
         } catch {
             errorMessage = error.localizedDescription
         }
     }
+
+    private func refreshDatabaseStatus() {
+        appState.checkDatabaseStatus()
+    }
 }
 
-struct TagEntry {
-    let username: String
-    let tag: String
-}
-
-struct TagEntryRow: View {
-    let entry: TagEntry
+private struct TagEntryRow: View {
+    let entry: TagMappingEntry
     let isDeleteMode: Bool
     let isSelected: Bool
     let onToggleSelected: () -> Void
@@ -302,14 +619,73 @@ struct TagEntryRow: View {
     }
 }
 
-struct AddTagSheet: View {
+private struct EvidenceEntryRow: View {
+    let entry: EvidenceEntry
+    let isDeleteMode: Bool
+    let isSelected: Bool
+    let onToggleSelected: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "waveform.path.badge.shield.checkmark")
+                    .foregroundStyle(.secondary)
+
+                Text(entry.identity)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+
+                Spacer(minLength: 6)
+
+                Text(entry.createdDate, format: Date.FormatStyle().year().month().day().hour().minute())
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("Tag \(entry.tag) · 槽位 \(entry.keySlot) · v\(entry.version)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Text(entry.filePath)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(entry.filePath)
+        }
+        .entryRowStyle()
+        .overlay {
+            if isDeleteMode && isSelected {
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.row, style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.9), lineWidth: 1.5)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if isDeleteMode && isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(6)
+            }
+        }
+        .contentShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.row, style: .continuous))
+        .onTapGesture {
+            if isDeleteMode {
+                onToggleSelected()
+            }
+        }
+    }
+}
+
+private struct AddTagSheet: View {
     @Binding var username: String
     let onSave: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
     private var suggestedTag: String? {
-        TagStoreBridge.previewTag(username: username)
+        DatabaseQueryStore.previewTag(username: username)
     }
 
     var body: some View {
@@ -349,8 +725,8 @@ struct AddTagSheet: View {
                                 .foregroundStyle(suggestedTag == nil ? .tertiary : .primary)
                             Spacer()
                         }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
                     }
                     .background(DesignSystem.Colors.rowBackground(colorScheme))
                     .cornerRadius(8)
@@ -383,8 +759,9 @@ struct AddTagSheet: View {
     }
 }
 
-struct DeleteConfirmSheet: View {
+private struct DeleteConfirmSheet: View {
     let expectedCount: Int
+    let itemLabel: String
     @Binding var input: String
     let onCancel: () -> Void
     let onConfirm: () -> Void
@@ -409,7 +786,7 @@ struct DeleteConfirmSheet: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                Text("我确认删除 \(expectedCount) 条标签")
+                Text("我确认删除 \(expectedCount) 条\(itemLabel)")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
             }
@@ -450,254 +827,5 @@ struct DeleteConfirmSheet: View {
         }
         .padding(24)
         .frame(width: 420)
-    }
-}
-
-private enum TagStoreBridgeError: LocalizedError {
-    case emptyUsername
-    case homeDirectoryMissing
-    case mappingNotFound(String)
-    case sqlite(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .emptyUsername:
-            return "用户名不能为空"
-        case .homeDirectoryMissing:
-            return "无法定位用户目录"
-        case .mappingNotFound(let username):
-            return "未找到用户映射: \(username)"
-        case .sqlite(let message):
-            return "标签数据库错误: \(message)"
-        }
-    }
-}
-
-private enum TagStoreBridge {
-    private static let charset = Array("ABCDEFGHJKMNPQRSTUVWXYZ23456789_")
-    private static let databaseFileName = "awmkit.db"
-    private static let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-
-    static func list() throws -> [TagEntry] {
-        try withDatabase { db in
-            var statement: OpaquePointer?
-            defer { sqlite3_finalize(statement) }
-            let sql = """
-            SELECT username, tag
-            FROM tag_mappings
-            ORDER BY username COLLATE NOCASE ASC
-            """
-            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-                throw databaseError(db)
-            }
-
-            var entries: [TagEntry] = []
-            while sqlite3_step(statement) == SQLITE_ROW {
-                guard
-                    let usernamePtr = sqlite3_column_text(statement, 0),
-                    let tagPtr = sqlite3_column_text(statement, 1)
-                else {
-                    continue
-                }
-
-                let username = String(cString: usernamePtr).trimmingCharacters(in: .whitespacesAndNewlines)
-                let tag = String(cString: tagPtr).uppercased()
-                guard !username.isEmpty, (try? AWMTag(tag: tag)) != nil else {
-                    continue
-                }
-                entries.append(TagEntry(username: username, tag: tag))
-            }
-            return entries
-        }
-    }
-
-    static func save(username: String) throws -> [TagEntry] {
-        let normalizedUsername = try normalize(username)
-        let tag = try AWMTag(identity: suggestedIdentity(from: normalizedUsername))
-        let now = Int64(Date().timeIntervalSince1970)
-
-        try withDatabase { db in
-            var statement: OpaquePointer?
-            defer { sqlite3_finalize(statement) }
-            let sql = """
-            INSERT INTO tag_mappings (username, tag, created_at)
-            VALUES (?1, ?2, ?3)
-            ON CONFLICT(username)
-            DO UPDATE SET
-                username = excluded.username,
-                tag = excluded.tag,
-                created_at = excluded.created_at
-            """
-            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-                throw databaseError(db)
-            }
-
-            try bind(normalizedUsername, at: 1, in: statement, db: db)
-            try bind(tag.value, at: 2, in: statement, db: db)
-            guard sqlite3_bind_int64(statement, 3, now) == SQLITE_OK else {
-                throw databaseError(db)
-            }
-            guard sqlite3_step(statement) == SQLITE_DONE else {
-                throw databaseError(db)
-            }
-        }
-        return try list()
-    }
-
-    static func previewTag(username: String) -> String? {
-        let normalized = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return nil }
-        return try? AWMTag(identity: suggestedIdentity(from: normalized)).value
-    }
-
-    static func remove(username: String) throws -> [TagEntry] {
-        let normalizedUsername = try normalize(username)
-        let affected = try withDatabase { db -> Int32 in
-            var statement: OpaquePointer?
-            defer { sqlite3_finalize(statement) }
-            let sql = "DELETE FROM tag_mappings WHERE username = ?1 COLLATE NOCASE"
-            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-                throw databaseError(db)
-            }
-            try bind(normalizedUsername, at: 1, in: statement, db: db)
-            guard sqlite3_step(statement) == SQLITE_DONE else {
-                throw databaseError(db)
-            }
-            return sqlite3_changes(db)
-        }
-        if affected == 0 {
-            throw TagStoreBridgeError.mappingNotFound(normalizedUsername)
-        }
-        return try list()
-    }
-
-    static func clear() throws -> [TagEntry] {
-        try withDatabase { db in
-            guard sqlite3_exec(db, "DELETE FROM tag_mappings", nil, nil, nil) == SQLITE_OK else {
-                throw databaseError(db)
-            }
-        }
-        return []
-    }
-
-    static func remove(usernames: Set<String>) throws -> [TagEntry] {
-        guard !usernames.isEmpty else {
-            return try list()
-        }
-        try withDatabase { db in
-            var statement: OpaquePointer?
-            defer { sqlite3_finalize(statement) }
-            let sql = "DELETE FROM tag_mappings WHERE username = ?1 COLLATE NOCASE"
-            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-                throw databaseError(db)
-            }
-
-            for username in usernames {
-                sqlite3_reset(statement)
-                sqlite3_clear_bindings(statement)
-                try bind(username, at: 1, in: statement, db: db)
-                guard sqlite3_step(statement) == SQLITE_DONE else {
-                    throw databaseError(db)
-                }
-            }
-        }
-        return try list()
-    }
-
-    private static func normalize(_ username: String) throws -> String {
-        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            throw TagStoreBridgeError.emptyUsername
-        }
-        return trimmed
-    }
-
-    private static func suggestedIdentity(from username: String) -> String {
-        let digest = SHA256.hash(data: Data(username.utf8))
-        var acc: UInt64 = 0
-        var accBits: UInt8 = 0
-        var output = ""
-        output.reserveCapacity(7)
-
-        for byte in digest {
-            acc = (acc << 8) | UInt64(byte)
-            accBits += 8
-
-            while accBits >= 5 && output.count < 7 {
-                let shift = accBits - 5
-                let index = Int((acc >> UInt64(shift)) & 0x1F)
-                output.append(charset[index])
-                accBits -= 5
-            }
-
-            if output.count >= 7 {
-                break
-            }
-        }
-
-        return output
-    }
-
-    private static func withDatabase<T>(_ body: (OpaquePointer?) throws -> T) throws -> T {
-        let url = try databaseURL()
-        try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-
-        var db: OpaquePointer?
-        guard sqlite3_open(url.path, &db) == SQLITE_OK else {
-            let message = db.flatMap { sqliteMessage(from: $0) } ?? "无法打开数据库"
-            if let db {
-                sqlite3_close(db)
-            }
-            throw TagStoreBridgeError.sqlite(message)
-        }
-        defer { sqlite3_close(db) }
-
-        try ensureSchema(in: db)
-        return try body(db)
-    }
-
-    private static func ensureSchema(in db: OpaquePointer?) throws {
-        let sql = """
-        CREATE TABLE IF NOT EXISTS tag_mappings (
-            username TEXT NOT NULL COLLATE NOCASE PRIMARY KEY,
-            tag TEXT NOT NULL,
-            created_at INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_tag_mappings_created_at
-        ON tag_mappings(created_at DESC);
-        """
-        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
-            throw databaseError(db)
-        }
-    }
-
-    private static func bind(_ value: String, at index: Int32, in statement: OpaquePointer?, db: OpaquePointer?) throws {
-        guard sqlite3_bind_text(statement, index, value, -1, sqliteTransient) == SQLITE_OK else {
-            throw databaseError(db)
-        }
-    }
-
-    private static func databaseError(_ db: OpaquePointer?) -> TagStoreBridgeError {
-        .sqlite(sqliteMessage(from: db))
-    }
-
-    private static func sqliteMessage(from db: OpaquePointer?) -> String {
-        guard let db, let cString = sqlite3_errmsg(db) else {
-            return "unknown sqlite error"
-        }
-        return String(cString: cString)
-    }
-
-    private static func databaseURL() throws -> URL {
-        let homePath = NSHomeDirectory()
-        if homePath.isEmpty {
-            throw TagStoreBridgeError.homeDirectoryMissing
-        }
-        return URL(fileURLWithPath: homePath, isDirectory: true)
-            .appendingPathComponent(".awmkit", isDirectory: true)
-            .appendingPathComponent(databaseFileName, isDirectory: false)
     }
 }
