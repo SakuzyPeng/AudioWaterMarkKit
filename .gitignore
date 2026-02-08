@@ -4,6 +4,7 @@
 
 # Build artifacts
 /macos-app/.build
+/macos-app/AWMKit.xcodeproj/
 /macos-app/AWMKit.xcodeproj/xcuserdata
 /macos-app/AWMKit.xcodeproj/project.xcworkspace/xcuserdata
 
