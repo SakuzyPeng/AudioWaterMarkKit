@@ -12,6 +12,9 @@ public struct AWMMessageResult {
     /// UTC Unix minutes (raw value)
     public let timestampMinutes: UInt32
 
+    /// Key slot (v1 always 0, v2 is 0-31)
+    public let keySlot: UInt8
+
     /// Decoded tag
     public let tag: AWMTag
 
@@ -37,12 +40,12 @@ public enum AWMMessage {
     /// Encode a watermark message
     ///
     /// - Parameters:
-    ///   - version: Protocol version (default: 1)
+    ///   - version: Protocol version (default: currentVersion)
     ///   - tag: 8-character tag
     ///   - key: HMAC key (recommended: 32 bytes)
     /// - Returns: 16-byte message
     public static func encode(
-        version: UInt8 = 1,
+        version: UInt8 = currentVersion,
         tag: AWMTag,
         key: Data
     ) throws -> Data {
@@ -76,7 +79,7 @@ public enum AWMMessage {
     ///   - timestampMinutes: UTC Unix minutes
     /// - Returns: 16-byte message
     public static func encode(
-        version: UInt8 = 1,
+        version: UInt8 = currentVersion,
         tag: AWMTag,
         key: Data,
         timestampMinutes: UInt32
@@ -148,6 +151,7 @@ public enum AWMMessage {
             version: cResult.version,
             timestampUTC: cResult.timestamp_utc,
             timestampMinutes: cResult.timestamp_minutes,
+            keySlot: cResult.key_slot,
             tag: tag
         )
     }

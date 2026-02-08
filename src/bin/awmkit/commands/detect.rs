@@ -4,8 +4,8 @@ use crate::Context;
 use awmkit::app::{i18n, KeyStore};
 use awmkit::Message;
 use clap::Args;
-use indicatif::{ProgressBar, ProgressStyle};
 use fluent_bundle::FluentArgs;
+use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 
 #[derive(Args)]
@@ -26,6 +26,7 @@ struct DetectJson {
     tag: Option<String>,
     identity: Option<String>,
     version: Option<u8>,
+    key_slot: Option<u8>,
     timestamp_minutes: Option<u32>,
     timestamp_utc: Option<u64>,
     pattern: Option<String>,
@@ -169,6 +170,7 @@ fn detect_one_json(audio: &awmkit::Audio, key: &[u8], input: &std::path::Path) -
             tag: None,
             identity: None,
             version: None,
+            key_slot: None,
             timestamp_minutes: None,
             timestamp_utc: None,
             pattern: None,
@@ -183,6 +185,7 @@ fn detect_one_json(audio: &awmkit::Audio, key: &[u8], input: &std::path::Path) -
                 tag: Some(decoded.tag.to_string()),
                 identity: Some(decoded.identity().to_string()),
                 version: Some(decoded.version),
+                key_slot: Some(decoded.key_slot),
                 timestamp_minutes: Some(decoded.timestamp_minutes),
                 timestamp_utc: Some(decoded.timestamp_utc),
                 pattern: Some(result.pattern),
@@ -196,6 +199,7 @@ fn detect_one_json(audio: &awmkit::Audio, key: &[u8], input: &std::path::Path) -
                 tag: None,
                 identity: None,
                 version: None,
+                key_slot: None,
                 timestamp_minutes: None,
                 timestamp_utc: None,
                 pattern: Some(result.pattern),
@@ -210,6 +214,7 @@ fn detect_one_json(audio: &awmkit::Audio, key: &[u8], input: &std::path::Path) -
             tag: None,
             identity: None,
             version: None,
+            key_slot: None,
             timestamp_minutes: None,
             timestamp_utc: None,
             pattern: None,

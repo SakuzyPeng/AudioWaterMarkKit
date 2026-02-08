@@ -1,6 +1,6 @@
 use crate::error::Result;
-use awmkit::app::{i18n, KeyStore};
 use crate::Context;
+use awmkit::app::{i18n, KeyStore};
 use awmkit::Message;
 use clap::Args;
 use fluent_bundle::FluentArgs;
@@ -30,6 +30,9 @@ pub fn run(ctx: &Context, args: &DecodeArgs) -> Result<()> {
     args.set("seconds", decoded.timestamp_utc.to_string());
     ctx.out
         .info(i18n::tr_args("cli-decode-timestamp_utc", &args));
+    let mut args = FluentArgs::new();
+    args.set("key_slot", decoded.key_slot.to_string());
+    ctx.out.info(i18n::tr_args("cli-decode-key_slot", &args));
     let mut args = FluentArgs::new();
     args.set("tag", decoded.tag.to_string());
     ctx.out.info(i18n::tr_args("cli-decode-tag", &args));

@@ -1,7 +1,7 @@
 use crate::error::Result;
-use awmkit::app::KeyStore;
 use crate::util::parse_tag;
 use crate::Context;
+use awmkit::app::KeyStore;
 use awmkit::{Message, CURRENT_VERSION};
 use clap::Args;
 

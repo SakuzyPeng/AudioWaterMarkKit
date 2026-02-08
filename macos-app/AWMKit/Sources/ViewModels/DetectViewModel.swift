@@ -11,6 +11,7 @@ struct DetectRecord: Identifiable, Equatable {
     let version: UInt8?
     let timestampMinutes: UInt32?
     let timestampUTC: UInt64?
+    let keySlot: UInt8?
     let pattern: String?
     let bitErrors: UInt32?
     let matchFound: Bool?
@@ -26,6 +27,7 @@ struct DetectRecord: Identifiable, Equatable {
         version: UInt8? = nil,
         timestampMinutes: UInt32? = nil,
         timestampUTC: UInt64? = nil,
+        keySlot: UInt8? = nil,
         pattern: String? = nil,
         bitErrors: UInt32? = nil,
         matchFound: Bool? = nil,
@@ -40,6 +42,7 @@ struct DetectRecord: Identifiable, Equatable {
         self.version = version
         self.timestampMinutes = timestampMinutes
         self.timestampUTC = timestampUTC
+        self.keySlot = keySlot
         self.pattern = pattern
         self.bitErrors = bitErrors
         self.matchFound = matchFound
@@ -308,6 +311,7 @@ class DetectViewModel: ObservableObject {
                                 version: decoded.version,
                                 timestampMinutes: decoded.timestampMinutes,
                                 timestampUTC: decoded.timestampUTC,
+                                keySlot: decoded.keySlot,
                                 pattern: detectResult.pattern,
                                 bitErrors: detectResult.bitErrors,
                                 matchFound: detectResult.found

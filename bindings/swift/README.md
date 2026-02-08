@@ -101,6 +101,7 @@ let result = try AWMMessage.decode(msg, key: key)
 result.version          // UInt8
 result.timestampUTC     // UInt64 (秒)
 result.timestampMinutes // UInt32 (分钟)
+result.keySlot          // UInt8 (v1 固定 0，v2 为 0-31)
 result.tag              // AWMTag
 result.identity         // String
 result.date             // Date

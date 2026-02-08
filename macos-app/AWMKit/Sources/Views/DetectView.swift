@@ -283,22 +283,25 @@ struct DetectView: View {
 
                 tripleFieldRow(
                     (
-                        label: "UTC 分钟",
-                        value: detailValue(from: displayedDetectRecord?.timestampMinutes.map { String($0) }),
+                        label: "检测时间",
+                        value: localTimestampDisplay(from: displayedDetectRecord),
                         valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
-                        monospaced: true
+                        monospaced: true,
+                        helpText: localTimestampHelp(from: displayedDetectRecord)
                     ),
                     (
-                        label: "UTC 秒",
-                        value: detailValue(from: displayedDetectRecord?.timestampUTC.map { String($0) }),
+                        label: "密钥槽位",
+                        value: detailValue(from: displayedDetectRecord?.keySlot.map { String($0) }),
                         valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
-                        monospaced: true
+                        monospaced: true,
+                        helpText: nil
                     ),
                     (
                         label: "位错误",
                         value: detailValue(from: displayedDetectRecord?.bitErrors.map { String($0) }),
                         valueColor: fieldValueColor(for: .bitErrors, record: displayedDetectRecord),
-                        monospaced: true
+                        monospaced: true,
+                        helpText: nil
                     )
                 )
 
@@ -633,24 +636,57 @@ struct DetectView: View {
         _ second: (label: String, value: String, valueColor: Color, monospaced: Bool),
         _ third: (label: String, value: String, valueColor: Color, monospaced: Bool)
     ) -> some View {
+        tripleFieldRow(
+            (
+                label: first.label,
+                value: first.value,
+                valueColor: first.valueColor,
+                monospaced: first.monospaced,
+                helpText: nil
+            ),
+            (
+                label: second.label,
+                value: second.value,
+                valueColor: second.valueColor,
+                monospaced: second.monospaced,
+                helpText: nil
+            ),
+            (
+                label: third.label,
+                value: third.value,
+                valueColor: third.valueColor,
+                monospaced: third.monospaced,
+                helpText: nil
+            )
+        )
+    }
+
+    private func tripleFieldRow(
+        _ first: (label: String, value: String, valueColor: Color, monospaced: Bool, helpText: String?),
+        _ second: (label: String, value: String, valueColor: Color, monospaced: Bool, helpText: String?),
+        _ third: (label: String, value: String, valueColor: Color, monospaced: Bool, helpText: String?)
+    ) -> some View {
         HStack(spacing: 8) {
             compactFieldCell(
                 label: first.label,
                 value: first.value,
                 valueColor: first.valueColor,
-                monospaced: first.monospaced
+                monospaced: first.monospaced,
+                helpText: first.helpText
             )
             compactFieldCell(
                 label: second.label,
                 value: second.value,
                 valueColor: second.valueColor,
-                monospaced: second.monospaced
+                monospaced: second.monospaced,
+                helpText: second.helpText
             )
             compactFieldCell(
                 label: third.label,
                 value: third.value,
                 valueColor: third.valueColor,
-                monospaced: third.monospaced
+                monospaced: third.monospaced,
+                helpText: third.helpText
             )
         }
     }
@@ -659,7 +695,8 @@ struct DetectView: View {
         label: String,
         value: String,
         valueColor: Color,
-        monospaced: Bool
+        monospaced: Bool,
+        helpText: String? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
@@ -670,7 +707,8 @@ struct DetectView: View {
                 value,
                 color: valueColor,
                 monospaced: monospaced,
-                truncationMode: .tail
+                truncationMode: .tail,
+                helpText: helpText
             )
         }
         .padding(.horizontal, 10)
@@ -691,7 +729,8 @@ struct DetectView: View {
         _ value: String,
         color: Color,
         monospaced: Bool,
-        truncationMode: Text.TruncationMode
+        truncationMode: Text.TruncationMode,
+        helpText: String? = nil
     ) -> some View {
         let resolvedColor: Color = value == "-" ? .secondary : color
 
@@ -708,7 +747,7 @@ struct DetectView: View {
         .lineLimit(1)
         .truncationMode(truncationMode)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .help(value)
+        .help(helpText ?? value)
     }
 
     private func fieldValueColor(for semantic: FieldSemantic, record: DetectRecord?) -> Color {
@@ -751,6 +790,43 @@ struct DetectView: View {
         guard let raw, !raw.isEmpty else { return "-" }
         return raw
     }
+
+    private func localTimestampDisplay(from record: DetectRecord?) -> String {
+        guard let components = timestampComponents(from: record) else {
+            return "-"
+        }
+        let date = Date(timeIntervalSince1970: TimeInterval(components.utcSeconds))
+        return Self.localTimestampFormatter.string(from: date)
+    }
+
+    private func localTimestampHelp(from record: DetectRecord?) -> String {
+        guard let components = timestampComponents(from: record) else {
+            return "-"
+        }
+        let local = localTimestampDisplay(from: record)
+        return "本地时间: \(local)\nUTC 分钟: \(components.utcMinutes)\nUTC 秒: \(components.utcSeconds)"
+    }
+
+    private func timestampComponents(from record: DetectRecord?) -> (utcMinutes: UInt32, utcSeconds: UInt64)? {
+        guard let record else { return nil }
+        if let minutes = record.timestampMinutes {
+            let seconds = record.timestampUTC ?? UInt64(minutes) * 60
+            return (minutes, seconds)
+        }
+        if let seconds = record.timestampUTC {
+            let minutes = UInt32(seconds / 60)
+            return (minutes, seconds)
+        }
+        return nil
+    }
+
+    private static let localTimestampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .autoupdatingCurrent
+        formatter.timeZone = .autoupdatingCurrent
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter
+    }()
 
     private func isSelectableResultLog(_ entry: LogEntry) -> Bool {
         entry.relatedRecordId != nil

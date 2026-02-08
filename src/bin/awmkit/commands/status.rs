@@ -22,10 +22,12 @@ pub fn run(ctx: &Context, args: &StatusArgs) -> Result<()> {
         let (key, backend) = store.load_with_backend()?;
         let mut fmt_args = FluentArgs::new();
         fmt_args.set("bytes", key.len().to_string());
-        ctx.out.info(i18n::tr_args("cli-status-key_configured", &fmt_args));
+        ctx.out
+            .info(i18n::tr_args("cli-status-key_configured", &fmt_args));
         let mut fmt_args = FluentArgs::new();
         fmt_args.set("backend", backend.label());
-        ctx.out.info(i18n::tr_args("cli-status-key_storage", &fmt_args));
+        ctx.out
+            .info(i18n::tr_args("cli-status-key_storage", &fmt_args));
         if key.len() != KEY_LEN {
             ctx.out.warn(i18n::tr("cli-status-key_len_mismatch"));
         }
@@ -39,23 +41,29 @@ pub fn run(ctx: &Context, args: &StatusArgs) -> Result<()> {
                 if audio.is_available() {
                     ctx.out.info(i18n::tr("cli-status-audiowmark_available"));
                 } else {
-                    ctx.out.warn(i18n::tr("cli-status-audiowmark_not_responding"));
+                    ctx.out
+                        .warn(i18n::tr("cli-status-audiowmark_not_responding"));
                 }
                 match audio.version() {
                     Ok(version) => {
                         let mut fmt_args = FluentArgs::new();
                         fmt_args.set("version", version.as_str());
-                        ctx.out.info(i18n::tr_args("cli-status-audiowmark_version", &fmt_args));
+                        ctx.out
+                            .info(i18n::tr_args("cli-status-audiowmark_version", &fmt_args));
                     }
                     Err(err) => {
                         let mut fmt_args = FluentArgs::new();
                         fmt_args.set("error", err.to_string());
-                        ctx.out.warn(i18n::tr_args("cli-status-audiowmark_version_error", &fmt_args));
+                        ctx.out.warn(i18n::tr_args(
+                            "cli-status-audiowmark_version_error",
+                            &fmt_args,
+                        ));
                     }
                 }
                 let mut fmt_args = FluentArgs::new();
                 fmt_args.set("path", audio.binary_path().display().to_string());
-                ctx.out.info(i18n::tr_args("cli-status-audiowmark_path", &fmt_args));
+                ctx.out
+                    .info(i18n::tr_args("cli-status-audiowmark_path", &fmt_args));
             } else {
                 ctx.out.info(i18n::tr("cli-status-audiowmark_found"));
             }

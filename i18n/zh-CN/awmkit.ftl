@@ -46,6 +46,7 @@ cli-detect-failed = 有文件处理失败
 cli-decode-version = 版本：{ $version }
 cli-decode-timestamp_minutes = 时间戳（分钟）：{ $minutes }
 cli-decode-timestamp_utc = 时间戳（UTC 秒）：{ $seconds }
+cli-decode-key_slot = 密钥槽位：{ $key_slot }
 cli-decode-tag = 标签：{ $tag }
 cli-decode-identity = 身份：{ $identity }
 cli-decode-status_valid = 状态：有效

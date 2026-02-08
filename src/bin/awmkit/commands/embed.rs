@@ -4,8 +4,8 @@ use crate::Context;
 use awmkit::app::{i18n, KeyStore};
 use awmkit::Message;
 use clap::Args;
-use indicatif::{ProgressBar, ProgressStyle};
 use fluent_bundle::FluentArgs;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::path::PathBuf;
 
 #[derive(Args)]

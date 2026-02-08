@@ -6,7 +6,7 @@
 //!
 //! ```text
 //! ┌──────────┬────────────┬──────────────────┬────────────┐
-//! │ Version  │ Timestamp  │  UserTagPacked   │   HMAC     │
+//! │ Version  │ Time+Slot  │  UserTagPacked   │   HMAC     │
 //! │  1 byte  │  4 bytes   │    5 bytes       │  6 bytes   │
 //! └──────────┴────────────┴──────────────────┴────────────┘
 //!               总计: 16 bytes = 128 bit
@@ -68,7 +68,7 @@ impl Message {
     /// 编码消息
     ///
     /// # Arguments
-    /// - `version`: 协议版本 (当前为 1)
+    /// - `version`: 协议版本 (当前为 2)
     /// - `tag`: Tag 引用
     /// - `key`: HMAC 密钥
     ///
@@ -108,10 +108,10 @@ mod tests {
         let key = b"test-key-32-bytes-for-hmac-test!";
 
         let tag = Tag::new("SAKUZY").unwrap();
-        let msg = Message::encode(1, &tag, key).unwrap();
+        let msg = Message::encode(CURRENT_VERSION, &tag, key).unwrap();
         let result = Message::decode(&msg, key).unwrap();
 
         assert_eq!(result.identity(), "SAKUZY");
-        assert_eq!(result.version, 1);
+        assert_eq!(result.version, CURRENT_VERSION);
     }
 }

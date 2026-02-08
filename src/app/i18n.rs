@@ -68,9 +68,8 @@ pub fn env_language() -> Option<String> {
 
 pub fn set_language(lang: Option<&str>) -> Result<()> {
     let requested = if let Some(lang) = lang {
-        vec![LanguageIdentifier::from_str(lang).map_err(|_| {
-            AppError::Message(format!("invalid language identifier: {lang}"))
-        })?]
+        vec![LanguageIdentifier::from_str(lang)
+            .map_err(|_| AppError::Message(format!("invalid language identifier: {lang}")))?]
     } else {
         DesktopLanguageRequester::requested_languages()
     };

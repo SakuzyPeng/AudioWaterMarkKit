@@ -112,6 +112,9 @@ cargo build --features ffi,multichannel --release
 cargo build --bin awmkit --features full-cli --release
 ```
 
+> 说明：`src-tauri` 已不纳入默认构建工作流（workspace 已移除）。
+> 当前默认消息协议为 `v2`：4-byte 时间字段为 `27-bit UTC 分钟 + 5-bit key_slot`，单活密钥阶段 `key_slot=0`。
+
 编译输出：
 - `target/release/libawmkit.a` - 静态库
 - `target/release/libawmkit.dylib` - 动态库 (macOS)

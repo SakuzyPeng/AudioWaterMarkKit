@@ -46,6 +46,7 @@ cli-detect-failed = one or more files failed
 cli-decode-version = Version: { $version }
 cli-decode-timestamp_minutes = Timestamp (minutes): { $minutes }
 cli-decode-timestamp_utc = Timestamp (UTC seconds): { $seconds }
+cli-decode-key_slot = Key slot: { $key_slot }
 cli-decode-tag = Tag: { $tag }
 cli-decode-identity = Identity: { $identity }
 cli-decode-status_valid = Status: valid

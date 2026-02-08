@@ -1,6 +1,6 @@
-use thiserror::Error;
 use awmkit::app::i18n;
 use fluent_bundle::FluentArgs;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum CliError {

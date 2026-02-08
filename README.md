@@ -485,12 +485,18 @@ cargo build --features multichannel --release
 # Rust CLI
 cargo build --bin awmkit --features full-cli --release
 
-# Tauri GUI 后端
-cargo check -p awmkit-gui
-
 # macOS 原生 App 的 Rust 库
 cargo build --features ffi,bundled --release
 ```
+
+> 说明：`src-tauri` 已不纳入默认构建工作流（workspace 已移除）。
+
+### 消息协议
+
+- 默认编码协议版本为 `v2`
+- `v2` 的 4-byte 时间字段布局为：`27-bit UTC 分钟 + 5-bit key_slot`
+- 当前单活密钥阶段，`key_slot` 固定为 `0`
+- 解码保持兼容 `v1` 历史消息（`v1` 中该字段等价为纯 UTC 分钟）
 
 ## 技术细节
 

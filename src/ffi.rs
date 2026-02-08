@@ -34,6 +34,7 @@ pub struct AWMResult {
     pub version: u8,
     pub timestamp_utc: u64,
     pub timestamp_minutes: u32,
+    pub key_slot: u8,
     pub tag: [c_char; 9],      // 8 chars + null terminator
     pub identity: [c_char; 8], // 7 chars max + null terminator
 }
@@ -209,6 +210,7 @@ pub unsafe extern "C" fn awm_message_decode(
             (*result).version = r.version;
             (*result).timestamp_utc = r.timestamp_utc;
             (*result).timestamp_minutes = r.timestamp_minutes;
+            (*result).key_slot = r.key_slot;
 
             // Copy tag (8 chars + null)
             let tag_bytes = r.tag.as_bytes();

@@ -38,6 +38,7 @@ typedef struct {
     uint8_t version;
     uint64_t timestamp_utc;     // Unix timestamp in seconds
     uint32_t timestamp_minutes; // Raw value (Unix minutes)
+    uint8_t key_slot;           // Key slot (v1: 0, v2: 0-31)
     char tag[9];                // 8 chars + null terminator
     char identity[8];           // 7 chars max + null terminator
 } AWMResult;
@@ -93,7 +94,7 @@ int32_t awm_tag_identity(const char* tag, char* out);
 /**
  * Encode a watermark message
  *
- * @param version  Protocol version (use 1)
+ * @param version  Protocol version (use 2)
  * @param tag      8-character tag string
  * @param key      HMAC key bytes
  * @param key_len  Key length

@@ -39,9 +39,10 @@ final class AWMKitTests: XCTestCase {
         XCTAssertEqual(msg.count, 16)
 
         let result = try AWMMessage.decode(msg, key: testKey)
-        XCTAssertEqual(result.version, 1)
+        XCTAssertEqual(result.version, AWMMessage.currentVersion)
         XCTAssertEqual(result.identity, "SAKUZY")
         XCTAssertEqual(result.tag, tag)
+        XCTAssertEqual(result.keySlot, 0)
     }
 
     func testMessageWithTimestamp() throws {
@@ -57,6 +58,7 @@ final class AWMKitTests: XCTestCase {
         let result = try AWMMessage.decode(msg, key: testKey)
         XCTAssertEqual(result.timestampMinutes, tsMinutes)
         XCTAssertEqual(result.timestampUTC, UInt64(tsMinutes) * 60)
+        XCTAssertEqual(result.keySlot, 0)
     }
 
     func testMessageWrongKey() throws {
