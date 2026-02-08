@@ -1,5 +1,5 @@
 use crate::app::error::{AppError, Result};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -104,66 +104,135 @@ impl EvidenceStore {
         key_slot: u8,
         limit: usize,
     ) -> Result<Vec<AudioEvidence>> {
+        self.list_filtered(Some(identity), None, Some(key_slot), limit)
+    }
+
+    pub fn list_filtered(
+        &self,
+        identity: Option<&str>,
+        tag: Option<&str>,
+        key_slot: Option<u8>,
+        limit: usize,
+    ) -> Result<Vec<AudioEvidence>> {
         #[allow(clippy::cast_possible_wrap)]
         let limit_i64 = limit as i64;
+        let key_slot_i64 = key_slot.map(i64::from);
         let mut stmt = self.conn.prepare(
             "SELECT
                 id, created_at, file_path, tag, identity, version, key_slot, timestamp_minutes,
                 message_hex, sample_rate, channels, sample_count, pcm_sha256,
                 chromaprint_blob, fp_config_id
              FROM audio_evidence
-             WHERE identity = ?1 AND key_slot = ?2
+             WHERE (?1 IS NULL OR identity = ?1)
+               AND (?2 IS NULL OR tag = ?2)
+               AND (?3 IS NULL OR key_slot = ?3)
              ORDER BY created_at DESC
-             LIMIT ?3",
+             LIMIT ?4",
         )?;
 
-        let mut rows = stmt.query(params![identity, i64::from(key_slot), limit_i64])?;
+        let mut rows = stmt.query(params![identity, tag, key_slot_i64, limit_i64])?;
 
         let mut out = Vec::new();
         while let Some(row) = rows.next()? {
-            let blob: Vec<u8> = row.get(13)?;
-            let chromaprint = decode_chromaprint_blob(&blob)?;
-            let created_at_i64: i64 = row.get(1)?;
-            let sample_count_i64: i64 = row.get(11)?;
-            let version_i64: i64 = row.get(5)?;
-            let key_slot_i64: i64 = row.get(6)?;
-            let timestamp_minutes_i64: i64 = row.get(7)?;
-            let sample_rate_i64: i64 = row.get(9)?;
-            let channels_i64: i64 = row.get(10)?;
-            let fp_config_id_i64: i64 = row.get(14)?;
-
-            out.push(AudioEvidence {
-                id: row.get(0)?,
-                #[allow(clippy::cast_sign_loss)]
-                created_at: created_at_i64 as u64,
-                file_path: row.get(2)?,
-                tag: row.get(3)?,
-                identity: row.get(4)?,
-                #[allow(clippy::cast_possible_truncation)]
-                version: version_i64 as u8,
-                #[allow(clippy::cast_possible_truncation)]
-                key_slot: key_slot_i64 as u8,
-                #[allow(clippy::cast_possible_truncation)]
-                timestamp_minutes: timestamp_minutes_i64 as u32,
-                message_hex: row.get(8)?,
-                #[allow(clippy::cast_possible_truncation)]
-                sample_rate: sample_rate_i64 as u32,
-                #[allow(clippy::cast_possible_truncation)]
-                channels: channels_i64 as u32,
-                #[allow(clippy::cast_sign_loss)]
-                sample_count: sample_count_i64 as u64,
-                pcm_sha256: row.get(12)?,
-                chromaprint,
-                #[allow(clippy::cast_possible_truncation)]
-                fp_config_id: fp_config_id_i64 as u8,
-            });
+            out.push(parse_audio_evidence_row(row)?);
         }
         Ok(out)
+    }
+
+    pub fn get_by_id(&self, id: i64) -> Result<Option<AudioEvidence>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT
+                id, created_at, file_path, tag, identity, version, key_slot, timestamp_minutes,
+                message_hex, sample_rate, channels, sample_count, pcm_sha256,
+                chromaprint_blob, fp_config_id
+             FROM audio_evidence
+             WHERE id = ?1
+             LIMIT 1",
+        )?;
+        let mut rows = stmt.query(params![id])?;
+        let Some(row) = rows.next()? else {
+            return Ok(None);
+        };
+        Ok(Some(parse_audio_evidence_row(row)?))
+    }
+
+    pub fn remove_by_id(&self, id: i64) -> Result<bool> {
+        let affected = self
+            .conn
+            .execute("DELETE FROM audio_evidence WHERE id = ?1", params![id])?;
+        Ok(affected > 0)
+    }
+
+    pub fn clear_filtered(
+        &self,
+        identity: Option<&str>,
+        tag: Option<&str>,
+        key_slot: Option<u8>,
+    ) -> Result<usize> {
+        let key_slot_i64 = key_slot.map(i64::from);
+        let affected = self.conn.execute(
+            "DELETE FROM audio_evidence
+             WHERE (?1 IS NULL OR identity = ?1)
+               AND (?2 IS NULL OR tag = ?2)
+               AND (?3 IS NULL OR key_slot = ?3)",
+            params![identity, tag, key_slot_i64],
+        )?;
+        Ok(affected)
+    }
+
+    pub fn count_all(&self) -> Result<usize> {
+        let mut stmt = self.conn.prepare("SELECT COUNT(*) FROM audio_evidence")?;
+        let count: i64 = stmt
+            .query_row([], |row| row.get(0))
+            .optional()?
+            .unwrap_or(0);
+        #[allow(clippy::cast_sign_loss)]
+        let count = count as usize;
+        Ok(count)
     }
 
     pub fn path(&self) -> &Path {
         &self.path
     }
+}
+
+fn parse_audio_evidence_row(row: &Row<'_>) -> Result<AudioEvidence> {
+    let blob: Vec<u8> = row.get(13)?;
+    let chromaprint = decode_chromaprint_blob(&blob)?;
+    let created_at_i64: i64 = row.get(1)?;
+    let sample_count_i64: i64 = row.get(11)?;
+    let version_i64: i64 = row.get(5)?;
+    let key_slot_i64: i64 = row.get(6)?;
+    let timestamp_minutes_i64: i64 = row.get(7)?;
+    let sample_rate_i64: i64 = row.get(9)?;
+    let channels_i64: i64 = row.get(10)?;
+    let fp_config_id_i64: i64 = row.get(14)?;
+
+    Ok(AudioEvidence {
+        id: row.get(0)?,
+        #[allow(clippy::cast_sign_loss)]
+        created_at: created_at_i64 as u64,
+        file_path: row.get(2)?,
+        tag: row.get(3)?,
+        identity: row.get(4)?,
+        #[allow(clippy::cast_possible_truncation)]
+        version: version_i64 as u8,
+        #[allow(clippy::cast_possible_truncation)]
+        key_slot: key_slot_i64 as u8,
+        #[allow(clippy::cast_possible_truncation)]
+        timestamp_minutes: timestamp_minutes_i64 as u32,
+        message_hex: row.get(8)?,
+        #[allow(clippy::cast_possible_truncation)]
+        sample_rate: sample_rate_i64 as u32,
+        #[allow(clippy::cast_possible_truncation)]
+        channels: channels_i64 as u32,
+        #[allow(clippy::cast_sign_loss)]
+        sample_count: sample_count_i64 as u64,
+        pcm_sha256: row.get(12)?,
+        chromaprint,
+        #[allow(clippy::cast_possible_truncation)]
+        fp_config_id: fp_config_id_i64 as u8,
+    })
 }
 
 pub fn encode_chromaprint_blob(chromaprint: &[u32]) -> Vec<u8> {
@@ -323,6 +392,76 @@ mod tests {
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].identity, "TARGET");
         assert_eq!(candidates[0].key_slot, 2);
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn list_filtered_combines_identity_tag_and_slot() {
+        let db_path = temp_db_path();
+        let store = EvidenceStore::load_at(db_path.clone()).unwrap();
+
+        let mut target = sample_evidence("TARGET", 2, "a1");
+        target.tag = "TAG_A".to_string();
+        store.insert(&target).unwrap();
+
+        let mut other_tag = sample_evidence("TARGET", 2, "a2");
+        other_tag.tag = "TAG_B".to_string();
+        store.insert(&other_tag).unwrap();
+
+        let other_slot = sample_evidence("TARGET", 1, "a3");
+        store.insert(&other_slot).unwrap();
+
+        let list = store
+            .list_filtered(Some("TARGET"), Some("TAG_A"), Some(2), 50)
+            .unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].tag, "TAG_A");
+        assert_eq!(list[0].key_slot, 2);
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn get_and_remove_by_id_work() {
+        let db_path = temp_db_path();
+        let store = EvidenceStore::load_at(db_path.clone()).unwrap();
+        let one = sample_evidence("ONE", 0, "x1");
+        store.insert(&one).unwrap();
+
+        let listed = store.list_filtered(Some("ONE"), None, Some(0), 10).unwrap();
+        assert_eq!(listed.len(), 1);
+        let id = listed[0].id;
+
+        let found = store.get_by_id(id).unwrap();
+        assert!(found.is_some());
+
+        assert!(store.remove_by_id(id).unwrap());
+        assert!(!store.remove_by_id(id).unwrap());
+        assert!(store.get_by_id(id).unwrap().is_none());
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn clear_filtered_and_count_all_work() {
+        let db_path = temp_db_path();
+        let store = EvidenceStore::load_at(db_path.clone()).unwrap();
+
+        let mut a = sample_evidence("A", 0, "c1");
+        a.tag = "T1".to_string();
+        let mut b = sample_evidence("A", 1, "c2");
+        b.tag = "T1".to_string();
+        let mut c = sample_evidence("B", 0, "c3");
+        c.tag = "T2".to_string();
+        store.insert(&a).unwrap();
+        store.insert(&b).unwrap();
+        store.insert(&c).unwrap();
+
+        assert_eq!(store.count_all().unwrap(), 3);
+        let removed = store.clear_filtered(Some("A"), Some("T1"), None).unwrap();
+        assert_eq!(removed, 2);
+        assert_eq!(store.count_all().unwrap(), 1);
+
+        let removed_none = store.clear_filtered(Some("A"), Some("T1"), None).unwrap();
+        assert_eq!(removed_none, 0);
         let _ = fs::remove_file(db_path);
     }
 }

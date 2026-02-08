@@ -90,6 +90,12 @@ enum Commands {
     /// Detect watermark from audio files
     Detect(commands::detect::DetectArgs),
 
+    /// Query and manage evidence records
+    Evidence {
+        #[command(subcommand)]
+        command: commands::evidence::EvidenceCommand,
+    },
+
     /// Show system status
     Status(commands::status::StatusArgs),
 }
@@ -148,6 +154,7 @@ fn run() -> Result<()> {
         Commands::Decode(args) => commands::decode::run(&ctx, &args),
         Commands::Embed(args) => commands::embed::run(&ctx, &args),
         Commands::Detect(args) => commands::detect::run(&ctx, &args),
+        Commands::Evidence { command } => commands::evidence::run(&ctx, command),
         Commands::Status(args) => commands::status::run(&ctx, &args),
     }
 }

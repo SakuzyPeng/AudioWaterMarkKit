@@ -1,7 +1,7 @@
 use crate::error::{CliError, Result};
 use crate::util::audio_from_context;
 use crate::Context;
-use awmkit::app::{i18n, KeyStore, KEY_LEN};
+use awmkit::app::{i18n, EvidenceStore, KeyStore, TagStore, KEY_LEN};
 use clap::Args;
 use fluent_bundle::FluentArgs;
 
@@ -64,6 +64,25 @@ pub fn run(ctx: &Context, args: &StatusArgs) -> Result<()> {
                 fmt_args.set("path", audio.binary_path().display().to_string());
                 ctx.out
                     .info(i18n::tr_args("cli-status-audiowmark_path", &fmt_args));
+
+                match TagStore::load() {
+                    Ok(tags) => {
+                        ctx.out.info(format!("db.mappings={}", tags.list().len()));
+                    }
+                    Err(err) => {
+                        ctx.out.warn(format!("db.mappings=unavailable ({err})"));
+                    }
+                }
+
+                match EvidenceStore::load() {
+                    Ok(evidence_store) => match evidence_store.count_all() {
+                        Ok(count) => ctx.out.info(format!("db.evidence={count}")),
+                        Err(err) => ctx.out.warn(format!("db.evidence=unavailable ({err})")),
+                    },
+                    Err(err) => {
+                        ctx.out.warn(format!("db.evidence=unavailable ({err})"));
+                    }
+                }
             } else {
                 ctx.out.info(i18n::tr("cli-status-audiowmark_found"));
             }

@@ -2,6 +2,7 @@ pub mod decode;
 pub mod detect;
 pub mod embed;
 pub mod encode;
+pub mod evidence;
 pub mod init;
 pub mod key;
 pub mod status;

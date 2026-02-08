@@ -11,8 +11,9 @@ use unic_langid::LanguageIdentifier;
 #[folder = "i18n"]
 struct Localizations;
 
-static FALLBACK_LANG: Lazy<LanguageIdentifier> =
-    Lazy::new(|| LanguageIdentifier::from_str("en-US").expect("valid fallback"));
+static FALLBACK_LANG: Lazy<LanguageIdentifier> = Lazy::new(|| {
+    LanguageIdentifier::from_str("en-US").unwrap_or_else(|_| LanguageIdentifier::default())
+});
 static LOADER: Lazy<FluentLanguageLoader> =
     Lazy::new(|| FluentLanguageLoader::new("awmkit", FALLBACK_LANG.clone()));
 
