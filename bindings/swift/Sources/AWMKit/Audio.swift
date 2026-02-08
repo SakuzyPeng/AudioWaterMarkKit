@@ -44,8 +44,26 @@ public struct AWMDetectResultSwift {
     /// Detection pattern ("all" or "single")
     public let pattern: String
 
+    /// Detection score from audiowmark (nil if unavailable)
+    public let detectScore: Float?
+
     /// Number of bit errors
     public let bitErrors: UInt32
+}
+
+public enum AWMCloneCheckKindSwift: String {
+    case exact
+    case likely
+    case suspect
+    case unavailable
+}
+
+public struct AWMCloneCheckResultSwift {
+    public let kind: AWMCloneCheckKindSwift
+    public let score: Double?
+    public let matchSeconds: Float?
+    public let evidenceId: Int64?
+    public let reason: String?
 }
 
 /// Single channel pair detection result
@@ -217,8 +235,74 @@ public class AWMAudio {
             found: cResult.found,
             rawMessage: rawMessage,
             pattern: pattern,
+            detectScore: cResult.has_detect_score ? cResult.detect_score : nil,
             bitErrors: cResult.bit_errors
         )
+    }
+
+    /// Evaluate clone check for decoded identity/key slot
+    public func cloneCheck(input: URL, identity: String, keySlot: UInt8) throws -> AWMCloneCheckResultSwift {
+        var cResult = AWMCloneCheckResult()
+
+        let result = input.path.withCString { inputPtr in
+            identity.withCString { identityPtr in
+                awm_clone_check_for_file(inputPtr, identityPtr, keySlot, &cResult)
+            }
+        }
+
+        if result != AWM_SUCCESS.rawValue {
+            throw AWMError(code: result)
+        }
+
+        let kind: AWMCloneCheckKindSwift
+        switch cResult.kind {
+        case AWM_CLONE_CHECK_EXACT:
+            kind = .exact
+        case AWM_CLONE_CHECK_LIKELY:
+            kind = .likely
+        case AWM_CLONE_CHECK_SUSPECT:
+            kind = .suspect
+        default:
+            kind = .unavailable
+        }
+
+        let reason = withUnsafePointer(to: cResult.reason) { ptr in
+            ptr.withMemoryRebound(to: CChar.self, capacity: 128) { charPtr in
+                String(cString: charPtr)
+            }
+        }
+
+        return AWMCloneCheckResultSwift(
+            kind: kind,
+            score: cResult.has_score ? cResult.score : nil,
+            matchSeconds: cResult.has_match_seconds ? cResult.match_seconds : nil,
+            evidenceId: cResult.has_evidence_id ? cResult.evidence_id : nil,
+            reason: reason.isEmpty ? nil : reason
+        )
+    }
+
+    /// Build and record audio evidence for embedded output file
+    public func recordEvidence(file: URL, rawMessage: Data, key: Data) throws {
+        guard rawMessage.count == 16 else {
+            throw AWMError.invalidMessageLength(rawMessage.count)
+        }
+
+        let result = file.path.withCString { filePathPtr in
+            rawMessage.withUnsafeBytes { rawPtr in
+                key.withUnsafeBytes { keyPtr in
+                    awm_evidence_record_file(
+                        filePathPtr,
+                        rawPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                        keyPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                        key.count
+                    )
+                }
+            }
+        }
+
+        if result != AWM_SUCCESS.rawValue {
+            throw AWMError(code: result)
+        }
     }
 
     /// Convenience: Detect and decode watermark
@@ -346,6 +430,7 @@ public class AWMAudio {
                 found: true,
                 rawMessage: bestRawMessage,
                 pattern: "multichannel",
+                detectScore: nil,
                 bitErrors: cResult.best_bit_errors
             )
         }
@@ -375,4 +460,3 @@ public class AWMAudio {
         }
     }
 }
-

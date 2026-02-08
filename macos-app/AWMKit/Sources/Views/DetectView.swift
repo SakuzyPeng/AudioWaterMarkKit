@@ -305,9 +305,33 @@ struct DetectView: View {
                     )
                 )
 
+                tripleFieldRow(
+                    (
+                        label: "检测分数",
+                        value: detectScoreDisplay(from: displayedDetectRecord),
+                        valueColor: fieldValueColor(for: .detectScore, record: displayedDetectRecord),
+                        monospaced: true,
+                        helpText: detectScoreHelp(from: displayedDetectRecord)
+                    ),
+                    (
+                        label: "克隆校验",
+                        value: detailValue(from: displayedDetectRecord?.cloneCheck),
+                        valueColor: fieldValueColor(for: .cloneCheck, record: displayedDetectRecord),
+                        monospaced: true,
+                        helpText: displayedDetectRecord?.cloneReason
+                    ),
+                    (
+                        label: "指纹分数",
+                        value: fingerprintScoreDisplay(from: displayedDetectRecord),
+                        valueColor: fieldValueColor(for: .fingerprintScore, record: displayedDetectRecord),
+                        monospaced: true,
+                        helpText: fingerprintScoreHelp(from: displayedDetectRecord)
+                    )
+                )
+
                 singleLineFieldRow(
                     label: "错误信息",
-                    value: detailValue(from: displayedDetectRecord?.error),
+                    value: errorDisplayValue(from: displayedDetectRecord),
                     valueColor: fieldValueColor(for: .error, record: displayedDetectRecord),
                     truncationMode: .middle
                 )
@@ -589,6 +613,9 @@ struct DetectView: View {
         case status
         case matchFound
         case bitErrors
+        case detectScore
+        case cloneCheck
+        case fingerprintScore
         case error
     }
 
@@ -780,15 +807,88 @@ struct DetectView: View {
                 return DesignSystem.Colors.warning
             }
             return DesignSystem.Colors.error
+        case .detectScore:
+            guard let score = record?.detectScore else { return .secondary }
+            if score >= 1.30 {
+                return DesignSystem.Colors.success
+            }
+            if score >= 1.10 {
+                return DesignSystem.Colors.warning
+            }
+            if score >= 1.00 {
+                return Color.yellow
+            }
+            return DesignSystem.Colors.error
+        case .cloneCheck:
+            switch record?.cloneCheck {
+            case "exact":
+                return DesignSystem.Colors.success
+            case "likely":
+                return .blue
+            case "suspect":
+                return DesignSystem.Colors.warning
+            case "unavailable":
+                return .secondary
+            default:
+                return .secondary
+            }
+        case .fingerprintScore:
+            guard let score = record?.cloneScore else { return .secondary }
+            if score <= 1.0 {
+                return DesignSystem.Colors.success
+            }
+            if score <= 3.0 {
+                return .blue
+            }
+            if score <= 7.0 {
+                return DesignSystem.Colors.warning
+            }
+            return DesignSystem.Colors.error
         case .error:
-            guard let err = record?.error, !err.isEmpty else { return .secondary }
-            return err == "-" ? .secondary : DesignSystem.Colors.error
+            let value = errorDisplayValue(from: record)
+            return value == "-" ? .secondary : DesignSystem.Colors.error
         }
     }
 
     private func detailValue(from raw: String?) -> String {
         guard let raw, !raw.isEmpty else { return "-" }
         return raw
+    }
+
+    private func detectScoreDisplay(from record: DetectRecord?) -> String {
+        guard let score = record?.detectScore else { return "-" }
+        return String(format: "%.3f", score)
+    }
+
+    private func detectScoreHelp(from record: DetectRecord?) -> String {
+        guard let score = record?.detectScore else { return "-" }
+        return "检测分数: \(String(format: "%.3f", score))"
+    }
+
+    private func fingerprintScoreDisplay(from record: DetectRecord?) -> String {
+        guard let score = record?.cloneScore else { return "-" }
+        if let seconds = record?.cloneMatchSeconds {
+            return "\(String(format: "%.2f", score)) / \(String(format: "%.0f", seconds))s"
+        }
+        return String(format: "%.2f", score)
+    }
+
+    private func fingerprintScoreHelp(from record: DetectRecord?) -> String {
+        guard let score = record?.cloneScore else { return "-" }
+        if let seconds = record?.cloneMatchSeconds {
+            return "指纹分数: \(String(format: "%.3f", score))\n匹配时长: \(String(format: "%.2f", seconds))s"
+        }
+        return "指纹分数: \(String(format: "%.3f", score))"
+    }
+
+    private func errorDisplayValue(from record: DetectRecord?) -> String {
+        if let error = record?.error, !error.isEmpty {
+            return error
+        }
+        if let reason = record?.cloneReason, !reason.isEmpty {
+            return "clone: \(reason)"
+        }
+        return "-"
     }
 
     private func localTimestampDisplay(from record: DetectRecord?) -> String {

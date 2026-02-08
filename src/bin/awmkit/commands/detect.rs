@@ -134,7 +134,10 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
                     }
                 }
             }
-            Ok(DetectOutcome::Invalid { error, detect_score }) => {
+            Ok(DetectOutcome::Invalid {
+                error,
+                detect_score,
+            }) => {
                 invalid += 1;
                 let score_text = detect_score
                     .map(|score| format!(" (score: {score:.3})"))
@@ -147,8 +150,12 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
                         score_text
                     ));
                 } else {
-                    ctx.out
-                        .error(format!("[INVALID] {}: {}{}", input.display(), error, score_text));
+                    ctx.out.error(format!(
+                        "[INVALID] {}: {}{}",
+                        input.display(),
+                        error,
+                        score_text
+                    ));
                 }
             }
             Err(err) => {

@@ -13,8 +13,13 @@ struct DetectRecord: Identifiable, Equatable {
     let timestampUTC: UInt64?
     let keySlot: UInt8?
     let pattern: String?
+    let detectScore: Float?
     let bitErrors: UInt32?
     let matchFound: Bool?
+    let cloneCheck: String?
+    let cloneScore: Double?
+    let cloneMatchSeconds: Float?
+    let cloneReason: String?
     let error: String?
     let timestamp: Date
 
@@ -29,8 +34,13 @@ struct DetectRecord: Identifiable, Equatable {
         timestampUTC: UInt64? = nil,
         keySlot: UInt8? = nil,
         pattern: String? = nil,
+        detectScore: Float? = nil,
         bitErrors: UInt32? = nil,
         matchFound: Bool? = nil,
+        cloneCheck: String? = nil,
+        cloneScore: Double? = nil,
+        cloneMatchSeconds: Float? = nil,
+        cloneReason: String? = nil,
         error: String? = nil,
         timestamp: Date = Date()
     ) {
@@ -44,8 +54,13 @@ struct DetectRecord: Identifiable, Equatable {
         self.timestampUTC = timestampUTC
         self.keySlot = keySlot
         self.pattern = pattern
+        self.detectScore = detectScore
         self.bitErrors = bitErrors
         self.matchFound = matchFound
+        self.cloneCheck = cloneCheck
+        self.cloneScore = cloneScore
+        self.cloneMatchSeconds = cloneMatchSeconds
+        self.cloneReason = cloneReason
         self.error = error
         self.timestamp = timestamp
     }
@@ -303,6 +318,24 @@ class DetectViewModel: ObservableObject {
                     if let detectResult = try audio.detect(input: fileURL) {
                         do {
                             let decoded = try AWMMessage.decode(detectResult.rawMessage, key: key)
+                            var cloneKind = "unavailable"
+                            var cloneScore: Double?
+                            var cloneMatchSeconds: Float?
+                            var cloneReason: String?
+                            do {
+                                let cloneResult = try audio.cloneCheck(
+                                    input: fileURL,
+                                    identity: decoded.identity,
+                                    keySlot: decoded.keySlot
+                                )
+                                cloneKind = cloneResult.kind.rawValue
+                                cloneScore = cloneResult.score
+                                cloneMatchSeconds = cloneResult.matchSeconds
+                                cloneReason = cloneResult.reason
+                            } catch {
+                                cloneKind = "unavailable"
+                                cloneReason = error.localizedDescription
+                            }
                             let record = DetectRecord(
                                 file: filePath,
                                 status: "ok",
@@ -313,13 +346,18 @@ class DetectViewModel: ObservableObject {
                                 timestampUTC: decoded.timestampUTC,
                                 keySlot: decoded.keySlot,
                                 pattern: detectResult.pattern,
+                                detectScore: detectResult.detectScore,
                                 bitErrors: detectResult.bitErrors,
-                                matchFound: detectResult.found
+                                matchFound: detectResult.found,
+                                cloneCheck: cloneKind,
+                                cloneScore: cloneScore,
+                                cloneMatchSeconds: cloneMatchSeconds,
+                                cloneReason: cloneReason
                             )
                             insertDetectRecord(record)
                             log(
                                 "成功: \(fileName)",
-                                detail: "标签: \(decoded.identity) | 时间: \(decoded.date.formatted())",
+                                detail: "标签: \(decoded.identity) | 时间: \(decoded.date.formatted()) | 克隆: \(cloneKind)",
                                 relatedRecordId: record.id
                             )
                             totalFound += 1
@@ -328,6 +366,7 @@ class DetectViewModel: ObservableObject {
                                 file: filePath,
                                 status: "invalid_hmac",
                                 pattern: detectResult.pattern,
+                                detectScore: detectResult.detectScore,
                                 bitErrors: detectResult.bitErrors,
                                 matchFound: detectResult.found,
                                 error: error.localizedDescription

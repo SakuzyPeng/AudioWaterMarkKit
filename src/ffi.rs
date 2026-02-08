@@ -13,6 +13,11 @@ use std::slice;
 use crate::message::{self, CURRENT_VERSION, MESSAGE_LEN};
 use crate::tag::Tag;
 
+#[cfg(feature = "app")]
+use crate::app::{build_audio_proof, EvidenceStore, NewAudioEvidence};
+#[cfg(feature = "app")]
+use rusty_chromaprint::{match_fingerprints, Configuration};
+
 /// FFI 错误码
 #[repr(i32)]
 pub enum AWMError {
@@ -37,6 +42,19 @@ pub struct AWMResult {
     pub key_slot: u8,
     pub tag: [c_char; 9],      // 8 chars + null terminator
     pub identity: [c_char; 8], // 7 chars max + null terminator
+}
+
+const CLONE_LIKELY_MAX_SCORE: f64 = 7.0;
+const CLONE_LIKELY_MIN_SECONDS: f32 = 6.0;
+
+fn copy_str_to_c_buf(dst: &mut [c_char], text: &str) {
+    dst.fill(0);
+    let max = dst.len().saturating_sub(1);
+    let bytes = text.as_bytes();
+    let copy_len = bytes.len().min(max);
+    for (index, &byte) in bytes[..copy_len].iter().enumerate() {
+        dst[index] = byte as c_char;
+    }
 }
 
 /// 创建 Tag（从身份字符串，自动补齐 + 计算校验位）
@@ -283,8 +301,56 @@ pub struct AWMDetectResult {
     pub raw_message: [u8; 16],
     /// 检测模式 (null-terminated)
     pub pattern: [c_char; 16],
+    /// 是否包含检测分数
+    pub has_detect_score: bool,
+    /// 检测分数（audiowmark 候选分数）
+    pub detect_score: f32,
     /// 比特错误数
     pub bit_errors: u32,
+}
+
+/// 克隆校验结果类型
+#[repr(i32)]
+#[derive(Clone, Copy)]
+pub enum AWMCloneCheckKind {
+    Exact = 0,
+    Likely = 1,
+    Suspect = 2,
+    Unavailable = 3,
+}
+
+/// 克隆校验结果
+#[repr(C)]
+pub struct AWMCloneCheckResult {
+    /// 校验类型
+    pub kind: AWMCloneCheckKind,
+    /// 是否有指纹分数
+    pub has_score: bool,
+    /// 指纹匹配分数（越小越像）
+    pub score: f64,
+    /// 是否有匹配时长
+    pub has_match_seconds: bool,
+    /// 匹配时长（秒）
+    pub match_seconds: f32,
+    /// 是否有关联证据 ID
+    pub has_evidence_id: bool,
+    /// 关联证据 ID
+    pub evidence_id: i64,
+    /// 原因文本（null-terminated）
+    pub reason: [c_char; 128],
+}
+
+impl AWMCloneCheckResult {
+    fn reset(&mut self) {
+        self.kind = AWMCloneCheckKind::Unavailable;
+        self.has_score = false;
+        self.score = 0.0;
+        self.has_match_seconds = false;
+        self.match_seconds = 0.0;
+        self.has_evidence_id = false;
+        self.evidence_id = 0;
+        self.reason.fill(0);
+    }
 }
 
 /// 创建 Audio 实例（自动搜索 audiowmark）
@@ -432,24 +498,246 @@ pub unsafe extern "C" fn awm_audio_detect(
             (*result).found = true;
             (*result).raw_message = detect_result.raw_message;
             (*result).bit_errors = detect_result.bit_errors;
+            (*result).has_detect_score = detect_result.detect_score.is_some();
+            (*result).detect_score = detect_result.detect_score.unwrap_or(0.0);
 
             // Copy pattern
-            let pattern_bytes = detect_result.pattern.as_bytes();
-            let copy_len = pattern_bytes.len().min(15);
-            for (i, &b) in pattern_bytes[..copy_len].iter().enumerate() {
-                (*result).pattern[i] = b as c_char;
-            }
-            (*result).pattern[copy_len] = 0;
+            copy_str_to_c_buf(&mut (*result).pattern, &detect_result.pattern);
 
             AWMError::Success as i32
         }
         Ok(None) => {
             (*result).found = false;
+            (*result).raw_message = [0; 16];
+            (*result).pattern.fill(0);
+            (*result).has_detect_score = false;
+            (*result).detect_score = 0.0;
+            (*result).bit_errors = 0;
             AWMError::NoWatermarkFound as i32
         }
         Err(crate::Error::AudiowmarkNotFound) => AWMError::AudiowmarkNotFound as i32,
         Err(crate::Error::AudiowmarkExec(_)) => AWMError::AudiowmarkExec as i32,
         Err(_) => AWMError::AudiowmarkExec as i32,
+    }
+}
+
+#[cfg(feature = "app")]
+fn is_likely(score: f64, match_seconds: f32) -> bool {
+    score <= CLONE_LIKELY_MAX_SCORE && match_seconds >= CLONE_LIKELY_MIN_SECONDS
+}
+
+#[cfg(feature = "app")]
+fn evaluate_clone_check(
+    input: &str,
+    identity: &str,
+    key_slot: u8,
+) -> std::result::Result<AWMCloneCheckResult, String> {
+    let mut output = AWMCloneCheckResult {
+        kind: AWMCloneCheckKind::Unavailable,
+        has_score: false,
+        score: 0.0,
+        has_match_seconds: false,
+        match_seconds: 0.0,
+        has_evidence_id: false,
+        evidence_id: 0,
+        reason: [0; 128],
+    };
+
+    let evidence_store = EvidenceStore::load().map_err(|e| format!("evidence_store: {e}"))?;
+    let proof = build_audio_proof(input).map_err(|e| format!("proof_error: {e}"))?;
+
+    let candidates = evidence_store
+        .list_candidates(identity, key_slot)
+        .map_err(|e| format!("query_error: {e}"))?;
+
+    if candidates.is_empty() {
+        output.kind = AWMCloneCheckKind::Suspect;
+        copy_str_to_c_buf(&mut output.reason, "no_evidence");
+        return Ok(output);
+    }
+
+    if let Some(candidate) = candidates
+        .iter()
+        .find(|candidate| candidate.pcm_sha256 == proof.pcm_sha256)
+    {
+        output.kind = AWMCloneCheckKind::Exact;
+        output.has_evidence_id = true;
+        output.evidence_id = candidate.id;
+        return Ok(output);
+    }
+
+    let config = Configuration::default();
+    let mut best_match: Option<(i64, f64, f32)> = None;
+
+    for candidate in &candidates {
+        if candidate.fp_config_id != config.id() {
+            continue;
+        }
+
+        let segments = match_fingerprints(&proof.chromaprint, &candidate.chromaprint, &config)
+            .map_err(|e| format!("match_error: {e}"))?;
+
+        for segment in segments {
+            let duration = segment.duration(&config);
+            let score = segment.score;
+            match best_match {
+                None => best_match = Some((candidate.id, score, duration)),
+                Some((_, best_score, best_duration))
+                    if duration > best_duration
+                        || ((duration - best_duration).abs() < f32::EPSILON
+                            && score < best_score) =>
+                {
+                    best_match = Some((candidate.id, score, duration));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if let Some((candidate_id, score, duration)) = best_match {
+        output.has_score = true;
+        output.score = score;
+        output.has_match_seconds = true;
+        output.match_seconds = duration;
+        if is_likely(score, duration) {
+            output.kind = AWMCloneCheckKind::Likely;
+            output.has_evidence_id = true;
+            output.evidence_id = candidate_id;
+        } else {
+            output.kind = AWMCloneCheckKind::Suspect;
+            copy_str_to_c_buf(&mut output.reason, "threshold_not_met");
+        }
+        return Ok(output);
+    }
+
+    output.kind = AWMCloneCheckKind::Suspect;
+    copy_str_to_c_buf(&mut output.reason, "no_similar_segment");
+    Ok(output)
+}
+
+/// 评估克隆校验结果（优先 SHA256，其次指纹匹配）
+///
+/// # Safety
+/// - `input` 与 `identity` 必须是有效 C 字符串
+/// - `result` 必须是有效指针
+#[no_mangle]
+pub unsafe extern "C" fn awm_clone_check_for_file(
+    input: *const c_char,
+    identity: *const c_char,
+    key_slot: u8,
+    result: *mut AWMCloneCheckResult,
+) -> i32 {
+    if input.is_null() || identity.is_null() || result.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    (*result).reset();
+
+    let input_str = match CStr::from_ptr(input).to_str() {
+        Ok(s) => s,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+    let identity_str = match CStr::from_ptr(identity).to_str() {
+        Ok(s) => s,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    #[cfg(feature = "app")]
+    {
+        match evaluate_clone_check(input_str, identity_str, key_slot) {
+            Ok(value) => {
+                *result = value;
+                AWMError::Success as i32
+            }
+            Err(reason) => {
+                (*result).kind = AWMCloneCheckKind::Unavailable;
+                copy_str_to_c_buf(&mut (*result).reason, &reason);
+                AWMError::Success as i32
+            }
+        }
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = key_slot;
+        let _ = input_str;
+        let _ = identity_str;
+        (*result).kind = AWMCloneCheckKind::Unavailable;
+        copy_str_to_c_buf(&mut (*result).reason, "app_feature_disabled");
+        AWMError::Success as i32
+    }
+}
+
+/// 对水印输出文件生成证据并写入数据库
+///
+/// # Safety
+/// - `file_path` 必须是有效 C 字符串
+/// - `raw_message` 必须指向 16 字节数据
+/// - `key` 必须指向 `key_len` 字节
+#[no_mangle]
+pub unsafe extern "C" fn awm_evidence_record_file(
+    file_path: *const c_char,
+    raw_message: *const u8,
+    key: *const u8,
+    key_len: usize,
+) -> i32 {
+    if file_path.is_null() || raw_message.is_null() || key.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    let file_path_str = match CStr::from_ptr(file_path).to_str() {
+        Ok(s) => s,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+    let raw: [u8; 16] = slice::from_raw_parts(raw_message, 16).try_into().unwrap();
+    let key_slice = slice::from_raw_parts(key, key_len);
+
+    #[cfg(feature = "app")]
+    {
+        let decoded = match message::decode(&raw, key_slice) {
+            Ok(decoded) => decoded,
+            Err(crate::Error::HmacMismatch) => return AWMError::HmacMismatch as i32,
+            Err(crate::Error::ChecksumMismatch { .. }) => return AWMError::ChecksumMismatch as i32,
+            Err(_) => return AWMError::InvalidTag as i32,
+        };
+
+        let proof = match build_audio_proof(file_path_str) {
+            Ok(proof) => proof,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+        let store = match EvidenceStore::load() {
+            Ok(store) => store,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+
+        let row = NewAudioEvidence {
+            file_path: file_path_str.to_string(),
+            tag: decoded.tag.to_string(),
+            identity: decoded.identity().to_string(),
+            version: decoded.version,
+            key_slot: decoded.key_slot,
+            timestamp_minutes: decoded.timestamp_minutes,
+            message_hex: hex::encode(raw),
+            sample_rate: proof.sample_rate,
+            channels: proof.channels,
+            sample_count: proof.sample_count,
+            pcm_sha256: proof.pcm_sha256,
+            chromaprint: proof.chromaprint,
+            fp_config_id: proof.fp_config_id,
+        };
+
+        match store.insert(&row) {
+            Ok(_) => AWMError::Success as i32,
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = file_path_str;
+        let _ = raw;
+        let _ = key_slice;
+        AWMError::AudiowmarkExec as i32
     }
 }
 

@@ -52,10 +52,10 @@ xcodegen generate
 
 ```bash
 cd ..
-cargo build --release --features ffi,bundled
+cargo build --release --features ffi,bundled,app
 ```
 
-说明：`ffi,bundled` 会让 `AWMAudio()` 优先使用 bundled audiowmark；请确保仓库中存在 `bundled/audiowmark-macos-arm64.zip`。
+说明：`ffi,bundled,app` 会让 `AWMAudio()` 优先使用 bundled audiowmark，并启用 clone-check/evidence 能力；请确保仓库中存在 `bundled/audiowmark-macos-arm64.zip`。
 
 ### 3. 打开项目
 

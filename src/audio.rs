@@ -637,11 +637,9 @@ mod tests {
         );
         let result = parse_detect_output(stdout, "").unwrap().unwrap();
         assert_eq!(result.raw_message[0], 0x01);
-        assert!(
-            result
-                .detect_score
-                .is_some_and(|value| (value - 1.792).abs() < 0.0001)
-        );
+        assert!(result
+            .detect_score
+            .is_some_and(|value| (value - 1.792).abs() < 0.0001));
         assert_eq!(result.bit_errors, 0);
     }
 
@@ -657,10 +655,8 @@ mod tests {
         let stdout = "pattern  0:05 023848c0200045fffff7d8743d035cda 1.427 0.065 A\n";
         let result = parse_detect_output(stdout, "").unwrap().unwrap();
         assert_eq!(result.raw_message[0], 0x02);
-        assert!(
-            result
-                .detect_score
-                .is_some_and(|value| (value - 1.427).abs() < 0.0001)
-        );
+        assert!(result
+            .detect_score
+            .is_some_and(|value| (value - 1.427).abs() < 0.0001));
     }
 }

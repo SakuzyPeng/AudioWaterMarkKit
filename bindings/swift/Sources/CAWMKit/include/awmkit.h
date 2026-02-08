@@ -189,8 +189,28 @@ typedef struct {
     bool found;                // Whether watermark was found
     uint8_t raw_message[16];   // Extracted message (if found)
     char pattern[16];          // Detection pattern (e.g., "all", "single")
+    bool has_detect_score;     // Whether detect_score is available
+    float detect_score;        // Detection score from audiowmark
     uint32_t bit_errors;       // Number of bit errors
 } AWMDetectResult;
+
+typedef enum {
+    AWM_CLONE_CHECK_EXACT = 0,
+    AWM_CLONE_CHECK_LIKELY = 1,
+    AWM_CLONE_CHECK_SUSPECT = 2,
+    AWM_CLONE_CHECK_UNAVAILABLE = 3,
+} AWMCloneCheckKind;
+
+typedef struct {
+    AWMCloneCheckKind kind;    // Clone check status
+    bool has_score;            // Whether score is available
+    double score;              // Fingerprint score (lower is better)
+    bool has_match_seconds;    // Whether match duration is available
+    float match_seconds;       // Match duration in seconds
+    bool has_evidence_id;      // Whether matched evidence id is available
+    int64_t evidence_id;       // Matched evidence id
+    char reason[128];          // Optional reason string
+} AWMCloneCheckResult;
 
 /**
  * Create Audio instance (auto-search for audiowmark)
@@ -258,6 +278,38 @@ int32_t awm_audio_detect(
     const AWMAudioHandle* handle,
     const char* input,
     AWMDetectResult* result
+);
+
+/**
+ * Evaluate clone check for a decoded identity/key_slot and input file
+ *
+ * @param input     Input audio file path
+ * @param identity  Decoded identity
+ * @param key_slot  Decoded key slot
+ * @param result    Output clone check result
+ * @return          AWM_SUCCESS or error code
+ */
+int32_t awm_clone_check_for_file(
+    const char* input,
+    const char* identity,
+    uint8_t key_slot,
+    AWMCloneCheckResult* result
+);
+
+/**
+ * Record evidence for embedded output file
+ *
+ * @param file_path   Embedded output audio file path
+ * @param raw_message 16-byte encoded message
+ * @param key         HMAC key bytes
+ * @param key_len     Key length
+ * @return            AWM_SUCCESS or error code
+ */
+int32_t awm_evidence_record_file(
+    const char* file_path,
+    const uint8_t* raw_message,
+    const uint8_t* key,
+    size_t key_len
 );
 
 /**

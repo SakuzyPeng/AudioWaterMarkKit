@@ -59,7 +59,7 @@ struct WindowConfigurator: NSViewRepresentable {
 
         private func installTitlebarAccessory(window: NSWindow, appState: AppState) {
             let hostingView = NSHostingView(rootView: TitlebarStatusAccessoryView(appState: appState))
-            hostingView.frame = NSRect(x: 0, y: 0, width: 72, height: 24)
+            hostingView.frame = NSRect(x: 0, y: 0, width: 108, height: 24)
 
             let accessory = NSTitlebarAccessoryViewController()
             accessory.layoutAttribute = .right
@@ -74,8 +74,10 @@ private struct TitlebarStatusAccessoryView: View {
     @ObservedObject var appState: AppState
     @State private var isHoveringKey = false
     @State private var isHoveringAudio = false
+    @State private var isHoveringDatabase = false
     @State private var keyTapFlash = false
     @State private var audioTapFlash = false
+    @State private var databaseTapFlash = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -130,6 +132,36 @@ private struct TitlebarStatusAccessoryView: View {
                     isHoveringKey = false
                 }
             }
+
+            statusIconButton(
+                systemName: "externaldrive.fill",
+                tone: appState.databaseStatusTone,
+                helpText: appState.databaseStatusHelp,
+                isHovering: isHoveringDatabase,
+                isFlashing: databaseTapFlash,
+                accessibilityLabel: "数据库状态"
+            ) {
+                flashTapFeedback(for: .database)
+                appState.checkDatabaseStatus()
+            }
+            .popover(isPresented: $isHoveringDatabase, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("映射总数：\(appState.mappingCount)")
+                    Text("证据总数（SHA256+指纹）：\(appState.evidenceCount)")
+                }
+                .font(.caption)
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: 320, alignment: .leading)
+            }
+            .onHover { hovering in
+                isHoveringDatabase = hovering
+                if hovering {
+                    isHoveringKey = false
+                    isHoveringAudio = false
+                }
+            }
         }
         .frame(height: 24)
     }
@@ -137,6 +169,7 @@ private struct TitlebarStatusAccessoryView: View {
     private enum TapTarget {
         case key
         case audio
+        case database
     }
 
     @ViewBuilder
@@ -191,6 +224,11 @@ private struct TitlebarStatusAccessoryView: View {
             audioTapFlash = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                 audioTapFlash = false
+            }
+        case .database:
+            databaseTapFlash = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                databaseTapFlash = false
             }
         }
     }

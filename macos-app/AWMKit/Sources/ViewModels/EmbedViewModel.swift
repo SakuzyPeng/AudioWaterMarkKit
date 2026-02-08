@@ -274,7 +274,17 @@ class EmbedViewModel: ObservableObject {
                     let outputURL = outputDir.appendingPathComponent("\(baseName)\(suffix).\(ext)")
 
                     audio.setStrength(UInt8(strength))
-                    _ = try audio.embed(input: fileURL, output: outputURL, tag: tag, key: key)
+                    let rawMessage = try audio.embed(input: fileURL, output: outputURL, tag: tag, key: key)
+                    do {
+                        try audio.recordEvidence(file: outputURL, rawMessage: rawMessage, key: key)
+                    } catch {
+                        log(
+                            "证据记录失败",
+                            detail: "\(outputURL.lastPathComponent): \(error.localizedDescription)",
+                            isSuccess: false,
+                            isEphemeral: true
+                        )
+                    }
 
                     log("成功: \(fileURL.lastPathComponent)", detail: "→ \(outputURL.lastPathComponent)")
                     successCount += 1
