@@ -15,32 +15,68 @@ namespace AWMKit.ViewModels;
 /// </summary>
 public sealed partial class EmbedViewModel : ObservableObject
 {
-    [ObservableProperty]
     private string _identity = string.Empty;
+    public string Identity
+    {
+        get => _identity;
+        set => SetProperty(ref _identity, value);
+    }
 
-    [ObservableProperty]
     private string _outputDirectory = string.Empty;
+    public string OutputDirectory
+    {
+        get => _outputDirectory;
+        set => SetProperty(ref _outputDirectory, value);
+    }
 
-    [ObservableProperty]
     private int _strength = 10;
+    public int Strength
+    {
+        get => _strength;
+        set => SetProperty(ref _strength, value);
+    }
 
-    [ObservableProperty]
     private bool _overwrite;
+    public bool Overwrite
+    {
+        get => _overwrite;
+        set => SetProperty(ref _overwrite, value);
+    }
 
-    [ObservableProperty]
     private bool _isProcessing;
+    public bool IsProcessing
+    {
+        get => _isProcessing;
+        set => SetProperty(ref _isProcessing, value);
+    }
 
-    [ObservableProperty]
     private int _processedCount;
+    public int ProcessedCount
+    {
+        get => _processedCount;
+        set => SetProperty(ref _processedCount, value);
+    }
 
-    [ObservableProperty]
     private int _totalCount;
+    public int TotalCount
+    {
+        get => _totalCount;
+        set => SetProperty(ref _totalCount, value);
+    }
 
-    [ObservableProperty]
     private string? _currentFile;
+    public string? CurrentFile
+    {
+        get => _currentFile;
+        set => SetProperty(ref _currentFile, value);
+    }
 
-    [ObservableProperty]
     private string? _errorMessage;
+    public string? ErrorMessage
+    {
+        get => _errorMessage;
+        set => SetProperty(ref _errorMessage, value);
+    }
 
     public ObservableCollection<string> InputFiles { get; } = new();
     public ObservableCollection<string> ProcessedFiles { get; } = new();

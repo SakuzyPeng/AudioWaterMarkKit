@@ -13,23 +13,47 @@ namespace AWMKit.ViewModels;
 /// </summary>
 public sealed partial class TagsViewModel : ObservableObject
 {
-    [ObservableProperty]
     private bool _isLoading;
+    public bool IsLoading
+    {
+        get => _isLoading;
+        set => SetProperty(ref _isLoading, value);
+    }
 
-    [ObservableProperty]
     private TagMapping? _selectedMapping;
+    public TagMapping? SelectedMapping
+    {
+        get => _selectedMapping;
+        set => SetProperty(ref _selectedMapping, value);
+    }
 
-    [ObservableProperty]
     private string _newIdentity = string.Empty;
+    public string NewIdentity
+    {
+        get => _newIdentity;
+        set => SetProperty(ref _newIdentity, value);
+    }
 
-    [ObservableProperty]
     private string _newTag = string.Empty;
+    public string NewTag
+    {
+        get => _newTag;
+        set => SetProperty(ref _newTag, value);
+    }
 
-    [ObservableProperty]
     private string _newDisplayName = string.Empty;
+    public string NewDisplayName
+    {
+        get => _newDisplayName;
+        set => SetProperty(ref _newDisplayName, value);
+    }
 
-    [ObservableProperty]
     private string? _errorMessage;
+    public string? ErrorMessage
+    {
+        get => _errorMessage;
+        set => SetProperty(ref _errorMessage, value);
+    }
 
     public ObservableCollection<TagMapping> TagMappings { get; } = new();
 
