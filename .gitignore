@@ -7,6 +7,11 @@
 /macos-app/AWMKit.xcodeproj/
 /macos-app/AWMKit.xcodeproj/xcuserdata
 /macos-app/AWMKit.xcodeproj/project.xcworkspace/xcuserdata
+/winui-app/**/bin/
+/winui-app/**/obj/
+/winui-app/**/publish/
+/winui-app/**/awmkit.dll
+/winui-app/awmkit.dll
 
 # Audio files
 *.wav
