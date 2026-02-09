@@ -23,6 +23,9 @@
             <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="12,10"/>
         </Style>
+        <Style x:Key="DetectMatrixCellBorderStyle" TargetType="Border" BasedOn="{StaticResource DetectInfoCellBorderStyle}">
+            <Setter Property="Padding" Value="12,6"/>
+        </Style>
     </Page.Resources>
 
     <Grid Padding="24" RowSpacing="12" ColumnSpacing="12">
@@ -160,20 +163,20 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Style="{StaticResource DetectInfoCellBorderStyle}">
-                        <StackPanel Spacing="4">
+                    <Border Grid.Column="0" Style="{StaticResource DetectMatrixCellBorderStyle}">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="状态" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayStatus, Mode=OneWay}" Foreground="{x:Bind ViewModel.StatusBrush, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
-                    <Border Grid.Column="1" Style="{StaticResource DetectInfoCellBorderStyle}">
-                        <StackPanel Spacing="4">
+                    <Border Grid.Column="1" Style="{StaticResource DetectMatrixCellBorderStyle}">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="匹配标记" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayMatchFound, Mode=OneWay}" Foreground="{x:Bind ViewModel.MatchFoundBrush, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
-                    <Border Grid.Column="2" Style="{StaticResource DetectInfoCellBorderStyle}">
-                        <StackPanel Spacing="4">
+                    <Border Grid.Column="2" Style="{StaticResource DetectMatrixCellBorderStyle}">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="检测模式" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayPattern, Mode=OneWay}"/>
                         </StackPanel>
@@ -186,20 +189,20 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Style="{StaticResource DetectInfoCellBorderStyle}">
-                        <StackPanel Spacing="4">
+                    <Border Grid.Column="0" Style="{StaticResource DetectMatrixCellBorderStyle}">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="标签" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayTag, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
-                    <Border Grid.Column="1" Style="{StaticResource DetectInfoCellBorderStyle}">
-                        <StackPanel Spacing="4">
+                    <Border Grid.Column="1" Style="{StaticResource DetectMatrixCellBorderStyle}">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="身份" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayIdentity, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
-                    <Border Grid.Column="2" Style="{StaticResource DetectInfoCellBorderStyle}">
-                        <StackPanel Spacing="4">
+                    <Border Grid.Column="2" Style="{StaticResource DetectMatrixCellBorderStyle}">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="版本" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayVersion, Mode=OneWay}"/>
                         </StackPanel>
@@ -212,20 +215,20 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Style="{StaticResource DetectInfoCellBorderStyle}">
-                        <StackPanel Spacing="4">
+                    <Border Grid.Column="0" Style="{StaticResource DetectMatrixCellBorderStyle}">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="检测时间" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayDetectTime, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
-                    <Border Grid.Column="1" Style="{StaticResource DetectInfoCellBorderStyle}">
-                        <StackPanel Spacing="4">
+                    <Border Grid.Column="1" Style="{StaticResource DetectMatrixCellBorderStyle}">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="密钥槽位" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayKeySlot, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
-                    <Border Grid.Column="2" Style="{StaticResource DetectInfoCellBorderStyle}">
-                        <StackPanel Spacing="4">
+                    <Border Grid.Column="2" Style="{StaticResource DetectMatrixCellBorderStyle}">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="位错误" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayBitErrors, Mode=OneWay}" Foreground="{x:Bind ViewModel.BitErrorsBrush, Mode=OneWay}"/>
                         </StackPanel>
@@ -238,20 +241,20 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" Style="{StaticResource DetectInfoCellBorderStyle}">
-                        <StackPanel Spacing="4">
+                    <Border Grid.Column="0" Style="{StaticResource DetectMatrixCellBorderStyle}">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="检测分数" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayDetectScore, Mode=OneWay}" Foreground="{x:Bind ViewModel.DetectScoreBrush, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
-                    <Border Grid.Column="1" Style="{StaticResource DetectInfoCellBorderStyle}">
-                        <StackPanel Spacing="4">
+                    <Border Grid.Column="1" Style="{StaticResource DetectMatrixCellBorderStyle}">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="克隆校验" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayCloneCheck, Mode=OneWay}" Foreground="{x:Bind ViewModel.CloneCheckBrush, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
-                    <Border Grid.Column="2" Style="{StaticResource DetectInfoCellBorderStyle}">
-                        <StackPanel Spacing="4">
+                    <Border Grid.Column="2" Style="{StaticResource DetectMatrixCellBorderStyle}">
+                        <StackPanel Spacing="2">
                             <TextBlock Text="指纹分数" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayFingerprintScore, Mode=OneWay}" Foreground="{x:Bind ViewModel.FingerprintScoreBrush, Mode=OneWay}"/>
                         </StackPanel>
