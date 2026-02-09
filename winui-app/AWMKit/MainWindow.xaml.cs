@@ -1,10 +1,14 @@
 using AWMKit.Pages;
 using AWMKit.ViewModels;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using System;
 using System.ComponentModel;
+using System.IO;
+using WinRT.Interop;
 
 namespace AWMKit;
 
@@ -40,6 +44,28 @@ public sealed partial class MainWindow : Window
     {
         // Keep native WinUI title bar and window controls.
         Title = "AWMKit";
+        TrySetWindowIcon();
+    }
+
+    private void TrySetWindowIcon()
+    {
+        try
+        {
+            var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
+            if (!File.Exists(iconPath))
+            {
+                return;
+            }
+
+            var hwnd = WindowNative.GetWindowHandle(this);
+            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+            var appWindow = AppWindow.GetFromWindowId(windowId);
+            appWindow.SetIcon(iconPath);
+        }
+        catch
+        {
+            // Ignore icon setup failure.
+        }
     }
 
     private void InitializeStatusIndicators()

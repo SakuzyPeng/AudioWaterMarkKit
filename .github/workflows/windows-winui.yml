@@ -79,6 +79,13 @@ jobs:
       - name: Build Rust FFI dylib (release)
         run: cargo build --lib --features ffi,app,bundled --release --target aarch64-apple-darwin
 
+      - name: Generate Xcode project
+        run: |
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          cd macos-app
+          xcodegen generate
+          test -d AWMKit.xcodeproj
+
       - name: Build macOS app (Release)
         run: |
           xcodebuild \
@@ -180,7 +187,7 @@ jobs:
       - name: Copy awmkit.dll to WinUI project
         shell: pwsh
         run: |
-          Copy-Item target/x86_64-pc-windows-msvc/release/awmkit.dll winui-app/AWMKit/awmkit.dll -Force
+          Copy-Item target/x86_64-pc-windows-msvc/release/awmkit.dll winui-app/AWMKit/awmkit_native.dll -Force
 
       - name: Build WinUI App (Release)
         shell: pwsh
