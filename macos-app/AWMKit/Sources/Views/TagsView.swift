@@ -156,7 +156,7 @@ struct TagsView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
 
-                TextField("搜索用户名 / Tag / Identity / 路径 / SHA256", text: $queryText)
+                TextField("搜索用户名 / Tag / Identity / 路径", text: $queryText)
                     .textFieldStyle(.plain)
 
                 if !queryText.isEmpty {
@@ -443,8 +443,7 @@ struct TagsView: View {
         return evidenceEntries.filter { entry in
             entry.identity.localizedCaseInsensitiveContains(trimmedQuery) ||
             entry.tag.localizedCaseInsensitiveContains(trimmedQuery) ||
-            entry.filePath.localizedCaseInsensitiveContains(trimmedQuery) ||
-            entry.pcmSha256.localizedCaseInsensitiveContains(trimmedQuery)
+            entry.filePath.localizedCaseInsensitiveContains(trimmedQuery)
         }
     }
 
@@ -642,8 +641,10 @@ private struct EvidenceEntryRow: View {
 
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.item) {
-            Image(systemName: "waveform.path.badge.shield.checkmark")
+            Image(systemName: "waveform")
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.secondary)
+                .frame(width: 18, height: 18)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(entry.identity)

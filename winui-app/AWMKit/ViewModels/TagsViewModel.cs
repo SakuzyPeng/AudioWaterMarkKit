@@ -501,8 +501,7 @@ public sealed class TagsViewModel : ObservableObject
 
         return evidence.Identity.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                evidence.Tag.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-               evidence.FilePath.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-               evidence.PcmSha256.Contains(query, StringComparison.OrdinalIgnoreCase);
+               evidence.FilePath.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ReplaceCollection<T>(ObservableCollection<T> target, IEnumerable<T> source)
