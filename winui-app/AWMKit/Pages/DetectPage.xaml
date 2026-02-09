@@ -75,12 +75,17 @@
                               SelectedItem="{x:Bind ViewModel.SelectedChannelLayout, Mode=TwoWay}"
                               DisplayMemberPath="DisplayText"
                               PlaceholderText="声道布局"
-                              AutomationProperties.Name="选择声道布局"/>
+                              AutomationProperties.Name="选择声道布局"
+                              Visibility="Collapsed"/>
                     <Button Click="SelectInputSourceButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
                             AutomationProperties.Name="选择输入源">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <SymbolIcon Symbol="OpenFile"/>
+                            <SymbolIcon Symbol="OpenFile"
+                                        Visibility="{x:Bind ViewModel.IsInputSelectSuccess, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
+                            <SymbolIcon Symbol="OpenFile"
+                                        Foreground="{StaticResource SuccessBrush}"
+                                        Visibility="{x:Bind ViewModel.IsInputSelectSuccess, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
                             <TextBlock Text="选择"/>
                         </StackPanel>
                     </Button>
@@ -90,9 +95,13 @@
                             AutomationProperties.Name="开始或停止检测">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="Play"
-                                        Visibility="{x:Bind ViewModel.IsProcessing, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
+                                        Visibility="{x:Bind ViewModel.ShowDetectDefaultPlayIcon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            <SymbolIcon Symbol="Play"
+                                        Foreground="{StaticResource SuccessBrush}"
+                                        Visibility="{x:Bind ViewModel.ShowDetectSuccessPlayIcon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
                             <SymbolIcon Symbol="Stop"
-                                        Visibility="{x:Bind ViewModel.IsProcessing, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        Foreground="{StaticResource ErrorBrush}"
+                                        Visibility="{x:Bind ViewModel.ShowDetectStopIcon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
                             <TextBlock Text="{x:Bind ViewModel.DetectButtonText, Mode=OneWay}"/>
                         </StackPanel>
                     </Button>
@@ -100,7 +109,11 @@
                             Style="{StaticResource SecondaryButtonStyle}"
                             AutomationProperties.Name="清空队列">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <SymbolIcon Symbol="List"/>
+                            <SymbolIcon Symbol="List"
+                                        Visibility="{x:Bind ViewModel.IsClearQueueSuccess, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
+                            <SymbolIcon Symbol="List"
+                                        Foreground="{StaticResource SuccessBrush}"
+                                        Visibility="{x:Bind ViewModel.IsClearQueueSuccess, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
                             <TextBlock Text="清空"/>
                         </StackPanel>
                     </Button>
@@ -108,7 +121,11 @@
                             Style="{StaticResource SecondaryButtonStyle}"
                             AutomationProperties.Name="清空日志">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <SymbolIcon Symbol="Message"/>
+                            <SymbolIcon Symbol="Message"
+                                        Visibility="{x:Bind ViewModel.IsClearLogsSuccess, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
+                            <SymbolIcon Symbol="Message"
+                                        Foreground="{StaticResource SuccessBrush}"
+                                        Visibility="{x:Bind ViewModel.IsClearLogsSuccess, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
                             <TextBlock Text="清空"/>
                         </StackPanel>
                     </Button>

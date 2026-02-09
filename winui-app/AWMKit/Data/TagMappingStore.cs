@@ -162,6 +162,21 @@ public sealed class TagMappingStore
     }
 
     /// <summary>
+    /// Saves a mapping only when username does not exist yet.
+    /// Returns true when inserted, false when already exists or on failure.
+    /// </summary>
+    public async Task<bool> SaveIfAbsentAsync(string username, string tag)
+    {
+        var existing = await GetByIdentityAsync(username);
+        if (existing is not null)
+        {
+            return false;
+        }
+
+        return await SaveAsync(username, tag);
+    }
+
+    /// <summary>
     /// Deletes a mapping by username (legacy API name kept for compatibility).
     /// </summary>
     public async Task<bool> DeleteByIdentityAsync(string identity)

@@ -38,6 +38,27 @@ public sealed partial class DetectViewModel : ObservableObject
     private CancellationTokenSource? _detectCts;
     private CancellationTokenSource? _progressResetCts;
 
+    private bool _isInputSelectSuccess;
+    public bool IsInputSelectSuccess
+    {
+        get => _isInputSelectSuccess;
+        private set => SetProperty(ref _isInputSelectSuccess, value);
+    }
+
+    private bool _isDetectSuccess;
+    public bool IsDetectSuccess
+    {
+        get => _isDetectSuccess;
+        private set
+        {
+            if (SetProperty(ref _isDetectSuccess, value))
+            {
+                OnPropertyChanged(nameof(ShowDetectDefaultPlayIcon));
+                OnPropertyChanged(nameof(ShowDetectSuccessPlayIcon));
+            }
+        }
+    }
+
     private string? _inputSource;
     public string? InputSource
     {
@@ -72,6 +93,9 @@ public sealed partial class DetectViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(CanDetectOrStop));
                 OnPropertyChanged(nameof(DetectButtonText));
+                OnPropertyChanged(nameof(ShowDetectStopIcon));
+                OnPropertyChanged(nameof(ShowDetectDefaultPlayIcon));
+                OnPropertyChanged(nameof(ShowDetectSuccessPlayIcon));
             }
         }
     }
@@ -240,6 +264,9 @@ public sealed partial class DetectViewModel : ObservableObject
     public bool CanDetectOrStop => IsProcessing || SelectedFiles.Count > 0;
 
     public string DetectButtonText => IsProcessing ? "停止" : "检测";
+    public bool ShowDetectStopIcon => IsProcessing;
+    public bool ShowDetectDefaultPlayIcon => !IsProcessing && !IsDetectSuccess;
+    public bool ShowDetectSuccessPlayIcon => !IsProcessing && IsDetectSuccess;
 
     public DetectRecord? DisplayedRecord
     {
@@ -332,6 +359,7 @@ public sealed partial class DetectViewModel : ObservableObject
         InputSource = sourcePath;
         var files = ResolveAudioFiles(sourcePath);
         AppendFilesWithDedup(files);
+        _ = FlashInputSelectAsync();
     }
 
     public void AddDroppedFiles(IEnumerable<string> filePaths)
@@ -519,6 +547,10 @@ public sealed partial class DetectViewModel : ObservableObject
             if (!token.IsCancellationRequested)
             {
                 AddLog("检测完成", $"已检测: {TotalDetected}, 发现水印: {TotalFound}", true, false, null, LogIconTone.Info);
+                if (TotalDetected > 0)
+                {
+                    _ = FlashDetectSuccessAsync();
+                }
             }
         }
         catch (Exception ex)
@@ -820,6 +852,20 @@ public sealed partial class DetectViewModel : ObservableObject
         IsClearLogsSuccess = true;
         await Task.Delay(TimeSpan.FromMilliseconds(300));
         IsClearLogsSuccess = false;
+    }
+
+    private async Task FlashInputSelectAsync()
+    {
+        IsInputSelectSuccess = true;
+        await Task.Delay(TimeSpan.FromMilliseconds(900));
+        IsInputSelectSuccess = false;
+    }
+
+    private async Task FlashDetectSuccessAsync()
+    {
+        IsDetectSuccess = true;
+        await Task.Delay(TimeSpan.FromMilliseconds(900));
+        IsDetectSuccess = false;
     }
 
     private void ScheduleProgressResetIfNeeded()
