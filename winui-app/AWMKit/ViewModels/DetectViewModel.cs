@@ -2,12 +2,9 @@ using AWMKit.Models;
 using AWMKit.Native;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace AWMKit.ViewModels;
@@ -30,14 +27,11 @@ public sealed partial class DetectViewModel : ObservableObject
     private string? _currentFile;
 
     [ObservableProperty]
-    private bool _autoSaveEvidence = true;
+    private bool _autoSaveEvidence = false;
 
     public ObservableCollection<string> InputFiles { get; } = new();
     public ObservableCollection<DetectResult> Results { get; } = new();
 
-    /// <summary>
-    /// Adds files to the input list.
-    /// </summary>
     [RelayCommand]
     private void AddFiles(string[] files)
     {
@@ -50,18 +44,12 @@ public sealed partial class DetectViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Removes a file from the input list.
-    /// </summary>
     [RelayCommand]
     private void RemoveFile(string file)
     {
         InputFiles.Remove(file);
     }
 
-    /// <summary>
-    /// Clears all input files and results.
-    /// </summary>
     [RelayCommand]
     private void ClearAll()
     {
@@ -69,9 +57,6 @@ public sealed partial class DetectViewModel : ObservableObject
         Results.Clear();
     }
 
-    /// <summary>
-    /// Starts the detection process.
-    /// </summary>
     [RelayCommand]
     private async Task DetectAsync()
     {
@@ -87,114 +72,127 @@ public sealed partial class DetectViewModel : ObservableObject
 
         await Task.Run(async () =>
         {
+            var (loadedKey, keyError) = AwmKeyBridge.LoadKey();
+            var hasKey = loadedKey is not null && keyError == AwmError.Ok;
+
             foreach (var inputFile in InputFiles.ToList())
             {
                 CurrentFile = Path.GetFileName(inputFile);
-
-                // Calculate file hash
-                var fileHash = ComputeFileHash(inputFile);
-
-                // Detect watermark
-                var (message, pattern, error) = AwmBridge.DetectAudio(inputFile);
+                var (detected, detectError) = AwmBridge.DetectAudioDetailed(inputFile);
 
                 DetectResult result;
-
-                if (error == AwmError.Ok && message is not null)
+                if (detectError == AwmError.Ok && detected is not null)
                 {
-                    // Try to decode tag from message
-                    var tag = TryDecodeTag(message);
-
-                    // Lookup user identity from tag mapping
-                    TagMapping? mapping = null;
-                    if (!string.IsNullOrEmpty(tag))
-                    {
-                        mapping = await AppViewModel.Instance.TagStore.GetByTagAsync(tag);
-                    }
-
-                    result = new DetectResult
-                    {
-                        FilePath = inputFile,
-                        FileHash = fileHash,
-                        Success = true,
-                        Tag = tag,
-                        Identity = mapping?.Identity,
-                        DisplayName = mapping?.DisplayName,
-                        Pattern = pattern,
-                        Message = message,
-                        Error = null,
-                        ErrorMessage = null
-                    };
-
-                    // Auto-save evidence
-                    if (AutoSaveEvidence && !string.IsNullOrEmpty(tag))
-                    {
-                        var messageHex = BitConverter.ToString(message).Replace("-", "");
-                        await AppViewModel.Instance.EvidenceStore.SaveAsync(
-                            inputFile, fileHash, messageHex, pattern, tag);
-                    }
+                    result = await BuildSuccessResultAsync(inputFile, detected.Value, hasKey ? loadedKey : null);
                 }
                 else
                 {
                     result = new DetectResult
                     {
                         FilePath = inputFile,
-                        FileHash = fileHash,
                         Success = false,
                         Tag = null,
                         Identity = null,
-                        DisplayName = null,
+                        KeySlot = null,
+                        TimestampMinutes = null,
                         Pattern = null,
+                        BitErrors = null,
+                        DetectScore = null,
+                        CloneCheck = null,
+                        CloneScore = null,
+                        CloneMatchSeconds = null,
+                        CloneEvidenceId = null,
+                        CloneReason = null,
                         Message = null,
-                        Error = error,
-                        ErrorMessage = error.ToString()
+                        Error = detectError,
+                        ErrorMessage = detectError.ToString()
                     };
                 }
 
-                // Must add to ObservableCollection on UI thread
-                App.Current.MainWindow?.DispatcherQueue.TryEnqueue(() =>
-                {
-                    Results.Add(result);
-                });
-
+                App.Current.MainWindow?.DispatcherQueue.TryEnqueue(() => Results.Add(result));
                 ProcessedCount++;
             }
 
             CurrentFile = null;
             IsProcessing = false;
-
-            // Refresh app stats
             await AppViewModel.Instance.RefreshStatsAsync();
         });
     }
 
-    private static string ComputeFileHash(string filePath)
+    private static Task<DetectResult> BuildSuccessResultAsync(
+        string inputFile,
+        AwmBridge.DetectAudioResult detectResult,
+        byte[]? key)
     {
-        using var sha256 = SHA256.Create();
-        using var stream = File.OpenRead(filePath);
-        var hashBytes = sha256.ComputeHash(stream);
-        return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
-    }
+        string? tag = null;
+        string? identity = null;
+        byte? keySlot = null;
+        uint? timestampMinutes = null;
+        AwmError? decodeError = null;
+        string? decodeErrorMessage = null;
 
-    private static string? TryDecodeTag(byte[] message)
-    {
-        // Try to decode with global key
-        var (key, keyError) = AwmKeyBridge.LoadKey();
-        if (key is null || keyError != AwmError.Ok)
+        if (key is not null)
         {
-            return null;
+            var (decoded, decodeErr) = AwmBridge.DecodeMessage(detectResult.RawMessage, key);
+            if (decodeErr == AwmError.Ok && decoded.HasValue)
+            {
+                tag = decoded.Value.GetTag();
+                identity = decoded.Value.GetIdentity();
+                keySlot = decoded.Value.KeySlot;
+                timestampMinutes = decoded.Value.TimestampMinutes;
+            }
+            else
+            {
+                decodeError = decodeErr;
+                decodeErrorMessage = decodeErr.ToString();
+            }
         }
 
-        var (result, decodeError) = AwmBridge.DecodeMessage(message, key);
-        if (decodeError == AwmError.Ok && result.HasValue)
+        AwmCloneCheckKind? cloneKind = null;
+        double? cloneScore = null;
+        float? cloneSeconds = null;
+        long? cloneEvidenceId = null;
+        string? cloneReason = null;
+
+        if (!string.IsNullOrEmpty(identity) && keySlot.HasValue)
         {
-            return result.Value.GetTag();
+            var (clone, cloneErr) = AwmBridge.CloneCheckForFile(inputFile, identity, keySlot.Value);
+            if (cloneErr == AwmError.Ok && clone.HasValue)
+            {
+                cloneKind = clone.Value.Kind;
+                cloneScore = clone.Value.Score;
+                cloneSeconds = clone.Value.MatchSeconds;
+                cloneEvidenceId = clone.Value.EvidenceId;
+                cloneReason = clone.Value.Reason;
+            }
+            else
+            {
+                cloneKind = AwmCloneCheckKind.Unavailable;
+                cloneReason = cloneErr.ToString();
+            }
         }
 
-        return null;
+        return Task.FromResult(new DetectResult
+        {
+            FilePath = inputFile,
+            Success = true,
+            Tag = tag,
+            Identity = identity,
+            KeySlot = keySlot,
+            TimestampMinutes = timestampMinutes,
+            Pattern = detectResult.Pattern,
+            BitErrors = detectResult.BitErrors,
+            DetectScore = detectResult.DetectScore,
+            CloneCheck = cloneKind,
+            CloneScore = cloneScore,
+            CloneMatchSeconds = cloneSeconds,
+            CloneEvidenceId = cloneEvidenceId,
+            CloneReason = cloneReason,
+            Message = detectResult.RawMessage,
+            Error = decodeError,
+            ErrorMessage = decodeErrorMessage
+        });
     }
 
-    /// <summary>
-    /// Checks if detection can start.
-    /// </summary>
     public bool CanDetect => InputFiles.Any() && !IsProcessing;
 }

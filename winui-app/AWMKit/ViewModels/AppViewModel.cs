@@ -144,7 +144,7 @@ public sealed partial class AppViewModel : ObservableObject
         await Task.Run(() =>
         {
             var error = AwmKeyBridge.DeleteKey();
-            KeyAvailable = error != AwmError.Ok;
+            KeyAvailable = error == AwmError.Ok ? false : KeyAvailable;
         });
     }
 

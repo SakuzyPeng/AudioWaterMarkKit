@@ -87,6 +87,20 @@ internal static class AwmNative
         [MarshalAs(UnmanagedType.LPUTF8Str)] string input,
         IntPtr result);
 
+    [DllImport(Lib, EntryPoint = "awm_clone_check_for_file", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int awm_clone_check_for_file(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string input,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string identity,
+        byte keySlot,
+        IntPtr result);
+
+    [DllImport(Lib, EntryPoint = "awm_evidence_record_file", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int awm_evidence_record_file(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string filePath,
+        IntPtr rawMessage,
+        IntPtr key,
+        nuint keyLen);
+
     [DllImport(Lib, EntryPoint = "awm_audio_is_available", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.U1)]
     internal static extern bool awm_audio_is_available(IntPtr handle);

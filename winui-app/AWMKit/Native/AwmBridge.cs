@@ -14,6 +14,21 @@ public static class AwmBridge
     private const int TagLength = 8;
     private const int IdentityMaxLength = 7;
 
+    public readonly record struct DetectAudioResult(
+        byte[] RawMessage,
+        string Pattern,
+        uint BitErrors,
+        float? DetectScore
+    );
+
+    public readonly record struct CloneCheckResult(
+        AwmCloneCheckKind Kind,
+        double? Score,
+        float? MatchSeconds,
+        long? EvidenceId,
+        string? Reason
+    );
+
     /// <summary>
     /// Gets the current message format version.
     /// </summary>
@@ -211,10 +226,24 @@ public static class AwmBridge
     /// </summary>
     public static (byte[]? message, string pattern, AwmError error) DetectAudio(string inputPath)
     {
+        var (result, error) = DetectAudioDetailed(inputPath);
+        if (error != AwmError.Ok || result is null)
+        {
+            return (null, string.Empty, error);
+        }
+
+        return (result.Value.RawMessage, result.Value.Pattern, AwmError.Ok);
+    }
+
+    /// <summary>
+    /// Detects a watermark from an audio file (extended result).
+    /// </summary>
+    public static (DetectAudioResult? result, AwmError error) DetectAudioDetailed(string inputPath)
+    {
         using var handle = AwmAudioHandle.CreateNew();
         if (handle.IsInvalid)
         {
-            return (null, string.Empty, AwmError.AudiowmarkNotFound);
+            return (null, AwmError.AudiowmarkNotFound);
         }
 
         var resultPtr = Marshal.AllocHGlobal(Marshal.SizeOf<AWMDetectResult>());
@@ -231,13 +260,76 @@ public static class AwmBridge
                 var message = new byte[MessageLength];
                 Array.Copy(result.RawMessage, message, MessageLength);
                 string pattern = result.GetPattern();
-                return (message, pattern, AwmError.Ok);
+                return (new DetectAudioResult(
+                    message,
+                    pattern,
+                    result.BitErrors,
+                    result.HasDetectScore ? result.DetectScore : null
+                ), AwmError.Ok);
             }
-            return (null, string.Empty, (AwmError)code);
+            return (null, (AwmError)code);
         }
         finally
         {
             Marshal.FreeHGlobal(resultPtr);
+        }
+    }
+
+    /// <summary>
+    /// Runs clone-check for decoded identity/key slot.
+    /// </summary>
+    public static (CloneCheckResult? result, AwmError error) CloneCheckForFile(string inputPath, string identity, byte keySlot)
+    {
+        var resultPtr = Marshal.AllocHGlobal(Marshal.SizeOf<AWMCloneCheckResult>());
+        try
+        {
+            int code = AwmNative.awm_clone_check_for_file(inputPath, identity, keySlot, resultPtr);
+            if (code != 0)
+            {
+                return (null, (AwmError)code);
+            }
+
+            var result = Marshal.PtrToStructure<AWMCloneCheckResult>(resultPtr);
+            var reason = result.GetReason();
+            return (new CloneCheckResult(
+                result.CloneKind,
+                result.HasScore ? result.Score : null,
+                result.HasMatchSeconds ? result.MatchSeconds : null,
+                result.HasEvidenceId ? result.EvidenceId : null,
+                string.IsNullOrWhiteSpace(reason) ? null : reason
+            ), AwmError.Ok);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(resultPtr);
+        }
+    }
+
+    /// <summary>
+    /// Records evidence for an embedded output file.
+    /// </summary>
+    public static AwmError RecordEvidenceFile(string filePath, byte[] rawMessage, byte[] key)
+    {
+        if (rawMessage.Length != MessageLength || key.Length == 0)
+        {
+            return AwmError.InvalidMessageLength;
+        }
+
+        var messageHandle = GCHandle.Alloc(rawMessage, GCHandleType.Pinned);
+        var keyHandle = GCHandle.Alloc(key, GCHandleType.Pinned);
+        try
+        {
+            int code = AwmNative.awm_evidence_record_file(
+                filePath,
+                messageHandle.AddrOfPinnedObject(),
+                keyHandle.AddrOfPinnedObject(),
+                (nuint)key.Length);
+            return (AwmError)code;
+        }
+        finally
+        {
+            keyHandle.Free();
+            messageHandle.Free();
         }
     }
 

@@ -101,7 +101,7 @@ public sealed partial class EmbedViewModel : ObservableObject
         await Task.Run(async () =>
         {
             // Load or generate global key
-            var (key, isNew, keyError) = AwmKeyBridge.GetOrCreateKey();
+            var (key, _, keyError) = AwmKeyBridge.GetOrCreateKey();
             if (key is null || keyError != AwmError.Ok)
             {
                 ErrorMessage = $"Key error: {keyError}";
@@ -120,7 +120,7 @@ public sealed partial class EmbedViewModel : ObservableObject
 
             // Encode message
             var (message, encodeError) = AwmBridge.EncodeMessage(tag, key);
-            if (encodeError != AwmError.Ok)
+            if (encodeError != AwmError.Ok || message is null)
             {
                 ErrorMessage = $"Message encoding error: {encodeError}";
                 IsProcessing = false;
@@ -146,6 +146,12 @@ public sealed partial class EmbedViewModel : ObservableObject
 
                 if (embedError == AwmError.Ok)
                 {
+                    var recordError = AwmBridge.RecordEvidenceFile(outputFile, message, key);
+                    if (recordError != AwmError.Ok && string.IsNullOrEmpty(ErrorMessage))
+                    {
+                        ErrorMessage = $"[WARN] Evidence record failed: {recordError}";
+                    }
+
                     ProcessedFiles.Add(outputFile);
                 }
                 else

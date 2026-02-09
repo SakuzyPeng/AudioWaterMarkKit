@@ -103,6 +103,8 @@
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
                                             <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="120"/>
@@ -143,12 +145,28 @@
                                         <TextBlock Grid.Row="4" Grid.Column="1" Text="{x:Bind Pattern}" Margin="0,4,0,0"
                                                    Visibility="{x:Bind Success}"/>
 
+                                        <!-- Detect Score -->
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Detect Score:" FontWeight="SemiBold" Margin="0,4,0,0"
+                                                   Visibility="{x:Bind DetectScore, Converter={StaticResource NullToCollapsedConverter}}"/>
+                                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind DetectScoreText}" Margin="0,4,0,0"
+                                                   Visibility="{x:Bind DetectScore, Converter={StaticResource NullToCollapsedConverter}}"/>
+
+                                        <!-- Clone Check -->
+                                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Clone Check:" FontWeight="SemiBold" Margin="0,4,0,0"
+                                                   Visibility="{x:Bind CloneCheck, Converter={StaticResource NullToCollapsedConverter}}"/>
+                                        <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,4,0,0"
+                                                   Visibility="{x:Bind CloneCheck, Converter={StaticResource NullToCollapsedConverter}}">
+                                            <Run Text="{x:Bind CloneCheckText}"/>
+                                            <Run Text=" "/>
+                                            <Run Text="{x:Bind CloneScoreText}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        </TextBlock>
+
                                         <!-- Error -->
-                                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Error:" FontWeight="SemiBold" Margin="0,4,0,0"
-                                                   Visibility="{x:Bind Success, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
-                                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{x:Bind ErrorMessage}" Margin="0,4,0,0"
+                                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Error:" FontWeight="SemiBold" Margin="0,4,0,0"
+                                                   Visibility="{x:Bind ErrorMessage, Converter={StaticResource NullToCollapsedConverter}}"/>
+                                        <TextBlock Grid.Row="7" Grid.Column="1" Text="{x:Bind ErrorMessage}" Margin="0,4,0,0"
                                                    Foreground="{StaticResource ErrorBrush}"
-                                                   Visibility="{x:Bind Success, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
+                                                   Visibility="{x:Bind ErrorMessage, Converter={StaticResource NullToCollapsedConverter}}"/>
                                     </Grid>
                                 </Border>
                             </DataTemplate>

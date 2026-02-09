@@ -1,4 +1,5 @@
 using AWMKit.Native;
+using System.Globalization;
 
 namespace AWMKit.Models;
 
@@ -7,53 +8,49 @@ namespace AWMKit.Models;
 /// </summary>
 public sealed class DetectResult
 {
-    /// <summary>
-    /// Audio file path that was analyzed.
-    /// </summary>
     public required string FilePath { get; init; }
-
-    /// <summary>
-    /// SHA-256 hash of the audio file.
-    /// </summary>
-    public required string FileHash { get; init; }
-
-    /// <summary>
-    /// Detection success status.
-    /// </summary>
     public bool Success { get; init; }
-
-    /// <summary>
-    /// Detected tag (null if detection failed).
-    /// </summary>
     public string? Tag { get; init; }
-
-    /// <summary>
-    /// User identity from tag mapping (null if not found).
-    /// </summary>
     public string? Identity { get; init; }
-
-    /// <summary>
-    /// User display name (null if not found).
-    /// </summary>
-    public string? DisplayName { get; init; }
-
-    /// <summary>
-    /// Detection pattern quality (null if detection failed).
-    /// </summary>
+    public byte? KeySlot { get; init; }
+    public uint? TimestampMinutes { get; init; }
     public string? Pattern { get; init; }
-
-    /// <summary>
-    /// Raw 16-byte message (null if detection failed).
-    /// </summary>
+    public uint? BitErrors { get; init; }
+    public float? DetectScore { get; init; }
+    public AwmCloneCheckKind? CloneCheck { get; init; }
+    public double? CloneScore { get; init; }
+    public float? CloneMatchSeconds { get; init; }
+    public long? CloneEvidenceId { get; init; }
+    public string? CloneReason { get; init; }
     public byte[]? Message { get; init; }
-
-    /// <summary>
-    /// Error code if detection failed.
-    /// </summary>
     public AwmError? Error { get; init; }
-
-    /// <summary>
-    /// Error message if detection failed.
-    /// </summary>
     public string? ErrorMessage { get; init; }
+
+    public string DetectScoreText =>
+        DetectScore.HasValue ? DetectScore.Value.ToString("0.###", CultureInfo.InvariantCulture) : string.Empty;
+
+    public string CloneCheckText =>
+        CloneCheck.HasValue ? CloneCheck.Value.ToString().ToLowerInvariant() : string.Empty;
+
+    public string CloneScoreText
+    {
+        get
+        {
+            if (!CloneScore.HasValue)
+            {
+                return string.Empty;
+            }
+
+            if (CloneMatchSeconds.HasValue)
+            {
+                return $"{CloneScore.Value.ToString("0.###", CultureInfo.InvariantCulture)} / {CloneMatchSeconds.Value.ToString("0.#", CultureInfo.InvariantCulture)}s";
+            }
+
+            return CloneScore.Value.ToString("0.###", CultureInfo.InvariantCulture);
+        }
+    }
+
+    // Compatibility properties for current WinUI bindings.
+    public string? DisplayName => null;
+    public string? FileHash => null;
 }
