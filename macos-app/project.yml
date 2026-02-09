@@ -38,10 +38,10 @@ targets:
         name: Sources
         type: group
         createIntermediateGroups: true
-
-    resources:
       - path: AWMKit/Resources
         name: Resources
+        type: group
+        buildPhase: resources
 
     dependencies:
       - package: AWMKit
