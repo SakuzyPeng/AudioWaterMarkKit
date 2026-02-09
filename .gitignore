@@ -12,6 +12,8 @@
 /winui-app/**/publish/
 /winui-app/**/awmkit.dll
 /winui-app/awmkit.dll
+/winui-app/AWMKit/awmkit_native.dll
+/.tmp-release/
 
 # Audio files
 *.wav

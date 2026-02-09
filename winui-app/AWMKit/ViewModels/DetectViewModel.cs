@@ -398,14 +398,24 @@ public sealed partial class DetectViewModel : ObservableObject
     [RelayCommand]
     private async Task DetectOrStopAsync()
     {
-        if (IsProcessing)
+        try
         {
-            _detectCts?.Cancel();
-            AddLog("检测已停止", "用户手动停止", false, true, null, LogIconTone.Warning);
-            return;
-        }
+            if (IsProcessing)
+            {
+                _detectCts?.Cancel();
+                AddLog("检测已停止", "用户手动停止", false, true, null, LogIconTone.Warning);
+                return;
+            }
 
-        await DetectAsync();
+            await DetectAsync();
+        }
+        catch (Exception ex)
+        {
+            AddLog("检测异常", ex.Message, false, false, null, LogIconTone.Error);
+            CurrentProcessingFile = null;
+            CurrentProcessingIndex = -1;
+            IsProcessing = false;
+        }
     }
 
     private async Task DetectAsync()
@@ -421,86 +431,101 @@ public sealed partial class DetectViewModel : ObservableObject
             return;
         }
 
-        var (key, keyError) = AwmKeyBridge.LoadKey();
-        if (keyError != AwmError.Ok || key is null)
+        try
         {
-            AddLog("检测失败", "密钥未配置", false, false, null, LogIconTone.Error);
-            return;
-        }
-
-        _detectCts = new CancellationTokenSource();
-        var token = _detectCts.Token;
-
-        _progressResetCts?.Cancel();
-        IsProcessing = true;
-        Progress = 0;
-        CurrentProcessingIndex = 0;
-        TotalDetected = 0;
-        TotalFound = 0;
-
-        AddLog("开始检测", $"准备检测 {SelectedFiles.Count} 个文件", true, false, null, LogIconTone.Info);
-
-        var initialTotal = SelectedFiles.Count;
-        for (var processed = 0; processed < initialTotal; processed++)
-        {
-            if (token.IsCancellationRequested || SelectedFiles.Count == 0)
+            var (key, keyError) = AwmKeyBridge.LoadKey();
+            if (keyError != AwmError.Ok || key is null)
             {
-                break;
+                AddLog("检测失败", "密钥未配置", false, false, null, LogIconTone.Error);
+                return;
             }
 
-            var filePath = SelectedFiles[0];
-            var fileName = Path.GetFileName(filePath);
-            CurrentProcessingFile = fileName;
-            CurrentProcessingIndex = 0;
+            _detectCts = new CancellationTokenSource();
+            var token = _detectCts.Token;
 
-            DetectRecord record;
+            _progressResetCts?.Cancel();
+            IsProcessing = true;
+            Progress = 0;
+            CurrentProcessingIndex = 0;
+            TotalDetected = 0;
+            TotalFound = 0;
+
+            AddLog("开始检测", $"准备检测 {SelectedFiles.Count} 个文件", true, false, null, LogIconTone.Info);
+
+            var initialTotal = SelectedFiles.Count;
+            for (var processed = 0; processed < initialTotal; processed++)
+            {
+                if (token.IsCancellationRequested || SelectedFiles.Count == 0)
+                {
+                    break;
+                }
+
+                var filePath = SelectedFiles[0];
+                var fileName = Path.GetFileName(filePath);
+                CurrentProcessingFile = fileName;
+                CurrentProcessingIndex = 0;
+
+                DetectRecord record;
+                try
+                {
+                    record = await Task.Run(() => DetectSingleFile(filePath, key), token);
+                }
+                catch (Exception ex)
+                {
+                    record = new DetectRecord
+                    {
+                        FilePath = filePath,
+                        Status = "error",
+                        Error = ex.Message,
+                    };
+                }
+
+                if (token.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                InsertDetectRecord(record);
+                LogDetectionOutcome(fileName, record);
+
+                TotalDetected += 1;
+                if (record.Status == "ok")
+                {
+                    TotalFound += 1;
+                }
+
+                if (SelectedFiles.Count > 0)
+                {
+                    SelectedFiles.RemoveAt(0);
+                }
+
+                Progress = (processed + 1) / (double)initialTotal;
+            }
+
+            if (!token.IsCancellationRequested)
+            {
+                AddLog("检测完成", $"已检测: {TotalDetected}, 发现水印: {TotalFound}", true, false, null, LogIconTone.Info);
+            }
+        }
+        catch (Exception ex)
+        {
+            AddLog("检测失败", ex.Message, false, false, null, LogIconTone.Error);
+        }
+        finally
+        {
+            CurrentProcessingFile = null;
+            CurrentProcessingIndex = -1;
+            IsProcessing = false;
+            ScheduleProgressResetIfNeeded();
             try
             {
-                record = await Task.Run(() => DetectSingleFile(filePath, key), token);
+                await AppViewModel.Instance.RefreshStatsAsync();
             }
-            catch (Exception ex)
+            catch
             {
-                record = new DetectRecord
-                {
-                    FilePath = filePath,
-                    Status = "error",
-                    Error = ex.Message,
-                };
+                // Ignore stats refresh errors to avoid UI crash.
             }
-
-            if (token.IsCancellationRequested)
-            {
-                break;
-            }
-
-            InsertDetectRecord(record);
-            LogDetectionOutcome(fileName, record);
-
-            TotalDetected += 1;
-            if (record.Status == "ok")
-            {
-                TotalFound += 1;
-            }
-
-            if (SelectedFiles.Count > 0)
-            {
-                SelectedFiles.RemoveAt(0);
-            }
-
-            Progress = (processed + 1) / (double)initialTotal;
         }
-
-        if (!token.IsCancellationRequested)
-        {
-            AddLog("检测完成", $"已检测: {TotalDetected}, 发现水印: {TotalFound}", true, false, null, LogIconTone.Info);
-        }
-
-        CurrentProcessingFile = null;
-        CurrentProcessingIndex = -1;
-        IsProcessing = false;
-
-        ScheduleProgressResetIfNeeded();
-        await AppViewModel.Instance.RefreshStatsAsync();
     }
 
     private DetectRecord DetectSingleFile(string filePath, byte[] key)
