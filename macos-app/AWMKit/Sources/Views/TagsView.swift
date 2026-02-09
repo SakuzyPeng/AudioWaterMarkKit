@@ -8,6 +8,7 @@ struct TagsView: View {
     @State private var evidenceEntries: [EvidenceEntry] = []
     @State private var queryText: String = ""
     @State private var queryScope: QueryScope = .all
+    @State private var queryScopeBeforeDeleteMode: QueryScope?
 
     @State private var newUsername: String = ""
     @State private var showingAddSheet = false
@@ -482,6 +483,9 @@ struct TagsView: View {
     }
 
     private func enterDeleteMode(_ mode: DeleteMode) {
+        if deleteMode == .none {
+            queryScopeBeforeDeleteMode = queryScope
+        }
         deleteMode = mode
         queryScope = mode == .mappings ? .mappings : .evidence
         selectedUsernames.removeAll()
@@ -492,6 +496,10 @@ struct TagsView: View {
 
     private func exitDeleteMode() {
         deleteMode = .none
+        if let previousScope = queryScopeBeforeDeleteMode {
+            queryScope = previousScope
+        }
+        queryScopeBeforeDeleteMode = nil
         selectedUsernames.removeAll()
         selectedEvidenceIDs.removeAll()
         deleteConfirmInput = ""
@@ -592,7 +600,14 @@ private struct TagEntryRow: View {
                     .lineLimit(1)
             }
 
-            Spacer(minLength: 6)
+            Spacer(minLength: 8)
+
+            Text(threeLineDateText(Date(timeIntervalSince1970: TimeInterval(entry.createdAt))))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+                .frame(width: 82, alignment: .center)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .entryRowStyle()
@@ -626,33 +641,36 @@ private struct EvidenceEntryRow: View {
     let onToggleSelected: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Image(systemName: "waveform.path.badge.shield.checkmark")
-                    .foregroundStyle(.secondary)
+        HStack(spacing: DesignSystem.Spacing.item) {
+            Image(systemName: "waveform.path.badge.shield.checkmark")
+                .foregroundStyle(.secondary)
 
+            VStack(alignment: .leading, spacing: 6) {
                 Text(entry.identity)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
 
-                Spacer(minLength: 6)
+                Text("Tag \(entry.tag) · 槽位 \(entry.keySlot) · v\(entry.version)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
 
-                Text(entry.createdDate, format: Date.FormatStyle().year().month().day().hour().minute())
+                Text(entry.filePath)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(entry.filePath)
             }
 
-            Text("Tag \(entry.tag) · 槽位 \(entry.keySlot) · v\(entry.version)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            Spacer(minLength: 8)
 
-            Text(entry.filePath)
+            Text(threeLineDateText(entry.createdDate))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .help(entry.filePath)
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+                .frame(width: 82, alignment: .center)
         }
         .entryRowStyle()
         .overlay {
@@ -676,6 +694,18 @@ private struct EvidenceEntryRow: View {
             }
         }
     }
+}
+
+private func threeLineDateText(_ date: Date) -> String {
+    let calendar = Calendar.current
+    let components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+    let year = components.year ?? 0
+    let month = components.month ?? 0
+    let day = components.day ?? 0
+    let hour = components.hour ?? 0
+    let minute = components.minute ?? 0
+    let second = components.second ?? 0
+    return "\(year)年\n\(month)月\(day)日\n\(String(format: "%02d:%02d:%02d", hour, minute, second))"
 }
 
 private struct AddTagSheet: View {

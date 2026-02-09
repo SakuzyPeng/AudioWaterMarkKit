@@ -2,6 +2,8 @@ using AWMKit.Models;
 using Microsoft.Data.Sqlite;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace AWMKit.Data;
@@ -26,6 +28,14 @@ public sealed class EvidenceStore
     /// </summary>
     public async Task<List<EvidenceRecord>> ListAllAsync()
     {
+        return await ListRecentAsync(int.MaxValue);
+    }
+
+    /// <summary>
+    /// Lists evidence records by created_at descending with a limit.
+    /// </summary>
+    public async Task<List<EvidenceRecord>> ListRecentAsync(int limit = 200)
+    {
         var records = new List<EvidenceRecord>();
 
         if (_database.Connection is null)
@@ -39,10 +49,68 @@ public sealed class EvidenceStore
                    chromaprint_blob, fingerprint_len, fp_config_id
             FROM audio_evidence
             ORDER BY created_at DESC
+            LIMIT @limit
             """;
 
         using var cmd = _database.Connection.CreateCommand();
         cmd.CommandText = query;
+        var normalizedLimit = limit <= 0 ? 200 : limit;
+        cmd.Parameters.AddWithValue("@limit", normalizedLimit);
+
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            records.Add(ReadRecord(reader));
+        }
+
+        return records;
+    }
+
+    /// <summary>
+    /// Lists evidence records using optional identity/tag/key_slot filters.
+    /// </summary>
+    public async Task<List<EvidenceRecord>> ListFilteredAsync(
+        string? identity = null,
+        string? tag = null,
+        int? keySlot = null,
+        int limit = 200)
+    {
+        var records = new List<EvidenceRecord>();
+
+        if (_database.Connection is null)
+        {
+            return records;
+        }
+
+        var sql = new StringBuilder("""
+            SELECT id, created_at, file_path, tag, identity, version, key_slot, timestamp_minutes,
+                   message_hex, sample_rate, channels, sample_count, pcm_sha256,
+                   chromaprint_blob, fingerprint_len, fp_config_id
+            FROM audio_evidence
+            WHERE 1=1
+            """);
+
+        using var cmd = _database.Connection.CreateCommand();
+        if (!string.IsNullOrWhiteSpace(identity))
+        {
+            sql.AppendLine(" AND identity = @identity COLLATE NOCASE");
+            cmd.Parameters.AddWithValue("@identity", identity.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            sql.AppendLine(" AND tag = @tag");
+            cmd.Parameters.AddWithValue("@tag", tag.Trim());
+        }
+        if (keySlot.HasValue)
+        {
+            sql.AppendLine(" AND key_slot = @keySlot");
+            cmd.Parameters.AddWithValue("@keySlot", keySlot.Value);
+        }
+
+        sql.AppendLine(" ORDER BY created_at DESC");
+        sql.AppendLine(" LIMIT @limit");
+        cmd.Parameters.AddWithValue("@limit", limit <= 0 ? 200 : limit);
+        cmd.CommandText = sql.ToString();
 
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
@@ -224,6 +292,47 @@ public sealed class EvidenceStore
 
         var result = await cmd.ExecuteScalarAsync();
         return result is long count ? (int)count : 0;
+    }
+
+    /// <summary>
+    /// Counts total evidence records.
+    /// </summary>
+    public async Task<int> CountAllAsync()
+    {
+        return await CountAsync();
+    }
+
+    /// <summary>
+    /// Deletes evidence rows by id collection.
+    /// </summary>
+    public async Task<int> RemoveByIdsAsync(IEnumerable<long> ids)
+    {
+        if (_database.Connection is null)
+        {
+            return 0;
+        }
+
+        var normalized = ids.Distinct().ToList();
+        if (normalized.Count == 0)
+        {
+            return 0;
+        }
+
+        const string delete = "DELETE FROM audio_evidence WHERE id = @id";
+        using var cmd = _database.Connection.CreateCommand();
+        cmd.CommandText = delete;
+        var parameter = cmd.CreateParameter();
+        parameter.ParameterName = "@id";
+        cmd.Parameters.Add(parameter);
+
+        var deleted = 0;
+        foreach (var id in normalized)
+        {
+            parameter.Value = id;
+            deleted += await cmd.ExecuteNonQueryAsync();
+        }
+
+        return deleted;
     }
 
     private static EvidenceRecord ReadRecord(SqliteDataReader reader)

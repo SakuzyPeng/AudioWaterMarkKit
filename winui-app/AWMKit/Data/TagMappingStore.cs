@@ -2,6 +2,7 @@ using AWMKit.Models;
 using Microsoft.Data.Sqlite;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace AWMKit.Data;
@@ -23,6 +24,14 @@ public sealed class TagMappingStore
     /// </summary>
     public async Task<List<TagMapping>> ListAllAsync()
     {
+        return await ListRecentAsync(int.MaxValue);
+    }
+
+    /// <summary>
+    /// Lists recent tag mappings in username order with an optional limit.
+    /// </summary>
+    public async Task<List<TagMapping>> ListRecentAsync(int limit = 200)
+    {
         var mappings = new List<TagMapping>();
 
         if (_database.Connection is null)
@@ -34,10 +43,13 @@ public sealed class TagMappingStore
             SELECT username, tag, created_at
             FROM tag_mappings
             ORDER BY username COLLATE NOCASE ASC
+            LIMIT @limit
             """;
 
         using var cmd = _database.Connection.CreateCommand();
         cmd.CommandText = query;
+        var normalizedLimit = limit <= 0 ? 200 : limit;
+        cmd.Parameters.AddWithValue("@limit", normalizedLimit);
 
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
@@ -51,6 +63,25 @@ public sealed class TagMappingStore
         }
 
         return mappings;
+    }
+
+    /// <summary>
+    /// Lists mappings filtered by username/tag (case-insensitive).
+    /// </summary>
+    public async Task<List<TagMapping>> ListFilteredAsync(string? search, int limit = 200)
+    {
+        var all = await ListRecentAsync(limit);
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            return all;
+        }
+
+        var query = search.Trim();
+        return all
+            .Where(mapping =>
+                mapping.Username.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                mapping.Tag.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .ToList();
     }
 
     /// <summary>
@@ -217,5 +248,62 @@ public sealed class TagMappingStore
 
         var rowsAffected = await cmd.ExecuteNonQueryAsync();
         return rowsAffected > 0;
+    }
+
+    /// <summary>
+    /// Deletes mappings by username collection.
+    /// </summary>
+    public async Task<int> RemoveByUsernamesAsync(IEnumerable<string> usernames)
+    {
+        if (_database.Connection is null)
+        {
+            return 0;
+        }
+
+        var normalized = usernames
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (normalized.Count == 0)
+        {
+            return 0;
+        }
+
+        const string delete = """
+            DELETE FROM tag_mappings
+            WHERE username = @username COLLATE NOCASE
+            """;
+
+        var deleted = 0;
+        using var cmd = _database.Connection.CreateCommand();
+        cmd.CommandText = delete;
+        var parameter = cmd.CreateParameter();
+        parameter.ParameterName = "@username";
+        cmd.Parameters.Add(parameter);
+
+        foreach (var username in normalized)
+        {
+            parameter.Value = username;
+            deleted += await cmd.ExecuteNonQueryAsync();
+        }
+
+        return deleted;
+    }
+
+    /// <summary>
+    /// Counts total mappings.
+    /// </summary>
+    public async Task<int> CountAsync()
+    {
+        if (_database.Connection is null)
+        {
+            return 0;
+        }
+
+        using var cmd = _database.Connection.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM tag_mappings";
+        var result = await cmd.ExecuteScalarAsync();
+        return result is long count ? (int)count : 0;
     }
 }

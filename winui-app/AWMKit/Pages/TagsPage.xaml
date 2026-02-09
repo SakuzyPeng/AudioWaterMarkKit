@@ -1,5 +1,6 @@
 <Page
     x:Class="AWMKit.Pages.TagsPage"
+    x:Name="RootPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -8,137 +9,341 @@
     mc:Ignorable="d"
     Loaded="Page_Loaded">
     <Page.Resources>
-        <SolidColorBrush x:Key="PageBackdropBrush" Color="#0D5B9BFF"/>
+        <SolidColorBrush x:Key="TagsPageBackdropBrush" Color="#0D5B9BFF"/>
+        <Style x:Key="CapsuleListViewItemStyle" TargetType="ListViewItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            <Setter Property="UseSystemFocusVisuals" Value="False"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style x:Key="CapsuleGridViewItemStyle" TargetType="GridViewItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            <Setter Property="UseSystemFocusVisuals" Value="False"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
     </Page.Resources>
 
-    <ScrollViewer Background="{StaticResource PageBackdropBrush}">
-        <StackPanel Padding="24" Spacing="24" MaxWidth="800">
-            <!-- Page Header -->
-            <TextBlock Text="Tag Management" Style="{StaticResource TitleTextBlockStyle}"/>
+    <Grid Padding="24" RowSpacing="12" Background="{StaticResource TagsPageBackdropBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-            <!-- Add New Tag -->
-            <Border Style="{StaticResource CardBorderStyle}">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Add New Tag Mapping" Style="{StaticResource SectionHeaderStyle}"/>
+        <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Padding="14">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="170"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-                    <TextBlock Text="Identity" Style="{StaticResource LabelStyle}"/>
-                    <TextBox x:Name="IdentityTextBox"
-                             PlaceholderText="e.g., alice@example.com"
-                             Text="{x:Bind ViewModel.NewIdentity, Mode=TwoWay}"
-                             Style="{StaticResource FormTextBoxStyle}"/>
+                <TextBox Grid.Column="0"
+                         PlaceholderText="搜索用户名 / Tag / Identity / 路径 / SHA256"
+                         Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
-                    <TextBlock Text="Tag (8 characters)" Style="{StaticResource LabelStyle}"/>
-                    <Grid>
+                <ComboBox Grid.Column="1"
+                          SelectedIndex="{x:Bind ViewModel.SearchScopeIndex, Mode=TwoWay}">
+                    <ComboBoxItem Content="全部"/>
+                    <ComboBoxItem Content="映射"/>
+                    <ComboBoxItem Content="证据"/>
+                </ComboBox>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Border Style="{StaticResource ListItemBorderStyle}" Padding="8,4">
+                        <TextBlock Text="{x:Bind ViewModel.MappingTotalBadgeText, Mode=OneWay}"/>
+                    </Border>
+                    <Border Style="{StaticResource ListItemBorderStyle}" Padding="8,4">
+                        <TextBlock Text="{x:Bind ViewModel.EvidenceTotalBadgeText, Mode=OneWay}"/>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <StackPanel Grid.Row="1" Spacing="8">
+            <InfoBar Severity="Error"
+                     Title="操作失败"
+                     Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                     IsOpen="{x:Bind ViewModel.HasErrorMessage, Mode=OneWay}"
+                     IsClosable="True"
+                     CloseButtonClick="ErrorInfoBar_CloseButtonClick"/>
+            <InfoBar Severity="Success"
+                     Title="操作提示"
+                     Message="{x:Bind ViewModel.InfoMessage, Mode=OneWay}"
+                     IsOpen="{x:Bind ViewModel.HasInfoMessage, Mode=OneWay}"
+                     IsClosable="True"
+                     CloseButtonClick="InfoInfoBar_CloseButtonClick"/>
+        </StackPanel>
+
+        <Grid Grid.Row="2" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0"
+                    Style="{StaticResource CardBorderStyle}"
+                    Padding="12"
+                    Visibility="{x:Bind ViewModel.ShowMappingsPanel, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-
-                        <TextBox x:Name="TagTextBox"
-                                 PlaceholderText="e.g., ABCD1234"
-                                 Text="{x:Bind ViewModel.NewTag, Mode=TwoWay}"
-                                 MaxLength="8"/>
-                        <Button Grid.Column="1"
-                                Content="Generate"
-                                Command="{x:Bind ViewModel.SuggestTagCommand}"
-                                Margin="8,0,0,0"/>
+                        <TextBlock Text="标签映射" Style="{StaticResource SectionHeaderStyle}" Margin="0"/>
+                        <Border Grid.Column="1" Style="{StaticResource ListItemBorderStyle}" Padding="8,4">
+                            <TextBlock Text="{x:Bind ViewModel.MappingSummaryText, Mode=OneWay}"/>
+                        </Border>
                     </Grid>
 
-                    <TextBlock Text="Display Name (Optional)" Style="{StaticResource LabelStyle}"/>
-                    <TextBox x:Name="DisplayNameTextBox"
-                             PlaceholderText="e.g., Alice Smith"
-                             Text="{x:Bind ViewModel.NewDisplayName, Mode=TwoWay}"
-                             Style="{StaticResource FormTextBoxStyle}"/>
+                    <Grid Grid.Row="1">
+                        <TextBlock Text="{x:Bind ViewModel.MappingEmptyHint, Mode=OneWay}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Visibility="{x:Bind ViewModel.ShowMappingEmptyHint, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
-                    <Button Content="Save Mapping"
-                            Command="{x:Bind ViewModel.SaveMappingCommand}"
-                            IsEnabled="{x:Bind ViewModel.CanSave, Mode=OneWay}"
-                            Style="{StaticResource PrimaryButtonStyle}"/>
-
-                    <InfoBar Severity="Error"
-                             Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
-                             IsOpen="{x:Bind ViewModel.ErrorMessage, Converter={StaticResource NullToFalseConverter}, Mode=OneWay}"/>
-                </StackPanel>
+                        <GridView ItemsSource="{x:Bind ViewModel.FilteredMappings, Mode=OneWay}"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="MappingsListView_ItemClick"
+                                  ItemContainerStyle="{StaticResource CapsuleGridViewItemStyle}"
+                                  SelectionMode="None"
+                                  IsSwipeEnabled="False"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                  ScrollViewer.HorizontalScrollMode="Disabled"
+                                  Visibility="{x:Bind ViewModel.ShowMappingEmptyHint, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                            <GridView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsWrapGrid Orientation="Horizontal" ItemWidth="240"/>
+                                </ItemsPanelTemplate>
+                            </GridView.ItemsPanel>
+                            <GridView.Resources>
+                                <SolidColorBrush x:Key="ListViewItemBackground" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBorderBrush" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBorderBrushPointerOver" Color="Transparent"/>
+                                <SolidColorBrush x:Key="GridViewItemBackground" Color="Transparent"/>
+                                <SolidColorBrush x:Key="GridViewItemBackgroundPointerOver" Color="Transparent"/>
+                                <SolidColorBrush x:Key="GridViewItemBackgroundPressed" Color="Transparent"/>
+                                <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="Transparent"/>
+                                <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="Transparent"/>
+                                <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="Transparent"/>
+                                <SolidColorBrush x:Key="GridViewItemBorderBrush" Color="Transparent"/>
+                                <SolidColorBrush x:Key="GridViewItemBorderBrushPointerOver" Color="Transparent"/>
+                            </GridView.Resources>
+                            <GridView.ItemTemplate>
+                                <DataTemplate x:DataType="models:TagMapping">
+                                    <Border Margin="0,0,8,8"
+                                            Padding="9"
+                                            CornerRadius="8"
+                                            BorderThickness="1"
+                                            BorderBrush="{x:Bind IsSelected, Converter={StaticResource BoolToSelectionBorderBrushConverter}}"
+                                            Background="{x:Bind IsSelected, Converter={StaticResource BoolToSelectionBackgroundBrushConverter}}">
+                                        <Grid ColumnSpacing="10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <FontIcon Glyph="&#xE77B;" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                <TextBlock Text="{x:Bind Username}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{x:Bind Tag}" FontFamily="Consolas" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                <FontIcon Glyph="&#xE73E;"
+                                                          HorizontalAlignment="Center"
+                                                          Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                                          Visibility="{x:Bind IsSelected, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                <TextBlock Text="{x:Bind CreatedAt, Converter={StaticResource ChineseThreeLineDateTimeConverter}}"
+                                                           FontSize="11"
+                                                           TextAlignment="Center"
+                                                           TextWrapping="Wrap"
+                                                           Width="90"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </GridView.ItemTemplate>
+                        </GridView>
+                    </Grid>
+                </Grid>
             </Border>
 
-            <!-- Existing Tags List -->
-            <Border Style="{StaticResource CardBorderStyle}">
-                <StackPanel Spacing="12">
-                    <Grid>
-                        <TextBlock Text="Existing Tag Mappings" Style="{StaticResource SectionHeaderStyle}"/>
-                        <Button Content="Refresh"
-                                Command="{x:Bind ViewModel.LoadMappingsCommand}"
-                                HorizontalAlignment="Right"
-                                Style="{StaticResource SecondaryButtonStyle}"/>
+            <Border Grid.Column="1"
+                    Style="{StaticResource CardBorderStyle}"
+                    Padding="12"
+                    Visibility="{x:Bind ViewModel.ShowEvidencePanel, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="音频证据" Style="{StaticResource SectionHeaderStyle}" Margin="0"/>
+                        <Border Grid.Column="1" Style="{StaticResource ListItemBorderStyle}" Padding="8,4">
+                            <TextBlock Text="{x:Bind ViewModel.EvidenceSummaryText, Mode=OneWay}"/>
+                        </Border>
                     </Grid>
 
-                    <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
-                                  Width="40"
-                                  Height="40"
-                                  Visibility="{x:Bind ViewModel.IsLoading, Converter={StaticResource BoolToVisibilityConverter}, Mode=OneWay}"/>
+                    <Grid Grid.Row="1">
+                        <TextBlock Text="{x:Bind ViewModel.EvidenceEmptyHint, Mode=OneWay}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Visibility="{x:Bind ViewModel.ShowEvidenceEmptyHint, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
-                    <ListView ItemsSource="{x:Bind ViewModel.TagMappings}"
-                              SelectionMode="None"
-                              Visibility="{x:Bind ViewModel.IsLoading, Converter={StaticResource InverseBoolToVisibilityConverter}, Mode=OneWay}">
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="models:TagMapping">
-                                <Border Style="{StaticResource ListItemBorderStyle}">
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="120"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-
-                                        <!-- Identity -->
-                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Identity:" FontWeight="SemiBold"/>
-                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind Identity}"/>
-
-                                        <!-- Tag -->
-                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag:" FontWeight="SemiBold" Margin="0,4,0,0"/>
-                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind Tag}" Margin="0,4,0,0"/>
-
-                                        <!-- Display Name -->
-                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Display Name:" FontWeight="SemiBold" Margin="0,4,0,0"
-                                                   Visibility="{x:Bind DisplayName, Converter={StaticResource NullToCollapsedConverter}}"/>
-                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind DisplayName}" Margin="0,4,0,0"
-                                                   Visibility="{x:Bind DisplayName, Converter={StaticResource NullToCollapsedConverter}}"/>
-
-                                        <!-- Updated At -->
-                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Updated:" FontWeight="SemiBold" Margin="0,4,0,0"/>
-                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind UpdatedAt, Converter={StaticResource DateTimeConverter}}" Margin="0,4,0,0"
-                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-
-                                        <!-- Action Buttons -->
-                                        <StackPanel Grid.Row="0" Grid.RowSpan="4" Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                            <Button Content="Delete Evidence"
-                                                    Click="DeleteEvidenceButton_Click"
-                                                    Tag="{x:Bind}"
-                                                    Style="{StaticResource SecondaryButtonStyle}"/>
-                                            <Button Content="Delete Mapping"
-                                                    Click="DeleteMappingButton_Click"
-                                                    Tag="{x:Bind}"
-                                                    Style="{StaticResource SecondaryButtonStyle}"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-
-                    <TextBlock Text="No tag mappings found"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               HorizontalAlignment="Center"
-                               Margin="0,16,0,0"
-                               Visibility="{x:Bind ViewModel.TagMappings.Count, Converter={StaticResource ZeroToVisibilityConverter}, Mode=OneWay}"/>
-                </StackPanel>
+                        <ListView ItemsSource="{x:Bind ViewModel.FilteredEvidence, Mode=OneWay}"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="EvidenceListView_ItemClick"
+                                  ItemContainerStyle="{StaticResource CapsuleListViewItemStyle}"
+                                  SelectionMode="None"
+                                  Visibility="{x:Bind ViewModel.ShowEvidenceEmptyHint, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                            <ListView.Resources>
+                                <SolidColorBrush x:Key="ListViewItemBackground" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBorderBrush" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBorderBrushPointerOver" Color="Transparent"/>
+                            </ListView.Resources>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="models:EvidenceRecord">
+                                    <Border Margin="0,0,0,8"
+                                            Padding="12"
+                                            CornerRadius="8"
+                                            BorderThickness="1"
+                                            BorderBrush="{x:Bind IsSelected, Converter={StaticResource BoolToSelectionBorderBrushConverter}}"
+                                            Background="{x:Bind IsSelected, Converter={StaticResource BoolToSelectionBackgroundBrushConverter}}">
+                                        <Grid ColumnSpacing="10" RowSpacing="4">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <FontIcon Grid.RowSpan="2" Glyph="&#xE8D6;" VerticalAlignment="Top" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <TextBlock Grid.Column="1" Text="{x:Bind Identity}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Column="2"
+                                                       Grid.RowSpan="3"
+                                                       VerticalAlignment="Center"
+                                                       HorizontalAlignment="Center"
+                                                       Margin="0,10,0,0"
+                                                       Width="90"
+                                                       Text="{x:Bind CreatedAtDateTime, Converter={StaticResource ChineseThreeLineDateTimeConverter}}"
+                                                       FontSize="11"
+                                                       TextAlignment="Center"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{x:Bind TagSlotDisplayText}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{x:Bind FilePath}" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            <FontIcon Grid.Column="2"
+                                                      Grid.Row="0"
+                                                      Glyph="&#xE73E;"
+                                                      HorizontalAlignment="Right"
+                                                      Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                                      Visibility="{x:Bind IsSelected, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+                </Grid>
             </Border>
-        </StackPanel>
-    </ScrollViewer>
+        </Grid>
+
+        <Border Grid.Row="3" Style="{StaticResource CardBorderStyle}" Padding="12">
+            <Grid>
+                <StackPanel Orientation="Horizontal"
+                            Spacing="8"
+                            Visibility="{x:Bind ViewModel.IsNormalMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Button Content="添加映射"
+                            Click="AddMappingButton_Click"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="{x:Bind ViewModel.CanOpenAddDialog, Mode=OneWay}"/>
+                    <Button Content="删除标签"
+                            Click="EnterDeleteMappingsModeButton_Click"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{x:Bind ViewModel.CanEnterMappingsDeleteMode, Mode=OneWay}"/>
+                    <Button Content="删除证据"
+                            Click="EnterDeleteEvidenceModeButton_Click"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{x:Bind ViewModel.CanEnterEvidenceDeleteMode, Mode=OneWay}"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal"
+                            Spacing="8"
+                            Visibility="{x:Bind ViewModel.IsMappingsDeleteMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Button Content="退出删除"
+                            Click="ExitDeleteModeButton_Click"
+                            Style="{StaticResource SecondaryButtonStyle}"/>
+                    <Button Content="全选"
+                            Click="SelectAllButton_Click"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{x:Bind ViewModel.CanSelectAll, Mode=OneWay}"/>
+                    <Button Content="全不选"
+                            Click="ClearSelectionButton_Click"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{x:Bind ViewModel.CanClearSelection, Mode=OneWay}"/>
+                    <Button Content="执行删除"
+                            Click="ExecuteDeleteButton_Click"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="{x:Bind ViewModel.CanExecuteDelete, Mode=OneWay}"/>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal"
+                            Spacing="8"
+                            Visibility="{x:Bind ViewModel.IsEvidenceDeleteMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Button Content="退出删除"
+                            Click="ExitDeleteModeButton_Click"
+                            Style="{StaticResource SecondaryButtonStyle}"/>
+                    <Button Content="全选"
+                            Click="SelectAllButton_Click"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{x:Bind ViewModel.CanSelectAll, Mode=OneWay}"/>
+                    <Button Content="全不选"
+                            Click="ClearSelectionButton_Click"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{x:Bind ViewModel.CanClearSelection, Mode=OneWay}"/>
+                    <Button Content="执行删除"
+                            Click="ExecuteDeleteButton_Click"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="{x:Bind ViewModel.CanExecuteDelete, Mode=OneWay}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
 </Page>

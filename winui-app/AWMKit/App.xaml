@@ -19,9 +19,12 @@
             <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
             <converters:ZeroToVisibilityConverter x:Key="ZeroToVisibilityConverter"/>
             <converters:DateTimeConverter x:Key="DateTimeConverter"/>
+            <converters:ChineseThreeLineDateTimeConverter x:Key="ChineseThreeLineDateTimeConverter"/>
             <converters:DisplayNameConverter x:Key="DisplayNameConverter"/>
             <converters:BoolToSuccessColorConverter x:Key="BoolToSuccessColorConverter"/>
             <converters:BoolToDetectionTextConverter x:Key="BoolToDetectionTextConverter"/>
+            <converters:BoolToSelectionBorderBrushConverter x:Key="BoolToSelectionBorderBrushConverter"/>
+            <converters:BoolToSelectionBackgroundBrushConverter x:Key="BoolToSelectionBackgroundBrushConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

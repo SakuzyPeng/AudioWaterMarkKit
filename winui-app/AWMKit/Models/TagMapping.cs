@@ -38,4 +38,9 @@ public sealed class TagMapping
     public DateTime UpdatedAt => DateTimeOffset.FromUnixTimeSeconds(CreatedAtUnix).UtcDateTime;
 
     public DateTime CreatedAt => UpdatedAt;
+
+    /// <summary>
+    /// UI-only selected state for delete mode.
+    /// </summary>
+    public bool IsSelected { get; set; }
 }

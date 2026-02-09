@@ -30,4 +30,11 @@ public sealed class EvidenceRecord
     public string FileHash => PcmSha256;
     public string Message => MessageHex;
     public string Pattern => "-";
+    public string TagDisplayText => $"Tag {Tag}";
+    public string TagSlotDisplayText => $"Tag {Tag} · 槽位 {KeySlot}";
+
+    /// <summary>
+    /// UI-only selected state for delete mode.
+    /// </summary>
+    public bool IsSelected { get; set; }
 }

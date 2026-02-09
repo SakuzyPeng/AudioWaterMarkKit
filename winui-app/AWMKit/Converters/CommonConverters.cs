@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Data;
+using Microsoft.UI.Xaml.Media;
 using System;
 
 namespace AWMKit.Converters;
@@ -137,6 +138,36 @@ public sealed class DateTimeConverter : IValueConverter
 }
 
 /// <summary>
+/// Formats DateTime into 3 centered Chinese lines:
+/// line1: 年, line2: 月日, line3: 时分秒.
+/// </summary>
+public sealed class ChineseThreeLineDateTimeConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        DateTime? dt = value switch
+        {
+            DateTime dateTime => dateTime,
+            DateTimeOffset dateTimeOffset => dateTimeOffset.DateTime,
+            _ => null
+        };
+
+        if (dt is not DateTime raw)
+        {
+            return string.Empty;
+        }
+
+        var local = raw.ToLocalTime();
+        return $"{local:yyyy年}\n{local:M月d日}\n{local:HH:mm:ss}";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
 /// Formats display name with parentheses (null-safe).
 /// </summary>
 public sealed class DisplayNameConverter : IValueConverter
@@ -182,6 +213,62 @@ public sealed class BoolToDetectionTextConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, string language)
     {
         return value is bool success && success ? "Detected" : "Not Detected";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// Converts selected flag to row border brush.
+/// </summary>
+public sealed class BoolToSelectionBorderBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var selected = value is bool isSelected && isSelected;
+        var resources = Application.Current.Resources;
+        if (selected && resources.TryGetValue("AccentFillColorDefaultBrush", out var accent) && accent is Brush accentBrush)
+        {
+            return accentBrush;
+        }
+
+        if (resources.TryGetValue("CardStrokeColorDefaultBrush", out var defaultBorder) && defaultBorder is Brush defaultBrush)
+        {
+            return defaultBrush;
+        }
+
+        return resources["NeutralBrush"];
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
+/// Converts selected flag to row background brush.
+/// </summary>
+public sealed class BoolToSelectionBackgroundBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var selected = value is bool isSelected && isSelected;
+        var resources = Application.Current.Resources;
+        if (!selected)
+        {
+            return resources["SubtleFillColorTransparentBrush"];
+        }
+
+        if (resources.TryGetValue("AccentFillColorSecondaryBrush", out var accent) && accent is Brush accentBrush)
+        {
+            return accentBrush;
+        }
+
+        return resources["SubtleFillColorTransparentBrush"];
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)
