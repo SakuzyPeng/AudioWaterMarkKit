@@ -750,6 +750,182 @@ pub unsafe extern "C" fn awm_audio_is_available(handle: *const AWMAudioHandle) -
     (*handle).inner.is_available()
 }
 
+/// 获取 audiowmark 二进制路径
+///
+/// # Safety
+/// - `handle` 必须是有效的 Audio 句柄
+/// - `out` 必须指向至少 `out_len` 字节的缓冲区
+/// - 返回 `AWM_SUCCESS` 并写入 null-terminated 路径，或错误码
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_binary_path(
+    handle: *const AWMAudioHandle,
+    out: *mut c_char,
+    out_len: usize,
+) -> i32 {
+    if handle.is_null() || out.is_null() || out_len == 0 {
+        return AWMError::NullPointer as i32;
+    }
+
+    let path_str = (*handle).inner.binary_path().to_string_lossy();
+    let bytes = path_str.as_bytes();
+    let max = out_len.saturating_sub(1);
+    let copy_len = bytes.len().min(max);
+    ptr::copy_nonoverlapping(bytes.as_ptr(), out as *mut u8, copy_len);
+    *out.add(copy_len) = 0;
+    AWMError::Success as i32
+}
+
+// ============================================================================
+// Key Management (requires "app" feature)
+// ============================================================================
+
+/// 检查密钥是否已存在
+#[no_mangle]
+pub extern "C" fn awm_key_exists() -> bool {
+    #[cfg(feature = "app")]
+    {
+        match crate::app::KeyStore::new() {
+            Ok(ks) => ks.exists(),
+            Err(_) => false,
+        }
+    }
+    #[cfg(not(feature = "app"))]
+    {
+        false
+    }
+}
+
+/// 加载密钥到输出缓冲区
+///
+/// # Safety
+/// - `out_key` 必须指向至少 `out_key_cap` 字节的缓冲区
+/// - `out_key_cap` 必须 >= 32
+/// - 成功时写入 32 字节密钥
+#[no_mangle]
+pub unsafe extern "C" fn awm_key_load(out_key: *mut u8, out_key_cap: usize) -> i32 {
+    if out_key.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    #[cfg(feature = "app")]
+    {
+        if out_key_cap < crate::app::KEY_LEN {
+            return AWMError::InvalidMessageLength as i32;
+        }
+        match crate::app::KeyStore::new().and_then(|ks| ks.load()) {
+            Ok(key) => {
+                ptr::copy_nonoverlapping(key.as_ptr(), out_key, key.len());
+                AWMError::Success as i32
+            }
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = out_key_cap;
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// 生成新密钥并保存，返回密钥内容
+///
+/// # Safety
+/// - `out_key` 必须指向至少 `out_key_cap` 字节的缓冲区
+/// - `out_key_cap` 必须 >= 32
+#[no_mangle]
+pub unsafe extern "C" fn awm_key_generate_and_save(
+    out_key: *mut u8,
+    out_key_cap: usize,
+) -> i32 {
+    if out_key.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    #[cfg(feature = "app")]
+    {
+        if out_key_cap < crate::app::KEY_LEN {
+            return AWMError::InvalidMessageLength as i32;
+        }
+        let key = crate::app::generate_key();
+        match crate::app::KeyStore::new().and_then(|ks| {
+            ks.save(&key)?;
+            Ok(())
+        }) {
+            Ok(()) => {
+                ptr::copy_nonoverlapping(key.as_ptr(), out_key, key.len());
+                AWMError::Success as i32
+            }
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = out_key_cap;
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// 删除已保存的密钥
+#[no_mangle]
+pub extern "C" fn awm_key_delete() -> i32 {
+    #[cfg(feature = "app")]
+    {
+        match crate::app::KeyStore::new().and_then(|ks| ks.delete()) {
+            Ok(()) => AWMError::Success as i32,
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+    #[cfg(not(feature = "app"))]
+    {
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+// ============================================================================
+// Tag Suggestion (requires "app" feature)
+// ============================================================================
+
+/// 从用户名生成推荐标签（SHA256 哈希 → Base32 编码）
+///
+/// # Safety
+/// - `username` 必须是有效的 C 字符串
+/// - `out_tag` 必须指向至少 9 字节的缓冲区
+#[no_mangle]
+pub unsafe extern "C" fn awm_tag_suggest(
+    username: *const c_char,
+    out_tag: *mut c_char,
+) -> i32 {
+    if username.is_null() || out_tag.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    let username_str = match CStr::from_ptr(username).to_str() {
+        Ok(s) => s,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    #[cfg(feature = "app")]
+    {
+        match crate::app::TagStore::suggest(username_str) {
+            Ok(tag) => {
+                let tag_str = tag.as_str();
+                ptr::copy_nonoverlapping(tag_str.as_ptr(), out_tag as *mut u8, 8);
+                *out_tag.add(8) = 0;
+                AWMError::Success as i32
+            }
+            Err(_) => AWMError::InvalidTag as i32,
+        }
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = username_str;
+        AWMError::InvalidTag as i32
+    }
+}
+
 // ============================================================================
 // Multichannel Operations
 // ============================================================================

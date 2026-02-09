@@ -1,0 +1,26 @@
+<Application
+    x:Class="AWMKit.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="using:AWMKit.Converters">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <ResourceDictionary Source="Styles/DesignTokens.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Value Converters -->
+            <converters:NullToFalseConverter x:Key="NullToFalseConverter"/>
+            <converters:NullToCollapsedConverter x:Key="NullToCollapsedConverter"/>
+            <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
+            <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter"/>
+            <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
+            <converters:ZeroToVisibilityConverter x:Key="ZeroToVisibilityConverter"/>
+            <converters:DateTimeConverter x:Key="DateTimeConverter"/>
+            <converters:DisplayNameConverter x:Key="DisplayNameConverter"/>
+            <converters:BoolToSuccessColorConverter x:Key="BoolToSuccessColorConverter"/>
+            <converters:BoolToDetectionTextConverter x:Key="BoolToDetectionTextConverter"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

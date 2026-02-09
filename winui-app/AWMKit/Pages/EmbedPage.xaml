@@ -1,0 +1,138 @@
+<Page
+    x:Class="AWMKit.Pages.EmbedPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer>
+        <StackPanel Padding="24" Spacing="24" MaxWidth="800">
+            <!-- Page Header -->
+            <TextBlock Text="Embed Watermark" Style="{StaticResource TitleTextBlockStyle}"/>
+
+            <!-- Identity Input -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="User Identity" Style="{StaticResource SectionHeaderStyle}"/>
+                    <TextBox x:Name="IdentityTextBox"
+                             PlaceholderText="e.g., alice@example.com"
+                             Text="{x:Bind ViewModel.Identity, Mode=TwoWay}"
+                             Style="{StaticResource FormTextBoxStyle}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- File Selection -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Input Files" Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Add Files"
+                                Click="AddFilesButton_Click"
+                                Style="{StaticResource SecondaryButtonStyle}"/>
+                        <Button Content="Clear"
+                                Command="{x:Bind ViewModel.ClearFilesCommand}"
+                                Style="{StaticResource SecondaryButtonStyle}"/>
+                    </StackPanel>
+
+                    <ListView x:Name="InputFilesList"
+                              ItemsSource="{x:Bind ViewModel.InputFiles}"
+                              Height="150"
+                              BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                              BorderThickness="1"
+                              CornerRadius="4">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="{x:Bind}" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1"
+                                            Content="&#xE711;"
+                                            FontFamily="Segoe Fluent Icons"
+                                            Click="RemoveFileButton_Click"
+                                            Tag="{x:Bind}"
+                                            Background="Transparent"
+                                            BorderThickness="0"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </StackPanel>
+            </Border>
+
+            <!-- Output Settings -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Output Settings" Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <TextBlock Text="Output Directory" Style="{StaticResource LabelStyle}"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox x:Name="OutputDirectoryTextBox"
+                                 PlaceholderText="Select output directory..."
+                                 Text="{x:Bind ViewModel.OutputDirectory, Mode=TwoWay}"
+                                 IsReadOnly="True"/>
+                        <Button Grid.Column="1"
+                                Content="Browse"
+                                Click="BrowseOutputButton_Click"
+                                Margin="8,0,0,0"/>
+                    </Grid>
+
+                    <TextBlock Text="Strength (1-20)" Style="{StaticResource LabelStyle}" Margin="0,8,0,0"/>
+                    <Slider x:Name="StrengthSlider"
+                            Minimum="1"
+                            Maximum="20"
+                            Value="{x:Bind ViewModel.Strength, Mode=TwoWay}"
+                            TickFrequency="1"
+                            SnapsTo="Ticks"
+                            Header="{x:Bind ViewModel.Strength, Mode=OneWay}"/>
+
+                    <CheckBox Content="Overwrite existing files"
+                              IsChecked="{x:Bind ViewModel.Overwrite, Mode=TwoWay}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Progress Section -->
+            <Border Style="{StaticResource CardBorderStyle}"
+                    Visibility="{x:Bind ViewModel.IsProcessing, Mode=OneWay}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Processing..." Style="{StaticResource SectionHeaderStyle}"/>
+                    <TextBlock Text="{x:Bind ViewModel.CurrentFile, Mode=OneWay}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <ProgressBar Value="{x:Bind ViewModel.ProcessedCount, Mode=OneWay}"
+                                 Maximum="{x:Bind ViewModel.TotalCount, Mode=OneWay}"
+                                 Style="{StaticResource ProcessProgressBarStyle}"/>
+                    <TextBlock>
+                        <Run Text="{x:Bind ViewModel.ProcessedCount, Mode=OneWay}"/>
+                        <Run Text="/"/>
+                        <Run Text="{x:Bind ViewModel.TotalCount, Mode=OneWay}"/>
+                        <Run Text="files processed"/>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <!-- Error Message -->
+            <InfoBar x:Name="ErrorInfoBar"
+                     Severity="Error"
+                     Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                     IsOpen="{x:Bind ViewModel.ErrorMessage, Converter={StaticResource NullToFalseConverter}, Mode=OneWay}"/>
+
+            <!-- Action Buttons -->
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Embed Watermark"
+                        Command="{x:Bind ViewModel.EmbedCommand}"
+                        IsEnabled="{x:Bind ViewModel.CanEmbed, Mode=OneWay}"
+                        Style="{StaticResource PrimaryButtonStyle}"/>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

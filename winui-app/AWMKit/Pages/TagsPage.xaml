@@ -1,0 +1,141 @@
+<Page
+    x:Class="AWMKit.Pages.TagsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:models="using:AWMKit.Models"
+    mc:Ignorable="d"
+    Loaded="Page_Loaded">
+
+    <ScrollViewer>
+        <StackPanel Padding="24" Spacing="24" MaxWidth="800">
+            <!-- Page Header -->
+            <TextBlock Text="Tag Management" Style="{StaticResource TitleTextBlockStyle}"/>
+
+            <!-- Add New Tag -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Add New Tag Mapping" Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <TextBlock Text="Identity" Style="{StaticResource LabelStyle}"/>
+                    <TextBox x:Name="IdentityTextBox"
+                             PlaceholderText="e.g., alice@example.com"
+                             Text="{x:Bind ViewModel.NewIdentity, Mode=TwoWay}"
+                             Style="{StaticResource FormTextBoxStyle}"/>
+
+                    <TextBlock Text="Tag (8 characters)" Style="{StaticResource LabelStyle}"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBox x:Name="TagTextBox"
+                                 PlaceholderText="e.g., ABCD1234"
+                                 Text="{x:Bind ViewModel.NewTag, Mode=TwoWay}"
+                                 MaxLength="8"/>
+                        <Button Grid.Column="1"
+                                Content="Generate"
+                                Command="{x:Bind ViewModel.SuggestTagCommand}"
+                                Margin="8,0,0,0"/>
+                    </Grid>
+
+                    <TextBlock Text="Display Name (Optional)" Style="{StaticResource LabelStyle}"/>
+                    <TextBox x:Name="DisplayNameTextBox"
+                             PlaceholderText="e.g., Alice Smith"
+                             Text="{x:Bind ViewModel.NewDisplayName, Mode=TwoWay}"
+                             Style="{StaticResource FormTextBoxStyle}"/>
+
+                    <Button Content="Save Mapping"
+                            Command="{x:Bind ViewModel.SaveMappingCommand}"
+                            IsEnabled="{x:Bind ViewModel.CanSave, Mode=OneWay}"
+                            Style="{StaticResource PrimaryButtonStyle}"/>
+
+                    <InfoBar Severity="Error"
+                             Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                             IsOpen="{x:Bind ViewModel.ErrorMessage, Converter={StaticResource NullToFalseConverter}, Mode=OneWay}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Existing Tags List -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel Spacing="12">
+                    <Grid>
+                        <TextBlock Text="Existing Tag Mappings" Style="{StaticResource SectionHeaderStyle}"/>
+                        <Button Content="Refresh"
+                                Command="{x:Bind ViewModel.LoadMappingsCommand}"
+                                HorizontalAlignment="Right"
+                                Style="{StaticResource SecondaryButtonStyle}"/>
+                    </Grid>
+
+                    <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
+                                  Width="40"
+                                  Height="40"
+                                  Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay}"/>
+
+                    <ListView ItemsSource="{x:Bind ViewModel.TagMappings}"
+                              SelectionMode="None"
+                              Visibility="{x:Bind ViewModel.IsLoading, Converter={StaticResource InverseBoolToVisibilityConverter}, Mode=OneWay}">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="models:TagMapping">
+                                <Border Style="{StaticResource ListItemBorderStyle}">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="120"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Identity -->
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Identity:" FontWeight="SemiBold"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{x:Bind Identity}"/>
+
+                                        <!-- Tag -->
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Tag:" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind Tag}" Margin="0,4,0,0"/>
+
+                                        <!-- Display Name -->
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Display Name:" FontWeight="SemiBold" Margin="0,4,0,0"
+                                                   Visibility="{x:Bind DisplayName, Converter={StaticResource NullToCollapsedConverter}}"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind DisplayName}" Margin="0,4,0,0"
+                                                   Visibility="{x:Bind DisplayName, Converter={StaticResource NullToCollapsedConverter}}"/>
+
+                                        <!-- Updated At -->
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Updated:" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{x:Bind UpdatedAt, Converter={StaticResource DateTimeConverter}}" Margin="0,4,0,0"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+
+                                        <!-- Action Buttons -->
+                                        <StackPanel Grid.Row="0" Grid.RowSpan="4" Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <Button Content="Delete Evidence"
+                                                    Click="DeleteEvidenceButton_Click"
+                                                    Tag="{x:Bind}"
+                                                    Style="{StaticResource SecondaryButtonStyle}"/>
+                                            <Button Content="Delete Mapping"
+                                                    Click="DeleteMappingButton_Click"
+                                                    Tag="{x:Bind}"
+                                                    Style="{StaticResource SecondaryButtonStyle}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <TextBlock Text="No tag mappings found"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               HorizontalAlignment="Center"
+                               Margin="0,16,0,0"
+                               Visibility="{x:Bind ViewModel.TagMappings.Count, Converter={StaticResource ZeroToVisibilityConverter}, Mode=OneWay}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

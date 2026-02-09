@@ -10,6 +10,7 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'src/**'
+      - 'winui-app/**'
 
 permissions:
   contents: read
@@ -26,6 +27,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -57,20 +63,33 @@ jobs:
       - name: Build FFI cdylib (release)
         run: cargo build --lib --features ffi,app,bundled --release --target x86_64-pc-windows-msvc
 
+      - name: Copy awmkit.dll to WinUI project
+        shell: pwsh
+        run: |
+          Copy-Item target/x86_64-pc-windows-msvc/release/awmkit.dll winui-app/AWMKit/awmkit.dll -Force
+
+      - name: Build WinUI App (Release)
+        shell: pwsh
+        run: |
+          cd winui-app/AWMKit
+          dotnet publish -c Release -r win-x64 --self-contained
+
       - name: Prepare installer staging
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path staging/app/bin | Out-Null
           New-Item -ItemType Directory -Force -Path staging/app/bundled/bin | Out-Null
 
+          # Copy CLI binary
           Copy-Item target/x86_64-pc-windows-msvc/release/awmkit.exe staging/app/bin/awmkit.exe -Force
 
-          # WinUI 可执行文件尚未入仓，先用 awmkit.exe 占位，保证打包链路可验证
-          Copy-Item target/x86_64-pc-windows-msvc/release/awmkit.exe staging/app/AWMKit.exe -Force
-
-          # Rust cdylib
-          if (Test-Path target/x86_64-pc-windows-msvc/release/awmkit.dll) {
-            Copy-Item target/x86_64-pc-windows-msvc/release/awmkit.dll staging/app/awmkit.dll -Force
+          # Copy WinUI app published output
+          $publishDir = "winui-app/AWMKit/bin/Release/net10.0-windows10.0.19041.0/win-x64/publish"
+          if (Test-Path $publishDir) {
+            Copy-Item $publishDir/* staging/app/ -Recurse -Force
+          } else {
+            Write-Warning "WinUI publish directory not found, using placeholder"
+            Copy-Item target/x86_64-pc-windows-msvc/release/awmkit.exe staging/app/AWMKit.exe -Force
           }
 
           # bundled 解压产物占位（用于验证目录结构）
@@ -94,11 +113,12 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-winui-prep-${{ github.run_id }}
+          name: windows-winui-${{ github.run_id }}
           path: |
             target/x86_64-pc-windows-msvc/release/awmkit.exe
             target/x86_64-pc-windows-msvc/release/awmkit.dll
             dist/windows/*.exe
+            staging/app/**
             docs/winui-equivalence-spec.md
             docs/winui-data-contract.md
             docs/winui-design-tokens.md

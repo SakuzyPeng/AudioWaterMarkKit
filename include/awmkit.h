@@ -320,6 +320,69 @@ int32_t awm_evidence_record_file(
  */
 bool awm_audio_is_available(const AWMAudioHandle* handle);
 
+/**
+ * Get audiowmark binary path
+ *
+ * @param handle   Audio handle
+ * @param out      Output buffer for path string
+ * @param out_len  Buffer capacity in bytes
+ * @return         AWM_SUCCESS or error code
+ */
+int32_t awm_audio_binary_path(
+    const AWMAudioHandle* handle,
+    char* out,
+    size_t out_len
+);
+
+// ============================================================================
+// Key Management (requires "app" feature at build time)
+// ============================================================================
+
+/**
+ * Check if a signing key exists
+ *
+ * @return  true if key is stored
+ */
+bool awm_key_exists(void);
+
+/**
+ * Load the signing key
+ *
+ * @param out_key      Output buffer (at least 32 bytes)
+ * @param out_key_cap  Buffer capacity (must be >= 32)
+ * @return             AWM_SUCCESS or error code
+ */
+int32_t awm_key_load(uint8_t* out_key, size_t out_key_cap);
+
+/**
+ * Generate a new signing key, save it, and return it
+ *
+ * @param out_key      Output buffer (at least 32 bytes)
+ * @param out_key_cap  Buffer capacity (must be >= 32)
+ * @return             AWM_SUCCESS or error code
+ */
+int32_t awm_key_generate_and_save(uint8_t* out_key, size_t out_key_cap);
+
+/**
+ * Delete the stored signing key
+ *
+ * @return  AWM_SUCCESS or error code
+ */
+int32_t awm_key_delete(void);
+
+// ============================================================================
+// Tag Suggestion (requires "app" feature at build time)
+// ============================================================================
+
+/**
+ * Generate a suggested tag from a username (SHA256 + Base32)
+ *
+ * @param username  Username string
+ * @param out_tag   Output buffer (at least 9 bytes for 8 chars + null)
+ * @return          AWM_SUCCESS or error code
+ */
+int32_t awm_tag_suggest(const char* username, char* out_tag);
+
 #ifdef __cplusplus
 }
 #endif

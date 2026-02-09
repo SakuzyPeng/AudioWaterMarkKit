@@ -67,7 +67,8 @@ Filename: "{app}\\{#AppExeName}"; Description: "启动 {#AppName}"; Flags: nowai
 [Code]
 function AWMKitUserDataDir: string;
 begin
-  Result := ExpandConstant('{userprofile}\\.awmkit');
+  // WinUI app uses %LOCALAPPDATA%\awmkit for database and config
+  Result := ExpandConstant('{localappdata}\\awmkit');
 end;
 
 procedure TryDeleteUserData;
