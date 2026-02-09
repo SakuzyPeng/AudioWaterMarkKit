@@ -69,6 +69,22 @@ public sealed class InverseBoolToVisibilityConverter : IValueConverter
 }
 
 /// <summary>
+/// Converts bool to Visibility.
+/// </summary>
+public sealed class BoolToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        return value is bool b && b ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+/// <summary>
 /// Converts count to Visibility (visible if count > 0).
 /// </summary>
 public sealed class CountToVisibilityConverter : IValueConverter

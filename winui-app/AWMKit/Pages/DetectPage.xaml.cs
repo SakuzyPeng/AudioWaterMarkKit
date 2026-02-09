@@ -1,7 +1,14 @@
 using AWMKit.ViewModels;
+using AWMKit.Models;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -20,29 +27,122 @@ public sealed partial class DetectPage : Page
         ViewModel = new DetectViewModel();
     }
 
-    private async void AddFilesButton_Click(object sender, RoutedEventArgs e)
+    private async void SelectInputSourceButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "选择输入源",
+            Content = "请选择输入类型",
+            PrimaryButtonText = "文件",
+            SecondaryButtonText = "目录",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        switch (result)
+        {
+            case ContentDialogResult.Primary:
+            {
+                var path = await PickSingleAudioFileAsync();
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    ViewModel.SetInputSource(path);
+                }
+                break;
+            }
+            case ContentDialogResult.Secondary:
+            {
+                var path = await PickFolderAsync();
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    ViewModel.SetInputSource(path);
+                }
+                break;
+            }
+        }
+    }
+
+    private async Task<string?> PickSingleAudioFileAsync()
     {
         var picker = new FileOpenPicker();
         picker.FileTypeFilter.Add(".wav");
-        picker.FileTypeFilter.Add(".mp3");
         picker.FileTypeFilter.Add(".flac");
-        picker.FileTypeFilter.Add(".m4a");
 
         var hWnd = WindowNative.GetWindowHandle(App.Current.MainWindow);
         InitializeWithWindow.Initialize(picker, hWnd);
 
-        var files = await picker.PickMultipleFilesAsync();
-        if (files.Count > 0)
-        {
-            ViewModel.AddFilesCommand.Execute(files.Select(f => f.Path).ToArray());
-        }
+        var file = await picker.PickSingleFileAsync();
+        return file?.Path;
     }
 
-    private void RemoveFileButton_Click(object sender, RoutedEventArgs e)
+    private async Task<string?> PickFolderAsync()
+    {
+        var picker = new FolderPicker();
+        picker.FileTypeFilter.Add("*");
+
+        var hWnd = WindowNative.GetWindowHandle(App.Current.MainWindow);
+        InitializeWithWindow.Initialize(picker, hWnd);
+
+        var folder = await picker.PickSingleFolderAsync();
+        return folder?.Path;
+    }
+
+    private void RemoveQueueFileButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button button && button.Tag is string filePath)
         {
-            ViewModel.RemoveFileCommand.Execute(filePath);
+            ViewModel.RemoveQueueFileCommand.Execute(filePath);
         }
+    }
+
+    private void LogEntryButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.Tag is LogEntry entry)
+        {
+            ViewModel.ToggleLogSelectionCommand.Execute(entry);
+        }
+    }
+
+    private void DropZone_DragOver(object sender, DragEventArgs e)
+    {
+        if (e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            e.AcceptedOperation = DataPackageOperation.Copy;
+        }
+        else
+        {
+            e.AcceptedOperation = DataPackageOperation.None;
+        }
+
+        e.DragUIOverride.Caption = "拖拽到此处添加到队列";
+        e.DragUIOverride.IsCaptionVisible = true;
+    }
+
+    private async void DropZone_Drop(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            return;
+        }
+
+        var items = await e.DataView.GetStorageItemsAsync();
+        var droppedFiles = new List<string>();
+
+        foreach (var item in items)
+        {
+            if (item is StorageFile file)
+            {
+                droppedFiles.Add(file.Path);
+            }
+            else if (item is StorageFolder folder)
+            {
+                var files = await folder.GetFilesAsync();
+                droppedFiles.AddRange(files.Select(x => x.Path));
+            }
+        }
+
+        ViewModel.AddDroppedFiles(droppedFiles);
     }
 }

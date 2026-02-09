@@ -2,217 +2,1080 @@ using AWMKit.Models;
 using AWMKit.Native;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Xaml.Media;
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace AWMKit.ViewModels;
 
 /// <summary>
-/// View model for the Detect page.
+/// Detect page state model aligned with macOS behavior.
 /// </summary>
 public sealed partial class DetectViewModel : ObservableObject
 {
+    private const int MaxLogCount = 200;
+
+    private static readonly SolidColorBrush SuccessBrush = new(Windows.UI.Color.FromArgb(255, 76, 175, 80));
+    private static readonly SolidColorBrush WarningBrush = new(Windows.UI.Color.FromArgb(255, 255, 152, 0));
+    private static readonly SolidColorBrush ErrorColorBrush = new(Windows.UI.Color.FromArgb(255, 244, 67, 54));
+    private static readonly SolidColorBrush InfoBrush = new(Windows.UI.Color.FromArgb(255, 33, 150, 243));
+    private static readonly SolidColorBrush SecondaryBrush = new(Windows.UI.Color.FromArgb(255, 158, 158, 158));
+    private static readonly SolidColorBrush PrimaryBrush = new(Windows.UI.Color.FromArgb(255, 240, 240, 240));
+    private static readonly SolidColorBrush YellowBrush = new(Windows.UI.Color.FromArgb(255, 255, 213, 79));
+
+    private readonly HashSet<string> _supportedAudioExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".wav",
+        ".flac",
+    };
+
+    private CancellationTokenSource? _detectCts;
+    private CancellationTokenSource? _progressResetCts;
+
+    private string? _inputSource;
+    public string? InputSource
+    {
+        get => _inputSource;
+        private set
+        {
+            if (SetProperty(ref _inputSource, value))
+            {
+                OnPropertyChanged(nameof(InputSourceText));
+            }
+        }
+    }
+
+    public string InputSourceText => string.IsNullOrWhiteSpace(InputSource) ? "尚未选择输入源" : InputSource;
+
     private bool _isProcessing;
     public bool IsProcessing
     {
         get => _isProcessing;
-        set => SetProperty(ref _isProcessing, value);
-    }
-
-    private int _processedCount;
-    public int ProcessedCount
-    {
-        get => _processedCount;
-        set => SetProperty(ref _processedCount, value);
-    }
-
-    private int _totalCount;
-    public int TotalCount
-    {
-        get => _totalCount;
-        set => SetProperty(ref _totalCount, value);
-    }
-
-    private string? _currentFile;
-    public string? CurrentFile
-    {
-        get => _currentFile;
-        set => SetProperty(ref _currentFile, value);
-    }
-
-    private bool _autoSaveEvidence;
-    public bool AutoSaveEvidence
-    {
-        get => _autoSaveEvidence;
-        set => SetProperty(ref _autoSaveEvidence, value);
-    }
-
-    public ObservableCollection<string> InputFiles { get; } = new();
-    public ObservableCollection<DetectResult> Results { get; } = new();
-
-    [RelayCommand]
-    private void AddFiles(string[] files)
-    {
-        foreach (var file in files)
+        private set
         {
-            if (!InputFiles.Contains(file))
+            if (SetProperty(ref _isProcessing, value))
             {
-                InputFiles.Add(file);
+                OnPropertyChanged(nameof(CanDetectOrStop));
+                OnPropertyChanged(nameof(DetectButtonText));
             }
         }
     }
 
-    [RelayCommand]
-    private void RemoveFile(string file)
+    private double _progress;
+    public double Progress
     {
-        InputFiles.Remove(file);
+        get => _progress;
+        private set
+        {
+            if (SetProperty(ref _progress, value))
+            {
+                OnPropertyChanged(nameof(ProgressPercent));
+                OnPropertyChanged(nameof(ProgressPercentText));
+            }
+        }
     }
 
-    [RelayCommand]
-    private void ClearAll()
+    public double ProgressPercent => Math.Clamp(Progress * 100.0, 0, 100);
+
+    public string ProgressPercentText => $"{(int)ProgressPercent}%";
+
+    private int _currentProcessingIndex = -1;
+    public int CurrentProcessingIndex
     {
-        InputFiles.Clear();
-        Results.Clear();
+        get => _currentProcessingIndex;
+        private set => SetProperty(ref _currentProcessingIndex, value);
     }
 
-    [RelayCommand]
-    private async Task DetectAsync()
+    private string? _currentProcessingFile;
+    public string? CurrentProcessingFile
     {
-        if (!InputFiles.Any())
+        get => _currentProcessingFile;
+        private set => SetProperty(ref _currentProcessingFile, value);
+    }
+
+    private int _totalDetected;
+    public int TotalDetected
+    {
+        get => _totalDetected;
+        private set
+        {
+            if (SetProperty(ref _totalDetected, value))
+            {
+                OnPropertyChanged(nameof(HasDetectCount));
+                OnPropertyChanged(nameof(DetectCountText));
+            }
+        }
+    }
+
+    private int _totalFound;
+    public int TotalFound
+    {
+        get => _totalFound;
+        private set
+        {
+            if (SetProperty(ref _totalFound, value))
+            {
+                OnPropertyChanged(nameof(DetectCountText));
+            }
+        }
+    }
+
+    public bool HasDetectCount => TotalDetected > 0;
+
+    public string DetectCountText => $"{TotalFound}（成功）/{TotalDetected}（总）";
+
+    private bool _isClearQueueSuccess;
+    public bool IsClearQueueSuccess
+    {
+        get => _isClearQueueSuccess;
+        private set => SetProperty(ref _isClearQueueSuccess, value);
+    }
+
+    private bool _isClearLogsSuccess;
+    public bool IsClearLogsSuccess
+    {
+        get => _isClearLogsSuccess;
+        private set => SetProperty(ref _isClearLogsSuccess, value);
+    }
+
+    private string _logSearchText = string.Empty;
+    public string LogSearchText
+    {
+        get => _logSearchText;
+        set
+        {
+            if (SetProperty(ref _logSearchText, value))
+            {
+                NotifyFilteredLogsChanged();
+            }
+        }
+    }
+
+    private Guid? _selectedResultLogId;
+    public Guid? SelectedResultLogId
+    {
+        get => _selectedResultLogId;
+        private set
+        {
+            if (SetProperty(ref _selectedResultLogId, value))
+            {
+                RefreshLogSelectionState();
+                NotifyDisplayedRecordChanged();
+            }
+        }
+    }
+
+    private bool _hideDetectDetailWhenNoSelection;
+    public bool HideDetectDetailWhenNoSelection
+    {
+        get => _hideDetectDetailWhenNoSelection;
+        private set
+        {
+            if (SetProperty(ref _hideDetectDetailWhenNoSelection, value))
+            {
+                NotifyDisplayedRecordChanged();
+            }
+        }
+    }
+
+    public ObservableCollection<string> SelectedFiles { get; } = new();
+
+    public ObservableCollection<LogEntry> Logs { get; } = new();
+
+    public ObservableCollection<DetectRecord> DetectRecords { get; } = new();
+
+    public bool HasLogs => Logs.Count > 0;
+
+    public bool ShowSearchBox => HasLogs;
+
+    public bool ShowNoLogsHint => !HasLogs;
+
+    public string LogCountText => $"共 {Logs.Count} 条";
+
+    public bool HasFilteredLogs => FilteredLogs.Any();
+
+    public bool ShowNoFilteredLogsHint => HasLogs && !HasFilteredLogs;
+
+    public IEnumerable<LogEntry> FilteredLogs
+    {
+        get
+        {
+            var query = LogSearchText.Trim();
+            if (string.IsNullOrEmpty(query))
+            {
+                return Logs;
+            }
+
+            return Logs.Where(log =>
+                log.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                log.Detail.Contains(query, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    public int QueueCount => SelectedFiles.Count;
+
+    public bool HasQueueFiles => SelectedFiles.Count > 0;
+
+    public bool ShowQueueEmptyHint => !HasQueueFiles;
+
+    public string QueueCountText => $"共 {QueueCount} 个";
+
+    public bool CanDetectOrStop => IsProcessing || SelectedFiles.Count > 0;
+
+    public string DetectButtonText => IsProcessing ? "停止" : "检测";
+
+    public DetectRecord? DisplayedRecord
+    {
+        get
+        {
+            if (SelectedResultLogId.HasValue)
+            {
+                var selectedLog = Logs.FirstOrDefault(x => x.Id == SelectedResultLogId.Value);
+                if (selectedLog?.RelatedRecordId is Guid relatedId)
+                {
+                    var record = DetectRecords.FirstOrDefault(x => x.Id == relatedId);
+                    if (record is not null)
+                    {
+                        return record;
+                    }
+                }
+            }
+
+            if (HideDetectDetailWhenNoSelection)
+            {
+                return null;
+            }
+
+            return DetectRecords.FirstOrDefault();
+        }
+    }
+
+    public string DisplayFile => DetailValue(DisplayedRecord?.FilePath);
+
+    public string DisplayStatus => DetailValue(DisplayedRecord?.Status);
+
+    public string DisplayMatchFound => DisplayedRecord?.MatchFound switch
+    {
+        true => "true",
+        false => "false",
+        _ => "-",
+    };
+
+    public string DisplayPattern => DetailValue(DisplayedRecord?.Pattern);
+
+    public string DisplayTag => DetailValue(DisplayedRecord?.Tag);
+
+    public string DisplayIdentity => DetailValue(DisplayedRecord?.Identity);
+
+    public string DisplayVersion => DisplayedRecord?.Version is byte version ? version.ToString() : "-";
+
+    public string DisplayDetectTime => LocalTimestampDisplay(DisplayedRecord);
+
+    public string DisplayKeySlot => DisplayedRecord?.KeySlot is byte keySlot ? keySlot.ToString() : "-";
+
+    public string DisplayBitErrors => DisplayedRecord?.BitErrors is uint bitErrors ? bitErrors.ToString() : "-";
+
+    public string DisplayDetectScore => DisplayedRecord?.DetectScore is float score ? $"{score:0.000}" : "-";
+
+    public string DisplayCloneCheck => DetailValue(DisplayedRecord?.CloneCheck);
+
+    public string DisplayFingerprintScore => FingerprintScoreDisplay(DisplayedRecord);
+
+    public string DisplayError => ErrorDisplayValue(DisplayedRecord);
+
+    public Brush StatusBrush => FieldBrush(FieldSemantic.Status, DisplayedRecord);
+
+    public Brush MatchFoundBrush => FieldBrush(FieldSemantic.MatchFound, DisplayedRecord);
+
+    public Brush BitErrorsBrush => FieldBrush(FieldSemantic.BitErrors, DisplayedRecord);
+
+    public Brush DetectScoreBrush => FieldBrush(FieldSemantic.DetectScore, DisplayedRecord);
+
+    public Brush CloneCheckBrush => FieldBrush(FieldSemantic.CloneCheck, DisplayedRecord);
+
+    public Brush FingerprintScoreBrush => FieldBrush(FieldSemantic.FingerprintScore, DisplayedRecord);
+
+    public Brush ErrorBrush => FieldBrush(FieldSemantic.Error, DisplayedRecord);
+
+    public DetectViewModel()
+    {
+        SelectedFiles.CollectionChanged += OnSelectedFilesChanged;
+        Logs.CollectionChanged += OnLogsChanged;
+        DetectRecords.CollectionChanged += OnDetectRecordsChanged;
+    }
+
+    public void SetInputSource(string sourcePath)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath))
         {
             return;
         }
 
-        IsProcessing = true;
-        ProcessedCount = 0;
-        TotalCount = InputFiles.Count;
-        Results.Clear();
+        InputSource = sourcePath;
+        var files = ResolveAudioFiles(sourcePath);
+        AppendFilesWithDedup(files);
+    }
 
-        await Task.Run(async () =>
+    public void AddDroppedFiles(IEnumerable<string> filePaths)
+    {
+        var files = filePaths
+            .Where(IsSupportedAudioFile)
+            .ToList();
+
+        AppendFilesWithDedup(files);
+    }
+
+    [RelayCommand]
+    private void RemoveQueueFile(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
         {
-            var (loadedKey, keyError) = AwmKeyBridge.LoadKey();
-            var hasKey = loadedKey is not null && keyError == AwmError.Ok;
+            return;
+        }
 
-            foreach (var inputFile in InputFiles.ToList())
+        SelectedFiles.Remove(filePath);
+    }
+
+    [RelayCommand]
+    private async Task ClearQueueAsync()
+    {
+        if (!SelectedFiles.Any())
+        {
+            AddLog("队列为空", "没有可移除的文件", true, true, null, LogIconTone.Info);
+            return;
+        }
+
+        var count = SelectedFiles.Count;
+        SelectedFiles.Clear();
+        AddLog("已清空队列", $"移除了 {count} 个文件", true, false, null, LogIconTone.Success);
+        await FlashClearQueueAsync();
+    }
+
+    [RelayCommand]
+    private async Task ClearLogsAsync()
+    {
+        if (!Logs.Any())
+        {
+            AddLog("日志为空", "没有可清空的日志", true, true, null, LogIconTone.Info);
+            return;
+        }
+
+        var count = Logs.Count;
+        Logs.Clear();
+        DetectRecords.Clear();
+        TotalDetected = 0;
+        TotalFound = 0;
+
+        AddLog("已清空日志", $"移除了 {count} 条日志记录", true, true, null, LogIconTone.Success);
+        await FlashClearLogsAsync();
+    }
+
+    [RelayCommand]
+    private void ToggleLogSelection(LogEntry? entry)
+    {
+        if (entry is null || !entry.IsSelectable)
+        {
+            return;
+        }
+
+        if (SelectedResultLogId == entry.Id)
+        {
+            SelectedResultLogId = null;
+            HideDetectDetailWhenNoSelection = true;
+            return;
+        }
+
+        SelectedResultLogId = entry.Id;
+        HideDetectDetailWhenNoSelection = false;
+    }
+
+    [RelayCommand]
+    private async Task DetectOrStopAsync()
+    {
+        if (IsProcessing)
+        {
+            _detectCts?.Cancel();
+            AddLog("检测已停止", "用户手动停止", false, true, null, LogIconTone.Warning);
+            return;
+        }
+
+        await DetectAsync();
+    }
+
+    private async Task DetectAsync()
+    {
+        if (IsProcessing)
+        {
+            return;
+        }
+
+        if (!SelectedFiles.Any())
+        {
+            AddLog("队列为空", "请先添加音频文件", false, true, null, LogIconTone.Warning);
+            return;
+        }
+
+        var (key, keyError) = AwmKeyBridge.LoadKey();
+        if (keyError != AwmError.Ok || key is null)
+        {
+            AddLog("检测失败", "密钥未配置", false, false, null, LogIconTone.Error);
+            return;
+        }
+
+        _detectCts = new CancellationTokenSource();
+        var token = _detectCts.Token;
+
+        _progressResetCts?.Cancel();
+        IsProcessing = true;
+        Progress = 0;
+        CurrentProcessingIndex = 0;
+        TotalDetected = 0;
+        TotalFound = 0;
+
+        AddLog("开始检测", $"准备检测 {SelectedFiles.Count} 个文件", true, false, null, LogIconTone.Info);
+
+        var initialTotal = SelectedFiles.Count;
+        for (var processed = 0; processed < initialTotal; processed++)
+        {
+            if (token.IsCancellationRequested || SelectedFiles.Count == 0)
             {
-                CurrentFile = Path.GetFileName(inputFile);
-                var (detected, detectError) = AwmBridge.DetectAudioDetailed(inputFile);
+                break;
+            }
 
-                DetectResult result;
-                if (detectError == AwmError.Ok && detected is not null)
+            var filePath = SelectedFiles[0];
+            var fileName = Path.GetFileName(filePath);
+            CurrentProcessingFile = fileName;
+            CurrentProcessingIndex = 0;
+
+            DetectRecord record;
+            try
+            {
+                record = await Task.Run(() => DetectSingleFile(filePath, key), token);
+            }
+            catch (Exception ex)
+            {
+                record = new DetectRecord
                 {
-                    result = await BuildSuccessResultAsync(inputFile, detected.Value, hasKey ? loadedKey : null);
+                    FilePath = filePath,
+                    Status = "error",
+                    Error = ex.Message,
+                };
+            }
+
+            if (token.IsCancellationRequested)
+            {
+                break;
+            }
+
+            InsertDetectRecord(record);
+            LogDetectionOutcome(fileName, record);
+
+            TotalDetected += 1;
+            if (record.Status == "ok")
+            {
+                TotalFound += 1;
+            }
+
+            if (SelectedFiles.Count > 0)
+            {
+                SelectedFiles.RemoveAt(0);
+            }
+
+            Progress = (processed + 1) / (double)initialTotal;
+        }
+
+        if (!token.IsCancellationRequested)
+        {
+            AddLog("检测完成", $"已检测: {TotalDetected}, 发现水印: {TotalFound}", true, false, null, LogIconTone.Info);
+        }
+
+        CurrentProcessingFile = null;
+        CurrentProcessingIndex = -1;
+        IsProcessing = false;
+
+        ScheduleProgressResetIfNeeded();
+        await AppViewModel.Instance.RefreshStatsAsync();
+    }
+
+    private DetectRecord DetectSingleFile(string filePath, byte[] key)
+    {
+        var (detected, detectError) = AwmBridge.DetectAudioDetailed(filePath);
+        if (detectError == AwmError.Ok && detected is AwmBridge.DetectAudioResult detectResult)
+        {
+            var (decoded, decodeError) = AwmBridge.DecodeMessage(detectResult.RawMessage, key);
+            if (decodeError == AwmError.Ok && decoded.HasValue)
+            {
+                var decodedValue = decoded.Value;
+
+                string cloneCheck = "unavailable";
+                double? cloneScore = null;
+                float? cloneMatchSeconds = null;
+                string? cloneReason = null;
+
+                var identity = decodedValue.GetIdentity();
+                var keySlot = decodedValue.KeySlot;
+
+                var (clone, cloneError) = AwmBridge.CloneCheckForFile(filePath, identity, keySlot);
+                if (cloneError == AwmError.Ok && clone.HasValue)
+                {
+                    cloneCheck = CloneKindToString(clone.Value.Kind);
+                    cloneScore = clone.Value.Score;
+                    cloneMatchSeconds = clone.Value.MatchSeconds;
+                    cloneReason = clone.Value.Reason;
                 }
                 else
                 {
-                    result = new DetectResult
-                    {
-                        FilePath = inputFile,
-                        Success = false,
-                        Tag = null,
-                        Identity = null,
-                        KeySlot = null,
-                        TimestampMinutes = null,
-                        Pattern = null,
-                        BitErrors = null,
-                        DetectScore = null,
-                        CloneCheck = null,
-                        CloneScore = null,
-                        CloneMatchSeconds = null,
-                        CloneEvidenceId = null,
-                        CloneReason = null,
-                        Message = null,
-                        Error = detectError,
-                        ErrorMessage = detectError.ToString()
-                    };
+                    cloneCheck = "unavailable";
+                    cloneReason = cloneError.ToString();
                 }
 
-                App.Current.MainWindow?.DispatcherQueue.TryEnqueue(() => Results.Add(result));
-                ProcessedCount++;
+                return new DetectRecord
+                {
+                    FilePath = filePath,
+                    Status = "ok",
+                    Tag = decodedValue.GetTag(),
+                    Identity = identity,
+                    Version = decodedValue.Version,
+                    TimestampMinutes = decodedValue.TimestampMinutes,
+                    TimestampUtc = decodedValue.TimestampUtc,
+                    KeySlot = decodedValue.KeySlot,
+                    Pattern = detectResult.Pattern,
+                    DetectScore = detectResult.DetectScore,
+                    BitErrors = detectResult.BitErrors,
+                    MatchFound = true,
+                    CloneCheck = cloneCheck,
+                    CloneScore = cloneScore,
+                    CloneMatchSeconds = cloneMatchSeconds,
+                    CloneReason = cloneReason,
+                };
             }
 
-            CurrentFile = null;
-            IsProcessing = false;
-            await AppViewModel.Instance.RefreshStatsAsync();
-        });
+            return new DetectRecord
+            {
+                FilePath = filePath,
+                Status = "invalid_hmac",
+                Pattern = detectResult.Pattern,
+                DetectScore = detectResult.DetectScore,
+                BitErrors = detectResult.BitErrors,
+                MatchFound = true,
+                Error = decodeError.ToString(),
+            };
+        }
+
+        if (detectError == AwmError.NoWatermarkFound)
+        {
+            return new DetectRecord
+            {
+                FilePath = filePath,
+                Status = "not_found",
+            };
+        }
+
+        return new DetectRecord
+        {
+            FilePath = filePath,
+            Status = "error",
+            Error = detectError.ToString(),
+        };
     }
 
-    private static Task<DetectResult> BuildSuccessResultAsync(
-        string inputFile,
-        AwmBridge.DetectAudioResult detectResult,
-        byte[]? key)
+    private void LogDetectionOutcome(string fileName, DetectRecord record)
     {
-        string? tag = null;
-        string? identity = null;
-        byte? keySlot = null;
-        uint? timestampMinutes = null;
-        AwmError? decodeError = null;
-        string? decodeErrorMessage = null;
-
-        if (key is not null)
+        switch (record.Status)
         {
-            var (decoded, decodeErr) = AwmBridge.DecodeMessage(detectResult.RawMessage, key);
-            if (decodeErr == AwmError.Ok && decoded.HasValue)
+            case "ok":
             {
-                tag = decoded.Value.GetTag();
-                identity = decoded.Value.GetIdentity();
-                keySlot = decoded.Value.KeySlot;
-                timestampMinutes = decoded.Value.TimestampMinutes;
+                var timeText = LocalTimestampDisplay(record);
+                AddLog(
+                    $"成功: {fileName}",
+                    $"标签: {record.Identity ?? "-"} | 时间: {timeText} | 克隆: {record.CloneCheck ?? "-"}",
+                    true,
+                    false,
+                    record.Id,
+                    LogIconTone.Success);
+                break;
             }
-            else
-            {
-                decodeError = decodeErr;
-                decodeErrorMessage = decodeErr.ToString();
-            }
+            case "not_found":
+                AddLog($"无标记: {fileName}", "未检测到水印", false, false, record.Id, LogIconTone.Warning);
+                break;
+            case "invalid_hmac":
+                AddLog(
+                    $"失败: {fileName}",
+                    $"HMAC 校验失败: {record.Error ?? "unknown"}",
+                    false,
+                    false,
+                    record.Id,
+                    LogIconTone.Error);
+                break;
+            default:
+                AddLog($"失败: {fileName}", record.Error ?? "未知错误", false, false, record.Id, LogIconTone.Error);
+                break;
         }
-
-        AwmCloneCheckKind? cloneKind = null;
-        double? cloneScore = null;
-        float? cloneSeconds = null;
-        long? cloneEvidenceId = null;
-        string? cloneReason = null;
-
-        if (!string.IsNullOrEmpty(identity) && keySlot.HasValue)
-        {
-            var (clone, cloneErr) = AwmBridge.CloneCheckForFile(inputFile, identity, keySlot.Value);
-            if (cloneErr == AwmError.Ok && clone.HasValue)
-            {
-                cloneKind = clone.Value.Kind;
-                cloneScore = clone.Value.Score;
-                cloneSeconds = clone.Value.MatchSeconds;
-                cloneEvidenceId = clone.Value.EvidenceId;
-                cloneReason = clone.Value.Reason;
-            }
-            else
-            {
-                cloneKind = AwmCloneCheckKind.Unavailable;
-                cloneReason = cloneErr.ToString();
-            }
-        }
-
-        return Task.FromResult(new DetectResult
-        {
-            FilePath = inputFile,
-            Success = true,
-            Tag = tag,
-            Identity = identity,
-            KeySlot = keySlot,
-            TimestampMinutes = timestampMinutes,
-            Pattern = detectResult.Pattern,
-            BitErrors = detectResult.BitErrors,
-            DetectScore = detectResult.DetectScore,
-            CloneCheck = cloneKind,
-            CloneScore = cloneScore,
-            CloneMatchSeconds = cloneSeconds,
-            CloneEvidenceId = cloneEvidenceId,
-            CloneReason = cloneReason,
-            Message = detectResult.RawMessage,
-            Error = decodeError,
-            ErrorMessage = decodeErrorMessage
-        });
     }
 
-    public bool CanDetect => InputFiles.Any() && !IsProcessing;
+    private IReadOnlyList<string> ResolveAudioFiles(string sourcePath)
+    {
+        if (Directory.Exists(sourcePath))
+        {
+            try
+            {
+                var files = Directory
+                    .EnumerateFiles(sourcePath, "*", SearchOption.TopDirectoryOnly)
+                    .Where(IsSupportedAudioFile)
+                    .ToList();
+
+                if (files.Count == 0)
+                {
+                    AddLog("目录无可用音频", "当前目录未找到 WAV / FLAC 文件", false, true, null, LogIconTone.Warning);
+                }
+
+                return files;
+            }
+            catch (Exception ex)
+            {
+                AddLog("读取目录失败", ex.Message, false, false, null, LogIconTone.Error);
+                return Array.Empty<string>();
+            }
+        }
+
+        if (File.Exists(sourcePath) && IsSupportedAudioFile(sourcePath))
+        {
+            return new[] { sourcePath };
+        }
+
+        AddLog("不支持的输入源", "请选择 WAV / FLAC 文件或包含这些文件的目录", false, true, null, LogIconTone.Warning);
+        return Array.Empty<string>();
+    }
+
+    private void AppendFilesWithDedup(IEnumerable<string> files)
+    {
+        var incoming = files
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToList();
+
+        if (incoming.Count == 0)
+        {
+            return;
+        }
+
+        var existing = new HashSet<string>(SelectedFiles.Select(NormalizedPathKey), StringComparer.OrdinalIgnoreCase);
+        var deduped = new List<string>();
+        var duplicateCount = 0;
+
+        foreach (var file in incoming)
+        {
+            var normalized = NormalizedPathKey(file);
+            if (existing.Add(normalized))
+            {
+                deduped.Add(file);
+            }
+            else
+            {
+                duplicateCount += 1;
+            }
+        }
+
+        foreach (var file in deduped)
+        {
+            SelectedFiles.Add(file);
+        }
+
+        if (duplicateCount > 0)
+        {
+            AddLog("已去重", $"跳过 {duplicateCount} 个重复文件", true, true, null, LogIconTone.Info);
+        }
+    }
+
+    private static string NormalizedPathKey(string path)
+    {
+        try
+        {
+            return Path.GetFullPath(path).Trim().TrimEnd(Path.DirectorySeparatorChar).ToUpperInvariant();
+        }
+        catch
+        {
+            return path.Trim().ToUpperInvariant();
+        }
+    }
+
+    private bool IsSupportedAudioFile(string path)
+    {
+        var ext = Path.GetExtension(path);
+        return _supportedAudioExtensions.Contains(ext);
+    }
+
+    private void InsertDetectRecord(DetectRecord record)
+    {
+        DetectRecords.Insert(0, record);
+        while (DetectRecords.Count > MaxLogCount)
+        {
+            DetectRecords.RemoveAt(DetectRecords.Count - 1);
+        }
+
+        HideDetectDetailWhenNoSelection = false;
+        NotifyDisplayedRecordChanged();
+    }
+
+    private void AddLog(
+        string title,
+        string detail = "",
+        bool isSuccess = true,
+        bool isEphemeral = false,
+        Guid? relatedRecordId = null,
+        LogIconTone iconTone = LogIconTone.Info)
+    {
+        var entry = new LogEntry
+        {
+            Title = title,
+            Detail = detail,
+            IsSuccess = isSuccess,
+            IsEphemeral = isEphemeral,
+            RelatedRecordId = relatedRecordId,
+            IconTone = iconTone,
+        };
+
+        Logs.Insert(0, entry);
+        while (Logs.Count > MaxLogCount)
+        {
+            Logs.RemoveAt(Logs.Count - 1);
+        }
+
+        if (entry.IsEphemeral && entry.Title == "已清空日志")
+        {
+            _ = DismissClearLogAsync(entry.Id);
+        }
+    }
+
+    private async Task DismissClearLogAsync(Guid logId)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(3));
+
+        var target = Logs.FirstOrDefault(x => x.Id == logId && x.Title == "已清空日志");
+        if (target is not null)
+        {
+            Logs.Remove(target);
+        }
+    }
+
+    private async Task FlashClearQueueAsync()
+    {
+        IsClearQueueSuccess = true;
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        IsClearQueueSuccess = false;
+    }
+
+    private async Task FlashClearLogsAsync()
+    {
+        IsClearLogsSuccess = true;
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        IsClearLogsSuccess = false;
+    }
+
+    private void ScheduleProgressResetIfNeeded()
+    {
+        if (Progress < 1)
+        {
+            return;
+        }
+
+        _progressResetCts?.Cancel();
+        _progressResetCts = new CancellationTokenSource();
+        _ = ResetProgressLaterAsync(_progressResetCts.Token);
+    }
+
+    private async Task ResetProgressLaterAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(3), token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        if (!token.IsCancellationRequested)
+        {
+            Progress = 0;
+        }
+    }
+
+    private void OnSelectedFilesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(CanDetectOrStop));
+        OnPropertyChanged(nameof(QueueCount));
+        OnPropertyChanged(nameof(QueueCountText));
+        OnPropertyChanged(nameof(HasQueueFiles));
+        OnPropertyChanged(nameof(ShowQueueEmptyHint));
+    }
+
+    private void OnLogsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (Logs.Count == 0)
+        {
+            if (!string.IsNullOrEmpty(LogSearchText))
+            {
+                _logSearchText = string.Empty;
+                OnPropertyChanged(nameof(LogSearchText));
+            }
+
+            SelectedResultLogId = null;
+            HideDetectDetailWhenNoSelection = false;
+        }
+        else if (SelectedResultLogId.HasValue && Logs.All(x => x.Id != SelectedResultLogId.Value))
+        {
+            SelectedResultLogId = null;
+            HideDetectDetailWhenNoSelection = false;
+        }
+
+        NotifyFilteredLogsChanged();
+        RefreshLogSelectionState();
+    }
+
+    private void OnDetectRecordsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (DetectRecords.Count == 0)
+        {
+            HideDetectDetailWhenNoSelection = false;
+        }
+
+        NotifyDisplayedRecordChanged();
+    }
+
+    private void NotifyFilteredLogsChanged()
+    {
+        OnPropertyChanged(nameof(FilteredLogs));
+        OnPropertyChanged(nameof(HasLogs));
+        OnPropertyChanged(nameof(LogCountText));
+        OnPropertyChanged(nameof(ShowSearchBox));
+        OnPropertyChanged(nameof(ShowNoLogsHint));
+        OnPropertyChanged(nameof(HasFilteredLogs));
+        OnPropertyChanged(nameof(ShowNoFilteredLogsHint));
+    }
+
+    private void RefreshLogSelectionState()
+    {
+        foreach (var log in Logs)
+        {
+            log.IsSelected = SelectedResultLogId.HasValue && log.Id == SelectedResultLogId.Value;
+        }
+    }
+
+    private void NotifyDisplayedRecordChanged()
+    {
+        OnPropertyChanged(nameof(DisplayedRecord));
+        OnPropertyChanged(nameof(DisplayFile));
+        OnPropertyChanged(nameof(DisplayStatus));
+        OnPropertyChanged(nameof(DisplayMatchFound));
+        OnPropertyChanged(nameof(DisplayPattern));
+        OnPropertyChanged(nameof(DisplayTag));
+        OnPropertyChanged(nameof(DisplayIdentity));
+        OnPropertyChanged(nameof(DisplayVersion));
+        OnPropertyChanged(nameof(DisplayDetectTime));
+        OnPropertyChanged(nameof(DisplayKeySlot));
+        OnPropertyChanged(nameof(DisplayBitErrors));
+        OnPropertyChanged(nameof(DisplayDetectScore));
+        OnPropertyChanged(nameof(DisplayCloneCheck));
+        OnPropertyChanged(nameof(DisplayFingerprintScore));
+        OnPropertyChanged(nameof(DisplayError));
+        OnPropertyChanged(nameof(StatusBrush));
+        OnPropertyChanged(nameof(MatchFoundBrush));
+        OnPropertyChanged(nameof(BitErrorsBrush));
+        OnPropertyChanged(nameof(DetectScoreBrush));
+        OnPropertyChanged(nameof(CloneCheckBrush));
+        OnPropertyChanged(nameof(FingerprintScoreBrush));
+        OnPropertyChanged(nameof(ErrorBrush));
+    }
+
+    private static string DetailValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+    }
+
+    private static string CloneKindToString(AwmCloneCheckKind kind)
+    {
+        return kind switch
+        {
+            AwmCloneCheckKind.Exact => "exact",
+            AwmCloneCheckKind.Likely => "likely",
+            AwmCloneCheckKind.Suspect => "suspect",
+            _ => "unavailable",
+        };
+    }
+
+    private static string FingerprintScoreDisplay(DetectRecord? record)
+    {
+        if (record?.CloneScore is not double score)
+        {
+            return "-";
+        }
+
+        if (record.CloneMatchSeconds is float seconds)
+        {
+            return $"{score:0.00} / {seconds:0}s";
+        }
+
+        return $"{score:0.00}";
+    }
+
+    private static string ErrorDisplayValue(DetectRecord? record)
+    {
+        if (!string.IsNullOrWhiteSpace(record?.Error))
+        {
+            return record.Error;
+        }
+
+        if (!string.IsNullOrWhiteSpace(record?.CloneReason))
+        {
+            return $"clone: {record.CloneReason}";
+        }
+
+        return "-";
+    }
+
+    private static string LocalTimestampDisplay(DetectRecord? record)
+    {
+        if (record is null)
+        {
+            return "-";
+        }
+
+        ulong utcSeconds;
+        if (record.TimestampMinutes.HasValue)
+        {
+            utcSeconds = record.TimestampUtc ?? (ulong)record.TimestampMinutes.Value * 60;
+        }
+        else if (record.TimestampUtc.HasValue)
+        {
+            utcSeconds = record.TimestampUtc.Value;
+        }
+        else
+        {
+            return "-";
+        }
+
+        var dt = DateTimeOffset.FromUnixTimeSeconds((long)utcSeconds).ToLocalTime().DateTime;
+        return dt.ToString("yyyy-MM-dd HH:mm");
+    }
+
+    private enum FieldSemantic
+    {
+        Status,
+        MatchFound,
+        BitErrors,
+        DetectScore,
+        CloneCheck,
+        FingerprintScore,
+        Error,
+    }
+
+    private Brush FieldBrush(FieldSemantic semantic, DetectRecord? record)
+    {
+        switch (semantic)
+        {
+            case FieldSemantic.Status:
+                return record?.Status switch
+                {
+                    "ok" => SuccessBrush,
+                    "not_found" => SecondaryBrush,
+                    "invalid_hmac" => WarningBrush,
+                    "error" => ErrorColorBrush,
+                    _ => SecondaryBrush,
+                };
+
+            case FieldSemantic.MatchFound:
+                return record?.MatchFound switch
+                {
+                    true => SuccessBrush,
+                    false => SecondaryBrush,
+                    _ => SecondaryBrush,
+                };
+
+            case FieldSemantic.BitErrors:
+                if (record?.BitErrors is not uint bitErrors)
+                {
+                    return SecondaryBrush;
+                }
+
+                if (bitErrors == 0)
+                {
+                    return SuccessBrush;
+                }
+
+                if (bitErrors <= 3)
+                {
+                    return WarningBrush;
+                }
+
+                return ErrorColorBrush;
+
+            case FieldSemantic.DetectScore:
+                if (record?.DetectScore is not float detectScore)
+                {
+                    return SecondaryBrush;
+                }
+
+                if (detectScore >= 1.30f)
+                {
+                    return SuccessBrush;
+                }
+
+                if (detectScore >= 1.10f)
+                {
+                    return WarningBrush;
+                }
+
+                if (detectScore >= 1.00f)
+                {
+                    return YellowBrush;
+                }
+
+                return ErrorColorBrush;
+
+            case FieldSemantic.CloneCheck:
+                return record?.CloneCheck switch
+                {
+                    "exact" => SuccessBrush,
+                    "likely" => InfoBrush,
+                    "suspect" => WarningBrush,
+                    "unavailable" => SecondaryBrush,
+                    _ => SecondaryBrush,
+                };
+
+            case FieldSemantic.FingerprintScore:
+                if (record?.CloneScore is not double fpScore)
+                {
+                    return SecondaryBrush;
+                }
+
+                if (fpScore <= 1)
+                {
+                    return SuccessBrush;
+                }
+
+                if (fpScore <= 3)
+                {
+                    return InfoBrush;
+                }
+
+                if (fpScore <= 7)
+                {
+                    return WarningBrush;
+                }
+
+                return ErrorColorBrush;
+
+            case FieldSemantic.Error:
+                return DisplayError == "-" ? SecondaryBrush : ErrorColorBrush;
+
+            default:
+                return PrimaryBrush;
+        }
+    }
 }

@@ -14,6 +14,7 @@
             <converters:NullToFalseConverter x:Key="NullToFalseConverter"/>
             <converters:NullToCollapsedConverter x:Key="NullToCollapsedConverter"/>
             <converters:InverseBoolConverter x:Key="InverseBoolConverter"/>
+            <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
             <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter"/>
             <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter"/>
             <converters:ZeroToVisibilityConverter x:Key="ZeroToVisibilityConverter"/>

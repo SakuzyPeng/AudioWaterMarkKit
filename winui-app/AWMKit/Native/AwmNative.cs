@@ -3,12 +3,12 @@ using System.Runtime.InteropServices;
 namespace AWMKit.Native;
 
 /// <summary>
-/// Raw P/Invoke declarations for awmkit.dll FFI functions.
+/// Raw P/Invoke declarations for awmkit native FFI functions.
 /// Matches src/ffi.rs signatures exactly.
 /// </summary>
 internal static class AwmNative
 {
-    private const string Lib = "awmkit.dll";
+    private const string Lib = "awmkit_native.dll";
 
     // ── Tag Operations ──
 

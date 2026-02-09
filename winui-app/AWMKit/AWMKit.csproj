@@ -16,9 +16,11 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <EnableMsixTooling>true</EnableMsixTooling>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,8 +30,8 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.*" />
   </ItemGroup>
 
-  <ItemGroup Condition="Exists('awmkit.dll')">
-    <Content Include="awmkit.dll" CopyToOutputDirectory="PreserveNewest" />
+  <ItemGroup Condition="Exists('awmkit_native.dll')">
+    <Content Include="awmkit_native.dll" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
