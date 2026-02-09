@@ -31,7 +31,9 @@
   </ItemGroup>
 
   <ItemGroup Condition="Exists('awmkit_native.dll')">
-    <Content Include="awmkit_native.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="awmkit_native.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

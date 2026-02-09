@@ -58,6 +58,20 @@ pub struct Audio {
 }
 
 impl Audio {
+    #[cfg(windows)]
+    fn audiowmark_command(&self) -> Command {
+        use std::os::windows::process::CommandExt;
+        let mut cmd = Command::new(&self.binary_path);
+        // CREATE_NO_WINDOW: avoid flashing a console window when invoking audiowmark.
+        cmd.creation_flags(0x0800_0000);
+        cmd
+    }
+
+    #[cfg(not(windows))]
+    fn audiowmark_command(&self) -> Command {
+        Command::new(&self.binary_path)
+    }
+
     /// 创建 Audio 实例，自动搜索 audiowmark
     pub fn new() -> Result<Self> {
         Self::new_with_fallback_path(None)
@@ -117,7 +131,7 @@ impl Audio {
         validate_input_format(input.as_ref())?;
         let hex = bytes_to_hex(message);
 
-        let mut cmd = Command::new(&self.binary_path);
+        let mut cmd = self.audiowmark_command();
         cmd.arg("add")
             .arg("--strength")
             .arg(self.strength.to_string());
@@ -163,7 +177,7 @@ impl Audio {
     /// 检测结果，如果没有检测到水印返回 None
     pub fn detect<P: AsRef<Path>>(&self, input: P) -> Result<Option<DetectResult>> {
         validate_input_format(input.as_ref())?;
-        let mut cmd = Command::new(&self.binary_path);
+        let mut cmd = self.audiowmark_command();
         cmd.arg("get");
 
         if let Some(ref key_file) = self.key_file {
@@ -201,7 +215,7 @@ impl Audio {
 
     /// 检查 audiowmark 是否可用
     pub fn is_available(&self) -> bool {
-        Command::new(&self.binary_path)
+        self.audiowmark_command()
             .arg("--version")
             .output()
             .map(|o| o.status.success())
@@ -210,7 +224,7 @@ impl Audio {
 
     /// 获取 audiowmark 版本
     pub fn version(&self) -> Result<String> {
-        let output = Command::new(&self.binary_path)
+        let output = self.audiowmark_command()
             .arg("--version")
             .output()
             .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
