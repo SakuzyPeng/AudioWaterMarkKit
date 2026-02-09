@@ -192,17 +192,19 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="用户名" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock Grid.Column="1"
-                                       Text="{x:Bind ViewModel.PreviewTagDisplay, Mode=OneWay}"
-                                       Foreground="{x:Bind ViewModel.PreviewTagBrush, Mode=OneWay}"
-                                       FontWeight="SemiBold"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0">
+                                <TextBlock Text="{x:Bind ViewModel.ReuseHintText, Mode=OneWay}"
+                                           Foreground="{x:Bind ViewModel.PreviewTagBrush, Mode=OneWay}"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="{x:Bind ViewModel.PreviewTagDisplay, Mode=OneWay}"
+                                           Foreground="{x:Bind ViewModel.PreviewTagBrush, Mode=OneWay}"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
                         </Grid>
                         <TextBox Text="{x:Bind ViewModel.UsernameInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  PlaceholderText="例如: user_001"/>
-                        <TextBlock Text="{x:Bind ViewModel.MatchedMappingHintText, Mode=OneWay}"
-                                   FontSize="12"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   Visibility="{x:Bind ViewModel.MatchedMappingHintText, Mode=OneWay, Converter={StaticResource NullToCollapsedConverter}}"/>
                     </StackPanel>
                 </Border>
 

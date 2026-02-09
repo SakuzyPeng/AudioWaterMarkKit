@@ -109,6 +109,7 @@ public sealed partial class EmbedViewModel : ObservableObject
                 OnPropertyChanged(nameof(PreviewTagText));
                 OnPropertyChanged(nameof(PreviewTagDisplay));
                 OnPropertyChanged(nameof(MatchedMappingHintText));
+                OnPropertyChanged(nameof(ReuseHintText));
                 OnPropertyChanged(nameof(PreviewTagBrush));
             }
         }
@@ -264,6 +265,7 @@ public sealed partial class EmbedViewModel : ObservableObject
     public string PreviewTagText => ResolveTagValue() ?? "-";
     public string PreviewTagDisplay => $"Tag: {PreviewTagText}";
     public string? MatchedMappingHintText => MatchedMappingForInput is null ? null : "已存在映射，自动复用";
+    public string ReuseHintText => MatchedMappingForInput is null ? string.Empty : "复用 ";
     public string MappingPlaceholderText => HasMappings ? "选择已存储映射" : "暂无已存储映射";
 
     private EmbedMappingOption? MatchedMappingForInput
@@ -312,6 +314,7 @@ public sealed partial class EmbedViewModel : ObservableObject
         OnPropertyChanged(nameof(PreviewTagText));
         OnPropertyChanged(nameof(PreviewTagDisplay));
         OnPropertyChanged(nameof(MatchedMappingHintText));
+        OnPropertyChanged(nameof(ReuseHintText));
         OnPropertyChanged(nameof(PreviewTagBrush));
     }
 

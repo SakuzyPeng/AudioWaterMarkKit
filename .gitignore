@@ -1,44 +1,110 @@
+# ============================================================================
 # Rust
+# ============================================================================
 /target
 /src-tauri/target
+Cargo.lock.bak
 
-# Build artifacts
+# ============================================================================
+# Build Artifacts
+# ============================================================================
+
+# macOS App
 /macos-app/.build
 /macos-app/AWMKit.xcodeproj/
 /macos-app/AWMKit.xcodeproj/xcuserdata
 /macos-app/AWMKit.xcodeproj/project.xcworkspace/xcuserdata
+
+# WinUI App
 /winui-app/**/bin/
 /winui-app/**/obj/
 /winui-app/**/publish/
 /winui-app/**/awmkit.dll
 /winui-app/awmkit.dll
 /winui-app/AWMKit/awmkit_native.dll
-/.tmp-release/
+/winui-app/**/*.user
+/winui-app/.vs/
 
-# Audio files
+# Release artifacts
+/.tmp-release/
+/dist/
+
+# ============================================================================
+# Audio Files
+# ============================================================================
 *.wav
 *.flac
+*.mp3
+*.ogg
+*.opus
+/test-audio/
 
-# Test outputs
+# ============================================================================
+# Test Outputs
+# ============================================================================
 /test_output/
+/test_*.wav
+/test_*.flac
 
-# Scripts (user may not want to track local scripts)
+# ============================================================================
+# Scripts
+# ============================================================================
 *.sh
+!/scripts/**/*.sh
 !/scripts/sync_ffi_headers.sh
 
-# Vendor & bundled binaries
-/audiowmark-x86_64
-/vendor/
-/bundled/
+# PowerShell debug scripts
+check_*.ps1
+run_*.ps1
+read_*.ps1
+debug_*.ps1
 
+# ============================================================================
+# Bundled Binaries
+# ============================================================================
+/audiowmark-x86_64
+/bin/
+/vendor/
+
+# bundled/ has its own .gitignore
+
+# ============================================================================
 # Node/UI
+# ============================================================================
 /ui/node_modules/
 /ui/dist/
+/ui/.vite/
+/ui/.turbo/
 
-# OS
-.DS_Store
+# ============================================================================
+# IDE & Editor
+# ============================================================================
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
+.vim/
+.helix/
+
+# ============================================================================
+# OS
+# ============================================================================
+.DS_Store
 .AppleDouble
 .LSOverride
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ============================================================================
+# Logs & Temporary Files
+# ============================================================================
+*.log
+*.log.*
+build_diag.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.cache/
