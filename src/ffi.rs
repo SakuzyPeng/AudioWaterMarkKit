@@ -795,6 +795,44 @@ pub extern "C" fn awm_key_exists() -> bool {
     }
 }
 
+/// 获取当前生效的密钥存储后端标签
+///
+/// 返回值说明：
+/// - "keyring (service: ...)"：通过 keyring 读取
+/// - "dpapi (...)"：通过 DPAPI 回退文件读取（Windows）
+/// - "none"：当前未配置密钥
+///
+/// # Safety
+/// - `out` 必须指向至少 `out_len` 字节的缓冲区
+#[no_mangle]
+pub unsafe extern "C" fn awm_key_backend_label(out: *mut c_char, out_len: usize) -> i32 {
+    if out.is_null() || out_len == 0 {
+        return AWMError::NullPointer as i32;
+    }
+
+    #[cfg(feature = "app")]
+    {
+        let label = match crate::app::KeyStore::new().and_then(|ks| ks.load_with_backend()) {
+            Ok((_key, backend)) => backend.label(),
+            Err(_) => "none".to_string(),
+        };
+
+        let bytes = label.as_bytes();
+        let max = out_len.saturating_sub(1);
+        let copy_len = bytes.len().min(max);
+        ptr::copy_nonoverlapping(bytes.as_ptr(), out as *mut u8, copy_len);
+        *out.add(copy_len) = 0;
+        return AWMError::Success as i32;
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        *out = 0;
+        let _ = out_len;
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
 /// 加载密钥到输出缓冲区
 ///
 /// # Safety

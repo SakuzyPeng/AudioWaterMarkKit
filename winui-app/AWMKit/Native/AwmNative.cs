@@ -114,6 +114,9 @@ internal static class AwmNative
     [return: MarshalAs(UnmanagedType.U1)]
     internal static extern bool awm_key_exists();
 
+    [DllImport(Lib, EntryPoint = "awm_key_backend_label", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_key_backend_label(IntPtr outBuf, nuint outLen);
+
     [DllImport(Lib, EntryPoint = "awm_key_load", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_key_load(IntPtr outKey, nuint outKeyCap);
 

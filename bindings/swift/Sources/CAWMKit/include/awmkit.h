@@ -346,6 +346,20 @@ int32_t awm_audio_binary_path(
 bool awm_key_exists(void);
 
 /**
+ * Get active key backend label
+ *
+ * On Windows, possible values:
+ * - "keyring (service: ...)"
+ * - "dpapi (...path...)"
+ * - "none" (no key configured)
+ *
+ * @param out      Output buffer for backend label string
+ * @param out_len  Buffer capacity in bytes
+ * @return         AWM_SUCCESS or error code
+ */
+int32_t awm_key_backend_label(char* out, size_t out_len);
+
+/**
  * Load the signing key
  *
  * @param out_key      Output buffer (at least 32 bytes)

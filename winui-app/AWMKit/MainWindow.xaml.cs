@@ -1,7 +1,10 @@
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using AWMKit.ViewModels;
 using AWMKit.Pages;
+using AWMKit.ViewModels;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using System.ComponentModel;
 
 namespace AWMKit;
 
@@ -10,16 +13,26 @@ namespace AWMKit;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
+    public AppViewModel ViewModel { get; } = AppViewModel.Instance;
+
+    private NavigationViewItem? _lastPageItem;
+    private NavigationViewItem? _keyStatusItem;
+    private NavigationViewItem? _engineStatusItem;
+    private NavigationViewItem? _databaseStatusItem;
+
     public MainWindow()
     {
         InitializeComponent();
+        InitializeStatusIndicators();
         InitializeWindow();
+        ViewModel.PropertyChanged += ViewModel_PropertyChanged;
         _ = InitializeAsync();
     }
 
     private async System.Threading.Tasks.Task InitializeAsync()
     {
-        await AppViewModel.Instance.InitializeAsync();
+        await ViewModel.InitializeAsync();
+        UpdateStatusIndicators();
         NavigateToEmbed();
     }
 
@@ -29,30 +42,106 @@ public sealed partial class MainWindow : Window
         Title = "AWMKit";
     }
 
+    private void InitializeStatusIndicators()
+    {
+        _keyStatusItem = CreateStatusItem("status:key", Symbol.Contact, "密钥状态");
+        _engineStatusItem = CreateStatusItem("status:engine", Symbol.Audio, "音频引擎状态");
+        _databaseStatusItem = CreateStatusItem("status:database", Symbol.Library, "数据库状态");
+
+        MainNavigation.FooterMenuItems.Clear();
+        MainNavigation.FooterMenuItems.Add(_keyStatusItem);
+        MainNavigation.FooterMenuItems.Add(_engineStatusItem);
+        MainNavigation.FooterMenuItems.Add(_databaseStatusItem);
+        UpdateStatusIndicators();
+    }
+
+    private static NavigationViewItem CreateStatusItem(string tag, Symbol symbol, string automationName)
+    {
+        var item = new NavigationViewItem
+        {
+            Tag = tag,
+            Content = string.Empty,
+            Icon = new SymbolIcon(symbol),
+            Width = 40,
+            Margin = new Thickness(0, 0, 4, 0)
+        };
+        AutomationProperties.SetName(item, automationName);
+        return item;
+    }
+
+    private void UpdateStatusIndicators()
+    {
+        UpdateStatusItem(_keyStatusItem, ViewModel.KeyStatusBrush, ViewModel.KeyStatusTooltip);
+        UpdateStatusItem(_engineStatusItem, ViewModel.EngineStatusBrush, ViewModel.EngineStatusTooltip);
+        UpdateStatusItem(_databaseStatusItem, ViewModel.DatabaseStatusBrush, ViewModel.DatabaseStatusTooltip);
+    }
+
+    private static void UpdateStatusItem(NavigationViewItem? item, Brush brush, string tooltip)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        if (item.Icon is IconElement icon)
+        {
+            icon.Foreground = brush;
+        }
+
+        ToolTipService.SetToolTip(item, tooltip);
+    }
+
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        _ = DispatcherQueue.TryEnqueue(UpdateStatusIndicators);
+    }
+
     private void NavigateToEmbed()
     {
-        MainNavigation.SelectedItem = MainNavigation.MenuItems[0];
+        if (MainNavigation.MenuItems.Count == 0)
+        {
+            return;
+        }
+
+        if (MainNavigation.MenuItems[0] is NavigationViewItem embedItem)
+        {
+            _lastPageItem = embedItem;
+            MainNavigation.SelectedItem = embedItem;
+        }
         ContentFrame.Navigate(typeof(EmbedPage));
     }
 
     private void MainNavigation_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        if (args.SelectedItemContainer is NavigationViewItem item)
+        if (args.SelectedItemContainer is not NavigationViewItem item)
         {
-            var tag = item.Tag?.ToString();
-            switch (tag)
-            {
-                case "embed":
-                    ContentFrame.Navigate(typeof(EmbedPage));
-                    break;
-                case "detect":
-                    ContentFrame.Navigate(typeof(DetectPage));
-                    break;
-                case "tags":
-                    ContentFrame.Navigate(typeof(TagsPage));
-                    break;
-            }
+            return;
+        }
+
+        var tag = item.Tag?.ToString();
+        switch (tag)
+        {
+            case "embed":
+                _lastPageItem = item;
+                ContentFrame.Navigate(typeof(EmbedPage));
+                break;
+            case "detect":
+                _lastPageItem = item;
+                ContentFrame.Navigate(typeof(DetectPage));
+                break;
+            case "tags":
+                _lastPageItem = item;
+                ContentFrame.Navigate(typeof(TagsPage));
+                break;
+            case "status:key":
+            case "status:engine":
+            case "status:database":
+                _ = ViewModel.RefreshRuntimeStatusAsync();
+                if (_lastPageItem is not null)
+                {
+                    MainNavigation.SelectedItem = _lastPageItem;
+                }
+                break;
         }
     }
-
 }

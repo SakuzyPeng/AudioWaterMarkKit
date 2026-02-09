@@ -1,16 +1,19 @@
 using System;
+using System.Text;
 using System.Runtime.InteropServices;
 
 namespace AWMKit.Native;
 
 /// <summary>
-/// Bridge for key management operations using Windows DPAPI (via Rust keystore).
+/// Bridge for key management operations via Rust KeyStore.
+/// Backend order on Windows: keyring first, DPAPI file fallback.
 /// NOTE: Rust KeyStore is GLOBAL - only ONE key is stored per system (no per-user identity).
 /// All keys are 32 bytes (256-bit HMAC-SHA256 keys).
 /// </summary>
 public static class AwmKeyBridge
 {
     private const int KeySize = 32;
+    private const int LabelBufferSize = 512;
 
     /// <summary>
     /// Checks if a key exists in the system keystore.
@@ -19,6 +22,34 @@ public static class AwmKeyBridge
     public static bool KeyExists()
     {
         return AwmNative.awm_key_exists();
+    }
+
+    /// <summary>
+    /// Gets the active key backend label from native layer.
+    /// Examples: "keyring (service: ...)", "dpapi (...)", "none".
+    /// </summary>
+    public static (string? backend, AwmError error) GetBackendLabel()
+    {
+        var buffer = new byte[LabelBufferSize];
+        var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+        try
+        {
+            int code = AwmNative.awm_key_backend_label(handle.AddrOfPinnedObject(), (nuint)buffer.Length);
+            var error = (AwmError)code;
+            if (error != AwmError.Ok)
+            {
+                return (null, error);
+            }
+
+            var len = Array.IndexOf(buffer, (byte)0);
+            if (len < 0) len = buffer.Length;
+            var label = Encoding.UTF8.GetString(buffer, 0, len);
+            return (label, AwmError.Ok);
+        }
+        finally
+        {
+            handle.Free();
+        }
     }
 
     /// <summary>
