@@ -11,21 +11,21 @@
                     PaneDisplayMode="Top"
                     SelectionChanged="MainNavigation_SelectionChanged">
         <NavigationView.MenuItems>
-            <NavigationViewItem Content="Embed" Tag="embed">
+            <NavigationViewItem Content="嵌入" Tag="embed">
                 <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE710;"/>
+                    <SymbolIcon Symbol="Audio"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
 
-            <NavigationViewItem Content="Detect" Tag="detect">
+            <NavigationViewItem Content="检测" Tag="detect">
                 <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE71C;"/>
+                    <SymbolIcon Symbol="Find"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
 
-            <NavigationViewItem Content="Tags" Tag="tags">
+            <NavigationViewItem Content="标签" Tag="tags">
                 <NavigationViewItem.Icon>
-                    <FontIcon Glyph="&#xE1CB;"/>
+                    <SymbolIcon Symbol="Tag"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
         </NavigationView.MenuItems>

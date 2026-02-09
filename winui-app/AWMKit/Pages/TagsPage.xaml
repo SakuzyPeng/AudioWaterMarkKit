@@ -7,8 +7,11 @@
     xmlns:models="using:AWMKit.Models"
     mc:Ignorable="d"
     Loaded="Page_Loaded">
+    <Page.Resources>
+        <SolidColorBrush x:Key="PageBackdropBrush" Color="#0D5B9BFF"/>
+    </Page.Resources>
 
-    <ScrollViewer>
+    <ScrollViewer Background="{StaticResource PageBackdropBrush}">
         <StackPanel Padding="24" Spacing="24" MaxWidth="800">
             <!-- Page Header -->
             <TextBlock Text="Tag Management" Style="{StaticResource TitleTextBlockStyle}"/>

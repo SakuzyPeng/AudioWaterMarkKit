@@ -5,8 +5,11 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
+    <Page.Resources>
+        <SolidColorBrush x:Key="PageBackdropBrush" Color="#0D5B9BFF"/>
+    </Page.Resources>
 
-    <ScrollViewer>
+    <ScrollViewer Background="{StaticResource PageBackdropBrush}">
         <StackPanel Padding="24" Spacing="24" MaxWidth="800">
             <!-- Page Header -->
             <TextBlock Text="Embed Watermark" Style="{StaticResource TitleTextBlockStyle}"/>

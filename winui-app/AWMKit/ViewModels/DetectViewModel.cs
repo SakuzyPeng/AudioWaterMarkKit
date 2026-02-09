@@ -220,6 +220,8 @@ public sealed partial class DetectViewModel : ObservableObject
 
     public int QueueCount => SelectedFiles.Count;
 
+    public bool HasQueueCount => QueueCount > 0;
+
     public bool HasQueueFiles => SelectedFiles.Count > 0;
 
     public bool ShowQueueEmptyHint => !HasQueueFiles;
@@ -835,6 +837,7 @@ public sealed partial class DetectViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(CanDetectOrStop));
         OnPropertyChanged(nameof(QueueCount));
+        OnPropertyChanged(nameof(HasQueueCount));
         OnPropertyChanged(nameof(QueueCountText));
         OnPropertyChanged(nameof(HasQueueFiles));
         OnPropertyChanged(nameof(ShowQueueEmptyHint));

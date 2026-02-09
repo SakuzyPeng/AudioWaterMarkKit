@@ -8,10 +8,17 @@
     xmlns:models="using:AWMKit.Models"
     mc:Ignorable="d">
     <Page.Resources>
+        <SolidColorBrush x:Key="DetectPageBackdropBrush" Color="#0D5B9BFF"/>
+
+        <Style x:Key="DetectMainCardBorderStyle" TargetType="Border" BasedOn="{StaticResource CardBorderStyle}">
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
         <Style x:Key="DetectHeaderBorderStyle" TargetType="Border">
             <Setter Property="Background" Value="{ThemeResource ControlFillColorSecondaryBrush}"/>
-            <Setter Property="BorderBrush" Value="{ThemeResource DividerStrokeColorDefaultBrush}"/>
-            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="12,10"/>
             <Setter Property="Margin" Value="2,2,2,0"/>
@@ -28,7 +35,7 @@
         </Style>
     </Page.Resources>
 
-    <Grid Padding="24" RowSpacing="12" ColumnSpacing="12">
+    <Grid Padding="24" RowSpacing="12" ColumnSpacing="12" Background="{StaticResource DetectPageBackdropBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="*"/>
@@ -38,7 +45,7 @@
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="18">
+        <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource DetectMainCardBorderStyle}" Padding="18">
             <Grid RowSpacing="12">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -48,6 +55,8 @@
 
                 <Border Grid.Row="0"
                         Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
                         CornerRadius="8"
                         Padding="12"
                         Margin="2,2,2,0">
@@ -85,7 +94,7 @@
                             Style="{StaticResource SecondaryButtonStyle}"
                             AutomationProperties.Name="清空队列">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <SymbolIcon Symbol="Delete"/>
+                            <SymbolIcon Symbol="List"/>
                             <TextBlock Text="清空"/>
                         </StackPanel>
                     </Button>
@@ -93,7 +102,7 @@
                             Style="{StaticResource SecondaryButtonStyle}"
                             AutomationProperties.Name="清空日志">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <SymbolIcon Symbol="Delete"/>
+                            <SymbolIcon Symbol="Message"/>
                             <TextBlock Text="清空"/>
                         </StackPanel>
                     </Button>
@@ -112,14 +121,14 @@
                         Background="{ThemeResource ControlFillColorSecondaryBrush}">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
                         <FontIcon Glyph="&#xE8B8;" FontSize="26"/>
-                        <TextBlock Text="拖拽音频文件到此处" FontWeight="SemiBold"/>
-                        <TextBlock Text="检测文件中是否包含水印标签" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="拖拽音频文件到此处" FontWeight="SemiBold" TextAlignment="Center"/>
+                        <TextBlock Text="检测文件中是否包含水印标签" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Center"/>
                     </StackPanel>
                 </Border>
             </Grid>
         </Border>
 
-        <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource CardBorderStyle}" Padding="18">
+        <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource DetectMainCardBorderStyle}" Padding="18">
             <Grid RowSpacing="10">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -274,7 +283,7 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="18">
+        <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource DetectMainCardBorderStyle}" Padding="18">
             <Grid RowSpacing="12">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -289,7 +298,11 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="待检测文件" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                        <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{x:Bind ViewModel.QueueCountText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Grid.Column="1"
+                                   VerticalAlignment="Center"
+                                   Text="{x:Bind ViewModel.QueueCountText, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Visibility="{x:Bind ViewModel.HasQueueCount, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
                     </Grid>
                 </Border>
 
@@ -339,7 +352,7 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource CardBorderStyle}" Padding="18">
+        <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource DetectMainCardBorderStyle}" Padding="18">
             <Grid RowSpacing="12">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
