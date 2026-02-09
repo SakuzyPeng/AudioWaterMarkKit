@@ -106,13 +106,20 @@ jobs:
             -p:IncludeAllContentForSelfExtract=true `
             -p:DebugType=None `
             -p:DebugSymbols=false
-          $publishDir = "bin/Release/net10.0-windows10.0.19041.0/win-x64/publish"
-          if (-not (Test-Path "$publishDir/AWMKit.exe")) {
+          $publishDir = Get-ChildItem -Path "bin" -Directory -Recurse |
+            Where-Object { $_.Name -eq "publish" } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if ($null -eq $publishDir) {
+            throw "Publish directory not found under winui-app/AWMKit/bin"
+          }
+          $exePath = Join-Path $publishDir.FullName "AWMKit.exe"
+          if (-not (Test-Path $exePath)) {
             throw "AWMKit.exe not found in publish directory"
           }
-          Get-ChildItem "$publishDir/AWMKit.exe" | Format-List FullName,Length
+          Get-ChildItem $exePath | Format-List FullName,Length
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE/dist/windows" | Out-Null
-          Copy-Item "$publishDir/AWMKit.exe" "$env:GITHUB_WORKSPACE/dist/windows/AWMKit-win-x64-single.exe" -Force
+          Copy-Item $exePath "$env:GITHUB_WORKSPACE/dist/windows/AWMKit-win-x64-single.exe" -Force
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
