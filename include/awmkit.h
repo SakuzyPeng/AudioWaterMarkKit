@@ -194,6 +194,40 @@ typedef struct {
     uint32_t bit_errors;       // Number of bit errors
 } AWMDetectResult;
 
+/**
+ * Multichannel layout
+ */
+typedef enum {
+    AWM_CHANNEL_LAYOUT_STEREO = 0,
+    AWM_CHANNEL_LAYOUT_SURROUND_51 = 1,
+    AWM_CHANNEL_LAYOUT_SURROUND_512 = 2,
+    AWM_CHANNEL_LAYOUT_SURROUND_71 = 3,
+    AWM_CHANNEL_LAYOUT_SURROUND_714 = 4,
+    AWM_CHANNEL_LAYOUT_SURROUND_916 = 5,
+    AWM_CHANNEL_LAYOUT_AUTO = -1,
+} AWMChannelLayout;
+
+/**
+ * Multichannel pair detection result
+ */
+typedef struct {
+    uint32_t pair_index;      // Pair index
+    bool found;               // Whether watermark was found
+    uint8_t raw_message[16];  // Extracted message
+    uint32_t bit_errors;      // Bit errors
+} AWMPairResult;
+
+/**
+ * Multichannel detection result
+ */
+typedef struct {
+    uint32_t pair_count;            // Number of detected pairs
+    AWMPairResult pairs[8];         // Pair results (max 8)
+    bool has_best;                  // Whether best result exists
+    uint8_t best_raw_message[16];   // Best result message
+    uint32_t best_bit_errors;       // Best result bit errors
+} AWMMultichannelDetectResult;
+
 typedef enum {
     AWM_CLONE_CHECK_EXACT = 0,
     AWM_CLONE_CHECK_LIKELY = 1,
@@ -279,6 +313,36 @@ int32_t awm_audio_detect(
     const char* input,
     AWMDetectResult* result
 );
+
+/**
+ * Embed watermark with multichannel routing
+ *
+ * Requires rust feature: multichannel
+ */
+int32_t awm_audio_embed_multichannel(
+    const AWMAudioHandle* handle,
+    const char* input,
+    const char* output,
+    const uint8_t* message,
+    AWMChannelLayout layout
+);
+
+/**
+ * Detect watermark with multichannel routing
+ *
+ * Requires rust feature: multichannel
+ */
+int32_t awm_audio_detect_multichannel(
+    const AWMAudioHandle* handle,
+    const char* input,
+    AWMChannelLayout layout,
+    AWMMultichannelDetectResult* result
+);
+
+/**
+ * Get number of channels for a layout
+ */
+uint32_t awm_channel_layout_channels(AWMChannelLayout layout);
 
 /**
  * Evaluate clone check for a decoded identity/key_slot and input file
