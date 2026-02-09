@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+env:
+  AUDIOWMARK_WINDOWS_RELEASE: audiowmark-win-2026-02-03
+  AUDIOWMARK_WINDOWS_ASSET: audiowmark-windows-x86_64.zip
+
 jobs:
   windows-build-and-package:
     runs-on: windows-latest
@@ -44,12 +48,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-winui-
 
-      - name: Validate bundled audiowmark zip
+      - name: Ensure and validate bundled audiowmark zip
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $zipPath = "bundled/audiowmark-windows-x86_64.zip"
+          $zipPath = "bundled/$env:AUDIOWMARK_WINDOWS_ASSET"
           if (-not (Test-Path $zipPath)) {
-            throw "Missing bundled zip: $zipPath"
+            Write-Host "Bundled zip missing, downloading release asset..."
+            New-Item -ItemType Directory -Force -Path bundled | Out-Null
+            gh release download "$env:AUDIOWMARK_WINDOWS_RELEASE" `
+              --repo "${{ github.repository }}" `
+              -p "$env:AUDIOWMARK_WINDOWS_ASSET" `
+              --clobber
+            if (-not (Test-Path "$env:AUDIOWMARK_WINDOWS_ASSET")) {
+              throw "Failed to download release asset: $env:AUDIOWMARK_WINDOWS_ASSET"
+            }
+            Move-Item -Force "$env:AUDIOWMARK_WINDOWS_ASSET" $zipPath
           }
           Remove-Item -Recurse -Force tmp-bundled -ErrorAction SilentlyContinue
           Expand-Archive -Path $zipPath -DestinationPath tmp-bundled -Force
