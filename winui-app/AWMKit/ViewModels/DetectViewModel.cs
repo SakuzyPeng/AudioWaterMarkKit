@@ -53,6 +53,15 @@ public sealed partial class DetectViewModel : ObservableObject
 
     public string InputSourceText => string.IsNullOrWhiteSpace(InputSource) ? "尚未选择输入源" : InputSource;
 
+    public ObservableCollection<ChannelLayoutOption> ChannelLayoutOptions { get; } = BuildChannelLayoutOptions();
+
+    private ChannelLayoutOption? _selectedChannelLayout;
+    public ChannelLayoutOption? SelectedChannelLayout
+    {
+        get => _selectedChannelLayout;
+        set => SetProperty(ref _selectedChannelLayout, value);
+    }
+
     private bool _isProcessing;
     public bool IsProcessing
     {
@@ -307,6 +316,7 @@ public sealed partial class DetectViewModel : ObservableObject
 
     public DetectViewModel()
     {
+        SelectedChannelLayout = ChannelLayoutOptions.FirstOrDefault();
         SelectedFiles.CollectionChanged += OnSelectedFilesChanged;
         Logs.CollectionChanged += OnLogsChanged;
         DetectRecords.CollectionChanged += OnDetectRecordsChanged;
@@ -451,8 +461,10 @@ public sealed partial class DetectViewModel : ObservableObject
             CurrentProcessingIndex = 0;
             TotalDetected = 0;
             TotalFound = 0;
+            var channelLayout = SelectedChannelLayout?.Layout ?? AwmChannelLayout.Auto;
+            var layoutText = SelectedChannelLayout?.DisplayText ?? "自动";
 
-            AddLog("开始检测", $"准备检测 {SelectedFiles.Count} 个文件", true, false, null, LogIconTone.Info);
+            AddLog("开始检测", $"准备检测 {SelectedFiles.Count} 个文件（{layoutText}）", true, false, null, LogIconTone.Info);
 
             var initialTotal = SelectedFiles.Count;
             for (var processed = 0; processed < initialTotal; processed++)
@@ -470,7 +482,7 @@ public sealed partial class DetectViewModel : ObservableObject
                 DetectRecord record;
                 try
                 {
-                    record = await Task.Run(() => DetectSingleFile(filePath, key), token);
+                    record = await Task.Run(() => DetectSingleFile(filePath, key, channelLayout), token);
                 }
                 catch (Exception ex)
                 {
@@ -530,12 +542,18 @@ public sealed partial class DetectViewModel : ObservableObject
         }
     }
 
-    private DetectRecord DetectSingleFile(string filePath, byte[] key)
+    private DetectRecord DetectSingleFile(string filePath, byte[] key, AwmChannelLayout layout)
     {
-        var (detected, detectError) = AwmBridge.DetectAudioDetailed(filePath);
-        if (detectError == AwmError.Ok && detected is AwmBridge.DetectAudioResult detectResult)
+        var (mcDetected, detectError) = AwmBridge.DetectAudioMultichannelDetailed(filePath, layout);
+        if (detectError == AwmError.Ok && mcDetected is AwmBridge.MultichannelDetectAudioResult mcResult)
         {
-            var (decoded, decodeError) = AwmBridge.DecodeMessage(detectResult.RawMessage, key);
+            var (singleDetected, singleDetectError) = AwmBridge.DetectAudioDetailed(filePath);
+            var detectScore = singleDetectError == AwmError.Ok && singleDetected.HasValue
+                ? singleDetected.Value.DetectScore
+                : null;
+            var pattern = DetectPatternText(layout, mcResult.PairCount, singleDetected);
+
+            var (decoded, decodeError) = AwmBridge.DecodeMessage(mcResult.RawMessage, key);
             if (decodeError == AwmError.Ok && decoded.HasValue)
             {
                 var decodedValue = decoded.Value;
@@ -572,9 +590,9 @@ public sealed partial class DetectViewModel : ObservableObject
                     TimestampMinutes = decodedValue.TimestampMinutes,
                     TimestampUtc = decodedValue.TimestampUtc,
                     KeySlot = decodedValue.KeySlot,
-                    Pattern = detectResult.Pattern,
-                    DetectScore = detectResult.DetectScore,
-                    BitErrors = detectResult.BitErrors,
+                    Pattern = pattern,
+                    DetectScore = detectScore,
+                    BitErrors = mcResult.BitErrors,
                     MatchFound = true,
                     CloneCheck = cloneCheck,
                     CloneScore = cloneScore,
@@ -587,9 +605,9 @@ public sealed partial class DetectViewModel : ObservableObject
             {
                 FilePath = filePath,
                 Status = "invalid_hmac",
-                Pattern = detectResult.Pattern,
-                DetectScore = detectResult.DetectScore,
-                BitErrors = detectResult.BitErrors,
+                Pattern = pattern,
+                DetectScore = detectScore,
+                BitErrors = mcResult.BitErrors,
                 MatchFound = true,
                 Error = decodeError.ToString(),
             };
@@ -935,6 +953,49 @@ public sealed partial class DetectViewModel : ObservableObject
             AwmCloneCheckKind.Suspect => "suspect",
             _ => "unavailable",
         };
+    }
+
+    private static string DetectPatternText(
+        AwmChannelLayout layout,
+        uint pairCount,
+        AwmBridge.DetectAudioResult? singleDetected)
+    {
+        if (singleDetected is AwmBridge.DetectAudioResult detailed &&
+            !string.IsNullOrWhiteSpace(detailed.Pattern) &&
+            layout == AwmChannelLayout.Stereo)
+        {
+            return detailed.Pattern;
+        }
+
+        return layout switch
+        {
+            AwmChannelLayout.Stereo => "stereo",
+            AwmChannelLayout.Surround51 => $"multichannel 5.1 ({pairCount} 对)",
+            AwmChannelLayout.Surround512 => $"multichannel 5.1.2 ({pairCount} 对)",
+            AwmChannelLayout.Surround71 => $"multichannel 7.1 ({pairCount} 对)",
+            AwmChannelLayout.Surround714 => $"multichannel 7.1.4 ({pairCount} 对)",
+            AwmChannelLayout.Surround916 => $"multichannel 9.1.6 ({pairCount} 对)",
+            _ => $"multichannel auto ({pairCount} 对)",
+        };
+    }
+
+    private static ObservableCollection<ChannelLayoutOption> BuildChannelLayoutOptions()
+    {
+        return new ObservableCollection<ChannelLayoutOption>
+        {
+            CreateLayoutOption(AwmChannelLayout.Auto, "自动"),
+            CreateLayoutOption(AwmChannelLayout.Stereo, "立体声"),
+            CreateLayoutOption(AwmChannelLayout.Surround51, "5.1"),
+            CreateLayoutOption(AwmChannelLayout.Surround512, "5.1.2"),
+            CreateLayoutOption(AwmChannelLayout.Surround71, "7.1"),
+            CreateLayoutOption(AwmChannelLayout.Surround714, "7.1.4"),
+            CreateLayoutOption(AwmChannelLayout.Surround916, "9.1.6"),
+        };
+    }
+
+    private static ChannelLayoutOption CreateLayoutOption(AwmChannelLayout layout, string label)
+    {
+        return new ChannelLayoutOption(layout, label, AwmBridge.GetLayoutChannels(layout));
     }
 
     private static string FingerprintScoreDisplay(DetectRecord? record)

@@ -78,8 +78,22 @@ public sealed partial class EmbedViewModel : ObservableObject
         set => SetProperty(ref _errorMessage, value);
     }
 
+    public ObservableCollection<ChannelLayoutOption> ChannelLayoutOptions { get; } = BuildChannelLayoutOptions();
+
+    private ChannelLayoutOption? _selectedChannelLayout;
+    public ChannelLayoutOption? SelectedChannelLayout
+    {
+        get => _selectedChannelLayout;
+        set => SetProperty(ref _selectedChannelLayout, value);
+    }
+
     public ObservableCollection<string> InputFiles { get; } = new();
     public ObservableCollection<string> ProcessedFiles { get; } = new();
+
+    public EmbedViewModel()
+    {
+        SelectedChannelLayout = ChannelLayoutOptions.FirstOrDefault();
+    }
 
     /// <summary>
     /// Adds files to the input list.
@@ -178,7 +192,8 @@ public sealed partial class EmbedViewModel : ObservableObject
                 }
 
                 // Embed watermark
-                var embedError = AwmBridge.EmbedAudio(inputFile, outputFile, message, Strength);
+                var layout = SelectedChannelLayout?.Layout ?? AwmChannelLayout.Auto;
+                var embedError = AwmBridge.EmbedAudioMultichannel(inputFile, outputFile, message, layout, Strength);
 
                 if (embedError == AwmError.Ok)
                 {
@@ -210,4 +225,23 @@ public sealed partial class EmbedViewModel : ObservableObject
     /// Checks if embedding can start.
     /// </summary>
     public bool CanEmbed => !string.IsNullOrEmpty(Identity) && InputFiles.Any() && !string.IsNullOrEmpty(OutputDirectory) && !IsProcessing;
+
+    private static ObservableCollection<ChannelLayoutOption> BuildChannelLayoutOptions()
+    {
+        return new ObservableCollection<ChannelLayoutOption>
+        {
+            CreateLayoutOption(AwmChannelLayout.Auto, "自动"),
+            CreateLayoutOption(AwmChannelLayout.Stereo, "立体声"),
+            CreateLayoutOption(AwmChannelLayout.Surround51, "5.1"),
+            CreateLayoutOption(AwmChannelLayout.Surround512, "5.1.2"),
+            CreateLayoutOption(AwmChannelLayout.Surround71, "7.1"),
+            CreateLayoutOption(AwmChannelLayout.Surround714, "7.1.4"),
+            CreateLayoutOption(AwmChannelLayout.Surround916, "9.1.6"),
+        };
+    }
+
+    private static ChannelLayoutOption CreateLayoutOption(AwmChannelLayout layout, string label)
+    {
+        return new ChannelLayoutOption(layout, label, AwmBridge.GetLayoutChannels(layout));
+    }
 }

@@ -21,6 +21,12 @@ public static class AwmBridge
         float? DetectScore
     );
 
+    public readonly record struct MultichannelDetectAudioResult(
+        byte[] RawMessage,
+        uint BitErrors,
+        uint PairCount
+    );
+
     public readonly record struct CloneCheckResult(
         AwmCloneCheckKind Kind,
         double? Score,
@@ -222,6 +228,51 @@ public static class AwmBridge
     }
 
     /// <summary>
+    /// Embeds a watermark with multichannel routing.
+    /// </summary>
+    public static AwmError EmbedAudioMultichannel(
+        string inputPath,
+        string outputPath,
+        byte[] message,
+        AwmChannelLayout layout,
+        int strength = 10)
+    {
+        if (message.Length != MessageLength)
+        {
+            return AwmError.InvalidMessageLength;
+        }
+
+        using var handle = AwmAudioHandle.CreateNew();
+        if (handle.IsInvalid)
+        {
+            return AwmError.AudiowmarkNotFound;
+        }
+
+        AwmNative.awm_audio_set_strength(handle.DangerousGetHandle(), (byte)strength);
+
+        var messageHandle = GCHandle.Alloc(message, GCHandleType.Pinned);
+        try
+        {
+            int code = AwmNative.awm_audio_embed_multichannel(
+                handle.DangerousGetHandle(),
+                inputPath,
+                outputPath,
+                messageHandle.AddrOfPinnedObject(),
+                layout);
+
+            return (AwmError)code;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return EmbedAudio(inputPath, outputPath, message, strength);
+        }
+        finally
+        {
+            messageHandle.Free();
+        }
+    }
+
+    /// <summary>
     /// Detects a watermark from an audio file.
     /// </summary>
     public static (byte[]? message, string pattern, AwmError error) DetectAudio(string inputPath)
@@ -272,6 +323,92 @@ public static class AwmBridge
         finally
         {
             Marshal.FreeHGlobal(resultPtr);
+        }
+    }
+
+    /// <summary>
+    /// Detects a watermark with multichannel routing (returns best pair).
+    /// </summary>
+    public static (MultichannelDetectAudioResult? result, AwmError error) DetectAudioMultichannelDetailed(
+        string inputPath,
+        AwmChannelLayout layout)
+    {
+        using var handle = AwmAudioHandle.CreateNew();
+        if (handle.IsInvalid)
+        {
+            return (null, AwmError.AudiowmarkNotFound);
+        }
+
+        var resultPtr = Marshal.AllocHGlobal(Marshal.SizeOf<AWMMultichannelDetectResult>());
+        try
+        {
+            int code = AwmNative.awm_audio_detect_multichannel(
+                handle.DangerousGetHandle(),
+                inputPath,
+                layout,
+                resultPtr);
+
+            if (code == 0)
+            {
+                var result = Marshal.PtrToStructure<AWMMultichannelDetectResult>(resultPtr);
+                if (!result.HasBest || result.BestRawMessage is null)
+                {
+                    return (null, AwmError.NoWatermarkFound);
+                }
+
+                var message = new byte[MessageLength];
+                Array.Copy(result.BestRawMessage, message, MessageLength);
+
+                return (new MultichannelDetectAudioResult(
+                    message,
+                    result.BestBitErrors,
+                    result.PairCount
+                ), AwmError.Ok);
+            }
+
+            return (null, (AwmError)code);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            var (fallback, fallbackError) = DetectAudioDetailed(inputPath);
+            if (fallbackError != AwmError.Ok || fallback is null)
+            {
+                return (null, fallbackError);
+            }
+
+            return (new MultichannelDetectAudioResult(
+                fallback.Value.RawMessage,
+                fallback.Value.BitErrors,
+                1
+            ), AwmError.Ok);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(resultPtr);
+        }
+    }
+
+    /// <summary>
+    /// Returns channel count for a layout.
+    /// </summary>
+    public static uint GetLayoutChannels(AwmChannelLayout layout)
+    {
+        try
+        {
+            return AwmNative.awm_channel_layout_channels(layout);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return layout switch
+            {
+                AwmChannelLayout.Stereo => 2,
+                AwmChannelLayout.Surround51 => 6,
+                AwmChannelLayout.Surround512 => 8,
+                AwmChannelLayout.Surround71 => 8,
+                AwmChannelLayout.Surround714 => 12,
+                AwmChannelLayout.Surround916 => 16,
+                _ => 0,
+            };
         }
     }
 

@@ -18,6 +18,18 @@ public enum AwmError
     NoWatermarkFound = -9,
 }
 
+/// <summary>Multichannel layout enum matching AWMChannelLayout in C header.</summary>
+public enum AwmChannelLayout : int
+{
+    Stereo = 0,
+    Surround51 = 1,
+    Surround512 = 2,
+    Surround71 = 3,
+    Surround714 = 4,
+    Surround916 = 5,
+    Auto = -1,
+}
+
 /// <summary>Decoded watermark message.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct AWMResult
@@ -69,6 +81,39 @@ public struct AWMDetectResult
         if (len < 0) len = Pattern.Length;
         return System.Text.Encoding.UTF8.GetString(Pattern, 0, len);
     }
+}
+
+/// <summary>Single multichannel pair detection result.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct AWMPairResult
+{
+    public uint PairIndex;
+
+    [MarshalAs(UnmanagedType.U1)]
+    public bool Found;
+
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
+    public byte[] RawMessage;
+
+    public uint BitErrors;
+}
+
+/// <summary>Multichannel detect result with best pair summary.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct AWMMultichannelDetectResult
+{
+    public uint PairCount;
+
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 8)]
+    public AWMPairResult[] Pairs;
+
+    [MarshalAs(UnmanagedType.U1)]
+    public bool HasBest;
+
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
+    public byte[] BestRawMessage;
+
+    public uint BestBitErrors;
 }
 
 /// <summary>Clone check result kind.</summary>

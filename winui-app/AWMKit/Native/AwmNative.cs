@@ -81,11 +81,29 @@ internal static class AwmNative
         [MarshalAs(UnmanagedType.LPUTF8Str)] string output,
         IntPtr message);
 
+    [DllImport(Lib, EntryPoint = "awm_audio_embed_multichannel", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_audio_embed_multichannel(
+        IntPtr handle,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string input,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string output,
+        IntPtr message,
+        AwmChannelLayout layout);
+
     [DllImport(Lib, EntryPoint = "awm_audio_detect", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_audio_detect(
         IntPtr handle,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string input,
         IntPtr result);
+
+    [DllImport(Lib, EntryPoint = "awm_audio_detect_multichannel", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_audio_detect_multichannel(
+        IntPtr handle,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string input,
+        AwmChannelLayout layout,
+        IntPtr result);
+
+    [DllImport(Lib, EntryPoint = "awm_channel_layout_channels", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern uint awm_channel_layout_channels(AwmChannelLayout layout);
 
     [DllImport(Lib, EntryPoint = "awm_clone_check_for_file", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_clone_check_for_file(

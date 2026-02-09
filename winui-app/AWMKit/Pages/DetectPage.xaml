@@ -70,6 +70,12 @@
                 </Border>
 
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,2,0,0">
+                    <ComboBox Width="170"
+                              ItemsSource="{x:Bind ViewModel.ChannelLayoutOptions, Mode=OneWay}"
+                              SelectedItem="{x:Bind ViewModel.SelectedChannelLayout, Mode=TwoWay}"
+                              DisplayMemberPath="DisplayText"
+                              PlaceholderText="声道布局"
+                              AutomationProperties.Name="选择声道布局"/>
                     <Button Click="SelectInputSourceButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
                             AutomationProperties.Name="选择输入源">
