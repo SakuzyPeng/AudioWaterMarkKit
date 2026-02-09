@@ -3,42 +3,31 @@ using System;
 namespace AWMKit.Models;
 
 /// <summary>
-/// Represents an audio evidence record stored in the audio_evidence table.
+/// Represents one row from audio_evidence.
 /// </summary>
 public sealed class EvidenceRecord
 {
-    /// <summary>
-    /// Unique record ID.
-    /// </summary>
-    public int Id { get; init; }
-
-    /// <summary>
-    /// Full path to the audio file.
-    /// </summary>
+    public long Id { get; init; }
+    public long CreatedAt { get; init; }
     public required string FilePath { get; init; }
-
-    /// <summary>
-    /// SHA-256 hash of the audio file.
-    /// </summary>
-    public required string FileHash { get; init; }
-
-    /// <summary>
-    /// 16-byte watermark message (hex-encoded).
-    /// </summary>
-    public required string Message { get; init; }
-
-    /// <summary>
-    /// Detection pattern quality string (e.g., "5.2").
-    /// </summary>
-    public required string Pattern { get; init; }
-
-    /// <summary>
-    /// Decoded tag from the message (e.g., "ABCD1234").
-    /// </summary>
     public required string Tag { get; init; }
+    public required string Identity { get; init; }
+    public int Version { get; init; }
+    public int KeySlot { get; init; }
+    public long TimestampMinutes { get; init; }
+    public required string MessageHex { get; init; }
+    public int SampleRate { get; init; }
+    public int Channels { get; init; }
+    public long SampleCount { get; init; }
+    public required string PcmSha256 { get; init; }
+    public required byte[] ChromaprintBlob { get; init; }
+    public int FingerprintLen { get; init; }
+    public int FpConfigId { get; init; }
 
-    /// <summary>
-    /// Timestamp when the evidence was recorded (UTC).
-    /// </summary>
-    public DateTime CreatedAt { get; init; }
+    public DateTime CreatedAtDateTime => DateTimeOffset.FromUnixTimeSeconds(CreatedAt).UtcDateTime;
+
+    // Compatibility shims for existing WinUI code paths that still reference old names.
+    public string FileHash => PcmSha256;
+    public string Message => MessageHex;
+    public string Pattern => "-";
 }

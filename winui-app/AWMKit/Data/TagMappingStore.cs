@@ -19,7 +19,7 @@ public sealed class TagMappingStore
     }
 
     /// <summary>
-    /// Lists all tag mappings.
+    /// Lists all tag mappings in username order.
     /// </summary>
     public async Task<List<TagMapping>> ListAllAsync()
     {
@@ -30,7 +30,11 @@ public sealed class TagMappingStore
             return mappings;
         }
 
-        var query = "SELECT identity, tag, display_name, created_at, updated_at FROM tag_mappings ORDER BY updated_at DESC";
+        const string query = """
+            SELECT username, tag, created_at
+            FROM tag_mappings
+            ORDER BY username COLLATE NOCASE ASC
+            """;
 
         using var cmd = _database.Connection.CreateCommand();
         cmd.CommandText = query;
@@ -40,11 +44,9 @@ public sealed class TagMappingStore
         {
             mappings.Add(new TagMapping
             {
-                Identity = reader.GetString(0),
+                Username = reader.GetString(0),
                 Tag = reader.GetString(1),
-                DisplayName = reader.IsDBNull(2) ? null : reader.GetString(2),
-                CreatedAt = DateTime.Parse(reader.GetString(3)),
-                UpdatedAt = DateTime.Parse(reader.GetString(4))
+                CreatedAtUnix = reader.GetInt64(2)
             });
         }
 
@@ -52,7 +54,7 @@ public sealed class TagMappingStore
     }
 
     /// <summary>
-    /// Gets a tag mapping by identity.
+    /// Gets a tag mapping by username (legacy API name kept for compatibility).
     /// </summary>
     public async Task<TagMapping?> GetByIdentityAsync(string identity)
     {
@@ -61,26 +63,29 @@ public sealed class TagMappingStore
             return null;
         }
 
-        var query = "SELECT identity, tag, display_name, created_at, updated_at FROM tag_mappings WHERE identity = @identity";
+        const string query = """
+            SELECT username, tag, created_at
+            FROM tag_mappings
+            WHERE username = @username COLLATE NOCASE
+            LIMIT 1
+            """;
 
         using var cmd = _database.Connection.CreateCommand();
         cmd.CommandText = query;
-        cmd.Parameters.AddWithValue("@identity", identity);
+        cmd.Parameters.AddWithValue("@username", identity);
 
         using var reader = await cmd.ExecuteReaderAsync();
-        if (await reader.ReadAsync())
+        if (!await reader.ReadAsync())
         {
-            return new TagMapping
-            {
-                Identity = reader.GetString(0),
-                Tag = reader.GetString(1),
-                DisplayName = reader.IsDBNull(2) ? null : reader.GetString(2),
-                CreatedAt = DateTime.Parse(reader.GetString(3)),
-                UpdatedAt = DateTime.Parse(reader.GetString(4))
-            };
+            return null;
         }
 
-        return null;
+        return new TagMapping
+        {
+            Username = reader.GetString(0),
+            Tag = reader.GetString(1),
+            CreatedAtUnix = reader.GetInt64(2)
+        };
     }
 
     /// <summary>
@@ -93,30 +98,34 @@ public sealed class TagMappingStore
             return null;
         }
 
-        var query = "SELECT identity, tag, display_name, created_at, updated_at FROM tag_mappings WHERE tag = @tag";
+        const string query = """
+            SELECT username, tag, created_at
+            FROM tag_mappings
+            WHERE tag = @tag
+            LIMIT 1
+            """;
 
         using var cmd = _database.Connection.CreateCommand();
         cmd.CommandText = query;
         cmd.Parameters.AddWithValue("@tag", tag);
 
         using var reader = await cmd.ExecuteReaderAsync();
-        if (await reader.ReadAsync())
+        if (!await reader.ReadAsync())
         {
-            return new TagMapping
-            {
-                Identity = reader.GetString(0),
-                Tag = reader.GetString(1),
-                DisplayName = reader.IsDBNull(2) ? null : reader.GetString(2),
-                CreatedAt = DateTime.Parse(reader.GetString(3)),
-                UpdatedAt = DateTime.Parse(reader.GetString(4))
-            };
+            return null;
         }
 
-        return null;
+        return new TagMapping
+        {
+            Username = reader.GetString(0),
+            Tag = reader.GetString(1),
+            CreatedAtUnix = reader.GetInt64(2)
+        };
     }
 
     /// <summary>
     /// Saves or updates a tag mapping.
+    /// displayName is ignored because Rust schema has no such field.
     /// </summary>
     public async Task<bool> SaveAsync(string identity, string tag, string? displayName = null)
     {
@@ -125,37 +134,35 @@ public sealed class TagMappingStore
             return false;
         }
 
-        var now = DateTime.UtcNow.ToString("o");
+        _ = displayName;
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-        var upsert = @"
-INSERT INTO tag_mappings (identity, tag, display_name, created_at, updated_at)
-VALUES (@identity, @tag, @displayName, @now, @now)
-ON CONFLICT(identity) DO UPDATE SET
-    tag = @tag,
-    display_name = @displayName,
-    updated_at = @now";
+        const string upsert = """
+            INSERT INTO tag_mappings (username, tag, created_at)
+            VALUES (@username, @tag, @createdAt)
+            ON CONFLICT(username) DO UPDATE SET
+                tag = excluded.tag,
+                created_at = excluded.created_at
+            """;
 
         try
         {
             using var cmd = _database.Connection.CreateCommand();
             cmd.CommandText = upsert;
-            cmd.Parameters.AddWithValue("@identity", identity);
+            cmd.Parameters.AddWithValue("@username", identity);
             cmd.Parameters.AddWithValue("@tag", tag);
-            cmd.Parameters.AddWithValue("@displayName", displayName ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue("@now", now);
-
+            cmd.Parameters.AddWithValue("@createdAt", now);
             await cmd.ExecuteNonQueryAsync();
             return true;
         }
         catch (SqliteException)
         {
-            // Constraint violation (duplicate tag)
             return false;
         }
     }
 
     /// <summary>
-    /// Deletes a tag mapping by identity.
+    /// Deletes a mapping by username (legacy API name kept for compatibility).
     /// </summary>
     public async Task<bool> DeleteByIdentityAsync(string identity)
     {
@@ -164,18 +171,21 @@ ON CONFLICT(identity) DO UPDATE SET
             return false;
         }
 
-        var delete = "DELETE FROM tag_mappings WHERE identity = @identity";
+        const string delete = """
+            DELETE FROM tag_mappings
+            WHERE username = @username COLLATE NOCASE
+            """;
 
         using var cmd = _database.Connection.CreateCommand();
         cmd.CommandText = delete;
-        cmd.Parameters.AddWithValue("@identity", identity);
+        cmd.Parameters.AddWithValue("@username", identity);
 
         var rowsAffected = await cmd.ExecuteNonQueryAsync();
         return rowsAffected > 0;
     }
 
     /// <summary>
-    /// Deletes a tag mapping by tag.
+    /// Deletes a mapping by tag.
     /// </summary>
     public async Task<bool> DeleteByTagAsync(string tag)
     {
@@ -184,7 +194,7 @@ ON CONFLICT(identity) DO UPDATE SET
             return false;
         }
 
-        var delete = "DELETE FROM tag_mappings WHERE tag = @tag";
+        const string delete = "DELETE FROM tag_mappings WHERE tag = @tag";
 
         using var cmd = _database.Connection.CreateCommand();
         cmd.CommandText = delete;
