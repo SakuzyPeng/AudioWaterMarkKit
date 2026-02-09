@@ -96,46 +96,41 @@ public sealed partial class AppViewModel : ObservableObject
     /// </summary>
     public async Task InitializeAsync()
     {
-        await Task.Run(async () =>
+        // Check database
+        DatabaseAvailable = await _database.OpenAsync();
+
+        // Check engine
+        try
         {
-            // Check database
-            DatabaseAvailable = await _database.OpenAsync();
+            var (path, error) = AwmBridge.GetAudioBinaryPath();
+            EnginePath = path ?? string.Empty;
+            EngineAvailable = error == AwmError.Ok && !string.IsNullOrEmpty(path);
+        }
+        catch
+        {
+            EngineAvailable = false;
+            EnginePath = string.Empty;
+        }
 
-            // Check engine
-            try
-            {
-                var (path, error) = AwmBridge.GetAudioBinaryPath();
-                EnginePath = path ?? string.Empty;
-                EngineAvailable = error == AwmError.Ok && !string.IsNullOrEmpty(path);
-            }
-            catch
-            {
-                EngineAvailable = false;
-                EnginePath = string.Empty;
-            }
-
-            // Load statistics
-            if (DatabaseAvailable)
-            {
-                var tags = await _tagStore.ListAllAsync();
-                TotalTags = tags.Count;
-                TotalEvidence = await _evidenceStore.CountAsync();
-            }
-        });
+        // Load statistics
+        if (DatabaseAvailable)
+        {
+            var tags = await _tagStore.ListAllAsync();
+            TotalTags = tags.Count;
+            TotalEvidence = await _evidenceStore.CountAsync();
+        }
     }
 
     /// <summary>
     /// Sets the current user identity and checks key availability.
     /// NOTE: Key storage is global (not per-user in Rust FFI).
     /// </summary>
-    public async Task SetIdentityAsync(string identity)
+    public Task SetIdentityAsync(string identity)
     {
-        await Task.Run(() =>
-        {
-            CurrentIdentity = identity;
-            // Check global key availability (Rust KeyStore is global)
-            KeyAvailable = !string.IsNullOrEmpty(identity) && AwmKeyBridge.KeyExists();
-        });
+        CurrentIdentity = identity;
+        // Check global key availability (Rust KeyStore is global)
+        KeyAvailable = !string.IsNullOrEmpty(identity) && AwmKeyBridge.KeyExists();
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -150,11 +145,8 @@ public sealed partial class AppViewModel : ObservableObject
             return;
         }
 
-        await Task.Run(() =>
-        {
-            var (key, error) = AwmKeyBridge.GenerateAndSaveKey();
-            KeyAvailable = error == AwmError.Ok && key is not null;
-        });
+        var (key, error) = await Task.Run(() => AwmKeyBridge.GenerateAndSaveKey());
+        KeyAvailable = error == AwmError.Ok && key is not null;
     }
 
     /// <summary>
@@ -169,11 +161,11 @@ public sealed partial class AppViewModel : ObservableObject
             return;
         }
 
-        await Task.Run(() =>
+        var error = await Task.Run(AwmKeyBridge.DeleteKey);
+        if (error == AwmError.Ok)
         {
-            var error = AwmKeyBridge.DeleteKey();
-            KeyAvailable = error == AwmError.Ok ? false : KeyAvailable;
-        });
+            KeyAvailable = false;
+        }
     }
 
     /// <summary>
@@ -187,11 +179,8 @@ public sealed partial class AppViewModel : ObservableObject
             return;
         }
 
-        await Task.Run(async () =>
-        {
-            var tags = await _tagStore.ListAllAsync();
-            TotalTags = tags.Count;
-            TotalEvidence = await _evidenceStore.CountAsync();
-        });
+        var tags = await _tagStore.ListAllAsync();
+        TotalTags = tags.Count;
+        TotalEvidence = await _evidenceStore.CountAsync();
     }
 }

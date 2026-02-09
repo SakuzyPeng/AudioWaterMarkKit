@@ -72,7 +72,7 @@
                     <ProgressRing IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
                                   Width="40"
                                   Height="40"
-                                  Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay}"/>
+                                  Visibility="{x:Bind ViewModel.IsLoading, Converter={StaticResource BoolToVisibilityConverter}, Mode=OneWay}"/>
 
                     <ListView ItemsSource="{x:Bind ViewModel.TagMappings}"
                               SelectionMode="None"

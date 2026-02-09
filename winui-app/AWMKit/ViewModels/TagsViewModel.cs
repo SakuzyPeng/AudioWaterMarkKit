@@ -66,21 +66,23 @@ public sealed partial class TagsViewModel : ObservableObject
         IsLoading = true;
         ErrorMessage = null;
 
-        await Task.Run(async () =>
+        try
         {
             var mappings = await AppViewModel.Instance.TagStore.ListAllAsync();
-
-            App.Current.MainWindow?.DispatcherQueue.TryEnqueue(() =>
+            TagMappings.Clear();
+            foreach (var mapping in mappings)
             {
-                TagMappings.Clear();
-                foreach (var mapping in mappings)
-                {
-                    TagMappings.Add(mapping);
-                }
-            });
-
+                TagMappings.Add(mapping);
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"加载映射失败: {ex.Message}";
+        }
+        finally
+        {
             IsLoading = false;
-        });
+        }
     }
 
     /// <summary>
@@ -125,7 +127,7 @@ public sealed partial class TagsViewModel : ObservableObject
         IsLoading = true;
         ErrorMessage = null;
 
-        await Task.Run(async () =>
+        try
         {
             var success = await AppViewModel.Instance.TagStore.SaveAsync(
                 NewIdentity,
@@ -135,12 +137,9 @@ public sealed partial class TagsViewModel : ObservableObject
             if (success)
             {
                 // Clear form
-                App.Current.MainWindow?.DispatcherQueue.TryEnqueue(() =>
-                {
-                    NewIdentity = string.Empty;
-                    NewTag = string.Empty;
-                    NewDisplayName = string.Empty;
-                });
+                NewIdentity = string.Empty;
+                NewTag = string.Empty;
+                NewDisplayName = string.Empty;
 
                 // Reload list
                 await LoadMappingsAsync();
@@ -152,9 +151,11 @@ public sealed partial class TagsViewModel : ObservableObject
             {
                 ErrorMessage = "Failed to save mapping (duplicate tag?)";
             }
-
+        }
+        finally
+        {
             IsLoading = false;
-        });
+        }
     }
 
     /// <summary>
@@ -171,7 +172,7 @@ public sealed partial class TagsViewModel : ObservableObject
         IsLoading = true;
         ErrorMessage = null;
 
-        await Task.Run(async () =>
+        try
         {
             var success = await AppViewModel.Instance.TagStore.DeleteByIdentityAsync(mapping.Identity);
 
@@ -190,9 +191,11 @@ public sealed partial class TagsViewModel : ObservableObject
             {
                 ErrorMessage = "Failed to delete mapping";
             }
-
+        }
+        finally
+        {
             IsLoading = false;
-        });
+        }
     }
 
     /// <summary>
@@ -209,7 +212,7 @@ public sealed partial class TagsViewModel : ObservableObject
         IsLoading = true;
         ErrorMessage = null;
 
-        await Task.Run(async () =>
+        try
         {
             var count = await AppViewModel.Instance.EvidenceStore.DeleteByTagAsync(mapping.Tag);
 
@@ -217,9 +220,11 @@ public sealed partial class TagsViewModel : ObservableObject
 
             // Refresh app stats
             await AppViewModel.Instance.RefreshStatsAsync();
-
+        }
+        finally
+        {
             IsLoading = false;
-        });
+        }
     }
 
     /// <summary>
