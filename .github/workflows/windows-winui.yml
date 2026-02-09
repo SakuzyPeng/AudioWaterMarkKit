@@ -10,6 +10,8 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'src/**'
+      - 'bindings/swift/**'
+      - 'macos-app/**'
       - 'winui-app/**'
 
 permissions:
@@ -18,8 +20,96 @@ permissions:
 env:
   AUDIOWMARK_WINDOWS_RELEASE: audiowmark-win-2026-02-03
   AUDIOWMARK_WINDOWS_ASSET: audiowmark-windows-x86_64.zip
+  AUDIOWMARK_MACOS_RELEASE: audiowmark-macos-arm64-2026-02-03
+  AUDIOWMARK_MACOS_ASSET: audiowmark-macos-arm64.tar.gz
 
 jobs:
+  macos-build-and-package:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-macos-app-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-macos-app-
+
+      - name: Ensure and prepare bundled audiowmark (macOS)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ZIP_PATH="bundled/audiowmark-macos-arm64.zip"
+          if [ ! -f "$ZIP_PATH" ]; then
+            echo "Bundled zip missing, downloading release asset..."
+            gh release download "${AUDIOWMARK_MACOS_RELEASE}" \
+              --repo "${{ github.repository }}" \
+              -p "${AUDIOWMARK_MACOS_ASSET}" \
+              --clobber
+            rm -rf tmp-bundled audiowmark-dist
+            tar -xzf "${AUDIOWMARK_MACOS_ASSET}"
+            rm -f audiowmark-dist/bin/test.key
+            mkdir -p bundled
+            (cd audiowmark-dist && zip -r "$GITHUB_WORKSPACE/$ZIP_PATH" bin)
+          fi
+          rm -rf tmp-bundled
+          unzip -q "$ZIP_PATH" -d tmp-bundled
+          test -f tmp-bundled/bin/audiowmark
+          echo "Bundled zip validated: $ZIP_PATH"
+
+      - name: Rust test (app feature)
+        run: cargo test --features app
+
+      - name: Build Rust CLI (release, full-cli)
+        run: cargo build --bin awmkit --features full-cli --release --target aarch64-apple-darwin
+
+      - name: Build Rust FFI dylib (release)
+        run: cargo build --lib --features ffi,app,bundled --release --target aarch64-apple-darwin
+
+      - name: Build macOS app (Release)
+        run: |
+          xcodebuild \
+            -project macos-app/AWMKit.xcodeproj \
+            -scheme AWMKit \
+            -configuration Release \
+            -sdk macosx \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Package macOS app and CLI
+        run: |
+          set -euo pipefail
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release/AWMKit.app"
+          test -d "$APP_PATH"
+          mkdir -p dist/macos
+          ditto -c -k --keepParent "$APP_PATH" "dist/macos/AWMKit-macos-arm64.app.zip"
+          cp "target/aarch64-apple-darwin/release/awmkit" "dist/macos/awmkit-macos-arm64"
+          chmod +x "dist/macos/awmkit-macos-arm64"
+          ls -lh dist/macos
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-app-${{ github.run_id }}
+          path: |
+            dist/macos/AWMKit-macos-arm64.app.zip
+            dist/macos/awmkit-macos-arm64
+
   windows-build-and-package:
     runs-on: windows-latest
 
