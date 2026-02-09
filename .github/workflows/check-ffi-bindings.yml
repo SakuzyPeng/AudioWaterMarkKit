@@ -1,0 +1,43 @@
+name: Check FFI Headers And Swift Bindings
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "include/awmkit.h"
+      - "src/ffi.rs"
+      - "bindings/swift/**"
+      - "scripts/sync_ffi_headers.sh"
+      - ".github/workflows/check-ffi-bindings.yml"
+  pull_request:
+    paths:
+      - "include/awmkit.h"
+      - "src/ffi.rs"
+      - "bindings/swift/**"
+      - "scripts/sync_ffi_headers.sh"
+      - ".github/workflows/check-ffi-bindings.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check-header-sync:
+    name: Verify Header Sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check C header sync
+        run: ./scripts/sync_ffi_headers.sh --check
+
+  build-swift-bindings:
+    name: Build Swift Package
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Swift bindings
+        working-directory: bindings/swift
+        run: swift build

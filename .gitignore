@@ -24,6 +24,7 @@
 
 # Scripts (user may not want to track local scripts)
 *.sh
+!/scripts/sync_ffi_headers.sh
 
 # Vendor & bundled binaries
 /audiowmark-x86_64
