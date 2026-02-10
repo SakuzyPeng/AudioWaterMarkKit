@@ -6,6 +6,7 @@ final class KeyViewModel: ObservableObject {
     @Published var selectedSlot: Int = 0
     @Published var isWorking = false
     @Published var slotSearchText: String = ""
+    @Published var isApplySuccess = false
     @Published var isGenerateSuccess = false
     @Published var isDeleteSuccess = false
     @Published var isRefreshSuccess = false
@@ -49,6 +50,7 @@ final class KeyViewModel: ObservableObject {
         sync(from: appState)
         successMessage = "已切换激活槽位为 \(selectedSlot)"
         errorMessage = nil
+        flash(\.isApplySuccess)
     }
 
     func generateKey(appState: AppState) async {

@@ -26,6 +26,7 @@
             <converters:BoolToSelectionBorderBrushConverter x:Key="BoolToSelectionBorderBrushConverter"/>
             <converters:BoolToSelectionBackgroundBrushConverter x:Key="BoolToSelectionBackgroundBrushConverter"/>
             <converters:KeySlotStatusBrushConverter x:Key="KeySlotStatusBrushConverter"/>
+            <converters:BoolToKeySlotIconBrushConverter x:Key="BoolToKeySlotIconBrushConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

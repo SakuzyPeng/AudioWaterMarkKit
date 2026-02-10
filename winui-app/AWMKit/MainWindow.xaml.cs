@@ -70,7 +70,7 @@ public sealed partial class MainWindow : Window
 
     private void InitializeStatusIndicators()
     {
-        _keyStatusItem = CreateStatusItem("status:key", Symbol.Contact, "密钥状态");
+        _keyStatusItem = CreateStatusItem("status:key", Symbol.Permissions, "密钥状态");
         _engineStatusItem = CreateStatusItem("status:engine", Symbol.Audio, "音频引擎状态");
         _databaseStatusItem = CreateStatusItem("status:database", Symbol.Library, "数据库状态");
 

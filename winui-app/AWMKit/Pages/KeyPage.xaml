@@ -89,9 +89,14 @@
                                 <ComboBox Width="120"
                                           ItemsSource="{x:Bind ViewModel.SlotOptions, Mode=OneWay}"
                                           SelectedItem="{x:Bind ViewModel.SelectedSlot, Mode=TwoWay}"/>
-                                <Button Content="应用槽位"
-                                        Click="ApplySlotButton_Click"
-                                        IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}"/>
+                                <Button Click="ApplySlotButton_Click"
+                                        IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <SymbolIcon Symbol="AllApps"
+                                                    Foreground="{x:Bind ViewModel.ApplyActionBrush, Mode=OneWay}"/>
+                                        <TextBlock Text="应用"/>
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                         </Grid>
                         <TextBlock Text="{x:Bind ViewModel.ActiveKeySlotText, Mode=OneWay}"
@@ -104,9 +109,13 @@
                         <TextBlock Text="当前激活密钥"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Text="{x:Bind ViewModel.ActiveSummaryTitle, Mode=OneWay}"
-                                   FontWeight="SemiBold"
-                                   Foreground="{x:Bind ViewModel.ActiveSummaryTitleBrush, Mode=OneWay}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <SymbolIcon Symbol="AllApps"
+                                        Foreground="{x:Bind ViewModel.ActiveSummaryTitleBrush, Mode=OneWay}"/>
+                            <TextBlock Text="{x:Bind ViewModel.ActiveSummaryTitle, Mode=OneWay}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{x:Bind ViewModel.ActiveSummaryTitleBrush, Mode=OneWay}"/>
+                        </StackPanel>
                         <TextBlock Text="{x:Bind ViewModel.ActiveSummaryKeyLine, Mode=OneWay}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextTrimming="CharacterEllipsis"/>
@@ -125,10 +134,9 @@
                                 <TextBlock Text="{x:Bind GenerateKeyTooltip, Mode=OneWay}"/>
                             </ToolTipService.ToolTip>
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <SymbolIcon Symbol="Add"
+                                <SymbolIcon Symbol="Permissions"
                                             Foreground="{x:Bind ViewModel.GenerateActionBrush, Mode=OneWay}"/>
-                                <TextBlock Text="生成密钥"
-                                           Foreground="{x:Bind ViewModel.GenerateActionBrush, Mode=OneWay}"/>
+                                <TextBlock Text="生成"/>
                             </StackPanel>
                         </Button>
                         <Button Click="DeleteKeyButton_Click"
@@ -137,8 +145,7 @@
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Delete"
                                             Foreground="{x:Bind ViewModel.DeleteActionBrush, Mode=OneWay}"/>
-                                <TextBlock Text="删除密钥"
-                                           Foreground="{x:Bind ViewModel.DeleteActionBrush, Mode=OneWay}"/>
+                                <TextBlock Text="删除"/>
                             </StackPanel>
                         </Button>
                         <Button Click="RefreshButton_Click"
@@ -147,8 +154,7 @@
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Refresh"
                                             Foreground="{x:Bind ViewModel.RefreshActionBrush, Mode=OneWay}"/>
-                                <TextBlock Text="刷新状态"
-                                           Foreground="{x:Bind ViewModel.RefreshActionBrush, Mode=OneWay}"/>
+                                <TextBlock Text="刷新"/>
                             </StackPanel>
                         </Button>
                     </StackPanel>
@@ -207,9 +213,13 @@
                     <ListView.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Spacing="2" Padding="8,6">
-                                <TextBlock Text="{Binding TitleWithStatus}"
-                                           FontWeight="SemiBold"
-                                           Foreground="{Binding StatusText, Converter={StaticResource KeySlotStatusBrushConverter}}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <SymbolIcon Symbol="AllApps"
+                                                Foreground="{Binding IsActive, Converter={StaticResource BoolToKeySlotIconBrushConverter}}"/>
+                                    <TextBlock Text="{Binding TitleWithStatus}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{Binding StatusText, Converter={StaticResource KeySlotStatusBrushConverter}}"/>
+                                </StackPanel>
                                 <TextBlock Text="{Binding KeyLine}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <TextBlock Text="{Binding EvidenceLine}"

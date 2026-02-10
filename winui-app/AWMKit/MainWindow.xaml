@@ -31,7 +31,7 @@
 
             <NavigationViewItem Content="密钥" Tag="key">
                 <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Contact"/>
+                    <SymbolIcon Symbol="Permissions"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
         </NavigationView.MenuItems>

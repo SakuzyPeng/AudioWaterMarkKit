@@ -238,6 +238,7 @@ public sealed partial class AppViewModel : ObservableObject
     public async Task RefreshStatsAsync()
     {
         await RefreshDatabaseStatusAsync();
+        await RefreshKeyStatusAsync();
     }
 
     /// <summary>
@@ -301,11 +302,13 @@ public sealed partial class AppViewModel : ObservableObject
         if (error == AwmError.Ok)
         {
             ActiveKeySlot = Math.Clamp(slot, 0, 31);
+            await RefreshKeyStatusAsync();
             return;
         }
 
         var (currentSlot, _) = AwmKeyBridge.GetActiveSlot();
         ActiveKeySlot = Math.Clamp(currentSlot, 0, 31);
+        await RefreshKeyStatusAsync();
     }
 
     private void RefreshEngineStatus()

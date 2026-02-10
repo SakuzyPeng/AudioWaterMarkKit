@@ -587,7 +587,7 @@ struct TagsView: View {
     }
 
     private func refreshDatabaseStatus() {
-        appState.checkDatabaseStatus()
+        Task { await appState.refreshRuntimeStatus() }
     }
 }
 

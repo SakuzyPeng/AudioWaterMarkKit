@@ -110,8 +110,14 @@ struct KeyView: View {
                 }
                 .labelsHidden()
                 .frame(width: 88)
-                Button("应用槽位") {
+                Button {
                     viewModel.applySlot(appState: appState)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.grid.2x2.fill")
+                            .foregroundStyle(viewModel.isApplySuccess ? DesignSystem.Colors.success : .primary)
+                        Text("应用")
+                    }
                 }
                 .buttonStyle(GlassButtonStyle(size: .compact))
             }
@@ -139,10 +145,9 @@ struct KeyView: View {
                 Task { await viewModel.generateKey(appState: appState) }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "plus")
+                    Image(systemName: "key.fill")
                         .foregroundStyle(viewModel.isGenerateSuccess ? DesignSystem.Colors.success : .primary)
-                    Text("生成密钥")
-                        .foregroundStyle(viewModel.isGenerateSuccess ? DesignSystem.Colors.success : .primary)
+                    Text("生成")
                 }
             }
             .buttonStyle(GlassButtonStyle(accentOn: true))
@@ -154,8 +159,7 @@ struct KeyView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "trash")
                         .foregroundStyle(viewModel.isDeleteSuccess ? DesignSystem.Colors.success : .primary)
-                    Text("删除密钥")
-                        .foregroundStyle(viewModel.isDeleteSuccess ? DesignSystem.Colors.success : .primary)
+                    Text("删除")
                 }
             }
             .buttonStyle(GlassButtonStyle(size: .compact))
@@ -167,8 +171,7 @@ struct KeyView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.clockwise")
                         .foregroundStyle(viewModel.isRefreshSuccess ? DesignSystem.Colors.success : .primary)
-                    Text("刷新状态")
-                        .foregroundStyle(viewModel.isRefreshSuccess ? DesignSystem.Colors.success : .primary)
+                    Text("刷新")
                 }
             }
             .buttonStyle(GlassButtonStyle(size: .compact))
@@ -216,9 +219,13 @@ struct KeyView: View {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("槽位 \(appState.activeKeySlot)\(summary?.hasKey == true ? "（已配置）" : "（未配置）")")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(DesignSystem.Colors.success)
+                HStack(spacing: 6) {
+                    Image(systemName: "square.grid.2x2")
+                        .foregroundStyle(summary?.isActive == true ? DesignSystem.Colors.success : .secondary)
+                    Text("槽位 \(appState.activeKeySlot)\(summary?.hasKey == true ? "（已配置）" : "（未配置）")")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(DesignSystem.Colors.success)
+                }
                 Text(keyText + labelText)
                     .font(.caption)
                     .foregroundStyle(.primary)
@@ -254,9 +261,13 @@ struct KeyView: View {
             : " · 重复: \(summary.duplicateOfSlots.map(String.init).joined(separator: ","))"
 
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(statusColor(summary.statusText))
+            HStack(spacing: 6) {
+                Image(systemName: "square.grid.2x2")
+                    .foregroundStyle(summary.isActive ? DesignSystem.Colors.success : .secondary)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(statusColor(summary.statusText))
+            }
             Text(keyText + labelText)
                 .font(.caption)
                 .foregroundStyle(.primary)

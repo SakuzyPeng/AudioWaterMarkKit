@@ -310,3 +310,37 @@ public sealed class KeySlotStatusBrushConverter : IValueConverter
         return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32));
     }
 }
+
+/// <summary>
+/// Converts slot active flag to slot icon brush (active=green, inactive=secondary).
+/// </summary>
+public sealed class BoolToKeySlotIconBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var resources = Application.Current.Resources;
+        var isActive = value is bool active && active;
+
+        if (isActive)
+        {
+            return ResolveBrush(resources, "SuccessBrush");
+        }
+
+        return ResolveBrush(resources, "TextFillColorSecondaryBrush");
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotImplementedException();
+    }
+
+    private static Brush ResolveBrush(ResourceDictionary resources, string key)
+    {
+        if (resources.TryGetValue(key, out var value) && value is Brush brush)
+        {
+            return brush;
+        }
+
+        return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32));
+    }
+}

@@ -134,6 +134,20 @@ public sealed partial class KeyViewModel : ObservableObject
         }
     }
 
+    private bool _isApplySuccess;
+    public bool IsApplySuccess
+    {
+        get => _isApplySuccess;
+        private set
+        {
+            if (SetProperty(ref _isApplySuccess, value))
+            {
+                OnPropertyChanged(nameof(ApplyActionBrush));
+            }
+        }
+    }
+
+    public Brush ApplyActionBrush => IsApplySuccess ? SuccessBrush : ResolvePrimaryTextBrush();
     public Brush GenerateActionBrush => IsGenerateSuccess ? SuccessBrush : ResolveAccentTextBrush();
     public Brush DeleteActionBrush => IsDeleteSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
     public Brush RefreshActionBrush => IsRefreshSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
@@ -230,6 +244,7 @@ public sealed partial class KeyViewModel : ObservableObject
             await _appViewModel.RefreshActiveKeySlotAsync();
             SelectedSlot = _appViewModel.ActiveKeySlot;
             await RefreshSlotSummariesAsync();
+            await FlashApplySuccessAsync();
         }
         finally
         {
@@ -393,6 +408,13 @@ public sealed partial class KeyViewModel : ObservableObject
         IsGenerateSuccess = true;
         await Task.Delay(1000);
         IsGenerateSuccess = false;
+    }
+
+    private async Task FlashApplySuccessAsync()
+    {
+        IsApplySuccess = true;
+        await Task.Delay(1000);
+        IsApplySuccess = false;
     }
 
     private async Task FlashDeleteSuccessAsync()

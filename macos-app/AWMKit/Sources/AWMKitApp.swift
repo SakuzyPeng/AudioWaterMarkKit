@@ -236,6 +236,9 @@ class AppState: ObservableObject {
             let normalized = max(0, min(31, slot))
             try AWMKeyStore.setActiveSlot(UInt8(normalized))
             activeKeySlot = Int(try AWMKeyStore.activeSlot())
+            Task { [weak self] in
+                await self?.refreshRuntimeStatus()
+            }
         } catch {
             // Ignore setting persistence failure in UI state update path.
         }

@@ -36,6 +36,11 @@ struct EmbedView: View {
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
             .id(colorScheme)
         }
+        .onChange(of: viewModel.isProcessing) { oldValue, newValue in
+            if oldValue && !newValue {
+                Task { await appState.refreshRuntimeStatus() }
+            }
+        }
     }
 
     // MARK: - 输入卡片（左上）
