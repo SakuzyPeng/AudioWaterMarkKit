@@ -108,15 +108,24 @@
                     </Button>
                 </StackPanel>
 
-                <StackPanel Grid.Row="6" Spacing="8">
-                    <TextBlock Text="槽位摘要"
+                <Grid Grid.Row="6" RowSpacing="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Text="槽位摘要"
                                Style="{StaticResource SectionHeaderStyle}"/>
 
-                    <ListView ItemsSource="{x:Bind ViewModel.SlotSummaries, Mode=OneWay}"
+                    <ListView Grid.Row="1"
+                              ItemsSource="{x:Bind ViewModel.SlotSummaries, Mode=OneWay}"
                               SelectionMode="None"
                               IsItemClickEnabled="False"
-                              ScrollViewer.VerticalScrollMode="Auto"
+                              ScrollViewer.VerticalScrollMode="Enabled"
                               ScrollViewer.VerticalScrollBarVisibility="Auto"
+                              ScrollViewer.HorizontalScrollMode="Disabled"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                               MinHeight="180">
                         <ListView.ItemTemplate>
                             <DataTemplate>
@@ -131,7 +140,7 @@
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
-                </StackPanel>
+                </Grid>
 
                 <TextBlock Grid.Row="7"
                            Text="槽位仅可在密钥页修改。嵌入与检测页面只展示当前槽位信息。"
