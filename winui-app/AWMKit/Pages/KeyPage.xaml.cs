@@ -14,6 +14,10 @@ public sealed partial class KeyPage : Page
     public KeyViewModel ViewModel { get; } = new();
 
     public bool IsNotBusy => !ViewModel.IsBusy;
+    public bool CanGenerateKey => IsNotBusy && !ViewModel.SelectedSlotHasKey;
+    public string GenerateKeyTooltip => ViewModel.SelectedSlotHasKey
+        ? "当前槽位已有密钥，已禁止覆盖。请先删除后再生成。"
+        : "在当前槽位生成新密钥";
 
     public InfoBarSeverity KeyStatusSeverity => ViewModel.KeyAvailable ? InfoBarSeverity.Success : InfoBarSeverity.Warning;
 
@@ -34,7 +38,21 @@ public sealed partial class KeyPage : Page
 
     private async void GenerateKeyButton_Click(object sender, RoutedEventArgs e)
     {
-        await ViewModel.GenerateKeyAsync();
+        var error = await ViewModel.GenerateKeyAsync();
+        if (error == Native.AwmError.KeyAlreadyExists)
+        {
+            await ShowMessageDialogAsync(
+                "槽位已有密钥",
+                "当前槽位已存在密钥，已阻止覆盖。\n如需替换，请先删除该槽位密钥后再生成。");
+            return;
+        }
+
+        if (error != Native.AwmError.Ok)
+        {
+            await ShowMessageDialogAsync(
+                "生成失败",
+                $"密钥生成失败：{error}");
+        }
     }
 
     private async void DeleteKeyButton_Click(object sender, RoutedEventArgs e)
@@ -84,5 +102,19 @@ public sealed partial class KeyPage : Page
                 Bindings.Update();
             }
         });
+    }
+
+    private async Task ShowMessageDialogAsync(string title, string content)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = content,
+            CloseButtonText = "确定",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        await dialog.ShowAsync();
     }
 }

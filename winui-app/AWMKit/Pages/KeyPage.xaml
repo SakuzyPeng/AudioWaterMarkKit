@@ -120,7 +120,10 @@
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Click="GenerateKeyButton_Click"
                                 Style="{StaticResource PrimaryButtonStyle}"
-                                IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}">
+                                IsEnabled="{x:Bind CanGenerateKey, Mode=OneWay}">
+                            <ToolTipService.ToolTip>
+                                <TextBlock Text="{x:Bind GenerateKeyTooltip, Mode=OneWay}"/>
+                            </ToolTipService.ToolTip>
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Add"
                                             Foreground="{x:Bind ViewModel.GenerateActionBrush, Mode=OneWay}"/>

@@ -156,22 +156,29 @@ public sealed partial class KeyViewModel : ObservableObject
         RaiseComputedProperties();
     }
 
-    public async Task GenerateKeyAsync()
+    public async Task<AwmError> GenerateKeyAsync()
     {
         if (IsBusy)
         {
-            return;
+            return AwmError.AudiowmarkExec;
         }
 
         IsBusy = true;
+        var result = AwmError.AudiowmarkExec;
         try
         {
             var (_, error) = await Task.Run(() => AwmKeyBridge.GenerateAndSaveKeyInSlot(SelectedSlot));
+            result = error;
             if (error == AwmError.Ok)
             {
                 await _appViewModel.RefreshRuntimeStatusAsync();
                 await RefreshSlotSummariesAsync();
                 await FlashGenerateSuccessAsync();
+            }
+            else
+            {
+                // Keep slot/status view in sync even when generation is rejected.
+                await RefreshSlotSummariesAsync();
             }
         }
         finally
@@ -179,6 +186,8 @@ public sealed partial class KeyViewModel : ObservableObject
             IsBusy = false;
             RaiseComputedProperties();
         }
+
+        return result;
     }
 
     public async Task DeleteKeyAsync()
