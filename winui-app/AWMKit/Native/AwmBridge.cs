@@ -24,7 +24,9 @@ public static class AwmBridge
     public readonly record struct MultichannelDetectAudioResult(
         byte[] RawMessage,
         uint BitErrors,
-        uint PairCount
+        uint PairCount,
+        string Pattern,
+        float? DetectScore
     );
 
     public readonly record struct CloneCheckResult(
@@ -362,7 +364,9 @@ public static class AwmBridge
                 return (new MultichannelDetectAudioResult(
                     message,
                     result.BestBitErrors,
-                    result.PairCount
+                    result.PairCount,
+                    result.GetBestPattern(),
+                    result.HasBestDetectScore ? result.BestDetectScore : null
                 ), AwmError.Ok);
             }
 
@@ -379,7 +383,9 @@ public static class AwmBridge
             return (new MultichannelDetectAudioResult(
                 fallback.Value.RawMessage,
                 fallback.Value.BitErrors,
-                1
+                1,
+                fallback.Value.Pattern,
+                fallback.Value.DetectScore
             ), AwmError.Ok);
         }
         finally

@@ -472,7 +472,7 @@ private extension EmbedViewModel {
         try await Task.detached(priority: .userInitiated) {
             let tag = try AWMTag(tag: tagValue)
             audio.audio.setStrength(strength)
-            let rawMessage = try audio.audio.embed(input: fileURL, output: outputURL, tag: tag, key: key)
+            let rawMessage = try audio.audio.embedMultichannel(input: fileURL, output: outputURL, tag: tag, key: key, layout: nil)
             do {
                 try audio.audio.recordEvidence(file: outputURL, rawMessage: rawMessage, key: key)
                 return EmbedStepOutput(evidenceErrorDescription: nil)

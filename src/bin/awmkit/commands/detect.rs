@@ -1,7 +1,8 @@
 use crate::error::{CliError, Result};
-use crate::util::{audio_from_context, ensure_file, expand_inputs};
+use crate::util::{audio_from_context, ensure_file, expand_inputs, CliLayout};
 use crate::Context;
 use awmkit::app::{build_audio_proof, i18n, AppError, EvidenceStore, KeyStore};
+use awmkit::ChannelLayout;
 use awmkit::Message;
 use clap::Args;
 use fluent_bundle::FluentArgs;
@@ -17,6 +18,10 @@ pub struct DetectArgs {
     /// JSON output
     #[arg(long)]
     pub json: bool,
+
+    /// Channel layout (default: auto)
+    #[arg(long, value_enum, default_value_t = CliLayout::Auto)]
+    pub layout: CliLayout,
 
     /// Input files (supports glob)
     #[arg(value_name = "INPUT")]
@@ -57,6 +62,7 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
 
     let key_store = KeyStore::new()?;
     let audio = audio_from_context(ctx)?;
+    let layout = args.layout.to_channel_layout();
     let evidence_store = match EvidenceStore::load() {
         Ok(store) => Some(store),
         Err(err) => {
@@ -72,6 +78,7 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
                 &audio,
                 &key_store,
                 &input,
+                layout,
                 evidence_store.as_ref(),
             ));
         }
@@ -98,7 +105,7 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
     let mut invalid = 0usize;
 
     for input in inputs {
-        match detect_one(&audio, &key_store, &input, evidence_store.as_ref()) {
+        match detect_one(&audio, &key_store, &input, layout, evidence_store.as_ref()) {
             Ok(DetectOutcome::Found {
                 tag,
                 identity,
@@ -327,9 +334,10 @@ fn detect_one(
     audio: &awmkit::Audio,
     key_store: &KeyStore,
     input: &std::path::Path,
+    layout: Option<ChannelLayout>,
     evidence_store: Option<&EvidenceStore>,
 ) -> Result<DetectOutcome> {
-    match audio.detect(input)? {
+    match detect_best(audio, input, layout)? {
         None => Ok(DetectOutcome::NotFound),
         Some(result) => {
             let slot_resolution = resolve_decode_slot(&result.raw_message, key_store);
@@ -364,9 +372,10 @@ fn detect_one_json(
     audio: &awmkit::Audio,
     key_store: &KeyStore,
     input: &std::path::Path,
+    layout: Option<ChannelLayout>,
     evidence_store: Option<&EvidenceStore>,
 ) -> DetectJson {
-    match audio.detect(input) {
+    match detect_best(audio, input, layout) {
         Ok(None) => DetectJson {
             file: input.display().to_string(),
             status: "not_found".to_string(),
@@ -469,6 +478,15 @@ fn detect_one_json(
             slot_scan_count: None,
         },
     }
+}
+
+fn detect_best(
+    audio: &awmkit::Audio,
+    input: &std::path::Path,
+    layout: Option<ChannelLayout>,
+) -> Result<Option<awmkit::DetectResult>> {
+    let result = audio.detect_multichannel(input, layout)?;
+    Ok(result.best)
 }
 
 struct DecodedSlotMessage {

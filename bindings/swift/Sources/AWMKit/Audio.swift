@@ -426,11 +426,16 @@ public class AWMAudio {
         var best: AWMDetectResultSwift? = nil
         if cResult.has_best {
             let bestRawMessage = withUnsafeBytes(of: cResult.best_raw_message) { Data($0) }
+            let bestPattern = withUnsafePointer(to: cResult.best_pattern) { ptr in
+                ptr.withMemoryRebound(to: CChar.self, capacity: 16) { charPtr in
+                    String(cString: charPtr)
+                }
+            }
             best = AWMDetectResultSwift(
                 found: true,
                 rawMessage: bestRawMessage,
-                pattern: "multichannel",
-                detectScore: nil,
+                pattern: bestPattern,
+                detectScore: cResult.has_best_detect_score ? cResult.best_detect_score : nil,
                 bitErrors: cResult.best_bit_errors
             )
         }

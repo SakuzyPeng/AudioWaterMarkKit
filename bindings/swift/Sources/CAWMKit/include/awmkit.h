@@ -226,6 +226,9 @@ typedef struct {
     AWMPairResult pairs[8];         // Pair results (max 8)
     bool has_best;                  // Whether best result exists
     uint8_t best_raw_message[16];   // Best result message
+    char best_pattern[16];          // Best detection pattern
+    bool has_best_detect_score;     // Whether best detect score is available
+    float best_detect_score;        // Best detect score from audiowmark
     uint32_t best_bit_errors;       // Best result bit errors
 } AWMMultichannelDetectResult;
 

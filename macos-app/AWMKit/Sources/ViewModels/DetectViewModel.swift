@@ -433,59 +433,65 @@ private extension DetectViewModel {
             let filePath = fileURL.path(percentEncoded: false)
 
             do {
-                if let detectResult = try audio.audio.detect(input: fileURL) {
-                    do {
-                        let decoded = try AWMMessage.decode(detectResult.rawMessage, key: key)
-                        var cloneKind = "unavailable"
-                        var cloneScore: Double?
-                        var cloneMatchSeconds: Float?
-                        var cloneReason: String?
-                        do {
-                            let cloneResult = try audio.audio.cloneCheck(
-                                input: fileURL,
-                                identity: decoded.identity,
-                                keySlot: decoded.keySlot
-                            )
-                            cloneKind = cloneResult.kind.rawValue
-                            cloneScore = cloneResult.score
-                            cloneMatchSeconds = cloneResult.matchSeconds
-                            cloneReason = cloneResult.reason
-                        } catch {
-                            cloneKind = "unavailable"
-                            cloneReason = error.localizedDescription
-                        }
-
-                        return DetectRecord(
-                            file: filePath,
-                            status: "ok",
-                            tag: decoded.tag.value,
-                            identity: decoded.identity,
-                            version: decoded.version,
-                            timestampMinutes: decoded.timestampMinutes,
-                            timestampUTC: decoded.timestampUTC,
-                            keySlot: decoded.keySlot,
-                            pattern: detectResult.pattern,
-                            detectScore: detectResult.detectScore,
-                            bitErrors: detectResult.bitErrors,
-                            matchFound: detectResult.found,
-                            cloneCheck: cloneKind,
-                            cloneScore: cloneScore,
-                            cloneMatchSeconds: cloneMatchSeconds,
-                            cloneReason: cloneReason
-                        )
-                    } catch {
-                        return DetectRecord(
-                            file: filePath,
-                            status: "invalid_hmac",
-                            pattern: detectResult.pattern,
-                            detectScore: detectResult.detectScore,
-                            bitErrors: detectResult.bitErrors,
-                            matchFound: detectResult.found,
-                            error: error.localizedDescription
-                        )
-                    }
+                let multichannel = try audio.audio.detectMultichannel(input: fileURL, layout: nil)
+                guard let detectResult = multichannel.best else {
+                    return DetectRecord(
+                        file: filePath,
+                        status: "not_found"
+                    )
                 }
 
+                do {
+                    let decoded = try AWMMessage.decode(detectResult.rawMessage, key: key)
+                    var cloneKind = "unavailable"
+                    var cloneScore: Double?
+                    var cloneMatchSeconds: Float?
+                    var cloneReason: String?
+                    do {
+                        let cloneResult = try audio.audio.cloneCheck(
+                            input: fileURL,
+                            identity: decoded.identity,
+                            keySlot: decoded.keySlot
+                        )
+                        cloneKind = cloneResult.kind.rawValue
+                        cloneScore = cloneResult.score
+                        cloneMatchSeconds = cloneResult.matchSeconds
+                        cloneReason = cloneResult.reason
+                    } catch {
+                        cloneKind = "unavailable"
+                        cloneReason = error.localizedDescription
+                    }
+
+                    return DetectRecord(
+                        file: filePath,
+                        status: "ok",
+                        tag: decoded.tag.value,
+                        identity: decoded.identity,
+                        version: decoded.version,
+                        timestampMinutes: decoded.timestampMinutes,
+                        timestampUTC: decoded.timestampUTC,
+                        keySlot: decoded.keySlot,
+                        pattern: detectResult.pattern,
+                        detectScore: detectResult.detectScore,
+                        bitErrors: detectResult.bitErrors,
+                        matchFound: detectResult.found,
+                        cloneCheck: cloneKind,
+                        cloneScore: cloneScore,
+                        cloneMatchSeconds: cloneMatchSeconds,
+                        cloneReason: cloneReason
+                    )
+                } catch {
+                    return DetectRecord(
+                        file: filePath,
+                        status: "invalid_hmac",
+                        pattern: detectResult.pattern,
+                        detectScore: detectResult.detectScore,
+                        bitErrors: detectResult.bitErrors,
+                        matchFound: detectResult.found,
+                        error: error.localizedDescription
+                    )
+                }
+            } catch AWMError.noWatermarkFound {
                 return DetectRecord(
                     file: filePath,
                     status: "not_found"

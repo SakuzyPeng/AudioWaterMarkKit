@@ -1,9 +1,36 @@
 use crate::error::{CliError, Result};
 use crate::Context;
 use awmkit::app::{i18n, AppConfig, AudioEngine};
+use awmkit::ChannelLayout;
 use awmkit::Tag;
+use clap::ValueEnum;
 use glob::glob;
 use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum CliLayout {
+    Auto,
+    Stereo,
+    Surround51,
+    Surround512,
+    Surround71,
+    Surround714,
+    Surround916,
+}
+
+impl CliLayout {
+    pub fn to_channel_layout(self) -> Option<ChannelLayout> {
+        match self {
+            Self::Auto => None,
+            Self::Stereo => Some(ChannelLayout::Stereo),
+            Self::Surround51 => Some(ChannelLayout::Surround51),
+            Self::Surround512 => Some(ChannelLayout::Surround512),
+            Self::Surround71 => Some(ChannelLayout::Surround71),
+            Self::Surround714 => Some(ChannelLayout::Surround714),
+            Self::Surround916 => Some(ChannelLayout::Surround916),
+        }
+    }
+}
 
 pub fn parse_tag(input: &str) -> Result<Tag> {
     if input.len() == 8 {

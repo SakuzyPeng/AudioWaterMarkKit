@@ -114,7 +114,22 @@ public struct AWMMultichannelDetectResult
     [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
     public byte[] BestRawMessage;
 
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
+    public byte[] BestPattern;
+
+    [MarshalAs(UnmanagedType.U1)]
+    public bool HasBestDetectScore;
+
+    public float BestDetectScore;
+
     public uint BestBitErrors;
+
+    public string GetBestPattern()
+    {
+        int len = Array.IndexOf(BestPattern, (byte)0);
+        if (len < 0) len = BestPattern.Length;
+        return System.Text.Encoding.UTF8.GetString(BestPattern, 0, len);
+    }
 }
 
 /// <summary>Clone check result kind.</summary>

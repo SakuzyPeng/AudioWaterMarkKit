@@ -1667,6 +1667,12 @@ pub struct AWMMultichannelDetectResult {
     pub has_best: bool,
     /// 最佳结果的原始消息
     pub best_raw_message: [u8; 16],
+    /// 最佳结果的检测模式
+    pub best_pattern: [c_char; 16],
+    /// 最佳结果是否包含检测分数
+    pub has_best_detect_score: bool,
+    /// 最佳结果检测分数
+    pub best_detect_score: f32,
     /// 最佳结果的比特错误数
     pub best_bit_errors: u32,
 }
@@ -1765,9 +1771,20 @@ pub unsafe extern "C" fn awm_audio_detect_multichannel(
             // 复制最佳结果
             if let Some(best) = &mc_result.best {
                 (*result).best_raw_message = best.raw_message;
+                copy_str_to_c_buf(&mut (*result).best_pattern, &best.pattern);
+                if let Some(score) = best.detect_score {
+                    (*result).has_best_detect_score = true;
+                    (*result).best_detect_score = score;
+                } else {
+                    (*result).has_best_detect_score = false;
+                    (*result).best_detect_score = 0.0;
+                }
                 (*result).best_bit_errors = best.bit_errors;
             } else {
                 (*result).best_raw_message = [0; 16];
+                (*result).best_pattern = [0; 16];
+                (*result).has_best_detect_score = false;
+                (*result).best_detect_score = 0.0;
                 (*result).best_bit_errors = 0;
             }
 

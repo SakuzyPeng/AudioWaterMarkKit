@@ -1,8 +1,11 @@
 use crate::error::{CliError, Result};
-use crate::util::{audio_from_context, default_output_path, ensure_file, expand_inputs, parse_tag};
+use crate::util::{
+    audio_from_context, default_output_path, ensure_file, expand_inputs, parse_tag, CliLayout,
+};
 use crate::Context;
 use awmkit::app::{
     build_audio_proof, i18n, key_id_from_key_material, EvidenceStore, KeyStore, NewAudioEvidence,
+    TagStore,
 };
 use awmkit::Message;
 use clap::Args;
@@ -19,6 +22,10 @@ pub struct EmbedArgs {
     /// Watermark strength (1-30)
     #[arg(long, default_value_t = 10)]
     pub strength: u8,
+
+    /// Channel layout (default: auto)
+    #[arg(long, value_enum, default_value_t = CliLayout::Auto)]
+    pub layout: CliLayout,
 
     /// Output file path (single input only)
     #[arg(long, value_name = "PATH")]
@@ -54,6 +61,7 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
     };
 
     let audio = audio_from_context(ctx)?.strength(args.strength);
+    let layout = args.layout.to_channel_layout();
 
     let progress = if ctx.out.quiet() {
         None
@@ -77,7 +85,7 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
             None => default_output_path(&input)?,
         };
 
-        let result = audio.embed(&input, &output, &message);
+        let result = audio.embed_multichannel(&input, &output, &message, layout);
         match result {
             Ok(()) => {
                 success += 1;
@@ -150,6 +158,29 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
         args.set("success", success.to_string());
         args.set("failed", failed.to_string());
         ctx.out.info(i18n::tr_args("cli-embed-done", &args));
+    }
+
+    if success > 0 {
+        match TagStore::load() {
+            Ok(mut store) => match store.save_if_absent(decoded_message.identity(), &tag) {
+                Ok(inserted) if inserted && !ctx.out.quiet() => {
+                    ctx.out.info(format!(
+                        "已自动保存映射：{} -> {}",
+                        decoded_message.identity(),
+                        decoded_message.tag
+                    ));
+                }
+                Ok(_) => {}
+                Err(err) => {
+                    ctx.out
+                        .warn(format!("[WARN] tag mapping: save failed ({err})"));
+                }
+            },
+            Err(err) => {
+                ctx.out
+                    .warn(format!("[WARN] tag mapping: load failed ({err})"));
+            }
+        }
     }
 
     if failed > 0 {
