@@ -55,6 +55,8 @@ class AppState: ObservableObject {
     @Published var selectedTab: Tab = .embed
     @Published var isProcessing = false
     @Published var keyLoaded = false
+    @Published private(set) var keySourceLabel: String = "未配置"
+    @Published var activeKeySlot: Int = 0
     @Published private(set) var keyStatusTone: RuntimeStatusTone = .unknown
     @Published private(set) var keyStatusHelp: String = "密钥状态检查中..."
     @Published private(set) var audioStatusTone: RuntimeStatusTone = .unknown
@@ -72,6 +74,7 @@ class AppState: ObservableObject {
         case embed = "嵌入"
         case detect = "检测"
         case tags = "标签"
+        case key = "密钥"
 
         var id: String { rawValue }
 
@@ -80,6 +83,7 @@ class AppState: ObservableObject {
             case .embed: return "waveform.badge.plus"
             case .detect: return "waveform.badge.magnifyingglass"
             case .tags: return "tag"
+            case .key: return "key"
             }
         }
     }
@@ -96,6 +100,7 @@ class AppState: ObservableObject {
 
         checkAudioStatus()
         checkDatabaseStatus()
+        loadActiveKeySlot()
         Task {
             await refreshRuntimeStatus()
         }
@@ -105,37 +110,32 @@ class AppState: ObservableObject {
         await checkKey()
         checkAudioStatus()
         checkDatabaseStatus()
+        loadActiveKeySlot()
     }
 
     func checkKey() async {
         do {
             if let key = try keychain.loadKey() {
                 keyLoaded = true
+                keySourceLabel = "macOS Keychain"
                 keyStatusTone = .ready
                 keyStatusHelp = "密钥已配置（\(key.count) 字节）"
             } else {
                 keyLoaded = false
+                keySourceLabel = "未配置"
                 keyStatusTone = .warning
-                keyStatusHelp = "密钥未配置，点击自动生成"
+                keyStatusHelp = "密钥未配置，请前往“密钥”页面生成"
             }
         } catch {
             keyLoaded = false
+            keySourceLabel = "读取失败"
             keyStatusTone = .error
             keyStatusHelp = "密钥读取失败：\(error.localizedDescription)"
         }
     }
 
     func handleKeyIndicatorTap() async {
-        do {
-            if try keychain.loadKey() == nil {
-                _ = try keychain.generateAndSaveKey()
-            }
-            await checkKey()
-        } catch {
-            keyLoaded = false
-            keyStatusTone = .error
-            keyStatusHelp = "密钥初始化失败：\(error.localizedDescription)"
-        }
+        await refreshRuntimeStatus()
     }
 
     func checkAudioStatus() {
@@ -272,5 +272,32 @@ class AppState: ObservableObject {
             .appendingPathComponent("audiowmark", isDirectory: false)
             .path
         return FileManager.default.isExecutableFile(atPath: bundledBinary) ? "bundled" : "PATH"
+    }
+
+    func generateKey() async throws {
+        _ = try keychain.generateAndSaveKey()
+        await checkKey()
+    }
+
+    func deleteKey() async throws {
+        try keychain.deleteKey()
+        await checkKey()
+    }
+
+    func loadActiveKeySlot() {
+        do {
+            activeKeySlot = try AppSettingsStore.getActiveKeySlot()
+        } catch {
+            activeKeySlot = 0
+        }
+    }
+
+    func setActiveKeySlot(_ slot: Int) {
+        do {
+            try AppSettingsStore.setActiveKeySlot(slot)
+            activeKeySlot = max(0, min(31, slot))
+        } catch {
+            // Ignore setting persistence failure in UI state update path.
+        }
     }
 }

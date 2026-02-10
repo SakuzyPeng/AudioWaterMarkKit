@@ -1,0 +1,118 @@
+<Page
+    x:Class="AWMKit.Pages.KeyPage"
+    x:Name="RootPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Loaded="Page_Loaded">
+    <Grid Padding="24">
+        <Border Style="{StaticResource CardBorderStyle}" Padding="20">
+            <Grid RowSpacing="14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="密钥管理" Style="{StaticResource SectionHeaderStyle}"/>
+
+                <InfoBar Grid.Row="1"
+                         IsClosable="False"
+                         Severity="{x:Bind KeyStatusSeverity, Mode=OneWay}"
+                         Message="{x:Bind KeyStatusMessage, Mode=OneWay}"/>
+
+                <Border Grid.Row="2" Style="{StaticResource ListItemBorderStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="96"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="密钥状态"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.KeyStatusText, Mode=OneWay}"/>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="3" Style="{StaticResource ListItemBorderStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="96"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="密钥来源"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.KeySourceLabel, Mode=OneWay}" TextWrapping="WrapWholeWords"/>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="4" Style="{StaticResource ListItemBorderStyle}">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="96"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="激活槽位"
+                                       FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                                <ComboBox Width="120"
+                                          ItemsSource="{x:Bind ViewModel.SlotOptions, Mode=OneWay}"
+                                          SelectedItem="{x:Bind ViewModel.SelectedSlot, Mode=TwoWay}"/>
+                                <Button Content="应用槽位"
+                                        Click="ApplySlotButton_Click"
+                                        IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}"/>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="{x:Bind ViewModel.ActiveKeySlotText, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{x:Bind ViewModel.SlotHintText, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="WrapWholeWords"/>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="10">
+                    <Button Click="GenerateKeyButton_Click"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <SymbolIcon Symbol="Add"/>
+                            <TextBlock Text="生成密钥"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Click="DeleteKeyButton_Click"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{x:Bind ViewModel.KeyAvailable, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <SymbolIcon Symbol="Delete"/>
+                            <TextBlock Text="删除密钥"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Click="RefreshButton_Click"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <SymbolIcon Symbol="Refresh"/>
+                            <TextBlock Text="刷新状态"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <TextBlock Grid.Row="6"
+                           Text="槽位仅可在密钥页修改。嵌入与检测页面只展示当前槽位信息。"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           TextWrapping="WrapWholeWords"
+                           VerticalAlignment="Bottom"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Page>

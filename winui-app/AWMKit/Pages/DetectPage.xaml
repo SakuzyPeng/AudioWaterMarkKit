@@ -50,6 +50,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -69,7 +70,17 @@
                     </StackPanel>
                 </Border>
 
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,2,0,0">
+                <InfoBar Grid.Row="1"
+                         IsClosable="False"
+                         Severity="Warning"
+                         Visibility="{x:Bind AppState.KeyAvailable, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"
+                         Message="未配置密钥，请前往密钥页完成生成。">
+                    <InfoBar.ActionButton>
+                        <Button Content="前往密钥页" Click="GoToKeyPageButton_Click"/>
+                    </InfoBar.ActionButton>
+                </InfoBar>
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,2,0,0">
                     <ComboBox Width="170"
                               ItemsSource="{x:Bind ViewModel.ChannelLayoutOptions, Mode=OneWay}"
                               SelectedItem="{x:Bind ViewModel.SelectedChannelLayout, Mode=TwoWay}"
@@ -131,7 +142,7 @@
                     </Button>
                 </StackPanel>
 
-                <Border Grid.Row="2"
+                <Border Grid.Row="3"
                         x:Name="DropZone"
                         AllowDrop="True"
                         DragOver="DropZone_DragOver"

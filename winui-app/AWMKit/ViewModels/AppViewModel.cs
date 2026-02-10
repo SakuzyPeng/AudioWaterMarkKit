@@ -123,8 +123,8 @@ public sealed partial class AppViewModel : ObservableObject
     public Brush DatabaseStatusBrush => GetAvailabilityBrush(DatabaseAvailable);
 
     public string KeyStatusTooltip => KeyAvailable
-        ? $"密钥：已配置\n来源：{KeySourceLabel}\n点击刷新状态"
-        : "密钥：未配置\n来源：无\n点击刷新状态";
+        ? $"密钥：已配置\n来源：{KeySourceLabel}\n激活槽位：{ActiveKeySlot}\n点击刷新状态"
+        : $"密钥：未配置\n来源：无\n激活槽位：{ActiveKeySlot}\n点击刷新状态";
 
     public string EngineStatusTooltip => EngineAvailable
         ? $"音频引擎：可用\n路径：{EnginePath}\n点击刷新状态"
@@ -134,15 +134,30 @@ public sealed partial class AppViewModel : ObservableObject
         ? $"数据库：可用\n映射：{TotalTags}\n证据：{TotalEvidence}\n点击刷新状态"
         : "数据库：不可用\n点击刷新状态";
 
+    private int _activeKeySlot;
+    public int ActiveKeySlot
+    {
+        get => _activeKeySlot;
+        set
+        {
+            if (SetProperty(ref _activeKeySlot, value))
+            {
+                NotifyStatusPresentationChanged();
+            }
+        }
+    }
+
     private readonly AppDatabase _database;
     private readonly TagMappingStore _tagStore;
     private readonly EvidenceStore _evidenceStore;
+    private readonly AppSettingsStore _appSettingsStore;
 
     private AppViewModel()
     {
         _database = new AppDatabase();
         _tagStore = new TagMappingStore(_database);
         _evidenceStore = new EvidenceStore(_database);
+        _appSettingsStore = new AppSettingsStore(_database);
     }
 
     /// <summary>
@@ -159,6 +174,8 @@ public sealed partial class AppViewModel : ObservableObject
     /// Gets the evidence store.
     /// </summary>
     public EvidenceStore EvidenceStore => _evidenceStore;
+
+    public AppSettingsStore AppSettingsStore => _appSettingsStore;
 
     /// <summary>
     /// Initializes application state (call on startup).
@@ -185,11 +202,6 @@ public sealed partial class AppViewModel : ObservableObject
     [RelayCommand]
     private async Task GenerateKeyAsync()
     {
-        if (string.IsNullOrEmpty(CurrentIdentity))
-        {
-            return;
-        }
-
         var (key, error) = await Task.Run(AwmKeyBridge.GenerateAndSaveKey);
         if (error == AwmError.Ok && key is not null)
         {
@@ -204,11 +216,6 @@ public sealed partial class AppViewModel : ObservableObject
     [RelayCommand]
     private async Task DeleteKeyAsync()
     {
-        if (string.IsNullOrEmpty(CurrentIdentity))
-        {
-            return;
-        }
-
         var error = await Task.Run(AwmKeyBridge.DeleteKey);
         if (error == AwmError.Ok)
         {
@@ -225,6 +232,7 @@ public sealed partial class AppViewModel : ObservableObject
         await RefreshDatabaseStatusAsync();
         RefreshEngineStatus();
         await RefreshKeyStatusAsync();
+        await RefreshActiveKeySlotAsync();
     }
 
     /// <summary>
@@ -283,6 +291,36 @@ public sealed partial class AppViewModel : ObservableObject
         var tags = await _tagStore.ListAllAsync();
         TotalTags = tags.Count;
         TotalEvidence = await _evidenceStore.CountAsync();
+    }
+
+    public async Task RefreshActiveKeySlotAsync()
+    {
+        if (!_database.IsOpen)
+        {
+            var opened = await _database.OpenAsync();
+            if (!opened)
+            {
+                ActiveKeySlot = 0;
+                return;
+            }
+        }
+
+        ActiveKeySlot = await _appSettingsStore.GetActiveKeySlotAsync();
+    }
+
+    public async Task SetActiveKeySlotAsync(int slot)
+    {
+        if (!_database.IsOpen)
+        {
+            var opened = await _database.OpenAsync();
+            if (!opened)
+            {
+                return;
+            }
+        }
+
+        await _appSettingsStore.SaveActiveKeySlotAsync(slot);
+        ActiveKeySlot = Math.Clamp(slot, 0, 31);
     }
 
     private void RefreshEngineStatus()

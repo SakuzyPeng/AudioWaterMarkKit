@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
@@ -20,11 +21,37 @@ namespace AWMKit.Pages;
 public sealed partial class DetectPage : Page
 {
     public DetectViewModel ViewModel { get; }
+    public AppViewModel AppState { get; } = AppViewModel.Instance;
 
     public DetectPage()
     {
         InitializeComponent();
         ViewModel = new DetectViewModel();
+        ViewModel.IsKeyAvailable = AppState.KeyAvailable;
+        AppState.PropertyChanged += AppStateOnPropertyChanged;
+        Loaded += DetectPage_Loaded;
+        Unloaded += DetectPage_Unloaded;
+    }
+
+    private async void DetectPage_Loaded(object sender, RoutedEventArgs e)
+    {
+        await AppState.RefreshRuntimeStatusAsync();
+        ViewModel.IsKeyAvailable = AppState.KeyAvailable;
+    }
+
+    private void DetectPage_Unloaded(object sender, RoutedEventArgs e)
+    {
+        AppState.PropertyChanged -= AppStateOnPropertyChanged;
+        Unloaded -= DetectPage_Unloaded;
+        Loaded -= DetectPage_Loaded;
+    }
+
+    private void AppStateOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(AppViewModel.KeyAvailable))
+        {
+            _ = DispatcherQueue.TryEnqueue(() => { ViewModel.IsKeyAvailable = AppState.KeyAvailable; });
+        }
     }
 
     private async void SelectInputSourceButton_Click(object sender, RoutedEventArgs e)
@@ -75,6 +102,14 @@ public sealed partial class DetectPage : Page
 
         var file = await picker.PickSingleFileAsync();
         return file?.Path;
+    }
+
+    private void GoToKeyPageButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.Current.MainWindow is AWMKit.MainWindow window)
+        {
+            window.NavigateToKeyPage();
+        }
     }
 
     private async Task<string?> PickFolderAsync()

@@ -1,6 +1,7 @@
 using AWMKit.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using System.ComponentModel;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.DataTransfer;
@@ -16,16 +17,36 @@ namespace AWMKit.Pages;
 public sealed partial class EmbedPage : Page
 {
     public EmbedViewModel ViewModel { get; }
+    public AppViewModel AppState { get; } = AppViewModel.Instance;
 
     public EmbedPage()
     {
         InitializeComponent();
         ViewModel = new EmbedViewModel();
+        ViewModel.IsKeyAvailable = AppState.KeyAvailable;
+        AppState.PropertyChanged += AppStateOnPropertyChanged;
+        Unloaded += EmbedPage_Unloaded;
     }
 
     private async void Page_Loaded(object sender, RoutedEventArgs e)
     {
         await ViewModel.RefreshTagMappingsAsync();
+        await AppState.RefreshRuntimeStatusAsync();
+        ViewModel.IsKeyAvailable = AppState.KeyAvailable;
+    }
+
+    private void EmbedPage_Unloaded(object sender, RoutedEventArgs e)
+    {
+        AppState.PropertyChanged -= AppStateOnPropertyChanged;
+        Unloaded -= EmbedPage_Unloaded;
+    }
+
+    private void AppStateOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(AppViewModel.KeyAvailable))
+        {
+            _ = DispatcherQueue.TryEnqueue(() => { ViewModel.IsKeyAvailable = AppState.KeyAvailable; });
+        }
     }
 
     private async void SelectInputSourceButton_Click(object sender, RoutedEventArgs e)
@@ -72,6 +93,14 @@ public sealed partial class EmbedPage : Page
         {
             ViewModel.OutputDirectory = path;
             await ViewModel.FlashOutputSelectAsync();
+        }
+    }
+
+    private void GoToKeyPageButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (App.Current.MainWindow is AWMKit.MainWindow window)
+        {
+            window.NavigateToKeyPage();
         }
     }
 

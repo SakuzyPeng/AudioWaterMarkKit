@@ -77,8 +77,8 @@ struct StatusView: View {
                             if !appState.keyLoaded {
                                 Button(action: initializeKey) {
                                     HStack {
-                                        Image(systemName: "key.fill")
-                                        Text("初始化密钥")
+                                        Image(systemName: "key")
+                                        Text("前往密钥页")
                                     }
                                 }
                                 .buttonStyle(GlassButtonStyle(accentOn: true))
@@ -116,14 +116,7 @@ struct StatusView: View {
     }
 
     private func initializeKey() {
-        Task {
-            do {
-                _ = try appState.keychain.generateAndSaveKey()
-                await appState.checkKey()
-            } catch {
-                print("密钥生成失败: \(error.localizedDescription)")
-            }
-        }
+        appState.selectedTab = .key
     }
 }
 

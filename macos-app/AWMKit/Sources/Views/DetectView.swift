@@ -70,6 +70,10 @@ struct DetectView: View {
             VStack(alignment: .leading, spacing: 14) {
                 directorySummary
 
+                if !appState.keyLoaded {
+                    keyRequiredHint
+                }
+
                 HStack(spacing: 12) {
                     Button(action: { viewModel.selectFiles() }) {
                         HStack(spacing: 6) {
@@ -92,7 +96,7 @@ struct DetectView: View {
                     }
                     .buttonStyle(GlassButtonStyle(accentOn: !viewModel.isProcessing, size: .compact))
                     .accessibilityLabel(viewModel.isProcessing ? "停止检测" : "开始检测")
-                    .disabled(viewModel.selectedFiles.isEmpty || viewModel.isProcessing)
+                    .disabled(viewModel.selectedFiles.isEmpty || viewModel.isProcessing || !appState.keyLoaded)
 
                     Button(action: { viewModel.clearQueue() }) {
                         HStack(spacing: 6) {
@@ -953,5 +957,24 @@ struct DetectView: View {
         case .error:
             return DesignSystem.Colors.error
         }
+    }
+
+    private var keyRequiredHint: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "key.slash")
+                .foregroundStyle(DesignSystem.Colors.warning)
+            Text("未配置密钥，请前往密钥页完成生成。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Button("前往密钥页") {
+                appState.selectedTab = .key
+            }
+            .buttonStyle(GlassButtonStyle(size: .compact))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(DesignSystem.Colors.rowBackground(colorScheme))
+        .cornerRadius(8)
     }
 }

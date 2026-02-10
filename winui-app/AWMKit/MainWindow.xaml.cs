@@ -155,6 +155,10 @@ public sealed partial class MainWindow : Window
                 _lastPageItem = item;
                 ContentFrame.Navigate(typeof(DetectPage));
                 break;
+            case "key":
+                _lastPageItem = item;
+                ContentFrame.Navigate(typeof(KeyPage));
+                break;
             case "tags":
                 _lastPageItem = item;
                 ContentFrame.Navigate(typeof(TagsPage));
@@ -168,6 +172,18 @@ public sealed partial class MainWindow : Window
                     MainNavigation.SelectedItem = _lastPageItem;
                 }
                 break;
+        }
+    }
+
+    public void NavigateToKeyPage()
+    {
+        foreach (var menuItem in MainNavigation.MenuItems)
+        {
+            if (menuItem is NavigationViewItem item && item.Tag?.ToString() == "key")
+            {
+                MainNavigation.SelectedItem = item;
+                return;
+            }
         }
     }
 }

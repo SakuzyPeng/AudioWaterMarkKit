@@ -40,6 +40,13 @@ public sealed class AppDatabase : IDisposable
         "fp_config_id"
     ];
 
+    private static readonly string[] AppSettingsColumns =
+    [
+        "key",
+        "value",
+        "updated_at"
+    ];
+
     private const string CreateTagMappingsSql = """
         CREATE TABLE IF NOT EXISTS tag_mappings (
             username TEXT NOT NULL COLLATE NOCASE PRIMARY KEY,
@@ -78,6 +85,14 @@ public sealed class AppDatabase : IDisposable
     private const string CreateAudioEvidenceIndexSql = """
         CREATE INDEX IF NOT EXISTS idx_audio_evidence_identity_slot_created
         ON audio_evidence(identity, key_slot, created_at DESC);
+        """;
+
+    private const string CreateAppSettingsSql = """
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+        );
         """;
 
     private readonly string _databasePath;
@@ -141,6 +156,7 @@ public sealed class AppDatabase : IDisposable
 
         await EnsureTableSchemaAsync("tag_mappings", TagMappingsColumns, CreateTagMappingsSql);
         await EnsureTableSchemaAsync("audio_evidence", AudioEvidenceColumns, CreateAudioEvidenceSql);
+        await EnsureTableSchemaAsync("app_settings", AppSettingsColumns, CreateAppSettingsSql);
 
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = CreateTagMappingsIndexSql + CreateAudioEvidenceIndexSql;

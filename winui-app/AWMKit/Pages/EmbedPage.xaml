@@ -51,6 +51,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
@@ -80,7 +81,17 @@
                     </StackPanel>
                 </Border>
 
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,2,0,0">
+                <InfoBar Grid.Row="1"
+                         IsClosable="False"
+                         Severity="Warning"
+                         Visibility="{x:Bind AppState.KeyAvailable, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"
+                         Message="未配置密钥，请前往密钥页完成生成。">
+                    <InfoBar.ActionButton>
+                        <Button Content="前往密钥页" Click="GoToKeyPageButton_Click"/>
+                    </InfoBar.ActionButton>
+                </InfoBar>
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,2,0,0">
                     <Button Click="SelectInputSourceButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
                             AutomationProperties.Name="选择输入源">
@@ -147,7 +158,7 @@
                     </Button>
                 </StackPanel>
 
-                <Border Grid.Row="2"
+                <Border Grid.Row="3"
                         x:Name="DropZone"
                         AllowDrop="True"
                         DragOver="DropZone_DragOver"
@@ -173,6 +184,7 @@
             <Grid RowSpacing="8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="*"/>
@@ -246,6 +258,17 @@
                 </Border>
 
                 <Border Grid.Row="5"
+                        Style="{StaticResource EmbedSettingCellBorderStyle}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="激活槽位（只读）" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{x:Bind AppState.ActiveKeySlot, Mode=OneWay}" FontFamily="Consolas"/>
+                        <TextBlock Text="当前版本嵌入仍写槽位 0，槽位修改请在“密钥”页操作。"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="WrapWholeWords"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="6"
                         Style="{StaticResource EmbedSettingCellBorderStyle}"
                         Visibility="Collapsed">
                     <StackPanel Spacing="6">

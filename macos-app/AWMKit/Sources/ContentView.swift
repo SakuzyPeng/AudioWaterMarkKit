@@ -6,6 +6,7 @@ struct ContentView: View {
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @StateObject private var embedVM = EmbedViewModel()
     @StateObject private var detectVM = DetectViewModel()
+    @StateObject private var keyVM = KeyViewModel()
 
     var body: some View {
         ZStack {
@@ -75,6 +76,8 @@ struct ContentView: View {
             DetectView(viewModel: detectVM)
         case .tags:
             TagsView()
+        case .key:
+            KeyView(viewModel: keyVM)
         }
     }
 }

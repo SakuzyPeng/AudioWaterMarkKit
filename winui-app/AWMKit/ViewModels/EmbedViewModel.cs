@@ -251,12 +251,25 @@ public sealed partial class EmbedViewModel : ObservableObject
     public bool HasQueueFiles => QueueCount > 0;
     public bool ShowQueueEmptyHint => !HasQueueFiles;
 
+    private bool _isKeyAvailable;
+    public bool IsKeyAvailable
+    {
+        get => _isKeyAvailable;
+        set
+        {
+            if (SetProperty(ref _isKeyAvailable, value))
+            {
+                OnPropertyChanged(nameof(CanEmbedOrStop));
+            }
+        }
+    }
+
     public bool HasLogs => Logs.Count > 0;
     public string LogCountText => $"共 {Logs.Count} 条";
     public bool ShowNoLogsHint => !HasLogs;
 
     public bool HasMappings => AllMappings.Count > 0;
-    public bool CanEmbedOrStop => IsProcessing || SelectedFiles.Count > 0;
+    public bool CanEmbedOrStop => IsKeyAvailable && (IsProcessing || SelectedFiles.Count > 0);
     public string EmbedButtonText => IsProcessing ? "停止" : "嵌入";
     public bool ShowEmbedStopIcon => IsProcessing;
     public bool ShowEmbedDefaultPlayIcon => !IsProcessing && !IsEmbedSuccess;
@@ -443,7 +456,7 @@ public sealed partial class EmbedViewModel : ObservableObject
             return;
         }
 
-        var (key, _, keyError) = AwmKeyBridge.GetOrCreateKey();
+        var (key, keyError) = AwmKeyBridge.LoadKey();
         if (key is null || keyError != AwmError.Ok)
         {
             AddLog("嵌入失败", $"密钥不可用: {keyError}", false, false, LogIconTone.Error);

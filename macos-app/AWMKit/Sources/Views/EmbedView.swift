@@ -45,6 +45,10 @@ struct EmbedView: View {
             VStack(alignment: .leading, spacing: 14) {
                 directorySummary
 
+                if !appState.keyLoaded {
+                    keyRequiredHint
+                }
+
                 HStack(spacing: 12) {
                     Button(action: { viewModel.selectFiles() }) {
                         HStack(spacing: 6) {
@@ -78,7 +82,7 @@ struct EmbedView: View {
                     }
                     .buttonStyle(GlassButtonStyle(accentOn: !viewModel.isProcessing, size: .compact))
                     .accessibilityLabel(viewModel.isProcessing ? "停止嵌入" : "开始嵌入")
-                    .disabled(viewModel.isCancelling)
+                    .disabled(viewModel.isCancelling || !appState.keyLoaded)
 
                     Button(action: { viewModel.clearQueue() }) {
                         HStack(spacing: 6) {
@@ -336,6 +340,30 @@ struct EmbedView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("激活槽位（只读）")
+                    .font(.subheadline)
+                HStack(spacing: 8) {
+                    Text("\(appState.activeKeySlot)")
+                        .font(.system(.body, design: .monospaced))
+                    Spacer()
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(DesignSystem.Colors.rowBackground(colorScheme))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(
+                            colorScheme == .light ? Color.black.opacity(0.2) : Color.white.opacity(0.25),
+                            lineWidth: 1
+                        )
+                )
+                Text("当前版本嵌入仍写槽位 0，槽位修改请前往“密钥”页面。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
@@ -537,5 +565,24 @@ struct EmbedView: View {
         case .error:
             return DesignSystem.Colors.error
         }
+    }
+
+    private var keyRequiredHint: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "key.slash")
+                .foregroundStyle(DesignSystem.Colors.warning)
+            Text("未配置密钥，请前往密钥页完成生成。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Button("前往密钥页") {
+                appState.selectedTab = .key
+            }
+            .buttonStyle(GlassButtonStyle(size: .compact))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(DesignSystem.Colors.rowBackground(colorScheme))
+        .cornerRadius(8)
     }
 }

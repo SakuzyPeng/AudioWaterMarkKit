@@ -261,7 +261,20 @@ public sealed partial class DetectViewModel : ObservableObject
 
     public string QueueCountText => $"共 {QueueCount} 个";
 
-    public bool CanDetectOrStop => IsProcessing || SelectedFiles.Count > 0;
+    private bool _isKeyAvailable;
+    public bool IsKeyAvailable
+    {
+        get => _isKeyAvailable;
+        set
+        {
+            if (SetProperty(ref _isKeyAvailable, value))
+            {
+                OnPropertyChanged(nameof(CanDetectOrStop));
+            }
+        }
+    }
+
+    public bool CanDetectOrStop => IsKeyAvailable && (IsProcessing || SelectedFiles.Count > 0);
 
     public string DetectButtonText => IsProcessing ? "停止" : "检测";
     public bool ShowDetectStopIcon => IsProcessing;
