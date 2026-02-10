@@ -489,7 +489,7 @@ cargo build --bin awmkit --features full-cli --release
 cargo build --features ffi,bundled --release
 ```
 
-> 说明：`src-tauri` 已不纳入默认构建工作流（workspace 已移除）。
+> 说明：Tauri 栈已从仓库移除，不再提供 `src-tauri`/`ui` 构建链路。
 
 ### 消息协议
 

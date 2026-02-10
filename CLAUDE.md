@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-AWMKit 是一个跨语言的音频水印消息编解码库，实现 128-bit 自描述、可验证的水印消息格式。核心用 Rust 实现，通过 C FFI 提供 Swift/ObjC 绑定，同时提供基于 Tauri 2 的桌面 GUI 应用。
+AWMKit 是一个跨语言的音频水印消息编解码库，实现 128-bit 自描述、可验证的水印消息格式。核心用 Rust 实现，通过 C FFI 提供 Swift/ObjC 与 WinUI 绑定。Tauri 栈已从仓库移除。
 
 ## 常用命令
 
@@ -33,26 +33,12 @@ cargo test test_name
 cargo clippy --all-features
 ```
 
-### GUI 开发 (Tauri + React)
+### GUI 开发（原 Tauri 栈已移除）
 
 ```bash
-# 安装前端依赖
-cd ui && npm install
-
-# 启动 Tauri 开发模式（自动启动 Vite HMR + Tauri WebView）
-cd src-tauri && cargo tauri dev
-
-# 仅启动前端开发服务（端口 1420）
-cd ui && npm run dev
-
-# 构建前端（自动运行 i18n 键检查）
-cd ui && npm run build
-
-# 检查国际化键一致性
-cd ui && npm run check:i18n
-
-# 类型检查
-cd ui && npx tsc --noEmit
+# 当前桌面端为原生实现：
+# - macOS: macos-app/AWMKit.xcodeproj
+# - Windows: winui-app/AWMKit/AWMKit.csproj
 ```
 
 ### Swift 绑定
@@ -95,11 +81,10 @@ cd cli-swift && ./dist.sh
 ### 整体架构
 
 ```
-┌─ GUI (Tauri 2) ──────────────────────────┐
-│  React 19 + TypeScript + Vite            │
-│  HeroUI 组件库 (@heroui/react)           │
-│  4 标签页: 嵌入 / 检测 / 状态 / 标签    │
-└──────────── Tauri IPC ───────────────────┘
+┌─ GUI (原生) ─────────────────────────────┐
+│  macOS SwiftUI / Windows WinUI           │
+│  4 标签页: 嵌入 / 检测 / 标签 / 密钥     │
+└─────────── FFI Bridge ───────────────────┘
                   ↓
 ┌─ Rust App 层 (src/app/, feature: app) ───┐
 │  i18n / keystore / tag_store /           │
@@ -138,21 +123,9 @@ cd cli-swift && ./dist.sh
 - `maintenance.rs` - 维护功能（清除缓存、重置配置）
 - `error.rs` - App 层统一错误类型
 
-### Tauri 后端 (src-tauri/)
+### 说明
 
-`src-tauri/src/main.rs` 通过 `#[tauri::command]` 暴露 14 个 IPC 命令供前端调用，包括：
-`get_i18n_bundle`, `get_status`, `init_key`, `embed_files`, `detect_files`, `list_tags`, `save_tag`, `remove_tag` 等。
-
-### 前端 (ui/)
-
-React 19 + TypeScript + Vite 应用，使用 HeroUI 组件库 (@heroui/react)：
-
-- `src/App.tsx` - 根组件，Tab 路由和全局状态管理
-- `src/pages/` - 4 个页面：EmbedPage, DetectPage, StatusPage, TagPage
-- `src/lib/api.ts` - Tauri IPC 调用封装层，所有后端通信入口
-- `src/styles/tokens.css` - 设计令牌（颜色、字体、间距）
-- `src/types/ui.ts` - TypeScript 类型定义
-- `scripts/check-i18n-keys.mjs` - 检查国际化键是否在所有语言文件中定义
+Tauri 后端与 React 前端目录已移除；桌面 UI 全部通过原生工程实现并调用 Rust FFI。
 
 ### 国际化 (i18n/)
 
@@ -185,8 +158,9 @@ cargo build --bin awmkit --features full-cli --release
 cargo build --bin FTSC-detect --features simple-cli --release
 cargo build --bin FTSC-embed --features simple-cli --release
 
-# GUI 应用（包含 Tauri 后端）
-cd src-tauri && cargo tauri build
+# GUI 应用（原生）
+# macOS: xcodebuild -project macos-app/AWMKit.xcodeproj ...
+# Windows: dotnet build winui-app/AWMKit/AWMKit.csproj ...
 ```
 
 ## 外部依赖
