@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import AWMKit
-import SQLite3
 
 @main
 struct AWMKitApp: App {
@@ -165,12 +164,12 @@ class AppState: ObservableObject {
 
     func checkDatabaseStatus() {
         do {
-            let summary = try queryDatabaseSummary()
-            mappingCount = summary.mappingCount
+            let summary = try AWMDatabaseStore.summary()
+            mappingCount = summary.tagCount
             evidenceCount = summary.evidenceCount
-            databaseStatusTone = (summary.mappingCount == 0 && summary.evidenceCount == 0) ? .warning : .ready
+            databaseStatusTone = (summary.tagCount == 0 && summary.evidenceCount == 0) ? .warning : .ready
             databaseStatusHelp = """
-            映射总数：\(summary.mappingCount)
+            映射总数：\(summary.tagCount)
             证据总数（SHA256+指纹）：\(summary.evidenceCount)
             """
         } catch {
@@ -179,97 +178,6 @@ class AppState: ObservableObject {
             databaseStatusTone = .error
             databaseStatusHelp = "数据库读取失败：\(error.localizedDescription)"
         }
-    }
-
-    private struct DatabaseSummary {
-        let mappingCount: Int
-        let evidenceCount: Int
-    }
-
-    private enum DatabaseStatusError: LocalizedError {
-        case openFailed(String)
-        case prepareFailed(String)
-        case stepFailed(String)
-
-        var errorDescription: String? {
-            switch self {
-            case .openFailed(let message):
-                return "打开失败：\(message)"
-            case .prepareFailed(let message):
-                return "预处理失败：\(message)"
-            case .stepFailed(let message):
-                return "查询失败：\(message)"
-            }
-        }
-    }
-
-    private func queryDatabaseSummary() throws -> DatabaseSummary {
-        let dbURL = databaseURL()
-        var db: OpaquePointer?
-        guard sqlite3_open_v2(
-            dbURL.path,
-            &db,
-            SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
-            nil
-        ) == SQLITE_OK else {
-            let message = db.flatMap(sqliteMessage(from:)) ?? "未知错误"
-            if let db { sqlite3_close(db) }
-            throw DatabaseStatusError.openFailed(message)
-        }
-        defer { sqlite3_close(db) }
-
-        let mappingCount = try queryTableCountIfExists(db: db, tableName: "tag_mappings")
-        let evidenceCount = try queryTableCountIfExists(db: db, tableName: "audio_evidence")
-        return DatabaseSummary(mappingCount: mappingCount, evidenceCount: evidenceCount)
-    }
-
-    private func queryTableCountIfExists(db: OpaquePointer?, tableName: String) throws -> Int {
-        guard try tableExists(db: db, tableName: tableName) else {
-            return 0
-        }
-
-        let sql = "SELECT COUNT(*) FROM \(tableName)"
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-            throw DatabaseStatusError.prepareFailed(sqliteMessage(from: db))
-        }
-        defer { sqlite3_finalize(statement) }
-
-        let step = sqlite3_step(statement)
-        guard step == SQLITE_ROW else {
-            throw DatabaseStatusError.stepFailed(sqliteMessage(from: db))
-        }
-        return Int(sqlite3_column_int64(statement, 0))
-    }
-
-    private func tableExists(db: OpaquePointer?, tableName: String) throws -> Bool {
-        let escaped = tableName.replacingOccurrences(of: "'", with: "''")
-        let sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name='\(escaped)' LIMIT 1"
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-            throw DatabaseStatusError.prepareFailed(sqliteMessage(from: db))
-        }
-        defer { sqlite3_finalize(statement) }
-
-        let step = sqlite3_step(statement)
-        if step == SQLITE_ROW {
-            return true
-        }
-        if step == SQLITE_DONE {
-            return false
-        }
-        throw DatabaseStatusError.stepFailed(sqliteMessage(from: db))
-    }
-
-    private func sqliteMessage(from db: OpaquePointer?) -> String {
-        guard let db, let cString = sqlite3_errmsg(db) else { return "未知 SQLite 错误" }
-        return String(cString: cString)
-    }
-
-    private func databaseURL() -> URL {
-        URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-            .appendingPathComponent(".awmkit", isDirectory: true)
-            .appendingPathComponent("awmkit.db", isDirectory: false)
     }
 
     private func inferredAudioBackend() -> String {

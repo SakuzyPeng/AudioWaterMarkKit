@@ -159,4 +159,38 @@ internal static class AwmNative
 
     [DllImport(Lib, EntryPoint = "awm_key_delete", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_key_delete();
+
+    // ── Database Operations (app feature) ──
+
+    [DllImport(Lib, EntryPoint = "awm_db_summary", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_db_summary(IntPtr outTagCount, IntPtr outEvidenceCount);
+
+    [DllImport(Lib, EntryPoint = "awm_db_tag_list_json", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_db_tag_list_json(uint limit, IntPtr outBuf, nuint outLen, IntPtr outRequiredLen);
+
+    [DllImport(Lib, EntryPoint = "awm_db_tag_lookup", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_db_tag_lookup(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string username,
+        IntPtr outTag,
+        nuint outLen,
+        IntPtr outRequiredLen);
+
+    [DllImport(Lib, EntryPoint = "awm_db_tag_save_if_absent", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_db_tag_save_if_absent(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string username,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string tag,
+        IntPtr outInserted);
+
+    [DllImport(Lib, EntryPoint = "awm_db_tag_remove_json", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_db_tag_remove_json(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string usernamesJson,
+        IntPtr outDeleted);
+
+    [DllImport(Lib, EntryPoint = "awm_db_evidence_list_json", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_db_evidence_list_json(uint limit, IntPtr outBuf, nuint outLen, IntPtr outRequiredLen);
+
+    [DllImport(Lib, EntryPoint = "awm_db_evidence_remove_json", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_db_evidence_remove_json(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string idsJson,
+        IntPtr outDeleted);
 }

@@ -266,25 +266,19 @@ public sealed partial class AppViewModel : ObservableObject
 
     private async Task RefreshDatabaseStatusAsync()
     {
-        if (!_database.IsOpen)
+        await Task.CompletedTask;
+        var (tagCount, evidenceCount, error) = AwmDatabaseBridge.GetSummary();
+        if (error != AwmError.Ok)
         {
-            DatabaseAvailable = await _database.OpenAsync();
-        }
-        else
-        {
-            DatabaseAvailable = true;
-        }
-
-        if (!DatabaseAvailable)
-        {
+            DatabaseAvailable = false;
             TotalTags = 0;
             TotalEvidence = 0;
             return;
         }
 
-        var tags = await _tagStore.ListAllAsync();
-        TotalTags = tags.Count;
-        TotalEvidence = await _evidenceStore.CountAsync();
+        DatabaseAvailable = true;
+        TotalTags = (int)Math.Min(tagCount, int.MaxValue);
+        TotalEvidence = (int)Math.Min(evidenceCount, int.MaxValue);
     }
 
     public async Task RefreshActiveKeySlotAsync()

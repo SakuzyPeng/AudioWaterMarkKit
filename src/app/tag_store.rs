@@ -48,6 +48,42 @@ impl TagStore {
         &self.entries
     }
 
+    /// List mappings with an upper bound.
+    pub fn list_recent(&self, limit: usize) -> Vec<TagEntry> {
+        let normalized = limit.max(1);
+        self.entries.iter().take(normalized).cloned().collect()
+    }
+
+    /// Get mapping tag by username (case-insensitive).
+    pub fn lookup_tag_ci(&self, username: &str) -> Result<Option<String>> {
+        let username = normalize_username(username)?;
+        let tag = self
+            .conn
+            .query_row(
+                "SELECT tag FROM tag_mappings WHERE username = ?1 COLLATE NOCASE LIMIT 1",
+                params![username],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        Ok(tag)
+    }
+
+    /// Save only if username does not exist.
+    /// Returns true when inserted, false when mapping already exists.
+    pub fn save_if_absent(&mut self, username: &str, tag: &Tag) -> Result<bool> {
+        let username = normalize_username(username)?;
+        if self.lookup_tag_ci(&username)?.is_some() {
+            return Ok(false);
+        }
+        let now = now_ts()?;
+        self.conn.execute(
+            "INSERT INTO tag_mappings (username, tag, created_at) VALUES (?1, ?2, ?3)",
+            params![username, tag.as_str(), now],
+        )?;
+        self.refresh_entries()?;
+        Ok(true)
+    }
+
     pub fn has_tag(&self, tag: &str) -> bool {
         self.entries.iter().any(|e| e.tag == tag)
     }
@@ -106,6 +142,29 @@ impl TagStore {
     pub fn clear(&mut self) -> Result<()> {
         self.conn.execute("DELETE FROM tag_mappings", [])?;
         self.refresh_entries()
+    }
+
+    /// Remove multiple usernames (case-insensitive).
+    /// Returns deleted row count.
+    pub fn remove_usernames(&mut self, usernames: &[String]) -> Result<usize> {
+        let mut deleted = 0usize;
+        for username in usernames {
+            let normalized = normalize_username(username)?;
+            let affected = self.conn.execute(
+                "DELETE FROM tag_mappings WHERE username = ?1 COLLATE NOCASE",
+                params![normalized],
+            )?;
+            deleted += affected;
+        }
+        if deleted > 0 {
+            self.refresh_entries()?;
+        }
+        Ok(deleted)
+    }
+
+    /// Count mapping rows.
+    pub fn count(&self) -> usize {
+        self.entries.len()
     }
 
     pub fn suggest(username: &str) -> Result<Tag> {

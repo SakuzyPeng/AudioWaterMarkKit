@@ -1,5 +1,5 @@
 using AWMKit.Models;
-using Microsoft.Data.Sqlite;
+using AWMKit.Native;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,66 +8,27 @@ using System.Threading.Tasks;
 namespace AWMKit.Data;
 
 /// <summary>
-/// Repository for tag_mappings table operations.
+/// Repository for tag_mappings via Rust FFI database APIs.
 /// </summary>
 public sealed class TagMappingStore
 {
-    private readonly AppDatabase _database;
-
     public TagMappingStore(AppDatabase database)
     {
-        _database = database;
+        _ = database;
     }
 
-    /// <summary>
-    /// Lists all tag mappings in username order.
-    /// </summary>
     public async Task<List<TagMapping>> ListAllAsync()
     {
         return await ListRecentAsync(int.MaxValue);
     }
 
-    /// <summary>
-    /// Lists recent tag mappings in username order with an optional limit.
-    /// </summary>
     public async Task<List<TagMapping>> ListRecentAsync(int limit = 200)
     {
-        var mappings = new List<TagMapping>();
-
-        if (_database.Connection is null)
-        {
-            return mappings;
-        }
-
-        const string query = """
-            SELECT username, tag, created_at
-            FROM tag_mappings
-            ORDER BY username COLLATE NOCASE ASC
-            LIMIT @limit
-            """;
-
-        using var cmd = _database.Connection.CreateCommand();
-        cmd.CommandText = query;
-        var normalizedLimit = limit <= 0 ? 200 : limit;
-        cmd.Parameters.AddWithValue("@limit", normalizedLimit);
-
-        using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            mappings.Add(new TagMapping
-            {
-                Username = reader.GetString(0),
-                Tag = reader.GetString(1),
-                CreatedAtUnix = reader.GetInt64(2)
-            });
-        }
-
-        return mappings;
+        await Task.CompletedTask;
+        var (rows, error) = AwmDatabaseBridge.ListTagMappings(limit);
+        return error == AwmError.Ok ? rows : [];
     }
 
-    /// <summary>
-    /// Lists mappings filtered by username/tag (case-insensitive).
-    /// </summary>
     public async Task<List<TagMapping>> ListFilteredAsync(string? search, int limit = 200)
     {
         var all = await ListRecentAsync(limit);
@@ -84,226 +45,86 @@ public sealed class TagMappingStore
             .ToList();
     }
 
-    /// <summary>
-    /// Gets a tag mapping by username (legacy API name kept for compatibility).
-    /// </summary>
     public async Task<TagMapping?> GetByIdentityAsync(string identity)
     {
-        if (_database.Connection is null)
-        {
-            return null;
-        }
-
-        const string query = """
-            SELECT username, tag, created_at
-            FROM tag_mappings
-            WHERE username = @username COLLATE NOCASE
-            LIMIT 1
-            """;
-
-        using var cmd = _database.Connection.CreateCommand();
-        cmd.CommandText = query;
-        cmd.Parameters.AddWithValue("@username", identity);
-
-        using var reader = await cmd.ExecuteReaderAsync();
-        if (!await reader.ReadAsync())
+        await Task.CompletedTask;
+        var (tag, error) = AwmDatabaseBridge.LookupTag(identity);
+        if (error != AwmError.Ok || string.IsNullOrWhiteSpace(tag))
         {
             return null;
         }
 
         return new TagMapping
         {
-            Username = reader.GetString(0),
-            Tag = reader.GetString(1),
-            CreatedAtUnix = reader.GetInt64(2)
+            Username = identity.Trim(),
+            Tag = tag,
+            CreatedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         };
     }
 
-    /// <summary>
-    /// Gets a tag mapping by tag.
-    /// </summary>
     public async Task<TagMapping?> GetByTagAsync(string tag)
     {
-        if (_database.Connection is null)
-        {
-            return null;
-        }
-
-        const string query = """
-            SELECT username, tag, created_at
-            FROM tag_mappings
-            WHERE tag = @tag
-            LIMIT 1
-            """;
-
-        using var cmd = _database.Connection.CreateCommand();
-        cmd.CommandText = query;
-        cmd.Parameters.AddWithValue("@tag", tag);
-
-        using var reader = await cmd.ExecuteReaderAsync();
-        if (!await reader.ReadAsync())
-        {
-            return null;
-        }
-
-        return new TagMapping
-        {
-            Username = reader.GetString(0),
-            Tag = reader.GetString(1),
-            CreatedAtUnix = reader.GetInt64(2)
-        };
+        var all = await ListRecentAsync(5000);
+        return all.FirstOrDefault(item => string.Equals(item.Tag, tag, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>
-    /// Saves or updates a tag mapping.
-    /// displayName is ignored because Rust schema has no such field.
-    /// </summary>
     public async Task<bool> SaveAsync(string identity, string tag, string? displayName = null)
     {
-        if (_database.Connection is null)
-        {
-            return false;
-        }
-
+        await Task.CompletedTask;
         _ = displayName;
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-        const string upsert = """
-            INSERT INTO tag_mappings (username, tag, created_at)
-            VALUES (@username, @tag, @createdAt)
-            ON CONFLICT(username) DO UPDATE SET
-                tag = excluded.tag,
-                created_at = excluded.created_at
-            """;
-
-        try
-        {
-            using var cmd = _database.Connection.CreateCommand();
-            cmd.CommandText = upsert;
-            cmd.Parameters.AddWithValue("@username", identity);
-            cmd.Parameters.AddWithValue("@tag", tag);
-            cmd.Parameters.AddWithValue("@createdAt", now);
-            await cmd.ExecuteNonQueryAsync();
-            return true;
-        }
-        catch (SqliteException)
+        var normalizedIdentity = identity.Trim();
+        var normalizedTag = tag.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedIdentity) || string.IsNullOrWhiteSpace(normalizedTag))
         {
             return false;
         }
-    }
 
-    /// <summary>
-    /// Saves a mapping only when username does not exist yet.
-    /// Returns true when inserted, false when already exists or on failure.
-    /// </summary>
-    public async Task<bool> SaveIfAbsentAsync(string username, string tag)
-    {
-        var existing = await GetByIdentityAsync(username);
+        var existing = await GetByIdentityAsync(normalizedIdentity);
         if (existing is not null)
         {
-            return false;
+            return string.Equals(existing.Tag, normalizedTag, StringComparison.OrdinalIgnoreCase);
         }
 
-        return await SaveAsync(username, tag);
+        var (inserted, error) = AwmDatabaseBridge.SaveTagIfAbsent(normalizedIdentity, normalizedTag);
+        return error == AwmError.Ok && inserted;
     }
 
-    /// <summary>
-    /// Deletes a mapping by username (legacy API name kept for compatibility).
-    /// </summary>
+    public async Task<bool> SaveIfAbsentAsync(string username, string tag)
+    {
+        await Task.CompletedTask;
+        var (inserted, error) = AwmDatabaseBridge.SaveTagIfAbsent(username.Trim(), tag.Trim().ToUpperInvariant());
+        return error == AwmError.Ok && inserted;
+    }
+
     public async Task<bool> DeleteByIdentityAsync(string identity)
     {
-        if (_database.Connection is null)
-        {
-            return false;
-        }
-
-        const string delete = """
-            DELETE FROM tag_mappings
-            WHERE username = @username COLLATE NOCASE
-            """;
-
-        using var cmd = _database.Connection.CreateCommand();
-        cmd.CommandText = delete;
-        cmd.Parameters.AddWithValue("@username", identity);
-
-        var rowsAffected = await cmd.ExecuteNonQueryAsync();
-        return rowsAffected > 0;
+        await Task.CompletedTask;
+        var (deleted, error) = AwmDatabaseBridge.RemoveTagMappings([identity]);
+        return error == AwmError.Ok && deleted > 0;
     }
 
-    /// <summary>
-    /// Deletes a mapping by tag.
-    /// </summary>
     public async Task<bool> DeleteByTagAsync(string tag)
     {
-        if (_database.Connection is null)
+        var mapping = await GetByTagAsync(tag);
+        if (mapping is null)
         {
             return false;
         }
-
-        const string delete = "DELETE FROM tag_mappings WHERE tag = @tag";
-
-        using var cmd = _database.Connection.CreateCommand();
-        cmd.CommandText = delete;
-        cmd.Parameters.AddWithValue("@tag", tag);
-
-        var rowsAffected = await cmd.ExecuteNonQueryAsync();
-        return rowsAffected > 0;
+        return await DeleteByIdentityAsync(mapping.Username);
     }
 
-    /// <summary>
-    /// Deletes mappings by username collection.
-    /// </summary>
     public async Task<int> RemoveByUsernamesAsync(IEnumerable<string> usernames)
     {
-        if (_database.Connection is null)
-        {
-            return 0;
-        }
-
-        var normalized = usernames
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Select(name => name.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (normalized.Count == 0)
-        {
-            return 0;
-        }
-
-        const string delete = """
-            DELETE FROM tag_mappings
-            WHERE username = @username COLLATE NOCASE
-            """;
-
-        var deleted = 0;
-        using var cmd = _database.Connection.CreateCommand();
-        cmd.CommandText = delete;
-        var parameter = cmd.CreateParameter();
-        parameter.ParameterName = "@username";
-        cmd.Parameters.Add(parameter);
-
-        foreach (var username in normalized)
-        {
-            parameter.Value = username;
-            deleted += await cmd.ExecuteNonQueryAsync();
-        }
-
-        return deleted;
+        await Task.CompletedTask;
+        var (deleted, error) = AwmDatabaseBridge.RemoveTagMappings(usernames);
+        return error == AwmError.Ok ? deleted : 0;
     }
 
-    /// <summary>
-    /// Counts total mappings.
-    /// </summary>
     public async Task<int> CountAsync()
     {
-        if (_database.Connection is null)
-        {
-            return 0;
-        }
-
-        using var cmd = _database.Connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM tag_mappings";
-        var result = await cmd.ExecuteScalarAsync();
-        return result is long count ? (int)count : 0;
+        await Task.CompletedTask;
+        var (tagCount, _, error) = AwmDatabaseBridge.GetSummary();
+        return error == AwmError.Ok ? (int)Math.Min(tagCount, int.MaxValue) : 0;
     }
 }

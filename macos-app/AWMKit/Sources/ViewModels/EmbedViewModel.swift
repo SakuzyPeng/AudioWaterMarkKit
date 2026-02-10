@@ -1,8 +1,6 @@
 import SwiftUI
 import AWMKit
 import UniformTypeIdentifiers
-import CryptoKit
-import SQLite3
 
 @MainActor
 class EmbedViewModel: ObservableObject {
@@ -455,58 +453,16 @@ struct EmbedTagMappingOption: Equatable {
     let tag: String
 }
 
-private enum EmbedTagMappingStoreError: LocalizedError {
-    case homeDirectoryMissing
-    case sqlite(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .homeDirectoryMissing:
-            return "无法定位用户目录"
-        case .sqlite(let message):
-            return "标签数据库错误: \(message)"
-        }
-    }
-}
-
 private enum EmbedTagMappingStore {
-    private static let charset = Array("ABCDEFGHJKMNPQRSTUVWXYZ23456789_")
-    private static let databaseFileName = "awmkit.db"
-    private static let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-
     static func loadMappings() -> [EmbedTagMappingOption] {
         do {
-            return try withDatabase { db in
-                var statement: OpaquePointer?
-                defer { sqlite3_finalize(statement) }
-
-                let sql = """
-                SELECT username, tag
-                FROM tag_mappings
-                ORDER BY username COLLATE NOCASE ASC
-                """
-                guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-                    throw databaseError(db)
+            return try AWMDatabaseStore.listTagMappings(limit: 200).compactMap { entry in
+                let username = entry.username.trimmingCharacters(in: .whitespacesAndNewlines)
+                let tag = entry.tag.uppercased()
+                guard !username.isEmpty, (try? AWMTag(tag: tag)) != nil else {
+                    return nil
                 }
-
-                var mappings: [EmbedTagMappingOption] = []
-                while sqlite3_step(statement) == SQLITE_ROW {
-                    guard
-                        let usernamePtr = sqlite3_column_text(statement, 0),
-                        let tagPtr = sqlite3_column_text(statement, 1)
-                    else {
-                        continue
-                    }
-
-                    let username = String(cString: usernamePtr).trimmingCharacters(in: .whitespacesAndNewlines)
-                    let tag = String(cString: tagPtr).uppercased()
-                    guard !username.isEmpty, (try? AWMTag(tag: tag)) != nil else {
-                        continue
-                    }
-                    mappings.append(EmbedTagMappingOption(username: username, tag: tag))
-                }
-
-                return mappings
+                return EmbedTagMappingOption(username: username, tag: tag)
             }
         } catch {
             return []
@@ -520,147 +476,17 @@ private enum EmbedTagMappingStore {
         let normalizedTag = tag.uppercased()
         guard (try? AWMTag(tag: normalizedTag)) != nil else { return .existed }
 
-        return try withDatabase { db in
-            if try findTag(for: normalizedUsername, in: db) != nil {
-                return .existed
-            }
-
-            var statement: OpaquePointer?
-            defer { sqlite3_finalize(statement) }
-            let sql = "INSERT INTO tag_mappings (username, tag, created_at) VALUES (?1, ?2, ?3)"
-            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-                throw databaseError(db)
-            }
-
-            try bind(normalizedUsername, at: 1, in: statement, db: db)
-            try bind(normalizedTag, at: 2, in: statement, db: db)
-            let now = Int64(Date().timeIntervalSince1970)
-            guard sqlite3_bind_int64(statement, 3, now) == SQLITE_OK else {
-                throw databaseError(db)
-            }
-
-            guard sqlite3_step(statement) == SQLITE_DONE else {
-                throw databaseError(db)
-            }
-            return .inserted
-        }
+        let inserted = try AWMDatabaseStore.saveTagIfAbsent(username: normalizedUsername, tag: normalizedTag)
+        return inserted ? .inserted : .existed
     }
 
     static func previewTag(username: String) -> String? {
         let normalized = username.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return nil }
-        return try? AWMTag(identity: suggestedIdentity(from: normalized)).value
-    }
-
-    private static func findTag(for username: String, in db: OpaquePointer?) throws -> String? {
-        var statement: OpaquePointer?
-        defer { sqlite3_finalize(statement) }
-        let sql = "SELECT tag FROM tag_mappings WHERE username = ?1 COLLATE NOCASE LIMIT 1"
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
-            throw databaseError(db)
+        if let existing = try? AWMDatabaseStore.lookupTag(username: normalized) {
+            return existing
         }
-        try bind(username, at: 1, in: statement, db: db)
-
-        switch sqlite3_step(statement) {
-        case SQLITE_ROW:
-            guard let tagPtr = sqlite3_column_text(statement, 0) else {
-                return nil
-            }
-            return String(cString: tagPtr)
-        case SQLITE_DONE:
-            return nil
-        default:
-            throw databaseError(db)
-        }
-    }
-
-    private static func withDatabase<T>(_ body: (OpaquePointer?) throws -> T) throws -> T {
-        let url = try databaseURL()
-        try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-
-        var db: OpaquePointer?
-        guard sqlite3_open(url.path, &db) == SQLITE_OK else {
-            let message = db.flatMap { sqliteMessage(from: $0) } ?? "无法打开数据库"
-            if let db {
-                sqlite3_close(db)
-            }
-            throw EmbedTagMappingStoreError.sqlite(message)
-        }
-        defer { sqlite3_close(db) }
-
-        try ensureSchema(in: db)
-        return try body(db)
-    }
-
-    private static func ensureSchema(in db: OpaquePointer?) throws {
-        let sql = """
-        CREATE TABLE IF NOT EXISTS tag_mappings (
-            username TEXT NOT NULL COLLATE NOCASE PRIMARY KEY,
-            tag TEXT NOT NULL,
-            created_at INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_tag_mappings_created_at
-        ON tag_mappings(created_at DESC);
-        """
-        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
-            throw databaseError(db)
-        }
-    }
-
-    private static func bind(_ value: String, at index: Int32, in statement: OpaquePointer?, db: OpaquePointer?) throws {
-        guard sqlite3_bind_text(statement, index, value, -1, sqliteTransient) == SQLITE_OK else {
-            throw databaseError(db)
-        }
-    }
-
-    private static func databaseError(_ db: OpaquePointer?) -> EmbedTagMappingStoreError {
-        .sqlite(sqliteMessage(from: db))
-    }
-
-    private static func sqliteMessage(from db: OpaquePointer?) -> String {
-        guard let db, let cString = sqlite3_errmsg(db) else {
-            return "unknown sqlite error"
-        }
-        return String(cString: cString)
-    }
-
-    private static func databaseURL() throws -> URL {
-        let homePath = NSHomeDirectory()
-        guard !homePath.isEmpty else {
-            throw EmbedTagMappingStoreError.homeDirectoryMissing
-        }
-        return URL(fileURLWithPath: homePath, isDirectory: true)
-            .appendingPathComponent(".awmkit", isDirectory: true)
-            .appendingPathComponent(databaseFileName, isDirectory: false)
-    }
-
-    private static func suggestedIdentity(from username: String) -> String {
-        let digest = SHA256.hash(data: Data(username.utf8))
-        var acc: UInt64 = 0
-        var accBits: UInt8 = 0
-        var output = ""
-        output.reserveCapacity(7)
-
-        for byte in digest {
-            acc = (acc << 8) | UInt64(byte)
-            accBits += 8
-
-            while accBits >= 5 && output.count < 7 {
-                let shift = accBits - 5
-                let index = Int((acc >> UInt64(shift)) & 0x1F)
-                output.append(charset[index])
-                accBits -= 5
-            }
-
-            if output.count >= 7 {
-                break
-            }
-        }
-
-        return output
+        return try? AWMDatabaseStore.suggestTag(username: normalized)
     }
 }
 

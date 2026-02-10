@@ -14,9 +14,11 @@ use crate::message::{self, CURRENT_VERSION, MESSAGE_LEN};
 use crate::tag::Tag;
 
 #[cfg(feature = "app")]
-use crate::app::{build_audio_proof, EvidenceStore, NewAudioEvidence};
+use crate::app::{build_audio_proof, EvidenceStore, NewAudioEvidence, TagStore};
 #[cfg(feature = "app")]
 use rusty_chromaprint::{match_fingerprints, Configuration};
+#[cfg(feature = "app")]
+use serde::Serialize;
 
 /// FFI 错误码
 #[repr(i32)]
@@ -55,6 +57,37 @@ fn copy_str_to_c_buf(dst: &mut [c_char], text: &str) {
     for (index, &byte) in bytes[..copy_len].iter().enumerate() {
         dst[index] = byte as c_char;
     }
+}
+
+/// Write UTF-8 string into C buffer with two-step size negotiation.
+///
+/// # Safety
+/// - `out_required_len` must be a valid writable pointer.
+/// - `out` may be null only when `out_len == 0`.
+unsafe fn write_string_with_required(
+    value: &str,
+    out: *mut c_char,
+    out_len: usize,
+    out_required_len: *mut usize,
+) -> i32 {
+    if out_required_len.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    let required = value.len().saturating_add(1);
+    *out_required_len = required;
+
+    if out.is_null() || out_len == 0 {
+        return AWMError::Success as i32;
+    }
+
+    if out_len < required {
+        return AWMError::InvalidMessageLength as i32;
+    }
+
+    ptr::copy_nonoverlapping(value.as_ptr(), out as *mut u8, value.len());
+    *out.add(value.len()) = 0;
+    AWMError::Success as i32
 }
 
 /// 创建 Tag（从身份字符串，自动补齐 + 计算校验位）
@@ -737,6 +770,369 @@ pub unsafe extern "C" fn awm_evidence_record_file(
         let _ = file_path_str;
         let _ = raw;
         let _ = key_slice;
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+// ============================================================================
+// Database Operations (requires "app" feature)
+// ============================================================================
+
+#[cfg(feature = "app")]
+#[derive(Serialize)]
+struct FfiAudioEvidence {
+    id: i64,
+    created_at: u64,
+    file_path: String,
+    tag: String,
+    identity: String,
+    version: u8,
+    key_slot: u8,
+    timestamp_minutes: u32,
+    message_hex: String,
+    sample_rate: u32,
+    channels: u32,
+    sample_count: u64,
+    pcm_sha256: String,
+    chromaprint_blob: String,
+    fingerprint_len: usize,
+    fp_config_id: u8,
+}
+
+#[cfg(feature = "app")]
+fn encode_chromaprint_blob_hex(values: &[u32]) -> String {
+    let mut out = Vec::with_capacity(values.len().saturating_mul(4));
+    for value in values {
+        out.extend_from_slice(&value.to_le_bytes());
+    }
+    hex::encode(out)
+}
+
+/// Query database summary counts for tag mappings and evidence.
+///
+/// # Safety
+/// - `out_tag_count` and `out_evidence_count` must be valid writable pointers.
+#[no_mangle]
+pub unsafe extern "C" fn awm_db_summary(
+    out_tag_count: *mut u64,
+    out_evidence_count: *mut u64,
+) -> i32 {
+    if out_tag_count.is_null() || out_evidence_count.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    #[cfg(feature = "app")]
+    {
+        let tag_store = match TagStore::load() {
+            Ok(store) => store,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+        let evidence_store = match EvidenceStore::load() {
+            Ok(store) => store,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+
+        *out_tag_count = u64::try_from(tag_store.count()).unwrap_or(u64::MAX);
+        *out_evidence_count =
+            u64::try_from(evidence_store.count_all().unwrap_or(0)).unwrap_or(u64::MAX);
+        return AWMError::Success as i32;
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        *out_tag_count = 0;
+        *out_evidence_count = 0;
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// List tag mappings as JSON.
+///
+/// Two-step usage:
+/// 1) call with `out=nullptr, out_len=0` to get required length
+/// 2) allocate buffer and call again to receive utf-8 json string
+///
+/// # Safety
+/// - `out_required_len` must be valid writable pointer.
+#[no_mangle]
+pub unsafe extern "C" fn awm_db_tag_list_json(
+    limit: u32,
+    out: *mut c_char,
+    out_len: usize,
+    out_required_len: *mut usize,
+) -> i32 {
+    #[cfg(feature = "app")]
+    {
+        let normalized_limit = usize::try_from(limit).unwrap_or(usize::MAX).max(1);
+        let store = match TagStore::load() {
+            Ok(store) => store,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+        let list = store.list_recent(normalized_limit);
+        let json = match serde_json::to_string(&list) {
+            Ok(json) => json,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+        return write_string_with_required(&json, out, out_len, out_required_len);
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = limit;
+        let _ = write_string_with_required("[]", out, out_len, out_required_len);
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// Lookup tag by username (case-insensitive).
+///
+/// Returns empty string when mapping is not found.
+///
+/// # Safety
+/// - `username` must be a valid C string.
+/// - `out_required_len` must be valid writable pointer.
+#[no_mangle]
+pub unsafe extern "C" fn awm_db_tag_lookup(
+    username: *const c_char,
+    out_tag: *mut c_char,
+    out_len: usize,
+    out_required_len: *mut usize,
+) -> i32 {
+    if username.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+    let username_str = match CStr::from_ptr(username).to_str() {
+        Ok(value) => value,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    #[cfg(feature = "app")]
+    {
+        let store = match TagStore::load() {
+            Ok(store) => store,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+        let tag = match store.lookup_tag_ci(username_str) {
+            Ok(tag) => tag.unwrap_or_default(),
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+        return write_string_with_required(&tag, out_tag, out_len, out_required_len);
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = username_str;
+        let _ = write_string_with_required("", out_tag, out_len, out_required_len);
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// Save tag mapping only when username does not exist.
+///
+/// # Safety
+/// - pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn awm_db_tag_save_if_absent(
+    username: *const c_char,
+    tag: *const c_char,
+    out_inserted: *mut bool,
+) -> i32 {
+    if username.is_null() || tag.is_null() || out_inserted.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    let username_str = match CStr::from_ptr(username).to_str() {
+        Ok(value) => value,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+    let tag_str = match CStr::from_ptr(tag).to_str() {
+        Ok(value) => value,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    if username_str.trim().is_empty() {
+        return AWMError::InvalidTag as i32;
+    }
+
+    #[cfg(feature = "app")]
+    {
+        let parsed_tag = match Tag::parse(tag_str) {
+            Ok(tag) => tag,
+            Err(_) => return AWMError::InvalidTag as i32,
+        };
+        let mut store = match TagStore::load() {
+            Ok(store) => store,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+        match store.save_if_absent(username_str, &parsed_tag) {
+            Ok(inserted) => {
+                *out_inserted = inserted;
+                AWMError::Success as i32
+            }
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = (username_str, tag_str);
+        *out_inserted = false;
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// Remove tag mappings by usernames JSON array.
+///
+/// # Safety
+/// - `usernames_json` must be valid UTF-8 C string.
+/// - `out_deleted` must be valid writable pointer.
+#[no_mangle]
+pub unsafe extern "C" fn awm_db_tag_remove_json(
+    usernames_json: *const c_char,
+    out_deleted: *mut u32,
+) -> i32 {
+    if usernames_json.is_null() || out_deleted.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+    let usernames_json_str = match CStr::from_ptr(usernames_json).to_str() {
+        Ok(value) => value,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    #[cfg(feature = "app")]
+    {
+        let usernames: Vec<String> = match serde_json::from_str(usernames_json_str) {
+            Ok(values) => values,
+            Err(_) => return AWMError::InvalidTag as i32,
+        };
+        let mut store = match TagStore::load() {
+            Ok(store) => store,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+        match store.remove_usernames(&usernames) {
+            Ok(deleted) => {
+                *out_deleted = u32::try_from(deleted).unwrap_or(u32::MAX);
+                AWMError::Success as i32
+            }
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = usernames_json_str;
+        *out_deleted = 0;
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// List evidence records as JSON.
+///
+/// # Safety
+/// - `out_required_len` must be valid writable pointer.
+#[no_mangle]
+pub unsafe extern "C" fn awm_db_evidence_list_json(
+    limit: u32,
+    out: *mut c_char,
+    out_len: usize,
+    out_required_len: *mut usize,
+) -> i32 {
+    #[cfg(feature = "app")]
+    {
+        let normalized_limit = usize::try_from(limit).unwrap_or(usize::MAX).max(1);
+        let store = match EvidenceStore::load() {
+            Ok(store) => store,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+
+        let rows = match store.list_filtered(None, None, None, normalized_limit) {
+            Ok(rows) => rows,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+
+        let payload: Vec<FfiAudioEvidence> = rows
+            .into_iter()
+            .map(|row| FfiAudioEvidence {
+                id: row.id,
+                created_at: row.created_at,
+                file_path: row.file_path,
+                tag: row.tag,
+                identity: row.identity,
+                version: row.version,
+                key_slot: row.key_slot,
+                timestamp_minutes: row.timestamp_minutes,
+                message_hex: row.message_hex,
+                sample_rate: row.sample_rate,
+                channels: row.channels,
+                sample_count: row.sample_count,
+                pcm_sha256: row.pcm_sha256,
+                chromaprint_blob: encode_chromaprint_blob_hex(&row.chromaprint),
+                fingerprint_len: row.chromaprint.len(),
+                fp_config_id: row.fp_config_id,
+            })
+            .collect();
+
+        let json = match serde_json::to_string(&payload) {
+            Ok(json) => json,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+
+        return write_string_with_required(&json, out, out_len, out_required_len);
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = limit;
+        let _ = write_string_with_required("[]", out, out_len, out_required_len);
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// Remove evidence records by ids JSON array.
+///
+/// # Safety
+/// - `ids_json` must be valid UTF-8 C string.
+/// - `out_deleted` must be valid writable pointer.
+#[no_mangle]
+pub unsafe extern "C" fn awm_db_evidence_remove_json(
+    ids_json: *const c_char,
+    out_deleted: *mut u32,
+) -> i32 {
+    if ids_json.is_null() || out_deleted.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+    let ids_json_str = match CStr::from_ptr(ids_json).to_str() {
+        Ok(value) => value,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    #[cfg(feature = "app")]
+    {
+        let ids: Vec<i64> = match serde_json::from_str(ids_json_str) {
+            Ok(values) => values,
+            Err(_) => return AWMError::InvalidTag as i32,
+        };
+        let store = match EvidenceStore::load() {
+            Ok(store) => store,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+
+        let mut deleted: u32 = 0;
+        for id in ids {
+            match store.remove_by_id(id) {
+                Ok(true) => deleted = deleted.saturating_add(1),
+                Ok(false) => {}
+                Err(_) => return AWMError::AudiowmarkExec as i32,
+            }
+        }
+        *out_deleted = deleted;
+        return AWMError::Success as i32;
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = ids_json_str;
+        *out_deleted = 0;
         AWMError::AudiowmarkExec as i32
     }
 }

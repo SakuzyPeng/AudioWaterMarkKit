@@ -492,6 +492,90 @@ int32_t awm_key_delete_slot(uint8_t slot, uint8_t* out_new_active_slot);
 int32_t awm_key_delete(void);
 
 // ============================================================================
+// Database Operations (requires "app" feature at build time)
+// ============================================================================
+
+/**
+ * Query database summary counts.
+ *
+ * @param out_tag_count       Output pointer for total tag mappings
+ * @param out_evidence_count  Output pointer for total evidence rows
+ * @return                    AWM_SUCCESS or error code
+ */
+int32_t awm_db_summary(uint64_t* out_tag_count, uint64_t* out_evidence_count);
+
+/**
+ * List tag mappings as JSON.
+ * Two-step usage:
+ * 1) call with out = NULL and out_len = 0 to get out_required_len
+ * 2) allocate buffer and call again to fetch JSON payload
+ *
+ * @param limit             Max row count (>=1)
+ * @param out               Output buffer for JSON UTF-8
+ * @param out_len           Buffer capacity in bytes
+ * @param out_required_len  Required bytes (includes null terminator)
+ * @return                  AWM_SUCCESS or error code
+ */
+int32_t awm_db_tag_list_json(uint32_t limit, char* out, size_t out_len, size_t* out_required_len);
+
+/**
+ * Lookup tag by username (case-insensitive).
+ * Returns empty string when mapping is not found.
+ *
+ * @param username          Username
+ * @param out_tag           Output buffer for tag
+ * @param out_len           Buffer capacity in bytes
+ * @param out_required_len  Required bytes (includes null terminator)
+ * @return                  AWM_SUCCESS or error code
+ */
+int32_t awm_db_tag_lookup(
+    const char* username,
+    char* out_tag,
+    size_t out_len,
+    size_t* out_required_len
+);
+
+/**
+ * Save mapping only when username does not exist.
+ *
+ * @param username      Username
+ * @param tag           8-char tag
+ * @param out_inserted  true if inserted, false when already exists
+ * @return              AWM_SUCCESS or error code
+ */
+int32_t awm_db_tag_save_if_absent(const char* username, const char* tag, bool* out_inserted);
+
+/**
+ * Remove tag mappings by usernames JSON array.
+ *
+ * @param usernames_json  JSON array string, e.g. ["alice","bob"]
+ * @param out_deleted     Deleted row count
+ * @return                AWM_SUCCESS or error code
+ */
+int32_t awm_db_tag_remove_json(const char* usernames_json, uint32_t* out_deleted);
+
+/**
+ * List evidence rows as JSON.
+ * Two-step usage is same as awm_db_tag_list_json.
+ *
+ * @param limit             Max row count (>=1)
+ * @param out               Output buffer for JSON UTF-8
+ * @param out_len           Buffer capacity in bytes
+ * @param out_required_len  Required bytes (includes null terminator)
+ * @return                  AWM_SUCCESS or error code
+ */
+int32_t awm_db_evidence_list_json(uint32_t limit, char* out, size_t out_len, size_t* out_required_len);
+
+/**
+ * Remove evidence rows by ids JSON array.
+ *
+ * @param ids_json    JSON array string, e.g. [1,2,3]
+ * @param out_deleted Deleted row count
+ * @return            AWM_SUCCESS or error code
+ */
+int32_t awm_db_evidence_remove_json(const char* ids_json, uint32_t* out_deleted);
+
+// ============================================================================
 // Tag Suggestion (requires "app" feature at build time)
 // ============================================================================
 
