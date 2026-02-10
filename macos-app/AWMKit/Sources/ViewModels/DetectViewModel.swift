@@ -2,7 +2,7 @@ import SwiftUI
 import AWMKit
 import UniformTypeIdentifiers
 
-struct DetectRecord: Identifiable, Equatable {
+struct DetectRecord: Identifiable, Equatable, Sendable {
     let id: UUID
     let file: String
     let status: String
@@ -304,6 +304,7 @@ class DetectViewModel: ObservableObject {
                 isProcessing = false
                 return
             }
+            let audioBox = UnsafeAudioBox(audio: audio)
 
             let initialTotal = selectedFiles.count
             let total = Double(initialTotal)
@@ -311,106 +312,19 @@ class DetectViewModel: ObservableObject {
             for processedCount in 0..<initialTotal {
                 guard let fileURL = selectedFiles.first else { break }
                 currentProcessingIndex = 0
-                let filePath = fileURL.path(percentEncoded: false)
                 let fileName = fileURL.lastPathComponent
-
-                do {
-                    if let detectResult = try audio.detect(input: fileURL) {
-                        do {
-                            let decoded = try AWMMessage.decode(detectResult.rawMessage, key: key)
-                            var cloneKind = "unavailable"
-                            var cloneScore: Double?
-                            var cloneMatchSeconds: Float?
-                            var cloneReason: String?
-                            do {
-                                let cloneResult = try audio.cloneCheck(
-                                    input: fileURL,
-                                    identity: decoded.identity,
-                                    keySlot: decoded.keySlot
-                                )
-                                cloneKind = cloneResult.kind.rawValue
-                                cloneScore = cloneResult.score
-                                cloneMatchSeconds = cloneResult.matchSeconds
-                                cloneReason = cloneResult.reason
-                            } catch {
-                                cloneKind = "unavailable"
-                                cloneReason = error.localizedDescription
-                            }
-                            let record = DetectRecord(
-                                file: filePath,
-                                status: "ok",
-                                tag: decoded.tag.value,
-                                identity: decoded.identity,
-                                version: decoded.version,
-                                timestampMinutes: decoded.timestampMinutes,
-                                timestampUTC: decoded.timestampUTC,
-                                keySlot: decoded.keySlot,
-                                pattern: detectResult.pattern,
-                                detectScore: detectResult.detectScore,
-                                bitErrors: detectResult.bitErrors,
-                                matchFound: detectResult.found,
-                                cloneCheck: cloneKind,
-                                cloneScore: cloneScore,
-                                cloneMatchSeconds: cloneMatchSeconds,
-                                cloneReason: cloneReason
-                            )
-                            insertDetectRecord(record)
-                            log(
-                                "成功: \(fileName)",
-                                detail: "标签: \(decoded.identity) | 时间: \(decoded.date.formatted()) | 克隆: \(cloneKind)",
-                                relatedRecordId: record.id
-                            )
-                            totalFound += 1
-                        } catch {
-                            let record = DetectRecord(
-                                file: filePath,
-                                status: "invalid_hmac",
-                                pattern: detectResult.pattern,
-                                detectScore: detectResult.detectScore,
-                                bitErrors: detectResult.bitErrors,
-                                matchFound: detectResult.found,
-                                error: error.localizedDescription
-                            )
-                            insertDetectRecord(record)
-                            log(
-                                "失败: \(fileName)",
-                                detail: "HMAC 校验失败: \(error.localizedDescription)",
-                                isSuccess: false,
-                                relatedRecordId: record.id
-                            )
-                        }
-                    } else {
-                        let record = DetectRecord(
-                            file: filePath,
-                            status: "not_found"
-                        )
-                        insertDetectRecord(record)
-                        log(
-                            "无标记: \(fileName)",
-                            detail: "未检测到水印",
-                            isSuccess: false,
-                            relatedRecordId: record.id
-                        )
-                    }
-                } catch {
-                    let record = DetectRecord(
-                        file: filePath,
-                        status: "error",
-                        error: error.localizedDescription
-                    )
-                    insertDetectRecord(record)
-                    log(
-                        "失败: \(fileName)",
-                        detail: error.localizedDescription,
-                        isSuccess: false,
-                        relatedRecordId: record.id
-                    )
+                let record = await Self.performDetectStep(audio: audioBox, fileURL: fileURL, key: key)
+                insertDetectRecord(record)
+                logDetectionOutcome(fileName: fileName, record: record)
+                if record.status == "ok" {
+                    totalFound += 1
                 }
                 totalDetected += 1
                 if !selectedFiles.isEmpty {
                     selectedFiles.removeFirst()
                 }
                 progress = Double(processedCount + 1) / total
+                await Task.yield()
             }
 
             log("检测完成", detail: "已检测: \(totalDetected), 发现水印: \(totalFound)")
@@ -418,6 +332,44 @@ class DetectViewModel: ObservableObject {
             currentProcessingIndex = -1
             isProcessing = false
             scheduleProgressResetIfNeeded()
+        }
+    }
+
+    private func logDetectionOutcome(fileName: String, record: DetectRecord) {
+        switch record.status {
+        case "ok":
+            let timeText: String
+            if let timestampUTC = record.timestampUTC {
+                timeText = Date(timeIntervalSince1970: TimeInterval(timestampUTC)).formatted()
+            } else {
+                timeText = "-"
+            }
+            log(
+                "成功: \(fileName)",
+                detail: "标签: \(record.identity ?? "-") | 时间: \(timeText) | 克隆: \(record.cloneCheck ?? "-")",
+                relatedRecordId: record.id
+            )
+        case "not_found":
+            log(
+                "无标记: \(fileName)",
+                detail: "未检测到水印",
+                isSuccess: false,
+                relatedRecordId: record.id
+            )
+        case "invalid_hmac":
+            log(
+                "失败: \(fileName)",
+                detail: "HMAC 校验失败: \(record.error ?? "unknown")",
+                isSuccess: false,
+                relatedRecordId: record.id
+            )
+        default:
+            log(
+                "失败: \(fileName)",
+                detail: record.error ?? "未知错误",
+                isSuccess: false,
+                relatedRecordId: record.id
+            )
         }
     }
 
@@ -464,5 +416,87 @@ class DetectViewModel: ObservableObject {
         } else {
             return ("就绪", false)
         }
+    }
+}
+
+private struct UnsafeAudioBox: @unchecked Sendable {
+    let audio: AWMAudio
+}
+
+private extension DetectViewModel {
+    nonisolated static func performDetectStep(
+        audio: UnsafeAudioBox,
+        fileURL: URL,
+        key: Data
+    ) async -> DetectRecord {
+        await Task.detached(priority: .userInitiated) {
+            let filePath = fileURL.path(percentEncoded: false)
+
+            do {
+                if let detectResult = try audio.audio.detect(input: fileURL) {
+                    do {
+                        let decoded = try AWMMessage.decode(detectResult.rawMessage, key: key)
+                        var cloneKind = "unavailable"
+                        var cloneScore: Double?
+                        var cloneMatchSeconds: Float?
+                        var cloneReason: String?
+                        do {
+                            let cloneResult = try audio.audio.cloneCheck(
+                                input: fileURL,
+                                identity: decoded.identity,
+                                keySlot: decoded.keySlot
+                            )
+                            cloneKind = cloneResult.kind.rawValue
+                            cloneScore = cloneResult.score
+                            cloneMatchSeconds = cloneResult.matchSeconds
+                            cloneReason = cloneResult.reason
+                        } catch {
+                            cloneKind = "unavailable"
+                            cloneReason = error.localizedDescription
+                        }
+
+                        return DetectRecord(
+                            file: filePath,
+                            status: "ok",
+                            tag: decoded.tag.value,
+                            identity: decoded.identity,
+                            version: decoded.version,
+                            timestampMinutes: decoded.timestampMinutes,
+                            timestampUTC: decoded.timestampUTC,
+                            keySlot: decoded.keySlot,
+                            pattern: detectResult.pattern,
+                            detectScore: detectResult.detectScore,
+                            bitErrors: detectResult.bitErrors,
+                            matchFound: detectResult.found,
+                            cloneCheck: cloneKind,
+                            cloneScore: cloneScore,
+                            cloneMatchSeconds: cloneMatchSeconds,
+                            cloneReason: cloneReason
+                        )
+                    } catch {
+                        return DetectRecord(
+                            file: filePath,
+                            status: "invalid_hmac",
+                            pattern: detectResult.pattern,
+                            detectScore: detectResult.detectScore,
+                            bitErrors: detectResult.bitErrors,
+                            matchFound: detectResult.found,
+                            error: error.localizedDescription
+                        )
+                    }
+                }
+
+                return DetectRecord(
+                    file: filePath,
+                    status: "not_found"
+                )
+            } catch {
+                return DetectRecord(
+                    file: filePath,
+                    status: "error",
+                    error: error.localizedDescription
+                )
+            }
+        }.value
     }
 }

@@ -252,6 +252,7 @@ class EmbedViewModel: ObservableObject {
                 isProcessing = false
                 return
             }
+            let audioBox = UnsafeAudioBox(audio: audio)
 
             let initialTotal = selectedFiles.count
             let total = Double(initialTotal)
@@ -265,20 +266,22 @@ class EmbedViewModel: ObservableObject {
                 currentProcessingIndex = 0
 
                 do {
-                    let tag = try AWMTag(tag: resolvedTag)
                     let baseName = fileURL.deletingPathExtension().lastPathComponent
                     let ext = fileURL.pathExtension
                     let outputDir = outputDirectory ?? fileURL.deletingLastPathComponent()
                     let outputURL = outputDir.appendingPathComponent("\(baseName)\(suffix).\(ext)")
-
-                    audio.setStrength(UInt8(strength))
-                    let rawMessage = try audio.embed(input: fileURL, output: outputURL, tag: tag, key: key)
-                    do {
-                        try audio.recordEvidence(file: outputURL, rawMessage: rawMessage, key: key)
-                    } catch {
+                    let step = try await Self.performEmbedStep(
+                        audio: audioBox,
+                        fileURL: fileURL,
+                        outputURL: outputURL,
+                        tagValue: resolvedTag,
+                        key: key,
+                        strength: UInt8(strength)
+                    )
+                    if let evidenceError = step.evidenceErrorDescription {
                         log(
                             "证据记录失败",
-                            detail: "\(outputURL.lastPathComponent): \(error.localizedDescription)",
+                            detail: "\(outputURL.lastPathComponent): \(evidenceError)",
                             isSuccess: false,
                             isEphemeral: true
                         )
@@ -294,6 +297,7 @@ class EmbedViewModel: ObservableObject {
                     selectedFiles.removeFirst()
                 }
                 progress = Double(processedCount + 1) / total
+                await Task.yield()
             }
 
             if isCancelling {
@@ -445,6 +449,37 @@ class EmbedViewModel: ObservableObject {
         } else {
             return ("就绪", false)
         }
+    }
+}
+
+private struct UnsafeAudioBox: @unchecked Sendable {
+    let audio: AWMAudio
+}
+
+private struct EmbedStepOutput: Sendable {
+    let evidenceErrorDescription: String?
+}
+
+private extension EmbedViewModel {
+    nonisolated static func performEmbedStep(
+        audio: UnsafeAudioBox,
+        fileURL: URL,
+        outputURL: URL,
+        tagValue: String,
+        key: Data,
+        strength: UInt8
+    ) async throws -> EmbedStepOutput {
+        try await Task.detached(priority: .userInitiated) {
+            let tag = try AWMTag(tag: tagValue)
+            audio.audio.setStrength(strength)
+            let rawMessage = try audio.audio.embed(input: fileURL, output: outputURL, tag: tag, key: key)
+            do {
+                try audio.audio.recordEvidence(file: outputURL, rawMessage: rawMessage, key: key)
+                return EmbedStepOutput(evidenceErrorDescription: nil)
+            } catch {
+                return EmbedStepOutput(evidenceErrorDescription: error.localizedDescription)
+            }
+        }.value
     }
 }
 

@@ -512,21 +512,39 @@ public sealed partial class EmbedViewModel : ObservableObject
                 continue;
             }
 
-            var embedError = AwmBridge.EmbedAudioMultichannel(
-                inputPath,
-                outputPath,
-                message,
-                layout,
-                Strength);
-
-            if (embedError == AwmError.Ok)
+            (AwmError embedError, AwmError evidenceError) stepResult;
+            try
             {
-                var evidenceError = AwmBridge.RecordEvidenceFile(outputPath, message, key);
-                if (evidenceError != AwmError.Ok)
+                stepResult = await Task.Run(() =>
+                {
+                    var embed = AwmBridge.EmbedAudioMultichannel(
+                        inputPath,
+                        outputPath,
+                        message,
+                        layout,
+                        Strength);
+
+                    var evidence = AwmError.Ok;
+                    if (embed == AwmError.Ok)
+                    {
+                        evidence = AwmBridge.RecordEvidenceFile(outputPath, message, key);
+                    }
+
+                    return (embed, evidence);
+                }, token);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            if (stepResult.embedError == AwmError.Ok)
+            {
+                if (stepResult.evidenceError != AwmError.Ok)
                 {
                     AddLog(
                         "证据记录失败",
-                        $"{Path.GetFileName(outputPath)}: {evidenceError}",
+                        $"{Path.GetFileName(outputPath)}: {stepResult.evidenceError}",
                         false,
                         true,
                         LogIconTone.Warning);
@@ -538,7 +556,7 @@ public sealed partial class EmbedViewModel : ObservableObject
             else
             {
                 failureCount += 1;
-                AddLog($"失败: {Path.GetFileName(inputPath)}", embedError.ToString(), false, false, LogIconTone.Error);
+                AddLog($"失败: {Path.GetFileName(inputPath)}", stepResult.embedError.ToString(), false, false, LogIconTone.Error);
             }
 
             if (SelectedFiles.Count > 0)
@@ -547,6 +565,7 @@ public sealed partial class EmbedViewModel : ObservableObject
             }
 
             Progress = (processed + 1) / (double)initialTotal;
+            await Task.Yield();
         }
 
         if (token.IsCancellationRequested)

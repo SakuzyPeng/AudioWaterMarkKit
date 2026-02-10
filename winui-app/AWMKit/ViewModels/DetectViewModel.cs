@@ -555,6 +555,7 @@ public sealed partial class DetectViewModel : ObservableObject
                 }
 
                 Progress = (processed + 1) / (double)initialTotal;
+                await Task.Yield();
             }
 
             if (!token.IsCancellationRequested)
