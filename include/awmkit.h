@@ -459,6 +459,23 @@ int32_t awm_key_active_slot_get(uint8_t* out_slot);
 int32_t awm_key_active_slot_set(uint8_t slot);
 
 /**
+ * Set human-readable label for a slot.
+ *
+ * @param slot   Slot index (0..31)
+ * @param label  UTF-8 label text (non-empty)
+ * @return       AWM_SUCCESS or error code
+ */
+int32_t awm_key_slot_label_set(uint8_t slot, const char* label);
+
+/**
+ * Clear human-readable label for a slot.
+ *
+ * @param slot  Slot index (0..31)
+ * @return      AWM_SUCCESS or error code
+ */
+int32_t awm_key_slot_label_clear(uint8_t slot);
+
+/**
  * Check if a key exists in the specific slot.
  *
  * @param slot  Slot index (0..31)

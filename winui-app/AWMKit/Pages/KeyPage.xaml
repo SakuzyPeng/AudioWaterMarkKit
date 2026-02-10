@@ -126,6 +126,8 @@
                 </Border>
 
                 <StackPanel Grid.Row="6" Spacing="10">
+                    <TextBox PlaceholderText="标签（可选，生成时一并写入）"
+                             Text="{x:Bind ViewModel.LabelInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Click="GenerateKeyButton_Click"
                                 Style="{StaticResource PrimaryButtonStyle}"
@@ -137,6 +139,15 @@
                                 <SymbolIcon Symbol="Permissions"
                                             Foreground="{x:Bind ViewModel.GenerateActionBrush, Mode=OneWay}"/>
                                 <TextBlock Text="生成"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Click="EditLabelButton_Click"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <SymbolIcon Symbol="Edit"
+                                            Foreground="{x:Bind ViewModel.EditActionBrush, Mode=OneWay}"/>
+                                <TextBlock Text="编辑"/>
                             </StackPanel>
                         </Button>
                         <Button Click="DeleteKeyButton_Click"

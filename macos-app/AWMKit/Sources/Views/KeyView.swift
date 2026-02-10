@@ -40,6 +40,9 @@ struct KeyView: View {
             viewModel.sync(from: appState)
             Task { await appState.refreshRuntimeStatus() }
         }
+        .onChange(of: viewModel.selectedSlot) { _ in
+            viewModel.syncLabelInputForSelectedSlot()
+        }
         .alert("删除密钥", isPresented: $showDeleteConfirm) {
             Button("取消", role: .cancel) {}
             Button("删除", role: .destructive) {
@@ -140,42 +143,74 @@ struct KeyView: View {
     }
 
     private var actionSection: some View {
-        HStack(spacing: 10) {
-            Button {
-                Task { await viewModel.generateKey(appState: appState) }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "key.fill")
-                        .foregroundStyle(viewModel.isGenerateSuccess ? DesignSystem.Colors.success : .primary)
-                    Text("生成")
-                }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "tag")
+                    .foregroundStyle(.secondary)
+                TextField("标签（可选，生成时一并写入）", text: $viewModel.labelInput)
+                    .textFieldStyle(.plain)
             }
-            .buttonStyle(GlassButtonStyle(accentOn: true))
-            .disabled(viewModel.isWorking)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(DesignSystem.Colors.rowBackground(colorScheme))
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(
+                        colorScheme == .light ? Color.black.opacity(0.14) : Color.white.opacity(0.18),
+                        lineWidth: 1
+                    )
+            )
 
-            Button {
-                showDeleteConfirm = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "trash")
-                        .foregroundStyle(viewModel.isDeleteSuccess ? DesignSystem.Colors.success : .primary)
-                    Text("删除")
+            HStack(spacing: 10) {
+                Button {
+                    Task { await viewModel.generateKey(appState: appState) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "key.fill")
+                            .foregroundStyle(viewModel.isGenerateSuccess ? DesignSystem.Colors.success : .primary)
+                        Text("生成")
+                    }
                 }
-            }
-            .buttonStyle(GlassButtonStyle(size: .compact))
-            .disabled(!viewModel.selectedSlotHasKey || viewModel.isWorking)
+                .buttonStyle(GlassButtonStyle(accentOn: true))
+                .disabled(viewModel.isWorking)
 
-            Button {
-                Task { await viewModel.refresh(appState: appState) }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.clockwise")
-                        .foregroundStyle(viewModel.isRefreshSuccess ? DesignSystem.Colors.success : .primary)
-                    Text("刷新")
+                Button {
+                    Task { await viewModel.editActiveSlotLabel(appState: appState) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "tag.fill")
+                            .foregroundStyle(viewModel.isEditSuccess ? DesignSystem.Colors.success : .primary)
+                        Text("编辑")
+                    }
                 }
+                .buttonStyle(GlassButtonStyle(size: .compact))
+                .disabled(viewModel.isWorking)
+
+                Button {
+                    showDeleteConfirm = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trash")
+                            .foregroundStyle(viewModel.isDeleteSuccess ? DesignSystem.Colors.success : .primary)
+                        Text("删除")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle(size: .compact))
+                .disabled(!viewModel.selectedSlotHasKey || viewModel.isWorking)
+
+                Button {
+                    Task { await viewModel.refresh(appState: appState) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.clockwise")
+                            .foregroundStyle(viewModel.isRefreshSuccess ? DesignSystem.Colors.success : .primary)
+                        Text("刷新")
+                    }
+                }
+                .buttonStyle(GlassButtonStyle(size: .compact))
+                .disabled(viewModel.isWorking)
             }
-            .buttonStyle(GlassButtonStyle(size: .compact))
-            .disabled(viewModel.isWorking)
         }
     }
 

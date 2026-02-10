@@ -38,7 +38,7 @@ public sealed partial class KeyPage : Page
 
     private async void GenerateKeyButton_Click(object sender, RoutedEventArgs e)
     {
-        var error = await ViewModel.GenerateKeyAsync();
+        var error = await ViewModel.GenerateKeyAsync(ViewModel.LabelInput);
         if (error == Native.AwmError.KeyAlreadyExists)
         {
             await ShowMessageDialogAsync(
@@ -52,6 +52,17 @@ public sealed partial class KeyPage : Page
             await ShowMessageDialogAsync(
                 "生成失败",
                 $"密钥生成失败：{error}");
+        }
+    }
+
+    private async void EditLabelButton_Click(object sender, RoutedEventArgs e)
+    {
+        var error = await ViewModel.EditActiveSlotLabelAsync(ViewModel.LabelInput);
+        if (error != Native.AwmError.Ok)
+        {
+            await ShowMessageDialogAsync(
+                "编辑失败",
+                $"密钥标签更新失败：{error}");
         }
     }
 

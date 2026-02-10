@@ -36,6 +36,7 @@ public sealed partial class KeyViewModel : ObservableObject
         {
             if (SetProperty(ref _selectedSlot, Math.Clamp(value, 0, 31)))
             {
+                SyncLabelInputForSelectedSlot();
                 OnPropertyChanged(nameof(SelectedSlotHasKey));
             }
         }
@@ -147,8 +148,29 @@ public sealed partial class KeyViewModel : ObservableObject
         }
     }
 
+    private bool _isEditSuccess;
+    public bool IsEditSuccess
+    {
+        get => _isEditSuccess;
+        private set
+        {
+            if (SetProperty(ref _isEditSuccess, value))
+            {
+                OnPropertyChanged(nameof(EditActionBrush));
+            }
+        }
+    }
+
+    private string _labelInput = string.Empty;
+    public string LabelInput
+    {
+        get => _labelInput;
+        set => SetProperty(ref _labelInput, value);
+    }
+
     public Brush ApplyActionBrush => IsApplySuccess ? SuccessBrush : ResolvePrimaryTextBrush();
     public Brush GenerateActionBrush => IsGenerateSuccess ? SuccessBrush : ResolveAccentTextBrush();
+    public Brush EditActionBrush => IsEditSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
     public Brush DeleteActionBrush => IsDeleteSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
     public Brush RefreshActionBrush => IsRefreshSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
 
@@ -167,10 +189,11 @@ public sealed partial class KeyViewModel : ObservableObject
         await _appViewModel.RefreshRuntimeStatusAsync();
         SelectedSlot = _appViewModel.ActiveKeySlot;
         await RefreshSlotSummariesAsync();
+        SyncLabelInputForSelectedSlot();
         RaiseComputedProperties();
     }
 
-    public async Task<AwmError> GenerateKeyAsync()
+    public async Task<AwmError> GenerateKeyAsync(string? labelToApply = null)
     {
         if (IsBusy)
         {
@@ -185,14 +208,25 @@ public sealed partial class KeyViewModel : ObservableObject
             result = error;
             if (error == AwmError.Ok)
             {
+                var trimmed = (labelToApply ?? string.Empty).Trim();
+                if (!string.IsNullOrWhiteSpace(trimmed))
+                {
+                    var labelError = await Task.Run(() => AwmKeyBridge.SetSlotLabel(SelectedSlot, trimmed));
+                    if (labelError != AwmError.Ok)
+                    {
+                        result = labelError;
+                    }
+                }
                 await _appViewModel.RefreshRuntimeStatusAsync();
                 await RefreshSlotSummariesAsync();
+                SyncLabelInputForSelectedSlot();
                 await FlashGenerateSuccessAsync();
             }
             else
             {
                 // Keep slot/status view in sync even when generation is rejected.
                 await RefreshSlotSummariesAsync();
+                SyncLabelInputForSelectedSlot();
             }
         }
         finally
@@ -220,6 +254,7 @@ public sealed partial class KeyViewModel : ObservableObject
                 await _appViewModel.RefreshRuntimeStatusAsync();
                 SelectedSlot = _appViewModel.ActiveKeySlot;
                 await RefreshSlotSummariesAsync();
+                SyncLabelInputForSelectedSlot();
                 await FlashDeleteSuccessAsync();
             }
         }
@@ -244,6 +279,7 @@ public sealed partial class KeyViewModel : ObservableObject
             await _appViewModel.RefreshActiveKeySlotAsync();
             SelectedSlot = _appViewModel.ActiveKeySlot;
             await RefreshSlotSummariesAsync();
+            SyncLabelInputForSelectedSlot();
             await FlashApplySuccessAsync();
         }
         finally
@@ -266,6 +302,7 @@ public sealed partial class KeyViewModel : ObservableObject
             await _appViewModel.RefreshRuntimeStatusAsync();
             SelectedSlot = _appViewModel.ActiveKeySlot;
             await RefreshSlotSummariesAsync();
+            SyncLabelInputForSelectedSlot();
             await FlashRefreshSuccessAsync();
         }
         finally
@@ -286,6 +323,7 @@ public sealed partial class KeyViewModel : ObservableObject
                 if (e.PropertyName == nameof(AppViewModel.ActiveKeySlot))
                 {
                     SelectedSlot = _appViewModel.ActiveKeySlot;
+                    SyncLabelInputForSelectedSlot();
                 }
 
                 RaiseComputedProperties();
@@ -310,6 +348,39 @@ public sealed partial class KeyViewModel : ObservableObject
         OnPropertyChanged(nameof(ConfiguredSlotCount));
         OnPropertyChanged(nameof(ShowConfiguredSlotCount));
         OnPropertyChanged(nameof(ConfiguredSlotCountText));
+    }
+
+    public async Task<AwmError> EditActiveSlotLabelAsync(string? label)
+    {
+        if (IsBusy)
+        {
+            return AwmError.AudiowmarkExec;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var activeSlot = _appViewModel.ActiveKeySlot;
+            var trimmed = (label ?? string.Empty).Trim();
+            var error = string.IsNullOrWhiteSpace(trimmed)
+                ? await Task.Run(() => AwmKeyBridge.ClearSlotLabel(activeSlot))
+                : await Task.Run(() => AwmKeyBridge.SetSlotLabel(activeSlot, trimmed));
+            if (error == AwmError.Ok)
+            {
+                await _appViewModel.RefreshRuntimeStatusAsync();
+                await RefreshSlotSummariesAsync();
+                SelectedSlot = _appViewModel.ActiveKeySlot;
+                SyncLabelInputForSelectedSlot();
+                await FlashEditSuccessAsync();
+            }
+
+            return error;
+        }
+        finally
+        {
+            IsBusy = false;
+            RaiseComputedProperties();
+        }
     }
 
     private Task RefreshSlotSummariesAsync()
@@ -342,6 +413,12 @@ public sealed partial class KeyViewModel : ObservableObject
         OnPropertyChanged(nameof(ConfiguredSlotCount));
         OnPropertyChanged(nameof(ShowConfiguredSlotCount));
         OnPropertyChanged(nameof(ConfiguredSlotCountText));
+    }
+
+    public void SyncLabelInputForSelectedSlot()
+    {
+        var summary = _allSlotSummaries.FirstOrDefault(item => item.Slot == SelectedSlot);
+        LabelInput = summary?.Label ?? string.Empty;
     }
 
     private void ApplySlotFilter()
@@ -429,5 +506,12 @@ public sealed partial class KeyViewModel : ObservableObject
         IsRefreshSuccess = true;
         await Task.Delay(1000);
         IsRefreshSuccess = false;
+    }
+
+    private async Task FlashEditSuccessAsync()
+    {
+        IsEditSuccess = true;
+        await Task.Delay(1000);
+        IsEditSuccess = false;
     }
 }

@@ -1359,6 +1359,58 @@ pub extern "C" fn awm_key_active_slot_set(slot: u8) -> i32 {
     }
 }
 
+/// 设置指定槽位的人类可读标签
+///
+/// # Safety
+/// - `label` 必须是有效 C 字符串
+#[no_mangle]
+pub unsafe extern "C" fn awm_key_slot_label_set(slot: u8, label: *const c_char) -> i32 {
+    if label.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+    let label_str = match CStr::from_ptr(label).to_str() {
+        Ok(s) => s,
+        Err(_) => return AWMError::InvalidUtf8 as i32,
+    };
+
+    #[cfg(feature = "app")]
+    {
+        if label_str.trim().is_empty() {
+            return AWMError::InvalidTag as i32;
+        }
+        match crate::app::AppSettingsStore::load()
+            .and_then(|settings| settings.set_slot_label(slot, label_str))
+        {
+            Ok(()) => AWMError::Success as i32,
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = (slot, label_str);
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// 清除指定槽位的人类可读标签
+#[no_mangle]
+pub extern "C" fn awm_key_slot_label_clear(slot: u8) -> i32 {
+    #[cfg(feature = "app")]
+    {
+        match crate::app::AppSettingsStore::load()
+            .and_then(|settings| settings.clear_slot_label(slot))
+        {
+            Ok(()) => AWMError::Success as i32,
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = slot;
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
 /// 检查指定槽位是否存在密钥
 #[no_mangle]
 pub extern "C" fn awm_key_exists_slot(slot: u8) -> bool {

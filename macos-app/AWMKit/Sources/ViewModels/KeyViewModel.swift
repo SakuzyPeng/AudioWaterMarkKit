@@ -6,8 +6,10 @@ final class KeyViewModel: ObservableObject {
     @Published var selectedSlot: Int = 0
     @Published var isWorking = false
     @Published var slotSearchText: String = ""
+    @Published var labelInput: String = ""
     @Published var isApplySuccess = false
     @Published var isGenerateSuccess = false
+    @Published var isEditSuccess = false
     @Published var isDeleteSuccess = false
     @Published var isRefreshSuccess = false
     @Published var errorMessage: String?
@@ -43,6 +45,7 @@ final class KeyViewModel: ObservableObject {
     func sync(from appState: AppState) {
         selectedSlot = appState.activeKeySlot
         refreshSlotSummaries()
+        labelInput = slotSummaries.first(where: { Int($0.slot) == selectedSlot })?.label ?? ""
     }
 
     func applySlot(appState: AppState) {
@@ -65,12 +68,42 @@ final class KeyViewModel: ObservableObject {
 
         do {
             try await appState.generateKey(slot: selectedSlot)
+            let trimmed = labelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                try await appState.setSlotLabel(slot: selectedSlot, label: trimmed)
+            }
             sync(from: appState)
-            successMessage = "槽位 \(selectedSlot) 密钥已生成"
+            successMessage = trimmed.isEmpty
+                ? "槽位 \(selectedSlot) 密钥已生成"
+                : "槽位 \(selectedSlot) 密钥已生成并设置标签"
             errorMessage = nil
             flash(\.isGenerateSuccess)
         } catch {
             errorMessage = "生成密钥失败：\(error.localizedDescription)"
+            successMessage = nil
+        }
+    }
+
+    func editActiveSlotLabel(appState: AppState) async {
+        guard !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
+
+        let active = appState.activeKeySlot
+        let trimmed = labelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            if trimmed.isEmpty {
+                try await appState.clearSlotLabel(slot: active)
+                successMessage = "槽位 \(active) 标签已清除"
+            } else {
+                try await appState.setSlotLabel(slot: active, label: trimmed)
+                successMessage = "槽位 \(active) 标签已更新"
+            }
+            sync(from: appState)
+            errorMessage = nil
+            flash(\.isEditSuccess)
+        } catch {
+            errorMessage = "编辑标签失败：\(error.localizedDescription)"
             successMessage = nil
         }
     }
@@ -108,6 +141,10 @@ final class KeyViewModel: ObservableObject {
         } catch {
             slotSummaries = []
         }
+    }
+
+    func syncLabelInputForSelectedSlot() {
+        labelInput = slotSummaries.first(where: { Int($0.slot) == selectedSlot })?.label ?? ""
     }
 
     private func flash(_ keyPath: ReferenceWritableKeyPath<KeyViewModel, Bool>) {

@@ -147,6 +147,12 @@ internal static class AwmNative
     [DllImport(Lib, EntryPoint = "awm_key_active_slot_set", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_key_active_slot_set(byte slot);
 
+    [DllImport(Lib, EntryPoint = "awm_key_slot_label_set", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_key_slot_label_set(byte slot, [MarshalAs(UnmanagedType.LPUTF8Str)] string label);
+
+    [DllImport(Lib, EntryPoint = "awm_key_slot_label_clear", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_key_slot_label_clear(byte slot);
+
     [DllImport(Lib, EntryPoint = "awm_key_exists_slot", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
     internal static extern bool awm_key_exists_slot(byte slot);

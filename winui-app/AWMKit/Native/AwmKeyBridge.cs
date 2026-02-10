@@ -121,6 +121,24 @@ public static class AwmKeyBridge
     }
 
     /// <summary>
+    /// Set human-readable label for specific slot.
+    /// </summary>
+    public static AwmError SetSlotLabel(int slot, string label)
+    {
+        int code = AwmNative.awm_key_slot_label_set(NormalizeSlot(slot), label);
+        return (AwmError)code;
+    }
+
+    /// <summary>
+    /// Clear human-readable label for specific slot.
+    /// </summary>
+    public static AwmError ClearSlotLabel(int slot)
+    {
+        int code = AwmNative.awm_key_slot_label_clear(NormalizeSlot(slot));
+        return (AwmError)code;
+    }
+
+    /// <summary>
     /// Generates key and saves into current active slot.
     /// </summary>
     public static (byte[]? key, AwmError error) GenerateAndSaveKey()

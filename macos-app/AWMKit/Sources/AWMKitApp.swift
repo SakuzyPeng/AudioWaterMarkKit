@@ -219,6 +219,18 @@ class AppState: ObservableObject {
         await refreshRuntimeStatus()
     }
 
+    func setSlotLabel(slot: Int, label: String) async throws {
+        let normalized = max(0, min(31, slot))
+        try AWMKeyStore.setSlotLabel(slot: UInt8(normalized), label: label)
+        await refreshRuntimeStatus()
+    }
+
+    func clearSlotLabel(slot: Int) async throws {
+        let normalized = max(0, min(31, slot))
+        try AWMKeyStore.clearSlotLabel(slot: UInt8(normalized))
+        await refreshRuntimeStatus()
+    }
+
     func loadActiveKey() throws -> Data {
         try AWMKeyStore.loadActiveKey()
     }

@@ -63,6 +63,22 @@ public enum AWMKeyStore {
         }
     }
 
+    public static func setSlotLabel(slot: UInt8, label: String) throws {
+        let code = label.withCString { ptr in
+            awm_key_slot_label_set(slot, ptr)
+        }
+        guard code == AWM_SUCCESS.rawValue else {
+            throw AWMError(code: code)
+        }
+    }
+
+    public static func clearSlotLabel(slot: UInt8) throws {
+        let code = awm_key_slot_label_clear(slot)
+        guard code == AWM_SUCCESS.rawValue else {
+            throw AWMError(code: code)
+        }
+    }
+
     public static func slotSummaries() throws -> [AWMKeySlotSummary] {
         let json = try fetchCString { out, outLen, required in
             awm_key_slot_summaries_json(out, outLen, required)
