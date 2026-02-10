@@ -500,97 +500,24 @@ fn dpapi_base_dir() -> Result<PathBuf> {
 
 #[cfg(windows)]
 fn encrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
-    use std::ptr::{null, null_mut};
-    use windows_sys::Win32::Foundation::{LocalFree, BOOL};
-    use windows_sys::Win32::Security::Cryptography::{
-        CryptProtectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
-    };
+    use windows_dpapi::{encrypt_data, Scope};
 
     if data.is_empty() {
         return Err(AppError::KeyStore("dpapi encrypt: empty data".to_string()));
     }
 
-    let mut in_blob = CRYPT_INTEGER_BLOB {
-        cbData: data.len() as u32,
-        pbData: data.as_ptr() as *mut u8,
-    };
-    let mut out_blob = CRYPT_INTEGER_BLOB {
-        cbData: 0,
-        pbData: null_mut(),
-    };
-
-    let ok: BOOL = unsafe {
-        CryptProtectData(
-            &mut in_blob,
-            null(),
-            null_mut(),
-            null_mut(),
-            null_mut(),
-            CRYPTPROTECT_UI_FORBIDDEN,
-            &mut out_blob,
-        )
-    };
-
-    if ok == 0 {
-        return Err(AppError::KeyStore("dpapi encrypt failed".to_string()));
-    }
-
-    let bytes = unsafe { std::slice::from_raw_parts(out_blob.pbData, out_blob.cbData as usize) };
-    let out = bytes.to_vec();
-    unsafe {
-        LocalFree(out_blob.pbData as *mut std::ffi::c_void);
-    }
-    Ok(out)
+    encrypt_data(data, Scope::User)
+        .map_err(|e| AppError::KeyStore(format!("dpapi encrypt failed: {e}")))
 }
 
 #[cfg(windows)]
 fn decrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
-    use std::ptr::{null, null_mut};
-    use windows_sys::Win32::Foundation::{LocalFree, BOOL};
-    use windows_sys::Win32::Security::Cryptography::{
-        CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
-    };
+    use windows_dpapi::{decrypt_data, Scope};
 
     if data.is_empty() {
         return Err(AppError::KeyStore("dpapi decrypt: empty data".to_string()));
     }
 
-    let mut in_blob = CRYPT_INTEGER_BLOB {
-        cbData: data.len() as u32,
-        pbData: data.as_ptr() as *mut u8,
-    };
-    let mut out_blob = CRYPT_INTEGER_BLOB {
-        cbData: 0,
-        pbData: null_mut(),
-    };
-    let mut descr = null_mut();
-
-    let ok: BOOL = unsafe {
-        CryptUnprotectData(
-            &mut in_blob,
-            &mut descr,
-            null_mut(),
-            null_mut(),
-            null_mut(),
-            CRYPTPROTECT_UI_FORBIDDEN,
-            &mut out_blob,
-        )
-    };
-
-    if !descr.is_null() {
-        unsafe {
-            LocalFree(descr as *mut std::ffi::c_void);
-        }
-    }
-
-    if ok == 0 {
-        return Err(AppError::KeyStore("dpapi decrypt failed".to_string()));
-    }
-
-    let bytes = unsafe { std::slice::from_raw_parts(out_blob.pbData, out_blob.cbData as usize) };
-    let out = bytes.to_vec();
-    unsafe {
-        LocalFree(out_blob.pbData as *mut std::ffi::c_void);
-    }
-    Ok(out)
+    decrypt_data(data, Scope::User)
+        .map_err(|e| AppError::KeyStore(format!("dpapi decrypt failed: {e}")))
 }

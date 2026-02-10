@@ -33,10 +33,4 @@ impl Output {
     pub fn error(&self, msg: impl Display) {
         eprintln!("{msg}");
     }
-
-    pub fn verbose_info(&self, msg: impl Display) {
-        if self.verbose && !self.quiet {
-            println!("{msg}");
-        }
-    }
 }

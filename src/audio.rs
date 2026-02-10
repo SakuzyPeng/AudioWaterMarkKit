@@ -725,46 +725,46 @@ fn convert_wav_to_flac(input_wav: &Path, output_flac: &Path) -> Result<()> {
         return Err(Error::InvalidInput("invalid WAV channels: 0".to_string()));
     }
 
-    let (bits_per_sample, samples): (usize, Vec<i32>) = match (spec.sample_format, spec.bits_per_sample)
-    {
-        (HoundSampleFormat::Int, 16) => {
-            let mut out = Vec::new();
-            for sample in reader
-                .samples::<i16>()
-                .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
-            {
-                out.push(i32::from(sample?));
+    let (bits_per_sample, samples): (usize, Vec<i32>) =
+        match (spec.sample_format, spec.bits_per_sample) {
+            (HoundSampleFormat::Int, 16) => {
+                let mut out = Vec::new();
+                for sample in reader
+                    .samples::<i16>()
+                    .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
+                {
+                    out.push(i32::from(sample?));
+                }
+                (16, out)
             }
-            (16, out)
-        }
-        (HoundSampleFormat::Int, 24) | (HoundSampleFormat::Int, 32) => {
-            let mut out = Vec::new();
-            for sample in reader
-                .samples::<i32>()
-                .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
-            {
-                out.push(sample?);
+            (HoundSampleFormat::Int, 24) | (HoundSampleFormat::Int, 32) => {
+                let mut out = Vec::new();
+                for sample in reader
+                    .samples::<i32>()
+                    .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
+                {
+                    out.push(sample?);
+                }
+                (usize::from(spec.bits_per_sample), out)
             }
-            (usize::from(spec.bits_per_sample), out)
-        }
-        (HoundSampleFormat::Float, 32) => {
-            let mut out = Vec::new();
-            for sample in reader
-                .samples::<f32>()
-                .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
-            {
-                let scaled = (sample? * 8_388_607.0_f32).round() as i32;
-                out.push(clamp_sample_to_bits(scaled, 24));
+            (HoundSampleFormat::Float, 32) => {
+                let mut out = Vec::new();
+                for sample in reader
+                    .samples::<f32>()
+                    .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
+                {
+                    let scaled = (sample? * 8_388_607.0_f32).round() as i32;
+                    out.push(clamp_sample_to_bits(scaled, 24));
+                }
+                (24, out)
             }
-            (24, out)
-        }
-        (sample_format, bits) => {
-            return Err(Error::InvalidInput(format!(
-                "unsupported WAV format for FLAC conversion: {:?} {bits}bit",
-                sample_format
-            )))
-        }
-    };
+            (sample_format, bits) => {
+                return Err(Error::InvalidInput(format!(
+                    "unsupported WAV format for FLAC conversion: {:?} {bits}bit",
+                    sample_format
+                )))
+            }
+        };
 
     let mut config = flacenc::config::Encoder::default();
     // Use a high-compression profile for FLAC output.
