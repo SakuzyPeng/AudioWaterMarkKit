@@ -38,7 +38,7 @@ public sealed partial class KeyPage : Page
 
     private async void GenerateKeyButton_Click(object sender, RoutedEventArgs e)
     {
-        var error = await ViewModel.GenerateKeyAsync(ViewModel.LabelInput);
+        var error = await ViewModel.GenerateKeyAsync();
         if (error == Native.AwmError.KeyAlreadyExists)
         {
             await ShowMessageDialogAsync(
@@ -57,7 +57,37 @@ public sealed partial class KeyPage : Page
 
     private async void EditLabelButton_Click(object sender, RoutedEventArgs e)
     {
-        var error = await ViewModel.EditActiveSlotLabelAsync(ViewModel.LabelInput);
+        var activeSlot = ViewModel.ActiveKeySlot;
+        var activeSummary = ViewModel.ActiveKeySummary;
+        var editor = new TextBox
+        {
+            PlaceholderText = "输入新标签（留空表示清除）",
+            Text = activeSummary?.Label ?? string.Empty
+        };
+
+        var content = new StackPanel { Spacing = 8 };
+        content.Children.Add(new TextBlock { Text = $"当前激活槽位：{activeSlot}" });
+        content.Children.Add(new TextBlock { Text = $"Key ID：{activeSummary?.KeyId ?? "未配置"}" });
+        content.Children.Add(new TextBlock { Text = $"当前标签：{(string.IsNullOrWhiteSpace(activeSummary?.Label) ? "未设置" : activeSummary!.Label)}" });
+        content.Children.Add(editor);
+
+        var dialog = new ContentDialog
+        {
+            Title = "编辑槽位标签",
+            Content = content,
+            PrimaryButtonText = "保存",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var error = await ViewModel.EditActiveSlotLabelAsync(editor.Text);
         if (error != Native.AwmError.Ok)
         {
             await ShowMessageDialogAsync(

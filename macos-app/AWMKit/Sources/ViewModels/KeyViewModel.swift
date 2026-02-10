@@ -6,7 +6,6 @@ final class KeyViewModel: ObservableObject {
     @Published var selectedSlot: Int = 0
     @Published var isWorking = false
     @Published var slotSearchText: String = ""
-    @Published var labelInput: String = ""
     @Published var isApplySuccess = false
     @Published var isGenerateSuccess = false
     @Published var isEditSuccess = false
@@ -45,7 +44,6 @@ final class KeyViewModel: ObservableObject {
     func sync(from appState: AppState) {
         selectedSlot = appState.activeKeySlot
         refreshSlotSummaries()
-        labelInput = slotSummaries.first(where: { Int($0.slot) == selectedSlot })?.label ?? ""
     }
 
     func applySlot(appState: AppState) {
@@ -68,14 +66,8 @@ final class KeyViewModel: ObservableObject {
 
         do {
             try await appState.generateKey(slot: selectedSlot)
-            let trimmed = labelInput.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty {
-                try await appState.setSlotLabel(slot: selectedSlot, label: trimmed)
-            }
             sync(from: appState)
-            successMessage = trimmed.isEmpty
-                ? "槽位 \(selectedSlot) 密钥已生成"
-                : "槽位 \(selectedSlot) 密钥已生成并设置标签"
+            successMessage = "槽位 \(selectedSlot) 密钥已生成"
             errorMessage = nil
             flash(\.isGenerateSuccess)
         } catch {
@@ -84,13 +76,13 @@ final class KeyViewModel: ObservableObject {
         }
     }
 
-    func editActiveSlotLabel(appState: AppState) async {
+    func editActiveSlotLabel(appState: AppState, label: String) async {
         guard !isWorking else { return }
         isWorking = true
         defer { isWorking = false }
 
         let active = appState.activeKeySlot
-        let trimmed = labelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             if trimmed.isEmpty {
                 try await appState.clearSlotLabel(slot: active)
@@ -142,11 +134,6 @@ final class KeyViewModel: ObservableObject {
             slotSummaries = []
         }
     }
-
-    func syncLabelInputForSelectedSlot() {
-        labelInput = slotSummaries.first(where: { Int($0.slot) == selectedSlot })?.label ?? ""
-    }
-
     private func flash(_ keyPath: ReferenceWritableKeyPath<KeyViewModel, Bool>) {
         self[keyPath: keyPath] = true
         Task { @MainActor in

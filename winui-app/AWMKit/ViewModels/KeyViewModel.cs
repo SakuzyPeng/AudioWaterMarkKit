@@ -36,7 +36,6 @@ public sealed partial class KeyViewModel : ObservableObject
         {
             if (SetProperty(ref _selectedSlot, Math.Clamp(value, 0, 31)))
             {
-                SyncLabelInputForSelectedSlot();
                 OnPropertyChanged(nameof(SelectedSlotHasKey));
             }
         }
@@ -73,7 +72,6 @@ public sealed partial class KeyViewModel : ObservableObject
     public string ActiveKeySlotText => $"当前激活槽位：{ActiveKeySlot}";
     public string KeyStatusText => KeyAvailable ? "已配置" : "未配置";
     public Brush KeyStatusBrush => KeyAvailable ? SuccessBrush : ResolveWarningBrush();
-    public string SlotHintText => "当前版本嵌入仍写槽位 0，槽位切换将在后续协议生效阶段接入。";
     public KeySlotSummary? ActiveKeySummary => _allSlotSummaries.FirstOrDefault(item => item.IsActive);
     public string ActiveSummaryTitle => $"槽位 {ActiveKeySlot}（{(ActiveKeySummary?.HasKey == true ? "已配置" : "未配置")}）";
     public Brush ActiveSummaryTitleBrush => SuccessBrush;
@@ -161,13 +159,6 @@ public sealed partial class KeyViewModel : ObservableObject
         }
     }
 
-    private string _labelInput = string.Empty;
-    public string LabelInput
-    {
-        get => _labelInput;
-        set => SetProperty(ref _labelInput, value);
-    }
-
     public Brush ApplyActionBrush => IsApplySuccess ? SuccessBrush : ResolvePrimaryTextBrush();
     public Brush GenerateActionBrush => IsGenerateSuccess ? SuccessBrush : ResolveAccentTextBrush();
     public Brush EditActionBrush => IsEditSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
@@ -189,7 +180,6 @@ public sealed partial class KeyViewModel : ObservableObject
         await _appViewModel.RefreshRuntimeStatusAsync();
         SelectedSlot = _appViewModel.ActiveKeySlot;
         await RefreshSlotSummariesAsync();
-        SyncLabelInputForSelectedSlot();
         RaiseComputedProperties();
     }
 
@@ -219,14 +209,12 @@ public sealed partial class KeyViewModel : ObservableObject
                 }
                 await _appViewModel.RefreshRuntimeStatusAsync();
                 await RefreshSlotSummariesAsync();
-                SyncLabelInputForSelectedSlot();
                 await FlashGenerateSuccessAsync();
             }
             else
             {
                 // Keep slot/status view in sync even when generation is rejected.
                 await RefreshSlotSummariesAsync();
-                SyncLabelInputForSelectedSlot();
             }
         }
         finally
@@ -254,7 +242,6 @@ public sealed partial class KeyViewModel : ObservableObject
                 await _appViewModel.RefreshRuntimeStatusAsync();
                 SelectedSlot = _appViewModel.ActiveKeySlot;
                 await RefreshSlotSummariesAsync();
-                SyncLabelInputForSelectedSlot();
                 await FlashDeleteSuccessAsync();
             }
         }
@@ -279,7 +266,6 @@ public sealed partial class KeyViewModel : ObservableObject
             await _appViewModel.RefreshActiveKeySlotAsync();
             SelectedSlot = _appViewModel.ActiveKeySlot;
             await RefreshSlotSummariesAsync();
-            SyncLabelInputForSelectedSlot();
             await FlashApplySuccessAsync();
         }
         finally
@@ -302,7 +288,6 @@ public sealed partial class KeyViewModel : ObservableObject
             await _appViewModel.RefreshRuntimeStatusAsync();
             SelectedSlot = _appViewModel.ActiveKeySlot;
             await RefreshSlotSummariesAsync();
-            SyncLabelInputForSelectedSlot();
             await FlashRefreshSuccessAsync();
         }
         finally
@@ -323,7 +308,6 @@ public sealed partial class KeyViewModel : ObservableObject
                 if (e.PropertyName == nameof(AppViewModel.ActiveKeySlot))
                 {
                     SelectedSlot = _appViewModel.ActiveKeySlot;
-                    SyncLabelInputForSelectedSlot();
                 }
 
                 RaiseComputedProperties();
@@ -370,7 +354,6 @@ public sealed partial class KeyViewModel : ObservableObject
                 await _appViewModel.RefreshRuntimeStatusAsync();
                 await RefreshSlotSummariesAsync();
                 SelectedSlot = _appViewModel.ActiveKeySlot;
-                SyncLabelInputForSelectedSlot();
                 await FlashEditSuccessAsync();
             }
 
@@ -413,12 +396,6 @@ public sealed partial class KeyViewModel : ObservableObject
         OnPropertyChanged(nameof(ConfiguredSlotCount));
         OnPropertyChanged(nameof(ShowConfiguredSlotCount));
         OnPropertyChanged(nameof(ConfiguredSlotCountText));
-    }
-
-    public void SyncLabelInputForSelectedSlot()
-    {
-        var summary = _allSlotSummaries.FirstOrDefault(item => item.Slot == SelectedSlot);
-        LabelInput = summary?.Label ?? string.Empty;
     }
 
     private void ApplySlotFilter()

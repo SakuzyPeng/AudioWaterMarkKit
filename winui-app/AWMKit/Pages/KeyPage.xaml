@@ -21,7 +21,7 @@
 
     <Grid Padding="24" ColumnSpacing="12" Background="{StaticResource KeyPageBackdropBrush}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="420"/>
+            <ColumnDefinition Width="500"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
@@ -126,10 +126,18 @@
                 </Border>
 
                 <StackPanel Grid.Row="6" Spacing="10">
-                    <TextBox PlaceholderText="标签（可选，生成时一并写入）"
-                             Text="{x:Bind ViewModel.LabelInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <Button Click="GenerateKeyButton_Click"
+                    <Grid ColumnSpacing="10" RowSpacing="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Row="0" Grid.Column="0"
+                                Click="GenerateKeyButton_Click"
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 IsEnabled="{x:Bind CanGenerateKey, Mode=OneWay}">
                             <ToolTipService.ToolTip>
@@ -141,16 +149,20 @@
                                 <TextBlock Text="生成"/>
                             </StackPanel>
                         </Button>
-                        <Button Click="EditLabelButton_Click"
+
+                        <Button Grid.Row="0" Grid.Column="1"
+                                Click="EditLabelButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
                                 IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <SymbolIcon Symbol="Edit"
+                                <SymbolIcon Symbol="Tag"
                                             Foreground="{x:Bind ViewModel.EditActionBrush, Mode=OneWay}"/>
                                 <TextBlock Text="编辑"/>
                             </StackPanel>
                         </Button>
-                        <Button Click="DeleteKeyButton_Click"
+
+                        <Button Grid.Row="1" Grid.Column="0"
+                                Click="DeleteKeyButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
                                 IsEnabled="{x:Bind ViewModel.SelectedSlotHasKey, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -159,7 +171,9 @@
                                 <TextBlock Text="删除"/>
                             </StackPanel>
                         </Button>
-                        <Button Click="RefreshButton_Click"
+
+                        <Button Grid.Row="1" Grid.Column="1"
+                                Click="RefreshButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
                                 IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -168,10 +182,7 @@
                                 <TextBlock Text="刷新"/>
                             </StackPanel>
                         </Button>
-                    </StackPanel>
-                    <TextBlock Text="{x:Bind ViewModel.SlotHintText, Mode=OneWay}"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               TextWrapping="WrapWholeWords"/>
+                    </Grid>
                 </StackPanel>
             </Grid>
         </Border>

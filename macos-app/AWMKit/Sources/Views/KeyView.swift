@@ -6,6 +6,8 @@ struct KeyView: View {
     @ObservedObject var viewModel: KeyViewModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var showDeleteConfirm = false
+    @State private var showEditLabelSheet = false
+    @State private var editLabelDraft = ""
 
     var body: some View {
         GeometryReader { proxy in
@@ -17,7 +19,6 @@ struct KeyView: View {
                         slotSection
                         activeKeyCapsule
                         actionSection
-                        hintSection
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
@@ -40,9 +41,6 @@ struct KeyView: View {
             viewModel.sync(from: appState)
             Task { await appState.refreshRuntimeStatus() }
         }
-        .onChange(of: viewModel.selectedSlot) { _ in
-            viewModel.syncLabelInputForSelectedSlot()
-        }
         .alert("删除密钥", isPresented: $showDeleteConfirm) {
             Button("取消", role: .cancel) {}
             Button("删除", role: .destructive) {
@@ -63,6 +61,22 @@ struct KeyView: View {
             Button("确定", role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? viewModel.successMessage ?? "")
+        }
+        .sheet(isPresented: $showEditLabelSheet) {
+            EditSlotLabelSheet(
+                slot: appState.activeKeySlot,
+                keyId: viewModel.activeSlotSummary?.keyId,
+                currentLabel: viewModel.activeSlotSummary?.label,
+                draftLabel: $editLabelDraft,
+                isWorking: viewModel.isWorking,
+                onCancel: { showEditLabelSheet = false },
+                onConfirm: {
+                    Task {
+                        await viewModel.editActiveSlotLabel(appState: appState, label: editLabelDraft)
+                        showEditLabelSheet = false
+                    }
+                }
+            )
         }
     }
 
@@ -144,24 +158,6 @@ struct KeyView: View {
 
     private var actionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "tag")
-                    .foregroundStyle(.secondary)
-                TextField("标签（可选，生成时一并写入）", text: $viewModel.labelInput)
-                    .textFieldStyle(.plain)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(DesignSystem.Colors.rowBackground(colorScheme))
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(
-                        colorScheme == .light ? Color.black.opacity(0.14) : Color.white.opacity(0.18),
-                        lineWidth: 1
-                    )
-            )
-
             HStack(spacing: 10) {
                 Button {
                     Task { await viewModel.generateKey(appState: appState) }
@@ -176,7 +172,8 @@ struct KeyView: View {
                 .disabled(viewModel.isWorking)
 
                 Button {
-                    Task { await viewModel.editActiveSlotLabel(appState: appState) }
+                    editLabelDraft = viewModel.activeSlotSummary?.label ?? ""
+                    showEditLabelSheet = true
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "tag.fill")
@@ -212,15 +209,6 @@ struct KeyView: View {
                 .disabled(viewModel.isWorking)
             }
         }
-    }
-
-    private var hintSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("槽位只能在密钥页修改。")
-            Text("当前版本嵌入仍写槽位 0，槽位切换将在后续协议生效阶段接入。")
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
     }
 
     private var slotSearchField: some View {
@@ -363,5 +351,45 @@ struct KeyView: View {
                     lineWidth: 1
                 )
         )
+    }
+}
+
+private struct EditSlotLabelSheet: View {
+    let slot: Int
+    let keyId: String?
+    let currentLabel: String?
+    @Binding var draftLabel: String
+    let isWorking: Bool
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("编辑槽位标签")
+                .font(.headline)
+            Text("当前激活槽位：\(slot)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("Key ID：\(keyId ?? "未配置")")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("当前标签：\((currentLabel?.isEmpty == false ? currentLabel! : "未设置"))")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            TextField("输入新标签（留空表示清除）", text: $draftLabel)
+                .textFieldStyle(.roundedBorder)
+
+            HStack {
+                Spacer()
+                Button("取消", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button("保存", action: onConfirm)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(isWorking)
+            }
+        }
+        .padding(18)
+        .frame(minWidth: 420)
     }
 }

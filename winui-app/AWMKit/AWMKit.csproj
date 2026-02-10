@@ -24,6 +24,15 @@
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..'))</RepoRoot>
+    <RustTargetDir>$(RepoRoot)\target\x86_64-pc-windows-msvc</RustTargetDir>
+    <RustConfigLower>$([System.String]::Copy('$(Configuration)').ToLowerInvariant())</RustConfigLower>
+    <RustNativeDll>$(RustTargetDir)\$(RustConfigLower)\awmkit.dll</RustNativeDll>
+    <RustNativeDllRelease>$(RustTargetDir)\release\awmkit.dll</RustNativeDllRelease>
+    <NativeDllLocal>$(MSBuildProjectDirectory)\awmkit_native.dll</NativeDllLocal>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.250907003" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.*" />
@@ -35,12 +44,22 @@
     <None Include="Assets\AppIcon.ico"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <ItemGroup Condition="Exists('awmkit_native.dll')">
     <None Include="awmkit_native.dll"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <Target Name="PrepareAwmkitNativeDll" BeforeTargets="Build;Publish">
+    <Copy SourceFiles="$(RustNativeDll)"
+          DestinationFiles="$(NativeDllLocal)"
+          SkipUnchangedFiles="true"
+          Condition="Exists('$(RustNativeDll)')" />
+    <Copy SourceFiles="$(RustNativeDllRelease)"
+          DestinationFiles="$(NativeDllLocal)"
+          SkipUnchangedFiles="true"
+          Condition="!Exists('$(RustNativeDll)') and Exists('$(RustNativeDllRelease)')" />
+    <Error Condition="!Exists('$(NativeDllLocal)')"
+           Text="Missing awmkit native DLL. Build Rust first: cargo build --release --features ffi,app,bundled --target x86_64-pc-windows-msvc" />
+  </Target>
 
 </Project>
