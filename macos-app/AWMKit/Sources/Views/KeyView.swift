@@ -9,15 +9,25 @@ struct KeyView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.card) {
+            HStack(alignment: .top, spacing: DesignSystem.Spacing.card) {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        header
+                        header("密钥管理")
                         statusSection
                         slotSection
-                        slotSummarySection
+                        activeKeyCapsule
                         actionSection
                         hintSection
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
+                .frame(width: max(420, proxy.size.width * 0.42))
+
+                GlassCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        header("槽位摘要")
+                        slotSearchField
+                        slotSummarySection
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
@@ -53,9 +63,9 @@ struct KeyView: View {
         }
     }
 
-    private var header: some View {
+    private func header(_ title: String) -> some View {
         HStack {
-            Text("密钥管理")
+            Text(title)
                 .font(.headline)
             Spacer()
         }
@@ -106,20 +116,14 @@ struct KeyView: View {
     }
 
     private var slotSummarySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("槽位摘要")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(viewModel.slotSummaries, id: \.slot) { summary in
-                        slotSummaryRow(summary)
-                    }
+        ScrollView {
+            LazyVStack(spacing: 8) {
+                ForEach(viewModel.filteredSlotSummaries, id: \.slot) { summary in
+                    slotSummaryRow(summary)
                 }
             }
-            .frame(maxHeight: 240)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var actionSection: some View {
@@ -169,6 +173,63 @@ struct KeyView: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
+    }
+
+    private var slotSearchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("搜索槽位 / Key ID / 标签 / 状态", text: $viewModel.slotSearchText)
+                .textFieldStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(DesignSystem.Colors.rowBackground(colorScheme))
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(
+                    colorScheme == .light ? Color.black.opacity(0.14) : Color.white.opacity(0.18),
+                    lineWidth: 1
+                )
+        )
+    }
+
+    private var activeKeyCapsule: some View {
+        let summary = viewModel.activeSlotSummary
+        let keyText = summary?.hasKey == true ? "Key ID: \(summary?.keyId ?? "-")" : "未配置"
+        let labelText = (summary?.label?.isEmpty == false) ? " · \(summary?.label ?? "")" : ""
+        let evidenceText = "证据: \(summary?.evidenceCount ?? 0)"
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("当前激活密钥")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("槽位 \(appState.activeKeySlot)\(summary?.hasKey == true ? "（已配置）" : "（未配置）")")
+                    .font(.subheadline.weight(.semibold))
+                Text(keyText + labelText)
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text(evidenceText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(DesignSystem.Colors.rowBackground(colorScheme))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        colorScheme == .light ? Color.black.opacity(0.12) : Color.white.opacity(0.14),
+                        lineWidth: 1
+                    )
+            )
+        }
     }
 
     @ViewBuilder

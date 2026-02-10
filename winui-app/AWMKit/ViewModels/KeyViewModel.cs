@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using AWMKit.Models;
 using AWMKit.Native;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
@@ -15,6 +16,7 @@ namespace AWMKit.ViewModels;
 public sealed partial class KeyViewModel : ObservableObject
 {
     private readonly AppViewModel _appViewModel = AppViewModel.Instance;
+    private readonly List<KeySlotSummary> _allSlotSummaries = new();
 
     private bool _isBusy;
     public bool IsBusy
@@ -38,6 +40,20 @@ public sealed partial class KeyViewModel : ObservableObject
 
     public ObservableCollection<int> SlotOptions { get; } = new();
     public ObservableCollection<KeySlotSummary> SlotSummaries { get; } = new();
+    public ObservableCollection<KeySlotSummary> FilteredSlotSummaries { get; } = new();
+
+    private string _slotSearchText = string.Empty;
+    public string SlotSearchText
+    {
+        get => _slotSearchText;
+        set
+        {
+            if (SetProperty(ref _slotSearchText, value))
+            {
+                ApplySlotFilter();
+            }
+        }
+    }
 
     public bool KeyAvailable => _appViewModel.KeyAvailable;
     public bool SelectedSlotHasKey
@@ -53,6 +69,23 @@ public sealed partial class KeyViewModel : ObservableObject
     public string ActiveKeySlotText => $"当前激活槽位：{ActiveKeySlot}";
     public string KeyStatusText => KeyAvailable ? "已配置" : "未配置";
     public string SlotHintText => "当前版本嵌入仍写槽位 0，槽位切换将在后续协议生效阶段接入。";
+    public KeySlotSummary? ActiveKeySummary => _allSlotSummaries.FirstOrDefault(item => item.IsActive);
+    public string ActiveSummaryTitle => $"槽位 {ActiveKeySlot}（{(ActiveKeySummary?.HasKey == true ? "已配置" : "未配置")}）";
+    public string ActiveSummaryKeyLine
+    {
+        get
+        {
+            if (ActiveKeySummary is not { HasKey: true } summary)
+            {
+                return "未配置";
+            }
+
+            return string.IsNullOrWhiteSpace(summary.Label)
+                ? $"Key ID: {summary.KeyId ?? "-"}"
+                : $"Key ID: {summary.KeyId ?? "-"} · {summary.Label}";
+        }
+    }
+    public string ActiveSummaryEvidenceLine => $"证据: {ActiveKeySummary?.EvidenceCount ?? 0}";
 
     public KeyViewModel()
     {
@@ -169,6 +202,10 @@ public sealed partial class KeyViewModel : ObservableObject
         OnPropertyChanged(nameof(ActiveKeySlot));
         OnPropertyChanged(nameof(ActiveKeySlotText));
         OnPropertyChanged(nameof(KeyStatusText));
+        OnPropertyChanged(nameof(ActiveKeySummary));
+        OnPropertyChanged(nameof(ActiveSummaryTitle));
+        OnPropertyChanged(nameof(ActiveSummaryKeyLine));
+        OnPropertyChanged(nameof(ActiveSummaryEvidenceLine));
     }
 
     private Task RefreshSlotSummariesAsync()
@@ -180,15 +217,49 @@ public sealed partial class KeyViewModel : ObservableObject
     private void RefreshSlotSummaries()
     {
         var (rows, error) = AwmKeyBridge.GetSlotSummaries();
+        _allSlotSummaries.Clear();
         SlotSummaries.Clear();
+        FilteredSlotSummaries.Clear();
         if (error == AwmError.Ok)
         {
             foreach (var row in rows.OrderBy(item => item.Slot))
             {
+                _allSlotSummaries.Add(row);
                 SlotSummaries.Add(row);
             }
         }
 
+        ApplySlotFilter();
         OnPropertyChanged(nameof(SelectedSlotHasKey));
+        OnPropertyChanged(nameof(ActiveKeySummary));
+        OnPropertyChanged(nameof(ActiveSummaryTitle));
+        OnPropertyChanged(nameof(ActiveSummaryKeyLine));
+        OnPropertyChanged(nameof(ActiveSummaryEvidenceLine));
+    }
+
+    private void ApplySlotFilter()
+    {
+        var keyword = SlotSearchText?.Trim();
+        var query = string.IsNullOrWhiteSpace(keyword) ? null : keyword.ToLowerInvariant();
+        var filtered = query is null
+            ? _allSlotSummaries
+            : _allSlotSummaries.Where(item =>
+            {
+                var fields = string.Join(" ", new[]
+                {
+                    $"槽位 {item.Slot}",
+                    item.KeyId ?? string.Empty,
+                    item.Label ?? string.Empty,
+                    item.StatusText,
+                    $"证据 {item.EvidenceCount}"
+                }).ToLowerInvariant();
+                return fields.Contains(query, StringComparison.Ordinal);
+            }).ToList();
+
+        FilteredSlotSummaries.Clear();
+        foreach (var row in filtered)
+        {
+            FilteredSlotSummaries.Add(row);
+        }
     }
 }
