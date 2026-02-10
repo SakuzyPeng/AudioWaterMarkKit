@@ -3,6 +3,7 @@ use crate::Context;
 use crate::KeyCommand;
 use awmkit::app::{
     generate_key, i18n, AppError, AppSettingsStore, EvidenceStore, KeyStore, KEY_LEN, KEY_SLOT_MAX,
+    KEY_SLOT_MIN,
 };
 use clap::{Args, Subcommand};
 use fluent_bundle::FluentArgs;
@@ -287,6 +288,7 @@ fn delete(ctx: &Context, args: &DeleteArgs) -> Result<()> {
         return Err(CliError::Message(i18n::tr("cli-key-delete-requires-yes")));
     }
     let store = KeyStore::new()?;
+    let active_slot = store.active_slot()?;
     let slot = resolve_slot(&store, args.slot)?;
     let evidence_store = EvidenceStore::load()?;
     let evidence_count = evidence_store.count_by_slot(slot)?;
@@ -304,6 +306,27 @@ fn delete(ctx: &Context, args: &DeleteArgs) -> Result<()> {
         let _ = evidence_store.clear_filtered(None, None, Some(slot))?;
     }
     store.delete_slot(slot)?;
+
+    if slot == active_slot {
+        let fallback_slot = if store.exists_slot(KEY_SLOT_MIN) {
+            KEY_SLOT_MIN
+        } else {
+            store
+                .list_configured_slots()
+                .into_iter()
+                .min()
+                .unwrap_or(KEY_SLOT_MIN)
+        };
+
+        let settings = AppSettingsStore::load()?;
+        settings.set_active_key_slot(fallback_slot)?;
+
+        if fallback_slot != active_slot {
+            let mut switch_fmt = FluentArgs::new();
+            switch_fmt.set("slot", fallback_slot.to_string());
+            ctx.out.info(i18n::tr_args("cli-key-slot-set", &switch_fmt));
+        }
+    }
 
     let mut fmt = FluentArgs::new();
     fmt.set("slot", slot.to_string());
