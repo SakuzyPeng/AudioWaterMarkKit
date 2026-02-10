@@ -33,6 +33,8 @@ public sealed partial class DetectViewModel : ObservableObject
     {
         ".wav",
         ".flac",
+        ".m4a",
+        ".alac",
     };
 
     private CancellationTokenSource? _detectCts;
@@ -723,7 +725,7 @@ public sealed partial class DetectViewModel : ObservableObject
 
                 if (files.Count == 0)
                 {
-                    AddLog("目录无可用音频", "当前目录未找到 WAV / FLAC 文件", false, true, null, LogIconTone.Warning);
+                    AddLog("目录无可用音频", "当前目录未找到 WAV / FLAC / M4A / ALAC 文件", false, true, null, LogIconTone.Warning);
                 }
 
                 return files;
@@ -740,7 +742,7 @@ public sealed partial class DetectViewModel : ObservableObject
             return new[] { sourcePath };
         }
 
-        AddLog("不支持的输入源", "请选择 WAV / FLAC 文件或包含这些文件的目录", false, true, null, LogIconTone.Warning);
+        AddLog("不支持的输入源", "请选择 WAV / FLAC / M4A / ALAC 文件或包含这些文件的目录", false, true, null, LogIconTone.Warning);
         return Array.Empty<string>();
     }
 

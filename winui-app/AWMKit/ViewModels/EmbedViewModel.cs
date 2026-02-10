@@ -33,6 +33,8 @@ public sealed partial class EmbedViewModel : ObservableObject
     {
         ".wav",
         ".flac",
+        ".m4a",
+        ".alac",
     };
 
     private CancellationTokenSource? _embedCts;
@@ -612,8 +614,19 @@ public sealed partial class EmbedViewModel : ObservableObject
 
         var suffix = string.IsNullOrWhiteSpace(CustomSuffix) ? "_wm" : CustomSuffix.Trim();
         var baseName = Path.GetFileNameWithoutExtension(inputPath);
-        var ext = Path.GetExtension(inputPath);
+        var ext = NormalizeOutputExtension(Path.GetExtension(inputPath));
         return Path.Combine(outputDirectory, $"{baseName}{suffix}{ext}");
+    }
+
+    private static string NormalizeOutputExtension(string ext)
+    {
+        if (string.Equals(ext, ".wav", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(ext, ".flac", StringComparison.OrdinalIgnoreCase))
+        {
+            return ext.ToLowerInvariant();
+        }
+
+        return ".wav";
     }
 
     private IReadOnlyList<string> ResolveAudioFiles(string sourcePath)
@@ -629,7 +642,7 @@ public sealed partial class EmbedViewModel : ObservableObject
 
                 if (files.Count == 0)
                 {
-                    AddLog("目录无可用音频", "当前目录未找到 WAV / FLAC 文件", false, true, LogIconTone.Warning);
+                    AddLog("目录无可用音频", "当前目录未找到 WAV / FLAC / M4A / ALAC 文件", false, true, LogIconTone.Warning);
                 }
 
                 return files;
@@ -646,7 +659,7 @@ public sealed partial class EmbedViewModel : ObservableObject
             return new[] { sourcePath };
         }
 
-        AddLog("不支持的输入源", "请选择 WAV / FLAC 文件或包含这些文件的目录", false, true, LogIconTone.Warning);
+        AddLog("不支持的输入源", "请选择 WAV / FLAC / M4A / ALAC 文件或包含这些文件的目录", false, true, LogIconTone.Warning);
         return Array.Empty<string>();
     }
 

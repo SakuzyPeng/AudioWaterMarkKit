@@ -57,6 +57,36 @@ pub struct Audio {
     key_file: Option<PathBuf>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum InputAudioFormat {
+    Wav,
+    Flac,
+    M4a,
+    Alac,
+}
+
+#[cfg(feature = "multichannel")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OutputAudioFormat {
+    Wav,
+    Flac,
+}
+
+struct TempDirGuard {
+    path: PathBuf,
+}
+
+impl Drop for TempDirGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+struct PreparedInput {
+    path: PathBuf,
+    _guard: Option<TempDirGuard>,
+}
+
 impl Audio {
     #[cfg(windows)]
     fn audiowmark_command(&self) -> Command {
@@ -128,7 +158,7 @@ impl Audio {
         output: P,
         message: &[u8; MESSAGE_LEN],
     ) -> Result<()> {
-        validate_input_format(input.as_ref())?;
+        let prepared = prepare_input_for_audiowmark(input.as_ref(), "embed_input")?;
         let hex = bytes_to_hex(message);
 
         let mut cmd = self.audiowmark_command();
@@ -140,7 +170,7 @@ impl Audio {
             cmd.arg("--key").arg(key_file);
         }
 
-        cmd.arg(input.as_ref()).arg(output.as_ref()).arg(&hex);
+        cmd.arg(&prepared.path).arg(output.as_ref()).arg(&hex);
 
         let output = cmd
             .output()
@@ -176,7 +206,7 @@ impl Audio {
     /// # Returns
     /// 检测结果，如果没有检测到水印返回 None
     pub fn detect<P: AsRef<Path>>(&self, input: P) -> Result<Option<DetectResult>> {
-        validate_input_format(input.as_ref())?;
+        let prepared = prepare_input_for_audiowmark(input.as_ref(), "detect_input")?;
         let mut cmd = self.audiowmark_command();
         cmd.arg("get");
 
@@ -184,7 +214,7 @@ impl Audio {
             cmd.arg("--key").arg(key_file);
         }
 
-        cmd.arg(input.as_ref());
+        cmd.arg(&prepared.path);
 
         let output = cmd
             .output()
@@ -257,7 +287,8 @@ impl Audio {
     ) -> Result<()> {
         use std::fs;
 
-        let input = input.as_ref();
+        let prepared = prepare_input_for_audiowmark(input.as_ref(), "embed_multichannel_input")?;
+        let input = prepared.path.as_path();
         let output = output.as_ref();
 
         // 加载多声道音频
@@ -333,8 +364,17 @@ impl Audio {
             audio.sample_format(),
         )?;
 
-        // 保存输出
-        result.to_wav(output)?;
+        // 按输出扩展名保存
+        match parse_output_audio_format(output)? {
+            OutputAudioFormat::Wav => {
+                result.to_wav(output)?;
+            }
+            OutputAudioFormat::Flac => {
+                let temp_output_wav = temp_dir.join("output_multichannel.wav");
+                result.to_wav(&temp_output_wav)?;
+                convert_wav_to_flac(&temp_output_wav, output)?;
+            }
+        }
 
         // 清理临时目录
         let _ = fs::remove_dir(&temp_dir);
@@ -353,7 +393,8 @@ impl Audio {
     ) -> Result<MultichannelDetectResult> {
         use std::fs;
 
-        let input = input.as_ref();
+        let prepared = prepare_input_for_audiowmark(input.as_ref(), "detect_multichannel_input")?;
+        let input = prepared.path.as_path();
 
         // 加载多声道音频
         let audio = MultichannelAudio::from_file(input)?;
@@ -563,20 +604,317 @@ fn parse_detect_output(stdout: &str, stderr: &str) -> Result<Option<DetectResult
     Ok(None)
 }
 
-fn validate_input_format(path: &Path) -> Result<()> {
+fn parse_input_audio_format(path: &Path) -> Result<InputAudioFormat> {
     let ext = path
         .extension()
         .and_then(|s| s.to_str())
         .map(|s| s.to_ascii_lowercase());
     match ext.as_deref() {
-        Some("wav") | Some("flac") => Ok(()),
+        Some("wav") => Ok(InputAudioFormat::Wav),
+        Some("flac") => Ok(InputAudioFormat::Flac),
+        Some("m4a") => Ok(InputAudioFormat::M4a),
+        Some("alac") => Ok(InputAudioFormat::Alac),
         Some(ext) => Err(Error::InvalidInput(format!(
-            "unsupported audio format: .{ext} (supported: wav, flac)"
+            "unsupported audio format: .{ext} (supported: wav, flac, m4a, alac)"
         ))),
         None => Err(Error::InvalidInput(
-            "input file has no extension (supported: wav, flac)".to_string(),
+            "input file has no extension (supported: wav, flac, m4a, alac)".to_string(),
         )),
     }
+}
+
+#[cfg(feature = "multichannel")]
+fn parse_output_audio_format(path: &Path) -> Result<OutputAudioFormat> {
+    let ext = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase());
+    match ext.as_deref() {
+        Some("wav") => Ok(OutputAudioFormat::Wav),
+        Some("flac") => Ok(OutputAudioFormat::Flac),
+        Some(ext) => Err(Error::InvalidInput(format!(
+            "unsupported output format: .{ext} (supported: wav, flac)"
+        ))),
+        None => Err(Error::InvalidInput(
+            "output file has no extension (supported: wav, flac)".to_string(),
+        )),
+    }
+}
+
+fn prepare_input_for_audiowmark(input: &Path, purpose: &str) -> Result<PreparedInput> {
+    let format = parse_input_audio_format(input)?;
+    match format {
+        InputAudioFormat::Wav | InputAudioFormat::Flac => Ok(PreparedInput {
+            path: input.to_path_buf(),
+            _guard: None,
+        }),
+        InputAudioFormat::M4a | InputAudioFormat::Alac => {
+            let temp_dir = create_temp_dir(purpose)?;
+            let temp_wav = temp_dir.join("input.wav");
+            decode_to_wav(input, &temp_wav)?;
+            Ok(PreparedInput {
+                path: temp_wav,
+                _guard: Some(TempDirGuard { path: temp_dir }),
+            })
+        }
+    }
+}
+
+fn create_temp_dir(prefix: &str) -> Result<PathBuf> {
+    use std::fs;
+
+    let path = std::env::temp_dir().join(format!(
+        "{prefix}_{}_{:?}_{}",
+        std::process::id(),
+        std::thread::current().id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+
+    fs::create_dir_all(&path)?;
+    Ok(path)
+}
+
+fn decode_to_wav(input: &Path, output_wav: &Path) -> Result<()> {
+    use hound::{SampleFormat as HoundSampleFormat, WavSpec, WavWriter};
+
+    let decoded = decode_media_to_pcm_i32(input)?;
+    let spec = WavSpec {
+        channels: decoded.channels,
+        sample_rate: decoded.sample_rate,
+        bits_per_sample: decoded.bits_per_sample,
+        sample_format: HoundSampleFormat::Int,
+    };
+
+    let mut writer = WavWriter::create(output_wav, spec)
+        .map_err(|e| Error::InvalidInput(format!("failed to create WAV: {e}")))?;
+
+    for sample in decoded.samples {
+        let clamped = clamp_sample_to_bits(sample, decoded.bits_per_sample);
+        if decoded.bits_per_sample == 16 {
+            writer
+                .write_sample(clamped as i16)
+                .map_err(|e| Error::InvalidInput(format!("write error: {e}")))?;
+        } else {
+            writer
+                .write_sample(clamped)
+                .map_err(|e| Error::InvalidInput(format!("write error: {e}")))?;
+        }
+    }
+
+    writer
+        .finalize()
+        .map_err(|e| Error::InvalidInput(format!("finalize error: {e}")))?;
+    Ok(())
+}
+
+#[cfg(feature = "multichannel")]
+fn convert_wav_to_flac(input_wav: &Path, output_flac: &Path) -> Result<()> {
+    use flacenc::component::BitRepr;
+    use flacenc::error::Verify;
+    use hound::SampleFormat as HoundSampleFormat;
+
+    let mut reader = hound::WavReader::open(input_wav)
+        .map_err(|e| Error::InvalidInput(format!("failed to open WAV: {e}")))?;
+    let spec = reader.spec();
+
+    let channels = spec.channels as usize;
+    if channels == 0 {
+        return Err(Error::InvalidInput("invalid WAV channels: 0".to_string()));
+    }
+
+    let (bits_per_sample, samples): (usize, Vec<i32>) = match (spec.sample_format, spec.bits_per_sample)
+    {
+        (HoundSampleFormat::Int, 16) => {
+            let mut out = Vec::new();
+            for sample in reader
+                .samples::<i16>()
+                .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
+            {
+                out.push(i32::from(sample?));
+            }
+            (16, out)
+        }
+        (HoundSampleFormat::Int, 24) | (HoundSampleFormat::Int, 32) => {
+            let mut out = Vec::new();
+            for sample in reader
+                .samples::<i32>()
+                .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
+            {
+                out.push(sample?);
+            }
+            (usize::from(spec.bits_per_sample), out)
+        }
+        (HoundSampleFormat::Float, 32) => {
+            let mut out = Vec::new();
+            for sample in reader
+                .samples::<f32>()
+                .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
+            {
+                let scaled = (sample? * 8_388_607.0_f32).round() as i32;
+                out.push(clamp_sample_to_bits(scaled, 24));
+            }
+            (24, out)
+        }
+        (sample_format, bits) => {
+            return Err(Error::InvalidInput(format!(
+                "unsupported WAV format for FLAC conversion: {:?} {bits}bit",
+                sample_format
+            )))
+        }
+    };
+
+    // flacenc does not expose a single "compression level" knob.
+    // Use the max block size to bias towards maximum compression ratio.
+    let mut encoder_config = flacenc::config::Encoder::default();
+    encoder_config.block_size = 32_767;
+
+    let config = encoder_config
+        .into_verified()
+        .map_err(|(_, err)| Error::InvalidInput(format!("invalid FLAC encoder config: {err}")))?;
+
+    let source = flacenc::source::MemSource::from_samples(
+        &samples,
+        channels,
+        bits_per_sample,
+        spec.sample_rate as usize,
+    );
+    let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size)
+        .map_err(|err| Error::AudiowmarkExec(format!("flac encode failed: {err}")))?;
+
+    let mut sink = flacenc::bitsink::ByteSink::new();
+    stream
+        .write(&mut sink)
+        .map_err(|err| Error::AudiowmarkExec(format!("flac write failed: {err}")))?;
+    std::fs::write(output_flac, sink.as_slice())?;
+    Ok(())
+}
+
+struct DecodedPcm {
+    sample_rate: u32,
+    channels: u16,
+    bits_per_sample: u16,
+    samples: Vec<i32>,
+}
+
+fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
+    use symphonia::core::audio::SampleBuffer;
+    use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+    use symphonia::core::errors::Error as SymphoniaError;
+    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::meta::MetadataOptions;
+    use symphonia::core::probe::Hint;
+
+    let file = std::fs::File::open(input)?;
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+
+    let mut hint = Hint::new();
+    if let Some(ext) = input.extension().and_then(|value| value.to_str()) {
+        hint.with_extension(ext);
+    }
+
+    let probed = symphonia::default::get_probe()
+        .format(
+            &hint,
+            mss,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
+        .map_err(|err| Error::InvalidInput(format!("unsupported audio format: {err}")))?;
+
+    let mut format = probed.format;
+    let track = format
+        .tracks()
+        .iter()
+        .find(|track| track.codec_params.codec != CODEC_TYPE_NULL)
+        .ok_or_else(|| Error::InvalidInput("no decodable audio track found".to_string()))?;
+    let track_id = track.id;
+    let sample_rate = track
+        .codec_params
+        .sample_rate
+        .ok_or_else(|| Error::InvalidInput("audio sample rate is unknown".to_string()))?;
+    let channels = track
+        .codec_params
+        .channels
+        .map(|value| value.count() as u16)
+        .ok_or_else(|| Error::InvalidInput("audio channel count is unknown".to_string()))?;
+    let bits_per_sample = track
+        .codec_params
+        .bits_per_sample
+        .unwrap_or(24)
+        .clamp(16, 32) as u16;
+
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&track.codec_params, &DecoderOptions::default())
+        .map_err(|err| Error::InvalidInput(format!("unsupported audio codec: {err}")))?;
+
+    let mut sample_buf: Option<SampleBuffer<i32>> = None;
+    let mut samples = Vec::<i32>::new();
+
+    loop {
+        let packet = match format.next_packet() {
+            Ok(packet) => packet,
+            Err(SymphoniaError::IoError(_)) => break,
+            Err(SymphoniaError::ResetRequired) => {
+                return Err(Error::InvalidInput(
+                    "chained audio streams are not supported".to_string(),
+                ));
+            }
+            Err(err) => {
+                return Err(Error::InvalidInput(format!(
+                    "failed to read audio packet: {err}"
+                )))
+            }
+        };
+
+        if packet.track_id() != track_id {
+            continue;
+        }
+
+        match decoder.decode(&packet) {
+            Ok(audio_buf) => {
+                if sample_buf.is_none() {
+                    sample_buf = Some(SampleBuffer::<i32>::new(
+                        audio_buf.capacity() as u64,
+                        *audio_buf.spec(),
+                    ));
+                }
+                if let Some(buffer) = sample_buf.as_mut() {
+                    buffer.copy_interleaved_ref(audio_buf);
+                    samples.extend_from_slice(buffer.samples());
+                }
+            }
+            Err(SymphoniaError::DecodeError(_)) | Err(SymphoniaError::IoError(_)) => continue,
+            Err(err) => {
+                return Err(Error::InvalidInput(format!(
+                    "failed to decode audio packet: {err}"
+                )))
+            }
+        }
+    }
+
+    if samples.is_empty() {
+        return Err(Error::InvalidInput(
+            "no decodable audio samples found".to_string(),
+        ));
+    }
+
+    Ok(DecodedPcm {
+        sample_rate,
+        channels,
+        bits_per_sample,
+        samples,
+    })
+}
+
+fn clamp_sample_to_bits(sample: i32, bits_per_sample: u16) -> i32 {
+    let bits = bits_per_sample.clamp(1, 32);
+    let min = -(1_i64 << (bits - 1));
+    let max = (1_i64 << (bits - 1)) - 1;
+    (sample as i64).clamp(min, max) as i32
 }
 
 /// 字节数组转 hex 字符串
@@ -601,6 +939,7 @@ fn hex_to_bytes(hex: &str) -> Option<[u8; MESSAGE_LEN]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn test_bytes_to_hex() {
@@ -673,5 +1012,28 @@ mod tests {
         assert!(result
             .detect_score
             .is_some_and(|value| (value - 1.427).abs() < 0.0001));
+    }
+
+    #[test]
+    fn test_validate_input_format_exts() {
+        assert!(parse_input_audio_format(Path::new("demo.wav")).is_ok());
+        assert!(parse_input_audio_format(Path::new("demo.flac")).is_ok());
+        assert!(parse_input_audio_format(Path::new("demo.m4a")).is_ok());
+        assert!(parse_input_audio_format(Path::new("demo.alac")).is_ok());
+        assert!(parse_input_audio_format(Path::new("demo.mp3")).is_err());
+    }
+
+    #[cfg(feature = "multichannel")]
+    #[test]
+    fn test_parse_output_audio_format() {
+        assert!(matches!(
+            parse_output_audio_format(Path::new("out.wav")).unwrap(),
+            OutputAudioFormat::Wav
+        ));
+        assert!(matches!(
+            parse_output_audio_format(Path::new("out.flac")).unwrap(),
+            OutputAudioFormat::Flac
+        ));
+        assert!(parse_output_audio_format(Path::new("out.m4a")).is_err());
     }
 }

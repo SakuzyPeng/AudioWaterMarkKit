@@ -109,6 +109,8 @@ public sealed partial class EmbedPage : Page
         var picker = new FileOpenPicker();
         picker.FileTypeFilter.Add(".wav");
         picker.FileTypeFilter.Add(".flac");
+        picker.FileTypeFilter.Add(".m4a");
+        picker.FileTypeFilter.Add(".alac");
 
         var hWnd = WindowNative.GetWindowHandle(App.Current.MainWindow);
         InitializeWithWindow.Initialize(picker, hWnd);

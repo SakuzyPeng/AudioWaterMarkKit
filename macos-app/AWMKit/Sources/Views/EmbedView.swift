@@ -126,7 +126,7 @@ struct EmbedView: View {
                             .font(.title2)
                         Text("拖拽音频文件到此处")
                             .font(.headline)
-                        Text("支持 WAV / FLAC 格式，可批量拖入")
+                        Text("支持 WAV / FLAC / M4A / ALAC 格式，可批量拖入")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     }

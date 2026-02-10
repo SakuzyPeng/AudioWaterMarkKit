@@ -90,7 +90,7 @@ class DetectViewModel: ObservableObject {
     @Published var isClearLogsSuccess = false
 
     private let maxLogCount = 200
-    private let supportedAudioExtensions: Set<String> = ["wav", "flac"]
+    private let supportedAudioExtensions: Set<String> = ["wav", "flac", "m4a", "alac"]
     private var progressResetTask: Task<Void, Never>?
 
     deinit {
@@ -152,6 +152,7 @@ class DetectViewModel: ObservableObject {
 
     func processDropProviders(_ providers: [NSItemProvider]) {
         var urls: [URL] = []
+        let supportedExtensions = supportedAudioExtensions
         let group = DispatchGroup()
         for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
             group.enter()
@@ -159,7 +160,7 @@ class DetectViewModel: ObservableObject {
                 defer { group.leave() }
                 if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
                     let ext = url.pathExtension.lowercased()
-                    if ext == "wav" || ext == "flac" {
+                    if supportedExtensions.contains(ext) {
                         urls.append(url)
                     }
                 }
@@ -183,7 +184,7 @@ class DetectViewModel: ObservableObject {
                 if files.isEmpty {
                     log(
                         "目录无可用音频",
-                        detail: "当前目录未找到 WAV / FLAC 文件",
+                        detail: "当前目录未找到 WAV / FLAC / M4A / ALAC 文件",
                         isSuccess: false,
                         isEphemeral: true
                     )
@@ -198,7 +199,7 @@ class DetectViewModel: ObservableObject {
         guard isSupportedAudioFile(source) else {
             log(
                 "不支持的输入源",
-                detail: "请选择 WAV / FLAC 文件或包含这些文件的目录",
+                detail: "请选择 WAV / FLAC / M4A / ALAC 文件或包含这些文件的目录",
                 isSuccess: false,
                 isEphemeral: true
             )
