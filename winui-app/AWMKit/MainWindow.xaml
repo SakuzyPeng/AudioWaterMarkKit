@@ -23,15 +23,15 @@
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
 
-            <NavigationViewItem Content="密钥" Tag="key">
-                <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Contact"/>
-                </NavigationViewItem.Icon>
-            </NavigationViewItem>
-
             <NavigationViewItem Content="标签" Tag="tags">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Tag"/>
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+
+            <NavigationViewItem Content="密钥" Tag="key">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Contact"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
         </NavigationView.MenuItems>

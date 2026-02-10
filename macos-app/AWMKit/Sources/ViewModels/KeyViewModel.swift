@@ -6,6 +6,9 @@ final class KeyViewModel: ObservableObject {
     @Published var selectedSlot: Int = 0
     @Published var isWorking = false
     @Published var slotSearchText: String = ""
+    @Published var isGenerateSuccess = false
+    @Published var isDeleteSuccess = false
+    @Published var isRefreshSuccess = false
     @Published var errorMessage: String?
     @Published var successMessage: String?
     @Published private(set) var slotSummaries: [AWMKeySlotSummary] = []
@@ -31,6 +34,9 @@ final class KeyViewModel: ObservableObject {
     }
     var activeSlotSummary: AWMKeySlotSummary? {
         slotSummaries.first(where: { $0.isActive })
+    }
+    var configuredSlotCount: Int {
+        slotSummaries.filter(\.hasKey).count
     }
 
     func sync(from appState: AppState) {
@@ -60,6 +66,7 @@ final class KeyViewModel: ObservableObject {
             sync(from: appState)
             successMessage = "槽位 \(selectedSlot) 密钥已生成"
             errorMessage = nil
+            flash(\.isGenerateSuccess)
         } catch {
             errorMessage = "生成密钥失败：\(error.localizedDescription)"
             successMessage = nil
@@ -76,10 +83,21 @@ final class KeyViewModel: ObservableObject {
             sync(from: appState)
             successMessage = "密钥已删除"
             errorMessage = nil
+            flash(\.isDeleteSuccess)
         } catch {
             errorMessage = "删除密钥失败：\(error.localizedDescription)"
             successMessage = nil
         }
+    }
+
+    func refresh(appState: AppState) async {
+        guard !isWorking else { return }
+        isWorking = true
+        defer { isWorking = false }
+
+        await appState.refreshRuntimeStatus()
+        sync(from: appState)
+        flash(\.isRefreshSuccess)
     }
 
     func refreshSlotSummaries() {
@@ -87,6 +105,14 @@ final class KeyViewModel: ObservableObject {
             slotSummaries = try AWMKeyStore.slotSummaries()
         } catch {
             slotSummaries = []
+        }
+    }
+
+    private func flash(_ keyPath: ReferenceWritableKeyPath<KeyViewModel, Bool>) {
+        self[keyPath: keyPath] = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            self[keyPath: keyPath] = false
         }
     }
 }

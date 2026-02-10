@@ -7,7 +7,19 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
     Loaded="Page_Loaded">
-    <Grid Padding="24" ColumnSpacing="12">
+    <Page.Resources>
+        <SolidColorBrush x:Key="KeyPageBackdropBrush" Color="#0D5B9BFF"/>
+        <Style x:Key="KeyHeaderBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource ControlFillColorSecondaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="Margin" Value="2,2,2,0"/>
+        </Style>
+    </Page.Resources>
+
+    <Grid Padding="24" ColumnSpacing="12" Background="{StaticResource KeyPageBackdropBrush}">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="420"/>
             <ColumnDefinition Width="*"/>
@@ -22,16 +34,19 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0" Text="密钥管理" Style="{StaticResource SectionHeaderStyle}"/>
+                <Border Grid.Row="0" Style="{StaticResource KeyHeaderBorderStyle}">
+                    <TextBlock Text="密钥管理" Style="{StaticResource SectionHeaderStyle}" Margin="0"/>
+                </Border>
 
-                <InfoBar Grid.Row="1"
+                <InfoBar Grid.Row="2"
                          IsClosable="False"
                          Severity="{x:Bind KeyStatusSeverity, Mode=OneWay}"
                          Message="{x:Bind KeyStatusMessage, Mode=OneWay}"/>
 
-                <Border Grid.Row="2" Style="{StaticResource ListItemBorderStyle}">
+                <Border Grid.Row="3" Style="{StaticResource ListItemBorderStyle}">
                     <StackPanel Spacing="8">
                         <Grid ColumnSpacing="16">
                             <Grid.ColumnDefinitions>
@@ -58,7 +73,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="3" Style="{StaticResource ListItemBorderStyle}">
+                <Border Grid.Row="4" Style="{StaticResource ListItemBorderStyle}">
                     <StackPanel Spacing="8">
                         <Grid ColumnSpacing="16">
                             <Grid.ColumnDefinitions>
@@ -82,7 +97,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="4" Style="{StaticResource ListItemBorderStyle}">
+                <Border Grid.Row="5" Style="{StaticResource ListItemBorderStyle}">
                     <StackPanel Spacing="4">
                         <TextBlock Text="当前激活密钥"
                                    FontWeight="SemiBold"
@@ -98,30 +113,36 @@
                     </StackPanel>
                 </Border>
 
-                <StackPanel Grid.Row="5" Spacing="10">
+                <StackPanel Grid.Row="6" Spacing="10">
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Click="GenerateKeyButton_Click"
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <SymbolIcon Symbol="Add"/>
-                                <TextBlock Text="生成密钥"/>
+                                <SymbolIcon Symbol="Add"
+                                            Foreground="{x:Bind ViewModel.GenerateActionBrush, Mode=OneWay}"/>
+                                <TextBlock Text="生成密钥"
+                                           Foreground="{x:Bind ViewModel.GenerateActionBrush, Mode=OneWay}"/>
                             </StackPanel>
                         </Button>
                         <Button Click="DeleteKeyButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
                                 IsEnabled="{x:Bind ViewModel.SelectedSlotHasKey, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <SymbolIcon Symbol="Delete"/>
-                                <TextBlock Text="删除密钥"/>
+                                <SymbolIcon Symbol="Delete"
+                                            Foreground="{x:Bind ViewModel.DeleteActionBrush, Mode=OneWay}"/>
+                                <TextBlock Text="删除密钥"
+                                           Foreground="{x:Bind ViewModel.DeleteActionBrush, Mode=OneWay}"/>
                             </StackPanel>
                         </Button>
                         <Button Click="RefreshButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
                                 IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <SymbolIcon Symbol="Refresh"/>
-                                <TextBlock Text="刷新状态"/>
+                                <SymbolIcon Symbol="Refresh"
+                                            Foreground="{x:Bind ViewModel.RefreshActionBrush, Mode=OneWay}"/>
+                                <TextBlock Text="刷新状态"
+                                           Foreground="{x:Bind ViewModel.RefreshActionBrush, Mode=OneWay}"/>
                             </StackPanel>
                         </Button>
                     </StackPanel>
@@ -140,9 +161,30 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <TextBlock Grid.Row="0"
-                           Text="槽位摘要"
-                           Style="{StaticResource SectionHeaderStyle}"/>
+                <Border Grid.Row="0" Style="{StaticResource KeyHeaderBorderStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Text="槽位摘要"
+                                   Style="{StaticResource SectionHeaderStyle}"
+                                   Margin="0"/>
+
+                        <Border Grid.Column="1"
+                                Background="{ThemeResource ControlFillColorSecondaryBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="8,4"
+                                VerticalAlignment="Center"
+                                Visibility="{x:Bind ViewModel.ShowConfiguredSlotCount, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <TextBlock Text="{x:Bind ViewModel.ConfiguredSlotCountText, Mode=OneWay}"
+                                       FontWeight="SemiBold"/>
+                        </Border>
+                    </Grid>
+                </Border>
 
                 <TextBox Grid.Row="1"
                          PlaceholderText="搜索槽位 / Key ID / 标签 / 状态"

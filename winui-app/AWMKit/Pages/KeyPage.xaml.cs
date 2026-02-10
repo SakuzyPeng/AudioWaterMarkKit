@@ -63,7 +63,7 @@ public sealed partial class KeyPage : Page
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
-        await ViewModel.InitializeAsync();
+        await ViewModel.RefreshStatusAsync();
     }
 
     private void ViewModelOnPropertyChanged(object? sender, PropertyChangedEventArgs e)

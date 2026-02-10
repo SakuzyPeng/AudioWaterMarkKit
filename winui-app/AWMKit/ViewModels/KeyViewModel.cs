@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using AWMKit.Models;
 using AWMKit.Native;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -17,6 +19,7 @@ public sealed partial class KeyViewModel : ObservableObject
 {
     private readonly AppViewModel _appViewModel = AppViewModel.Instance;
     private readonly List<KeySlotSummary> _allSlotSummaries = new();
+    private static readonly SolidColorBrush SuccessBrush = new(Windows.UI.Color.FromArgb(255, 76, 175, 80));
 
     private bool _isBusy;
     public bool IsBusy
@@ -86,6 +89,52 @@ public sealed partial class KeyViewModel : ObservableObject
         }
     }
     public string ActiveSummaryEvidenceLine => $"证据: {ActiveKeySummary?.EvidenceCount ?? 0}";
+    public int ConfiguredSlotCount => _allSlotSummaries.Count(item => item.HasKey);
+    public bool ShowConfiguredSlotCount => ConfiguredSlotCount > 0;
+    public string ConfiguredSlotCountText => ConfiguredSlotCount.ToString();
+
+    private bool _isGenerateSuccess;
+    public bool IsGenerateSuccess
+    {
+        get => _isGenerateSuccess;
+        private set
+        {
+            if (SetProperty(ref _isGenerateSuccess, value))
+            {
+                OnPropertyChanged(nameof(GenerateActionBrush));
+            }
+        }
+    }
+
+    private bool _isDeleteSuccess;
+    public bool IsDeleteSuccess
+    {
+        get => _isDeleteSuccess;
+        private set
+        {
+            if (SetProperty(ref _isDeleteSuccess, value))
+            {
+                OnPropertyChanged(nameof(DeleteActionBrush));
+            }
+        }
+    }
+
+    private bool _isRefreshSuccess;
+    public bool IsRefreshSuccess
+    {
+        get => _isRefreshSuccess;
+        private set
+        {
+            if (SetProperty(ref _isRefreshSuccess, value))
+            {
+                OnPropertyChanged(nameof(RefreshActionBrush));
+            }
+        }
+    }
+
+    public Brush GenerateActionBrush => IsGenerateSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
+    public Brush DeleteActionBrush => IsDeleteSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
+    public Brush RefreshActionBrush => IsRefreshSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
 
     public KeyViewModel()
     {
@@ -120,6 +169,7 @@ public sealed partial class KeyViewModel : ObservableObject
             {
                 await _appViewModel.RefreshRuntimeStatusAsync();
                 await RefreshSlotSummariesAsync();
+                await FlashGenerateSuccessAsync();
             }
         }
         finally
@@ -145,6 +195,7 @@ public sealed partial class KeyViewModel : ObservableObject
                 await _appViewModel.RefreshRuntimeStatusAsync();
                 SelectedSlot = _appViewModel.ActiveKeySlot;
                 await RefreshSlotSummariesAsync();
+                await FlashDeleteSuccessAsync();
             }
         }
         finally
@@ -168,6 +219,28 @@ public sealed partial class KeyViewModel : ObservableObject
             await _appViewModel.RefreshActiveKeySlotAsync();
             SelectedSlot = _appViewModel.ActiveKeySlot;
             await RefreshSlotSummariesAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+            RaiseComputedProperties();
+        }
+    }
+
+    public async Task RefreshStatusAsync()
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            await _appViewModel.RefreshRuntimeStatusAsync();
+            SelectedSlot = _appViewModel.ActiveKeySlot;
+            await RefreshSlotSummariesAsync();
+            await FlashRefreshSuccessAsync();
         }
         finally
         {
@@ -206,6 +279,9 @@ public sealed partial class KeyViewModel : ObservableObject
         OnPropertyChanged(nameof(ActiveSummaryTitle));
         OnPropertyChanged(nameof(ActiveSummaryKeyLine));
         OnPropertyChanged(nameof(ActiveSummaryEvidenceLine));
+        OnPropertyChanged(nameof(ConfiguredSlotCount));
+        OnPropertyChanged(nameof(ShowConfiguredSlotCount));
+        OnPropertyChanged(nameof(ConfiguredSlotCountText));
     }
 
     private Task RefreshSlotSummariesAsync()
@@ -235,6 +311,9 @@ public sealed partial class KeyViewModel : ObservableObject
         OnPropertyChanged(nameof(ActiveSummaryTitle));
         OnPropertyChanged(nameof(ActiveSummaryKeyLine));
         OnPropertyChanged(nameof(ActiveSummaryEvidenceLine));
+        OnPropertyChanged(nameof(ConfiguredSlotCount));
+        OnPropertyChanged(nameof(ShowConfiguredSlotCount));
+        OnPropertyChanged(nameof(ConfiguredSlotCountText));
     }
 
     private void ApplySlotFilter()
@@ -261,5 +340,37 @@ public sealed partial class KeyViewModel : ObservableObject
         {
             FilteredSlotSummaries.Add(row);
         }
+    }
+
+    private static Brush ResolvePrimaryTextBrush()
+    {
+        if (Application.Current.Resources.TryGetValue("TextFillColorPrimaryBrush", out var value)
+            && value is Brush brush)
+        {
+            return brush;
+        }
+
+        return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32));
+    }
+
+    private async Task FlashGenerateSuccessAsync()
+    {
+        IsGenerateSuccess = true;
+        await Task.Delay(1000);
+        IsGenerateSuccess = false;
+    }
+
+    private async Task FlashDeleteSuccessAsync()
+    {
+        IsDeleteSuccess = true;
+        await Task.Delay(1000);
+        IsDeleteSuccess = false;
+    }
+
+    private async Task FlashRefreshSuccessAsync()
+    {
+        IsRefreshSuccess = true;
+        await Task.Delay(1000);
+        IsRefreshSuccess = false;
     }
 }

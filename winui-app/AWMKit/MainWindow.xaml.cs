@@ -83,12 +83,25 @@ public sealed partial class MainWindow : Window
 
     private static NavigationViewItem CreateStatusItem(string tag, Symbol symbol, string automationName)
     {
+        var icon = new SymbolIcon(symbol)
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
         var item = new NavigationViewItem
         {
             Tag = tag,
-            Content = string.Empty,
-            Icon = new SymbolIcon(symbol),
+            Content = null,
+            Icon = icon,
             Width = 40,
+            Height = 32,
+            MinWidth = 40,
+            Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 4, 0)
         };
         AutomationProperties.SetName(item, automationName);

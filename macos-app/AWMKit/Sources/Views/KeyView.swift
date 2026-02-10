@@ -25,7 +25,7 @@ struct KeyView: View {
 
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        header("槽位摘要")
+                        header("槽位摘要", count: viewModel.configuredSlotCount)
                         slotSearchField
                         slotSummarySection
                     }
@@ -63,11 +63,14 @@ struct KeyView: View {
         }
     }
 
-    private func header(_ title: String) -> some View {
+    private func header(_ title: String, count: Int = 0) -> some View {
         HStack {
             Text(title)
                 .font(.headline)
             Spacer()
+            if count > 0 {
+                StatusCapsule(status: "\(count)", isHighlight: true)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -133,7 +136,9 @@ struct KeyView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus")
+                        .foregroundStyle(viewModel.isGenerateSuccess ? DesignSystem.Colors.success : .primary)
                     Text("生成密钥")
+                        .foregroundStyle(viewModel.isGenerateSuccess ? DesignSystem.Colors.success : .primary)
                 }
             }
             .buttonStyle(GlassButtonStyle(accentOn: true))
@@ -144,21 +149,22 @@ struct KeyView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "trash")
+                        .foregroundStyle(viewModel.isDeleteSuccess ? DesignSystem.Colors.success : .primary)
                     Text("删除密钥")
+                        .foregroundStyle(viewModel.isDeleteSuccess ? DesignSystem.Colors.success : .primary)
                 }
             }
             .buttonStyle(GlassButtonStyle(size: .compact))
             .disabled(!viewModel.selectedSlotHasKey || viewModel.isWorking)
 
             Button {
-                Task {
-                    await appState.refreshRuntimeStatus()
-                    viewModel.sync(from: appState)
-                }
+                Task { await viewModel.refresh(appState: appState) }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.clockwise")
+                        .foregroundStyle(viewModel.isRefreshSuccess ? DesignSystem.Colors.success : .primary)
                     Text("刷新状态")
+                        .foregroundStyle(viewModel.isRefreshSuccess ? DesignSystem.Colors.success : .primary)
                 }
             }
             .buttonStyle(GlassButtonStyle(size: .compact))

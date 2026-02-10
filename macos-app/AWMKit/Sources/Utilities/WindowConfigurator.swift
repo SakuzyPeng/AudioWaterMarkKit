@@ -84,7 +84,6 @@ private struct TitlebarStatusAccessoryView: View {
             statusIconButton(
                 systemName: "key.fill",
                 tone: appState.keyStatusTone,
-                helpText: appState.keyStatusHelp,
                 isHovering: isHoveringKey,
                 isFlashing: keyTapFlash,
                 accessibilityLabel: "密钥状态"
@@ -110,7 +109,6 @@ private struct TitlebarStatusAccessoryView: View {
             statusIconButton(
                 systemName: "waveform",
                 tone: appState.audioStatusTone,
-                helpText: appState.audioStatusHelp,
                 isHovering: isHoveringAudio,
                 isFlashing: audioTapFlash,
                 accessibilityLabel: "AudioWmark 状态"
@@ -136,7 +134,6 @@ private struct TitlebarStatusAccessoryView: View {
             statusIconButton(
                 systemName: "externaldrive.fill",
                 tone: appState.databaseStatusTone,
-                helpText: appState.databaseStatusHelp,
                 isHovering: isHoveringDatabase,
                 isFlashing: databaseTapFlash,
                 accessibilityLabel: "数据库状态"
@@ -176,7 +173,6 @@ private struct TitlebarStatusAccessoryView: View {
     private func statusIconButton(
         systemName: String,
         tone: AppState.RuntimeStatusTone,
-        helpText: String,
         isHovering: Bool,
         isFlashing: Bool,
         accessibilityLabel: String,
@@ -195,7 +191,6 @@ private struct TitlebarStatusAccessoryView: View {
                 }
         }
         .buttonStyle(.plain)
-        .help(helpText)
         .accessibilityLabel(accessibilityLabel)
     }
 

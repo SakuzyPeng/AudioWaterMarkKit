@@ -201,17 +201,11 @@ struct TagsView: View {
     private var mappingPanel: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.section) {
-                HStack {
-                    Text("标签映射")
-                        .font(.headline.weight(.semibold))
-
-                    Spacer()
-
-                    StatusCapsule(
-                        status: "\(displayedMappings.count)/\(mappings.count)",
-                        isHighlight: !displayedMappings.isEmpty
-                    )
-                }
+                cardHeader(
+                    title: "标签映射",
+                    status: "\(displayedMappings.count)/\(mappings.count)",
+                    highlight: !displayedMappings.isEmpty
+                )
 
                 if mappings.isEmpty {
                     emptyState(
@@ -250,17 +244,11 @@ struct TagsView: View {
     private var evidencePanel: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.section) {
-                HStack {
-                    Text("音频证据")
-                        .font(.headline.weight(.semibold))
-
-                    Spacer()
-
-                    StatusCapsule(
-                        status: "\(displayedEvidence.count)/\(evidenceEntries.count)",
-                        isHighlight: !displayedEvidence.isEmpty
-                    )
-                }
+                cardHeader(
+                    title: "音频证据",
+                    status: "\(displayedEvidence.count)/\(evidenceEntries.count)",
+                    highlight: !displayedEvidence.isEmpty
+                )
 
                 if evidenceEntries.isEmpty {
                     emptyState(
@@ -313,6 +301,32 @@ struct TagsView: View {
             Spacer()
         }
         .frame(minHeight: 140)
+    }
+
+    private func cardHeader(title: String, status: String, highlight: Bool) -> some View {
+        HStack {
+            Text(title)
+                .font(.headline.weight(.semibold))
+
+            Spacer()
+
+            StatusCapsule(
+                status: status,
+                isHighlight: highlight
+            )
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DesignSystem.Colors.titleBarBackground(colorScheme))
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(
+                    colorScheme == .light ? Color.black.opacity(0.08) : Color.clear,
+                    lineWidth: 1
+                )
+        )
     }
 
     private var actionSection: some View {
