@@ -21,7 +21,7 @@
 
     <Grid Padding="24" ColumnSpacing="12" Background="{StaticResource KeyPageBackdropBrush}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="500"/>
+            <ColumnDefinition Width="*" MinWidth="500"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
@@ -126,18 +126,8 @@
                 </Border>
 
                 <StackPanel Grid.Row="6" Spacing="10">
-                    <Grid ColumnSpacing="10" RowSpacing="10">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <Button Grid.Row="0" Grid.Column="0"
-                                Click="GenerateKeyButton_Click"
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Click="GenerateKeyButton_Click"
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 IsEnabled="{x:Bind CanGenerateKey, Mode=OneWay}">
                             <ToolTipService.ToolTip>
@@ -150,8 +140,7 @@
                             </StackPanel>
                         </Button>
 
-                        <Button Grid.Row="0" Grid.Column="1"
-                                Click="EditLabelButton_Click"
+                        <Button Click="EditLabelButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
                                 IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -161,8 +150,7 @@
                             </StackPanel>
                         </Button>
 
-                        <Button Grid.Row="1" Grid.Column="0"
-                                Click="DeleteKeyButton_Click"
+                        <Button Click="DeleteKeyButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
                                 IsEnabled="{x:Bind ViewModel.SelectedSlotHasKey, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -172,8 +160,7 @@
                             </StackPanel>
                         </Button>
 
-                        <Button Grid.Row="1" Grid.Column="1"
-                                Click="RefreshButton_Click"
+                        <Button Click="RefreshButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
                                 IsEnabled="{x:Bind IsNotBusy, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -182,7 +169,7 @@
                                 <TextBlock Text="刷新"/>
                             </StackPanel>
                         </Button>
-                    </Grid>
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </Border>
