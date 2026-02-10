@@ -501,6 +501,8 @@ public sealed class TagsViewModel : ObservableObject
 
         return evidence.Identity.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                evidence.Tag.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+               (evidence.KeyId?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
+               evidence.PcmSha256.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                evidence.FilePath.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 

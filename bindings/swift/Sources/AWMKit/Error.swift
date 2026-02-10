@@ -12,6 +12,7 @@ public enum AWMError: Error, LocalizedError {
     case audiowmarkNotFound
     case audiowmarkExec(String)
     case noWatermarkFound
+    case keyAlreadyExists
     case unknown(Int32)
 
     init(code: Int32) {
@@ -34,6 +35,8 @@ public enum AWMError: Error, LocalizedError {
             self = .audiowmarkExec("Execution failed")
         case AWM_ERROR_NO_WATERMARK_FOUND.rawValue:
             self = .noWatermarkFound
+        case AWM_ERROR_KEY_ALREADY_EXISTS.rawValue:
+            self = .keyAlreadyExists
         default:
             self = .unknown(code)
         }
@@ -59,6 +62,8 @@ public enum AWMError: Error, LocalizedError {
             return "audiowmark execution failed: \(msg)"
         case .noWatermarkFound:
             return "No watermark found in audio"
+        case .keyAlreadyExists:
+            return "Key already exists in slot"
         case .unknown(let code):
             return "Unknown error: \(code)"
         }

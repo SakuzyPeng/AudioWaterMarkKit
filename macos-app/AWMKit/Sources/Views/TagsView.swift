@@ -443,6 +443,7 @@ struct TagsView: View {
         return evidenceEntries.filter { entry in
             entry.identity.localizedCaseInsensitiveContains(trimmedQuery) ||
             entry.tag.localizedCaseInsensitiveContains(trimmedQuery) ||
+            (entry.keyId?.localizedCaseInsensitiveContains(trimmedQuery) ?? false) ||
             entry.filePath.localizedCaseInsensitiveContains(trimmedQuery)
         }
     }
@@ -651,10 +652,11 @@ private struct EvidenceEntryRow: View {
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
 
-                Text("Tag \(entry.tag) · 槽位 \(entry.keySlot) · v\(entry.version)")
+                Text("Tag \(entry.tag) · 槽位 \(entry.keySlot) · Key ID \(entry.keyId ?? "-")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .help(entry.keyId ?? "-")
 
                 Text(entry.filePath)
                     .font(.caption2)

@@ -1,6 +1,30 @@
 import Foundation
 import CAWMKit
 
+public struct AWMKeySlotSummary: Codable, Hashable {
+    public let slot: UInt8
+    public let isActive: Bool
+    public let hasKey: Bool
+    public let keyId: String?
+    public let label: String?
+    public let evidenceCount: Int
+    public let lastEvidenceAt: UInt64?
+    public let statusText: String
+    public let duplicateOfSlots: [UInt8]
+
+    enum CodingKeys: String, CodingKey {
+        case slot
+        case isActive = "is_active"
+        case hasKey = "has_key"
+        case keyId = "key_id"
+        case label
+        case evidenceCount = "evidence_count"
+        case lastEvidenceAt = "last_evidence_at"
+        case statusText = "status_text"
+        case duplicateOfSlots = "duplicate_of_slots"
+    }
+}
+
 /// Slot-aware key operations bridged from Rust KeyStore.
 public enum AWMKeyStore {
     private static let keyLength = 32
@@ -37,6 +61,15 @@ public enum AWMKeyStore {
         guard code == AWM_SUCCESS.rawValue else {
             throw AWMError(code: code)
         }
+    }
+
+    public static func slotSummaries() throws -> [AWMKeySlotSummary] {
+        let json = try fetchCString { out, outLen, required in
+            awm_key_slot_summaries_json(out, outLen, required)
+        }
+        let payload = json.isEmpty ? "[]" : json
+        let data = Data(payload.utf8)
+        return try JSONDecoder().decode([AWMKeySlotSummary].self, from: data)
     }
 
     public static func loadActiveKey() throws -> Data {
@@ -90,5 +123,23 @@ public enum AWMKeyStore {
     public static func deleteActiveKey() throws -> UInt8 {
         let slot = try activeSlot()
         return try deleteKey(slot: slot)
+    }
+
+    private static func fetchCString(
+        _ caller: (_ out: UnsafeMutablePointer<CChar>?, _ outLen: Int, _ required: UnsafeMutablePointer<Int>?) -> Int32
+    ) throws -> String {
+        var requiredLen = 0
+        var code = caller(nil, 0, &requiredLen)
+        guard code == AWM_SUCCESS.rawValue else {
+            throw AWMError(code: code)
+        }
+
+        let size = max(requiredLen, 1)
+        var buffer = [CChar](repeating: 0, count: size)
+        code = caller(&buffer, buffer.count, &requiredLen)
+        guard code == AWM_SUCCESS.rawValue else {
+            throw AWMError(code: code)
+        }
+        return String(cString: buffer)
     }
 }

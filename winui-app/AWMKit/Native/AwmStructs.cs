@@ -16,6 +16,7 @@ public enum AwmError
     AudiowmarkNotFound = -7,
     AudiowmarkExec = -8,
     NoWatermarkFound = -9,
+    KeyAlreadyExists = -10,
 }
 
 /// <summary>Multichannel layout enum matching AWMChannelLayout in C header.</summary>

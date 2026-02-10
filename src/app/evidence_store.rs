@@ -19,6 +19,7 @@ pub struct NewAudioEvidence {
     pub channels: u32,
     pub sample_count: u64,
     pub pcm_sha256: String,
+    pub key_id: String,
     pub chromaprint: Vec<u32>,
     pub fp_config_id: u8,
 }
@@ -38,6 +39,7 @@ pub struct AudioEvidence {
     pub channels: u32,
     pub sample_count: u64,
     pub pcm_sha256: String,
+    pub key_id: Option<String>,
     pub chromaprint: Vec<u32>,
     pub fp_config_id: u8,
 }
@@ -79,9 +81,9 @@ impl EvidenceStore {
         let changed = self.conn.execute(
             "INSERT OR IGNORE INTO audio_evidence (
                 created_at, file_path, tag, identity, version, key_slot, timestamp_minutes,
-                message_hex, sample_rate, channels, sample_count, pcm_sha256,
+                message_hex, sample_rate, channels, sample_count, pcm_sha256, key_id,
                 chromaprint_blob, fingerprint_len, fp_config_id
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 created_at,
                 input.file_path,
@@ -95,6 +97,7 @@ impl EvidenceStore {
                 i64::from(input.channels),
                 sample_count_i64,
                 input.pcm_sha256,
+                input.key_id,
                 chromaprint_blob,
                 fingerprint_len,
                 i64::from(input.fp_config_id),
@@ -129,7 +132,7 @@ impl EvidenceStore {
         let mut stmt = self.conn.prepare(
             "SELECT
                 id, created_at, file_path, tag, identity, version, key_slot, timestamp_minutes,
-                message_hex, sample_rate, channels, sample_count, pcm_sha256,
+                message_hex, sample_rate, channels, sample_count, pcm_sha256, key_id,
                 chromaprint_blob, fp_config_id
              FROM audio_evidence
              WHERE (?1 IS NULL OR identity = ?1)
@@ -152,7 +155,7 @@ impl EvidenceStore {
         let mut stmt = self.conn.prepare(
             "SELECT
                 id, created_at, file_path, tag, identity, version, key_slot, timestamp_minutes,
-                message_hex, sample_rate, channels, sample_count, pcm_sha256,
+                message_hex, sample_rate, channels, sample_count, pcm_sha256, key_id,
                 chromaprint_blob, fp_config_id
              FROM audio_evidence
              WHERE id = ?1
@@ -202,11 +205,20 @@ impl EvidenceStore {
 
     /// Count evidence rows for one key slot.
     pub fn count_by_slot(&self, key_slot: u8) -> Result<usize> {
+        self.count_by_slot_with_key_id(key_slot, None)
+    }
+
+    /// Count evidence rows for one key slot + key id.
+    pub fn count_by_slot_and_key_id(&self, key_slot: u8, key_id: &str) -> Result<usize> {
+        self.count_by_slot_with_key_id(key_slot, Some(key_id))
+    }
+
+    fn count_by_slot_with_key_id(&self, key_slot: u8, key_id: Option<&str>) -> Result<usize> {
         let mut stmt = self
             .conn
-            .prepare("SELECT COUNT(*) FROM audio_evidence WHERE key_slot = ?1")?;
+            .prepare("SELECT COUNT(*) FROM audio_evidence WHERE key_slot = ?1 AND (?2 IS NULL OR key_id = ?2)")?;
         let count: i64 = stmt
-            .query_row(params![i64::from(key_slot)], |row| row.get(0))
+            .query_row(params![i64::from(key_slot), key_id], |row| row.get(0))
             .optional()?
             .unwrap_or(0);
         #[allow(clippy::cast_sign_loss)]
@@ -216,13 +228,31 @@ impl EvidenceStore {
 
     /// Usage stats for one key slot.
     pub fn usage_by_slot(&self, key_slot: u8) -> Result<EvidenceSlotUsage> {
+        self.usage_by_slot_with_key_id(key_slot, None)
+    }
+
+    /// Usage stats for one key slot + key id.
+    pub fn usage_by_slot_and_key_id(
+        &self,
+        key_slot: u8,
+        key_id: &str,
+    ) -> Result<EvidenceSlotUsage> {
+        self.usage_by_slot_with_key_id(key_slot, Some(key_id))
+    }
+
+    fn usage_by_slot_with_key_id(
+        &self,
+        key_slot: u8,
+        key_id: Option<&str>,
+    ) -> Result<EvidenceSlotUsage> {
         let mut stmt = self.conn.prepare(
             "SELECT COUNT(*), MAX(created_at)
              FROM audio_evidence
-             WHERE key_slot = ?1",
+             WHERE key_slot = ?1
+               AND (?2 IS NULL OR key_id = ?2)",
         )?;
         let (count_i64, last_i64): (i64, Option<i64>) = stmt
-            .query_row(params![i64::from(key_slot)], |row| {
+            .query_row(params![i64::from(key_slot), key_id], |row| {
                 Ok((row.get(0)?, row.get(1)?))
             })
             .optional()?
@@ -244,7 +274,7 @@ impl EvidenceStore {
 }
 
 fn parse_audio_evidence_row(row: &Row<'_>) -> Result<AudioEvidence> {
-    let blob: Vec<u8> = row.get(13)?;
+    let blob: Vec<u8> = row.get(14)?;
     let chromaprint = decode_chromaprint_blob(&blob)?;
     let created_at_i64: i64 = row.get(1)?;
     let sample_count_i64: i64 = row.get(11)?;
@@ -253,7 +283,7 @@ fn parse_audio_evidence_row(row: &Row<'_>) -> Result<AudioEvidence> {
     let timestamp_minutes_i64: i64 = row.get(7)?;
     let sample_rate_i64: i64 = row.get(9)?;
     let channels_i64: i64 = row.get(10)?;
-    let fp_config_id_i64: i64 = row.get(14)?;
+    let fp_config_id_i64: i64 = row.get(15)?;
 
     Ok(AudioEvidence {
         id: row.get(0)?,
@@ -276,6 +306,7 @@ fn parse_audio_evidence_row(row: &Row<'_>) -> Result<AudioEvidence> {
         #[allow(clippy::cast_sign_loss)]
         sample_count: sample_count_i64 as u64,
         pcm_sha256: row.get(12)?,
+        key_id: row.get(13)?,
         chromaprint,
         #[allow(clippy::cast_possible_truncation)]
         fp_config_id: fp_config_id_i64 as u8,
@@ -347,13 +378,16 @@ fn open_db(path: &Path) -> Result<Connection> {
             channels INTEGER NOT NULL,
             sample_count INTEGER NOT NULL,
             pcm_sha256 TEXT NOT NULL,
+            key_id TEXT NOT NULL,
             chromaprint_blob BLOB NOT NULL,
             fingerprint_len INTEGER NOT NULL,
             fp_config_id INTEGER NOT NULL,
-            UNIQUE(identity, key_slot, pcm_sha256)
+            UNIQUE(identity, key_slot, key_id, pcm_sha256)
         );
         CREATE INDEX IF NOT EXISTS idx_audio_evidence_identity_slot_created
-        ON audio_evidence(identity, key_slot, created_at DESC);",
+        ON audio_evidence(identity, key_slot, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_audio_evidence_slot_key_created
+        ON audio_evidence(key_slot, key_id, created_at DESC);",
     )?;
     Ok(conn)
 }
@@ -397,6 +431,7 @@ mod tests {
             channels: 2,
             sample_count: 10_000,
             pcm_sha256: sha256.to_string(),
+            key_id: "AAAAAAAAAA".to_string(),
             chromaprint: vec![1, 2, 3, 4],
             fp_config_id: 1,
         }
@@ -509,6 +544,27 @@ mod tests {
 
         let removed_none = store.clear_filtered(Some("A"), Some("T1"), None).unwrap();
         assert_eq!(removed_none, 0);
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn usage_by_slot_and_key_id_filters_rows() {
+        let db_path = temp_db_path();
+        let store = EvidenceStore::load_at(db_path.clone()).unwrap();
+
+        let mut key_a = sample_evidence("TARGET", 0, "k1");
+        key_a.key_id = "AAAAAAAAAA".to_string();
+        store.insert(&key_a).unwrap();
+
+        let mut key_b = sample_evidence("TARGET", 0, "k2");
+        key_b.key_id = "BBBBBBBBBB".to_string();
+        store.insert(&key_b).unwrap();
+
+        let only_a = store.usage_by_slot_and_key_id(0, "AAAAAAAAAA").unwrap();
+        assert_eq!(only_a.count, 1);
+
+        let all = store.usage_by_slot(0).unwrap();
+        assert_eq!(all.count, 2);
         let _ = fs::remove_file(db_path);
     }
 }

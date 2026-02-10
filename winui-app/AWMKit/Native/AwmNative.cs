@@ -157,6 +157,9 @@ internal static class AwmNative
     [DllImport(Lib, EntryPoint = "awm_key_delete_slot", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_key_delete_slot(byte slot, IntPtr outNewActiveSlot);
 
+    [DllImport(Lib, EntryPoint = "awm_key_slot_summaries_json", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_key_slot_summaries_json(IntPtr outBuf, nuint outLen, IntPtr outRequiredLen);
+
     [DllImport(Lib, EntryPoint = "awm_key_delete", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_key_delete();
 

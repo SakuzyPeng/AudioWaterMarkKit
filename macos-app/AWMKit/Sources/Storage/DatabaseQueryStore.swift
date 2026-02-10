@@ -17,6 +17,7 @@ struct EvidenceEntry: Identifiable, Equatable {
     let keySlot: Int
     let timestampMinutes: Int64
     let pcmSha256: String
+    let keyId: String?
 
     var createdDate: Date {
         Date(timeIntervalSince1970: TimeInterval(createdAt))
@@ -81,7 +82,8 @@ enum DatabaseQueryStore {
                 version: Int(row.version),
                 keySlot: Int(row.keySlot),
                 timestampMinutes: Int64(row.timestampMinutes),
-                pcmSha256: row.pcmSha256
+                pcmSha256: row.pcmSha256,
+                keyId: row.keyId
             )
         }
     }

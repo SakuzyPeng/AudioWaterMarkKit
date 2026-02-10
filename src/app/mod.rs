@@ -15,11 +15,13 @@ pub use app_settings_store::{
 pub use audio_engine::{AppConfig, AudioEngine, DetectOutcome};
 pub use audio_proof::{build_audio_proof, AudioProof};
 pub use error::{AppError, Result};
-pub use evidence_store::{AudioEvidence, EvidenceStore, NewAudioEvidence};
+pub use evidence_store::{AudioEvidence, EvidenceSlotUsage, EvidenceStore, NewAudioEvidence};
 pub use i18n::{
     available_languages, current_language, env_language, set_language, tr, tr_args, LanguageInfo,
 };
-pub use keystore::{generate_key, KeyBackend, KeyStore, KEY_LEN};
+pub use keystore::{
+    generate_key, key_id_from_key_material, KeyBackend, KeySlotSummary, KeyStore, KEY_LEN,
+};
 pub use maintenance::{clear_local_cache, reset_all};
 pub use settings::AppSettings;
 pub use tag_store::{TagEntry, TagStore};

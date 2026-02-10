@@ -1,4 +1,5 @@
 import SwiftUI
+import AWMKit
 
 struct KeyView: View {
     @EnvironmentObject private var appState: AppState
@@ -14,6 +15,7 @@ struct KeyView: View {
                         header
                         statusSection
                         slotSection
+                        slotSummarySection
                         actionSection
                         hintSection
                     }
@@ -103,6 +105,23 @@ struct KeyView: View {
         }
     }
 
+    private var slotSummarySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("槽位摘要")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(viewModel.slotSummaries, id: \.slot) { summary in
+                        slotSummaryRow(summary)
+                    }
+                }
+            }
+            .frame(maxHeight: 240)
+        }
+    }
+
     private var actionSection: some View {
         HStack(spacing: 10) {
             Button {
@@ -150,6 +169,58 @@ struct KeyView: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder
+    private func slotSummaryRow(_ summary: AWMKeySlotSummary) -> some View {
+        let title = summary.isActive ? "槽位 \(summary.slot)（激活）" : "槽位 \(summary.slot)"
+        let keyText = summary.hasKey ? "Key ID: \(summary.keyId ?? "-")" : "未配置"
+        let labelText = summary.label?.isEmpty == false ? " · \(summary.label!)" : ""
+        let evidenceText = "证据: \(summary.evidenceCount)"
+        let duplicateText = summary.duplicateOfSlots.isEmpty
+            ? ""
+            : " · 重复: \(summary.duplicateOfSlots.map(String.init).joined(separator: ","))"
+
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(statusColor(summary.statusText))
+            Text(keyText + labelText)
+                .font(.caption)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Text(evidenceText + duplicateText)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(DesignSystem.Colors.rowBackground(colorScheme))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(
+                    colorScheme == .light ? Color.black.opacity(0.12) : Color.white.opacity(0.14),
+                    lineWidth: 1
+                )
+        )
+    }
+
+    private func statusColor(_ status: String) -> Color {
+        switch status {
+        case "active":
+            return .green
+        case "duplicate":
+            return .orange
+        case "configured":
+            return .primary
+        default:
+            return .secondary
+        }
     }
 
     private func row(label: String, value: String) -> some View {

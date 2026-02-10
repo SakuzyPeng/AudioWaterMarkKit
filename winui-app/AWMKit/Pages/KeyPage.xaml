@@ -18,6 +18,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Text="密钥管理" Style="{StaticResource SectionHeaderStyle}"/>
@@ -107,7 +108,32 @@
                     </Button>
                 </StackPanel>
 
-                <TextBlock Grid.Row="6"
+                <StackPanel Grid.Row="6" Spacing="8">
+                    <TextBlock Text="槽位摘要"
+                               Style="{StaticResource SectionHeaderStyle}"/>
+
+                    <ListView ItemsSource="{x:Bind ViewModel.SlotSummaries, Mode=OneWay}"
+                              SelectionMode="None"
+                              IsItemClickEnabled="False"
+                              ScrollViewer.VerticalScrollMode="Auto"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                              MinHeight="180">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Spacing="2" Padding="8,6">
+                                    <TextBlock Text="{Binding TitleWithStatus}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding KeyLine}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="{Binding EvidenceLine}"
+                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                               FontSize="12"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </StackPanel>
+
+                <TextBlock Grid.Row="7"
                            Text="槽位仅可在密钥页修改。嵌入与检测页面只展示当前槽位信息。"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                            TextWrapping="WrapWholeWords"

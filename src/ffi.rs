@@ -14,7 +14,10 @@ use crate::message::{self, CURRENT_VERSION, MESSAGE_LEN};
 use crate::tag::Tag;
 
 #[cfg(feature = "app")]
-use crate::app::{build_audio_proof, EvidenceStore, NewAudioEvidence, TagStore};
+use crate::app::{
+    build_audio_proof, key_id_from_key_material, EvidenceStore, KeySlotSummary, NewAudioEvidence,
+    TagStore,
+};
 #[cfg(feature = "app")]
 use rusty_chromaprint::{match_fingerprints, Configuration};
 #[cfg(feature = "app")]
@@ -33,6 +36,7 @@ pub enum AWMError {
     AudiowmarkNotFound = -7,
     AudiowmarkExec = -8,
     NoWatermarkFound = -9,
+    KeyAlreadyExists = -10,
 }
 
 /// 解码结果结构体
@@ -755,6 +759,7 @@ pub unsafe extern "C" fn awm_evidence_record_file(
             channels: proof.channels,
             sample_count: proof.sample_count,
             pcm_sha256: proof.pcm_sha256,
+            key_id: key_id_from_key_material(key_slice),
             chromaprint: proof.chromaprint,
             fp_config_id: proof.fp_config_id,
         };
@@ -794,6 +799,7 @@ struct FfiAudioEvidence {
     channels: u32,
     sample_count: u64,
     pcm_sha256: String,
+    key_id: Option<String>,
     chromaprint_blob: String,
     fingerprint_len: usize,
     fp_config_id: u8,
@@ -1066,6 +1072,7 @@ pub unsafe extern "C" fn awm_db_evidence_list_json(
                 channels: row.channels,
                 sample_count: row.sample_count,
                 pcm_sha256: row.pcm_sha256,
+                key_id: row.key_id,
                 chromaprint_blob: encode_chromaprint_blob_hex(&row.chromaprint),
                 fingerprint_len: row.chromaprint.len(),
                 fp_config_id: row.fp_config_id,
@@ -1278,14 +1285,23 @@ pub unsafe extern "C" fn awm_key_generate_and_save(out_key: *mut u8, out_key_cap
         if out_key_cap < crate::app::KEY_LEN {
             return AWMError::InvalidMessageLength as i32;
         }
-        let key = crate::app::generate_key();
-        match crate::app::KeyStore::new().and_then(|ks| {
-            ks.save(&key)?;
-            Ok(())
-        }) {
-            Ok(()) => {
-                ptr::copy_nonoverlapping(key.as_ptr(), out_key, key.len());
-                AWMError::Success as i32
+        match crate::app::KeyStore::new() {
+            Ok(ks) => {
+                let slot = match ks.active_slot() {
+                    Ok(slot) => slot,
+                    Err(_) => return AWMError::AudiowmarkExec as i32,
+                };
+                if ks.exists_slot(slot) {
+                    return AWMError::KeyAlreadyExists as i32;
+                }
+                let key = crate::app::generate_key();
+                match ks.save_slot(slot, &key) {
+                    Ok(()) => {
+                        ptr::copy_nonoverlapping(key.as_ptr(), out_key, key.len());
+                        AWMError::Success as i32
+                    }
+                    Err(_) => AWMError::AudiowmarkExec as i32,
+                }
             }
             Err(_) => AWMError::AudiowmarkExec as i32,
         }
@@ -1380,14 +1396,19 @@ pub unsafe extern "C" fn awm_key_generate_and_save_slot(
         if out_key_cap < crate::app::KEY_LEN {
             return AWMError::InvalidMessageLength as i32;
         }
-        let key = crate::app::generate_key();
-        match crate::app::KeyStore::new().and_then(|ks| {
-            ks.save_slot(slot, &key)?;
-            Ok(())
-        }) {
-            Ok(()) => {
-                ptr::copy_nonoverlapping(key.as_ptr(), out_key, key.len());
-                AWMError::Success as i32
+        match crate::app::KeyStore::new() {
+            Ok(ks) => {
+                if ks.exists_slot(slot) {
+                    return AWMError::KeyAlreadyExists as i32;
+                }
+                let key = crate::app::generate_key();
+                match ks.save_slot(slot, &key) {
+                    Ok(()) => {
+                        ptr::copy_nonoverlapping(key.as_ptr(), out_key, key.len());
+                        AWMError::Success as i32
+                    }
+                    Err(_) => AWMError::AudiowmarkExec as i32,
+                }
             }
             Err(_) => AWMError::AudiowmarkExec as i32,
         }
@@ -1423,6 +1444,47 @@ pub unsafe extern "C" fn awm_key_delete_slot(slot: u8, out_new_active_slot: *mut
     #[cfg(not(feature = "app"))]
     {
         let _ = (slot, out_new_active_slot);
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// 获取全部槽位摘要（JSON）
+///
+/// Two-step usage:
+/// 1) call with out = NULL and out_len = 0 to get out_required_len
+/// 2) allocate buffer and call again to fetch JSON payload
+///
+/// # Safety
+/// - `out_required_len` must be valid writable pointer.
+#[no_mangle]
+pub unsafe extern "C" fn awm_key_slot_summaries_json(
+    out: *mut c_char,
+    out_len: usize,
+    out_required_len: *mut usize,
+) -> i32 {
+    #[cfg(feature = "app")]
+    {
+        let store = match crate::app::KeyStore::new() {
+            Ok(store) => store,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+
+        let summaries: Vec<KeySlotSummary> = match store.slot_summaries() {
+            Ok(rows) => rows,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+
+        let json = match serde_json::to_string(&summaries) {
+            Ok(json) => json,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
+        };
+
+        return write_string_with_required(&json, out, out_len, out_required_len);
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = write_string_with_required("[]", out, out_len, out_required_len);
         AWMError::AudiowmarkExec as i32
     }
 }

@@ -105,23 +105,36 @@ class AppState: ObservableObject {
     }
 
     func refreshRuntimeStatus() async {
+        loadActiveKeySlot()
         await checkKey()
         checkAudioStatus()
         checkDatabaseStatus()
-        loadActiveKeySlot()
     }
 
     func checkKey() async {
+        let resolvedActiveSlot: Int
+        if let slot = try? AWMKeyStore.activeSlot() {
+            resolvedActiveSlot = Int(slot)
+            activeKeySlot = resolvedActiveSlot
+        } else {
+            resolvedActiveSlot = activeKeySlot
+        }
+        let slotSummaries = (try? AWMKeyStore.slotSummaries()) ?? []
+
         do {
             if !AWMKeyStore.exists() {
                 keyLoaded = false
                 keySourceLabel = "未配置"
                 keyStatusTone = .warning
-                keyStatusHelp = "密钥未配置，请前往“密钥”页面生成"
+                keyStatusHelp = formatKeyStatusHelp(
+                    activeSlot: resolvedActiveSlot,
+                    summaries: slotSummaries,
+                    keyAvailable: false
+                )
                 return
             }
 
-            let key = try AWMKeyStore.loadActiveKey()
+            _ = try AWMKeyStore.loadActiveKey()
             keyLoaded = true
 
             let backend = try? AWMKeyStore.backendLabel()
@@ -132,7 +145,11 @@ class AppState: ObservableObject {
             }
 
             keyStatusTone = .ready
-            keyStatusHelp = "密钥已配置（\(key.count) 字节）"
+            keyStatusHelp = formatKeyStatusHelp(
+                activeSlot: resolvedActiveSlot,
+                summaries: slotSummaries,
+                keyAvailable: true
+            )
         } catch {
             keyLoaded = false
             keySourceLabel = "读取失败"
@@ -222,5 +239,37 @@ class AppState: ObservableObject {
         } catch {
             // Ignore setting persistence failure in UI state update path.
         }
+    }
+
+    private func formatKeyStatusHelp(
+        activeSlot: Int,
+        summaries: [AWMKeySlotSummary],
+        keyAvailable: Bool
+    ) -> String {
+        let configured = summaries.filter { $0.hasKey }
+        let activeKeyId = summaries.first(where: { $0.slot == UInt8(activeSlot) })?.keyId ?? "未配置"
+        let listPreview = configured
+            .prefix(6)
+            .map { "\($0.slot):\($0.keyId ?? "-")" }
+            .joined(separator: ", ")
+        let slotDigest = configured.isEmpty
+            ? "-"
+            : (configured.count > 6 ? "\(listPreview), ..." : listPreview)
+        let duplicateSlots = configured
+            .filter { $0.statusText == "duplicate" }
+            .map { String($0.slot) }
+            .joined(separator: ",")
+
+        var lines: [String] = [
+            "激活槽位：\(activeSlot)",
+            "激活 Key ID：\(activeKeyId)",
+            "已配置槽位：\(configured.count)/32",
+            "槽位摘要：\(slotDigest)"
+        ]
+        if !duplicateSlots.isEmpty {
+            lines.append("重复密钥槽位：\(duplicateSlots)")
+        }
+        lines.append(keyAvailable ? "点击可刷新密钥状态" : "未配置密钥，请前往“密钥”页面生成")
+        return lines.joined(separator: "\n")
     }
 }

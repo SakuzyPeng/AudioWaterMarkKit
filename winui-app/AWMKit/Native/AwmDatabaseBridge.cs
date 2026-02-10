@@ -152,6 +152,7 @@ public static class AwmDatabaseBridge
                 Channels = row.Channels,
                 SampleCount = row.SampleCount,
                 PcmSha256 = row.PcmSha256,
+                KeyId = row.KeyId,
                 ChromaprintBlob = DecodeHex(row.ChromaprintBlob),
                 FingerprintLen = row.FingerprintLen,
                 FpConfigId = row.FpConfigId
@@ -331,6 +332,9 @@ public static class AwmDatabaseBridge
 
         [JsonPropertyName("pcm_sha256")]
         public string PcmSha256 { get; set; } = string.Empty;
+
+        [JsonPropertyName("key_id")]
+        public string? KeyId { get; set; }
 
         [JsonPropertyName("chromaprint_blob")]
         public string ChromaprintBlob { get; set; } = string.Empty;

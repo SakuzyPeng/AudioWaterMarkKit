@@ -1,6 +1,11 @@
+using AWMKit.Models;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AWMKit.Native;
 
@@ -15,6 +20,7 @@ public static class AwmKeyBridge
     private const int LabelBufferSize = 512;
     private const int MinSlot = 0;
     private const int MaxSlot = 31;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private static byte NormalizeSlot(int slot) => (byte)Math.Clamp(slot, MinSlot, MaxSlot);
 
@@ -186,5 +192,129 @@ public static class AwmKeyBridge
         {
             handle.Free();
         }
+    }
+
+    /// <summary>
+    /// Returns slot summaries for all 32 slots from Rust side.
+    /// </summary>
+    public static (List<KeySlotSummary> rows, AwmError error) GetSlotSummaries()
+    {
+        var (json, error) = ReadJsonString((outBuf, outLen, outRequiredLen) =>
+            AwmNative.awm_key_slot_summaries_json(outBuf, outLen, outRequiredLen));
+        if (error != AwmError.Ok || json is null)
+        {
+            return ([], error);
+        }
+
+        try
+        {
+            var payload = string.IsNullOrWhiteSpace(json) ? "[]" : json;
+            var rows = JsonSerializer.Deserialize<List<KeySlotSummaryRow>>(payload, JsonOptions) ?? [];
+            var mapped = rows.Select(row => new KeySlotSummary
+            {
+                Slot = Math.Clamp(row.Slot, MinSlot, MaxSlot),
+                IsActive = row.IsActive,
+                HasKey = row.HasKey,
+                KeyId = row.KeyId,
+                Label = string.IsNullOrWhiteSpace(row.Label) ? null : row.Label,
+                EvidenceCount = row.EvidenceCount,
+                LastEvidenceAt = row.LastEvidenceAt,
+                StatusText = row.StatusText ?? "empty",
+                DuplicateOfSlots = row.DuplicateOfSlots?.Distinct().OrderBy(v => v).ToArray() ?? Array.Empty<int>()
+            }).ToList();
+            return (mapped, AwmError.Ok);
+        }
+        catch
+        {
+            return ([], AwmError.AudiowmarkExec);
+        }
+    }
+
+    private static (string? value, AwmError error) ReadJsonString(
+        Func<IntPtr, nuint, IntPtr, int> invoker)
+    {
+        var requiredPtr = Marshal.AllocHGlobal(IntPtr.Size);
+        try
+        {
+            if (IntPtr.Size == 8)
+            {
+                Marshal.WriteInt64(requiredPtr, 0);
+            }
+            else
+            {
+                Marshal.WriteInt32(requiredPtr, 0);
+            }
+
+            int first = invoker(IntPtr.Zero, 0, requiredPtr);
+            var firstError = (AwmError)first;
+            if (firstError != AwmError.Ok)
+            {
+                return (null, firstError);
+            }
+
+            nuint required = ReadNuint(requiredPtr);
+            if (required == 0)
+            {
+                return (string.Empty, AwmError.Ok);
+            }
+
+            var buffer = Marshal.AllocHGlobal((int)required);
+            try
+            {
+                int second = invoker(buffer, required, requiredPtr);
+                var secondError = (AwmError)second;
+                if (secondError != AwmError.Ok)
+                {
+                    return (null, secondError);
+                }
+
+                return (Marshal.PtrToStringUTF8(buffer), AwmError.Ok);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(requiredPtr);
+        }
+    }
+
+    private static nuint ReadNuint(IntPtr pointer)
+    {
+        return IntPtr.Size == 8
+            ? (nuint)Marshal.ReadInt64(pointer)
+            : (nuint)Marshal.ReadInt32(pointer);
+    }
+
+    private sealed class KeySlotSummaryRow
+    {
+        [JsonPropertyName("slot")]
+        public int Slot { get; set; }
+
+        [JsonPropertyName("is_active")]
+        public bool IsActive { get; set; }
+
+        [JsonPropertyName("has_key")]
+        public bool HasKey { get; set; }
+
+        [JsonPropertyName("key_id")]
+        public string? KeyId { get; set; }
+
+        [JsonPropertyName("label")]
+        public string? Label { get; set; }
+
+        [JsonPropertyName("evidence_count")]
+        public int EvidenceCount { get; set; }
+
+        [JsonPropertyName("last_evidence_at")]
+        public long? LastEvidenceAt { get; set; }
+
+        [JsonPropertyName("status_text")]
+        public string? StatusText { get; set; }
+
+        [JsonPropertyName("duplicate_of_slots")]
+        public int[]? DuplicateOfSlots { get; set; }
     }
 }

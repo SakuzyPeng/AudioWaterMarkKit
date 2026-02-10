@@ -20,6 +20,7 @@ public sealed class EvidenceRecord
     public int Channels { get; init; }
     public long SampleCount { get; init; }
     public required string PcmSha256 { get; init; }
+    public string? KeyId { get; init; }
     public required byte[] ChromaprintBlob { get; init; }
     public int FingerprintLen { get; init; }
     public int FpConfigId { get; init; }
@@ -31,7 +32,8 @@ public sealed class EvidenceRecord
     public string Message => MessageHex;
     public string Pattern => "-";
     public string TagDisplayText => $"Tag {Tag}";
-    public string TagSlotDisplayText => $"Tag {Tag} · 槽位 {KeySlot}";
+    public string KeyIdDisplayText => string.IsNullOrWhiteSpace(KeyId) ? "-" : KeyId;
+    public string TagSlotDisplayText => $"Tag {Tag} · 槽位 {KeySlot} · Key ID {KeyIdDisplayText}";
 
     /// <summary>
     /// UI-only selected state for delete mode.

@@ -1,10 +1,13 @@
 using AWMKit.Data;
+using AWMKit.Models;
 using AWMKit.Native;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace AWMKit.ViewModels;
@@ -122,9 +125,7 @@ public sealed partial class AppViewModel : ObservableObject
 
     public Brush DatabaseStatusBrush => GetAvailabilityBrush(DatabaseAvailable);
 
-    public string KeyStatusTooltip => KeyAvailable
-        ? $"密钥：已配置\n来源：{KeySourceLabel}\n激活槽位：{ActiveKeySlot}\n点击刷新状态"
-        : $"密钥：未配置\n来源：无\n激活槽位：{ActiveKeySlot}\n点击刷新状态";
+    public string KeyStatusTooltip => BuildKeyStatusTooltip();
 
     public string EngineStatusTooltip => EngineAvailable
         ? $"音频引擎：可用\n路径：{EnginePath}\n点击刷新状态"
@@ -150,6 +151,7 @@ public sealed partial class AppViewModel : ObservableObject
     private readonly AppDatabase _database;
     private readonly TagMappingStore _tagStore;
     private readonly EvidenceStore _evidenceStore;
+    private List<KeySlotSummary> _keySlotSummaries = [];
 
     private AppViewModel()
     {
@@ -243,6 +245,9 @@ public sealed partial class AppViewModel : ObservableObject
     /// </summary>
     public Task RefreshKeyStatusAsync()
     {
+        var (summaries, summaryError) = AwmKeyBridge.GetSlotSummaries();
+        _keySlotSummaries = summaryError == AwmError.Ok ? summaries : [];
+
         var exists = AwmKeyBridge.KeyExists();
         KeyAvailable = exists;
         if (!exists)
@@ -261,6 +266,7 @@ public sealed partial class AppViewModel : ObservableObject
             KeySourceLabel = "已配置（来源未知）";
         }
 
+        NotifyStatusPresentationChanged();
         return Task.CompletedTask;
     }
 
@@ -346,5 +352,44 @@ public sealed partial class AppViewModel : ObservableObject
         OnPropertyChanged(nameof(KeyStatusTooltip));
         OnPropertyChanged(nameof(EngineStatusTooltip));
         OnPropertyChanged(nameof(DatabaseStatusTooltip));
+    }
+
+    private string BuildKeyStatusTooltip()
+    {
+        var configured = _keySlotSummaries
+            .Where(item => item.HasKey)
+            .OrderBy(item => item.Slot)
+            .ToList();
+        var active = _keySlotSummaries.FirstOrDefault(item => item.Slot == ActiveKeySlot);
+        var activeKeyId = active?.KeyId ?? "未配置";
+
+        var digest = configured.Count == 0
+            ? "-"
+            : string.Join(", ", configured.Take(6).Select(item => $"{item.Slot}:{item.KeyId ?? "-"}"));
+        if (configured.Count > 6)
+        {
+            digest += ", ...";
+        }
+
+        var duplicateSlots = configured
+            .Where(item => string.Equals(item.StatusText, "duplicate", StringComparison.OrdinalIgnoreCase))
+            .Select(item => item.Slot)
+            .Distinct()
+            .OrderBy(slot => slot)
+            .ToArray();
+
+        var lines = new List<string>
+        {
+            $"激活槽位：{ActiveKeySlot}",
+            $"激活 Key ID：{activeKeyId}",
+            $"已配置槽位：{configured.Count}/32",
+            $"槽位摘要：{digest}"
+        };
+        if (duplicateSlots.Length > 0)
+        {
+            lines.Add($"重复密钥槽位：{string.Join(",", duplicateSlots)}");
+        }
+        lines.Add(KeyAvailable ? "点击刷新状态" : "未配置密钥，请前往“密钥”页面生成");
+        return string.Join('\n', lines);
     }
 }

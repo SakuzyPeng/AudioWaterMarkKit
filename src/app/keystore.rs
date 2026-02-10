@@ -1,8 +1,11 @@
 use crate::app::app_settings_store::{validate_slot, AppSettingsStore, KEY_SLOT_MAX, KEY_SLOT_MIN};
 use crate::app::error::{AppError, Result};
+use crate::app::{EvidenceSlotUsage, EvidenceStore};
 use keyring::Entry;
 use rand::rngs::OsRng;
 use rand::RngCore;
+use serde::Serialize;
+use sha2::{Digest, Sha256};
 #[cfg(windows)]
 use std::path::PathBuf;
 
@@ -27,6 +30,19 @@ impl KeyBackend {
             Self::Dpapi(path) => format!("dpapi ({})", path.display()),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct KeySlotSummary {
+    pub slot: u8,
+    pub is_active: bool,
+    pub has_key: bool,
+    pub key_id: Option<String>,
+    pub label: Option<String>,
+    pub evidence_count: usize,
+    pub last_evidence_at: Option<u64>,
+    pub status_text: String,
+    pub duplicate_of_slots: Vec<u8>,
 }
 
 pub struct KeyStore {
@@ -164,6 +180,52 @@ impl KeyStore {
                 Err(keyring_err)
             }
         }
+    }
+
+    /// Build full slot summaries for UI presentation.
+    pub fn slot_summaries(&self) -> Result<Vec<KeySlotSummary>> {
+        let active_slot = self.active_slot()?;
+        let settings = AppSettingsStore::load()?;
+        let evidence_store = EvidenceStore::load()?;
+        let mut summaries = Vec::with_capacity(usize::from(KEY_SLOT_MAX) + 1);
+
+        for slot in KEY_SLOT_MIN..=KEY_SLOT_MAX {
+            let key = self.load_slot(slot).ok();
+            let key_id = key.as_ref().map(|bytes| key_id_from_key_material(bytes));
+            let label = settings.slot_label(slot)?;
+            let usage = if let Some(key_id) = key_id.as_deref() {
+                evidence_store.usage_by_slot_and_key_id(slot, key_id)?
+            } else {
+                EvidenceSlotUsage {
+                    count: 0,
+                    last_created_at: None,
+                }
+            };
+            let has_key = key.is_some();
+
+            let status_text = if !has_key {
+                "empty".to_string()
+            } else if slot == active_slot {
+                "active".to_string()
+            } else {
+                "configured".to_string()
+            };
+
+            summaries.push(KeySlotSummary {
+                slot,
+                is_active: slot == active_slot,
+                has_key,
+                key_id,
+                label,
+                evidence_count: usage.count,
+                last_evidence_at: usage.last_created_at,
+                status_text,
+                duplicate_of_slots: Vec::new(),
+            });
+        }
+
+        apply_duplicate_status(&mut summaries);
+        Ok(summaries)
     }
 
     fn save_slot_raw(&self, slot: u8, key: &[u8]) -> Result<()> {
@@ -325,8 +387,105 @@ fn slot_username(slot: u8) -> String {
     format!("{SLOT_USERNAME_PREFIX}{slot}")
 }
 
+pub fn key_id_from_key_material(key: &[u8]) -> String {
+    let digest = Sha256::digest(key);
+    hex::encode_upper(digest)[..10].to_string()
+}
+
+fn apply_duplicate_status(summaries: &mut [KeySlotSummary]) {
+    let mut buckets: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
+    for summary in summaries.iter() {
+        if let Some(key_id) = summary.key_id.as_ref() {
+            buckets
+                .entry(key_id.clone())
+                .or_default()
+                .push(summary.slot);
+        }
+    }
+
+    for summary in summaries.iter_mut() {
+        let Some(key_id) = summary.key_id.as_ref() else {
+            continue;
+        };
+        let Some(slots) = buckets.get(key_id) else {
+            continue;
+        };
+        if slots.len() <= 1 {
+            continue;
+        }
+
+        summary.status_text = "duplicate".to_string();
+        summary.duplicate_of_slots = slots
+            .iter()
+            .copied()
+            .filter(|slot| *slot != summary.slot)
+            .collect();
+    }
+}
+
 fn keyring_entry(username: &str) -> Result<Entry> {
     Entry::new(SERVICE, username).map_err(|e| AppError::KeyStore(e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{apply_duplicate_status, key_id_from_key_material, KeySlotSummary};
+
+    #[test]
+    fn key_id_is_stable_and_ten_chars() {
+        let key = [42u8; 32];
+        let first = key_id_from_key_material(&key);
+        let second = key_id_from_key_material(&key);
+        assert_eq!(first, second);
+        assert_eq!(first.len(), 10);
+    }
+
+    #[test]
+    fn duplicate_status_marks_related_slots() {
+        let mut rows = vec![
+            KeySlotSummary {
+                slot: 0,
+                is_active: true,
+                has_key: true,
+                key_id: Some("AAAAAAAAAA".to_string()),
+                label: None,
+                evidence_count: 0,
+                last_evidence_at: None,
+                status_text: "active".to_string(),
+                duplicate_of_slots: Vec::new(),
+            },
+            KeySlotSummary {
+                slot: 2,
+                is_active: false,
+                has_key: true,
+                key_id: Some("AAAAAAAAAA".to_string()),
+                label: None,
+                evidence_count: 0,
+                last_evidence_at: None,
+                status_text: "configured".to_string(),
+                duplicate_of_slots: Vec::new(),
+            },
+            KeySlotSummary {
+                slot: 1,
+                is_active: false,
+                has_key: false,
+                key_id: None,
+                label: None,
+                evidence_count: 0,
+                last_evidence_at: None,
+                status_text: "empty".to_string(),
+                duplicate_of_slots: Vec::new(),
+            },
+        ];
+
+        apply_duplicate_status(&mut rows);
+
+        assert_eq!(rows[0].status_text, "duplicate");
+        assert_eq!(rows[1].status_text, "duplicate");
+        assert_eq!(rows[2].status_text, "empty");
+        assert_eq!(rows[0].duplicate_of_slots, vec![2]);
+        assert_eq!(rows[1].duplicate_of_slots, vec![0]);
+    }
 }
 
 #[cfg(windows)]

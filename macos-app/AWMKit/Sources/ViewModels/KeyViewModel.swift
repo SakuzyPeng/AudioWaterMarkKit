@@ -7,15 +7,16 @@ final class KeyViewModel: ObservableObject {
     @Published var isWorking = false
     @Published var errorMessage: String?
     @Published var successMessage: String?
+    @Published private(set) var slotSummaries: [AWMKeySlotSummary] = []
 
     let slotOptions: [Int] = Array(0...31)
     var selectedSlotHasKey: Bool {
-        let normalized = max(0, min(31, selectedSlot))
-        return AWMKeyStore.exists(slot: UInt8(normalized))
+        slotSummaries.first(where: { Int($0.slot) == selectedSlot })?.hasKey ?? false
     }
 
     func sync(from appState: AppState) {
         selectedSlot = appState.activeKeySlot
+        refreshSlotSummaries()
     }
 
     func applySlot(appState: AppState) {
@@ -27,13 +28,18 @@ final class KeyViewModel: ObservableObject {
 
     func generateKey(appState: AppState) async {
         guard !isWorking else { return }
+        guard !selectedSlotHasKey else {
+            errorMessage = "槽位 \(selectedSlot) 已有密钥，请先删除后再生成。"
+            successMessage = nil
+            return
+        }
         isWorking = true
         defer { isWorking = false }
 
         do {
             try await appState.generateKey(slot: selectedSlot)
             sync(from: appState)
-            successMessage = "密钥已生成"
+            successMessage = "槽位 \(selectedSlot) 密钥已生成"
             errorMessage = nil
         } catch {
             errorMessage = "生成密钥失败：\(error.localizedDescription)"
@@ -54,6 +60,14 @@ final class KeyViewModel: ObservableObject {
         } catch {
             errorMessage = "删除密钥失败：\(error.localizedDescription)"
             successMessage = nil
+        }
+    }
+
+    func refreshSlotSummaries() {
+        do {
+            slotSummaries = try AWMKeyStore.slotSummaries()
+        } catch {
+            slotSummaries = []
         }
     }
 }

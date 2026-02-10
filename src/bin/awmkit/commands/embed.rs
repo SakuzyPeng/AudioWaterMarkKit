@@ -1,7 +1,9 @@
 use crate::error::{CliError, Result};
 use crate::util::{audio_from_context, default_output_path, ensure_file, expand_inputs, parse_tag};
 use crate::Context;
-use awmkit::app::{build_audio_proof, i18n, EvidenceStore, KeyStore, NewAudioEvidence};
+use awmkit::app::{
+    build_audio_proof, i18n, key_id_from_key_material, EvidenceStore, KeyStore, NewAudioEvidence,
+};
 use awmkit::Message;
 use clap::Args;
 use fluent_bundle::FluentArgs;
@@ -94,6 +96,7 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
                                 channels: proof.channels,
                                 sample_count: proof.sample_count,
                                 pcm_sha256: proof.pcm_sha256,
+                                key_id: key_id_from_key_material(&key),
                                 chromaprint: proof.chromaprint,
                                 fp_config_id: proof.fp_config_id,
                             };

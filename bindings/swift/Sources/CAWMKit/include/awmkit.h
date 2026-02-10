@@ -29,6 +29,7 @@ typedef enum {
     AWM_ERROR_AUDIOWMARK_NOT_FOUND = -7,
     AWM_ERROR_AUDIOWMARK_EXEC = -8,
     AWM_ERROR_NO_WATERMARK_FOUND = -9,
+    AWM_ERROR_KEY_ALREADY_EXISTS = -10,
 } AWMError;
 
 /**
@@ -483,6 +484,30 @@ int32_t awm_key_generate_and_save_slot(uint8_t slot, uint8_t* out_key, size_t ou
  * @return                     AWM_SUCCESS or error code
  */
 int32_t awm_key_delete_slot(uint8_t slot, uint8_t* out_new_active_slot);
+
+/**
+ * List all key slot summaries as JSON.
+ * Two-step usage:
+ * 1) call with out = NULL and out_len = 0 to get out_required_len
+ * 2) allocate buffer and call again to fetch JSON payload
+ *
+ * JSON fields per item:
+ * - slot
+ * - is_active
+ * - has_key
+ * - key_id (nullable)
+ * - label (nullable)
+ * - evidence_count
+ * - last_evidence_at (nullable)
+ * - status_text
+ * - duplicate_of_slots
+ *
+ * @param out               Output buffer for JSON UTF-8
+ * @param out_len           Buffer capacity in bytes
+ * @param out_required_len  Required bytes (includes null terminator)
+ * @return                  AWM_SUCCESS or error code
+ */
+int32_t awm_key_slot_summaries_json(char* out, size_t out_len, size_t* out_required_len);
 
 /**
  * Delete the stored signing key

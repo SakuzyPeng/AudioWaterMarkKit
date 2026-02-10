@@ -27,6 +27,7 @@ public struct AWMDatabaseEvidenceEntry: Codable, Hashable {
     public let channels: UInt32
     public let sampleCount: UInt64
     public let pcmSha256: String
+    public let keyId: String?
     public let chromaprintBlob: String
     public let fingerprintLen: Int
     public let fpConfigId: UInt8
@@ -45,6 +46,7 @@ public struct AWMDatabaseEvidenceEntry: Codable, Hashable {
         case channels
         case sampleCount = "sample_count"
         case pcmSha256 = "pcm_sha256"
+        case keyId = "key_id"
         case chromaprintBlob = "chromaprint_blob"
         case fingerprintLen = "fingerprint_len"
         case fpConfigId = "fp_config_id"
