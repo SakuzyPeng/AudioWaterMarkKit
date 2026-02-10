@@ -486,8 +486,13 @@ mod tests {
             vec![13, 14, 15, 16],
         ];
 
-        let audio = MultichannelAudio::new(channels.clone(), 48000, SampleFormat::Int24)
-            .expect("create audio");
+        let audio_result = MultichannelAudio::new(channels.clone(), 48000, SampleFormat::Int24);
+        assert!(audio_result.is_ok());
+        let audio = if let Ok(value) = audio_result {
+            value
+        } else {
+            return;
+        };
 
         let pairs = audio.split_stereo_pairs();
         assert_eq!(pairs.len(), 2);
@@ -496,8 +501,14 @@ mod tests {
         assert_eq!(pairs[1].0, vec![9, 10, 11, 12]);
         assert_eq!(pairs[1].1, vec![13, 14, 15, 16]);
 
-        let merged = MultichannelAudio::merge_stereo_pairs(&pairs, 48000, SampleFormat::Int24)
-            .expect("merge");
+        let merged_result =
+            MultichannelAudio::merge_stereo_pairs(&pairs, 48000, SampleFormat::Int24);
+        assert!(merged_result.is_ok());
+        let merged = if let Ok(value) = merged_result {
+            value
+        } else {
+            return;
+        };
         assert_eq!(merged.num_channels(), 4);
     }
 }

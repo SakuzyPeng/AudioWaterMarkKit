@@ -128,9 +128,27 @@ mod tests {
     fn test_public_api() {
         let key = b"test-key-32-bytes-for-hmac-test!";
 
-        let tag = Tag::new("SAKUZY").unwrap();
-        let msg = Message::encode(CURRENT_VERSION, &tag, key).unwrap();
-        let result = Message::decode(&msg, key).unwrap();
+        let tag_result = Tag::new("SAKUZY");
+        assert!(tag_result.is_ok());
+        let tag = if let Ok(value) = tag_result {
+            value
+        } else {
+            return;
+        };
+        let msg_result = Message::encode(CURRENT_VERSION, &tag, key);
+        assert!(msg_result.is_ok());
+        let msg = if let Ok(value) = msg_result {
+            value
+        } else {
+            return;
+        };
+        let decoded_result = Message::decode(&msg, key);
+        assert!(decoded_result.is_ok());
+        let result = if let Ok(value) = decoded_result {
+            value
+        } else {
+            return;
+        };
 
         assert_eq!(result.identity(), "SAKUZY");
         assert_eq!(result.version, CURRENT_VERSION);

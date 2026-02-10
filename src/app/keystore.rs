@@ -268,7 +268,7 @@ impl KeyStore {
     fn try_load_legacy_key(&self) -> Result<Option<Vec<u8>>> {
         match self.load_from_legacy_keyring() {
             Ok(key) => return Ok(Some(key)),
-            Err(AppError::KeyNotFound) | Err(AppError::KeyStore(_)) => {}
+            Err(AppError::KeyNotFound | AppError::KeyStore(_)) => {}
             Err(err) => return Err(err),
         }
         #[cfg(windows)]

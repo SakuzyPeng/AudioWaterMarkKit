@@ -77,7 +77,7 @@ pub fn default_output_path(input: &Path) -> Result<PathBuf> {
         .and_then(|value| value.to_str())
         .map(|value| value.to_ascii_lowercase());
     let output_ext = match normalized_ext.as_deref() {
-        Some("wav") | Some("flac") => normalized_ext.as_deref().unwrap_or("wav"),
+        Some("wav" | "flac") => normalized_ext.as_deref().unwrap_or("wav"),
         _ => "wav",
     };
     name.push(".");

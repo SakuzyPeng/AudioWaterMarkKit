@@ -281,13 +281,13 @@ mod tests {
     #[test]
     fn test_fixed_timestamp() {
         let tag = Tag::new("TEST").unwrap();
-        let ts_minutes = 29049600u32; // 2026-01-18 00:00 UTC
+        let ts_minutes = 29_049_600_u32; // 2026-01-18 00:00 UTC
 
         let msg = encode_with_timestamp(CURRENT_VERSION, &tag, TEST_KEY, ts_minutes).unwrap();
         let result = decode(&msg, TEST_KEY).unwrap();
 
         assert_eq!(result.timestamp_minutes, ts_minutes);
-        assert_eq!(result.timestamp_utc, ts_minutes as u64 * 60);
+        assert_eq!(result.timestamp_utc, u64::from(ts_minutes) * 60);
         assert_eq!(result.key_slot, 0);
     }
 
@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn test_message_format_v1() {
         let tag = Tag::new("ABCDEFG").unwrap();
-        let ts_minutes = 0x01020304u32;
+        let ts_minutes = 0x0102_0304_u32;
 
         let msg = encode_with_timestamp(VERSION_V1, &tag, TEST_KEY, ts_minutes).unwrap();
 
@@ -340,7 +340,7 @@ mod tests {
     #[test]
     fn test_decode_v1_compat() {
         let tag = Tag::new("SAKUZY").unwrap();
-        let ts_minutes = 12345678u32;
+        let ts_minutes = 12_345_678_u32;
         let msg = encode_with_timestamp(VERSION_V1, &tag, TEST_KEY, ts_minutes).unwrap();
         let result = decode(&msg, TEST_KEY).unwrap();
         assert_eq!(result.version, VERSION_V1);

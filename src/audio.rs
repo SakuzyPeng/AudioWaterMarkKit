@@ -737,7 +737,7 @@ fn convert_wav_to_flac(input_wav: &Path, output_flac: &Path) -> Result<()> {
                 }
                 (16, out)
             }
-            (HoundSampleFormat::Int, 24) | (HoundSampleFormat::Int, 32) => {
+            (HoundSampleFormat::Int, 24 | 32) => {
                 let mut out = Vec::new();
                 for sample in reader
                     .samples::<i32>()
@@ -900,7 +900,7 @@ fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
                     samples.extend_from_slice(buffer.samples());
                 }
             }
-            Err(SymphoniaError::DecodeError(_)) | Err(SymphoniaError::IoError(_)) => continue,
+            Err(SymphoniaError::DecodeError(_) | SymphoniaError::IoError(_)) => continue,
             Err(err) => {
                 return Err(Error::InvalidInput(format!(
                     "failed to decode audio packet: {err}"
@@ -966,34 +966,48 @@ mod tests {
     #[test]
     fn test_hex_to_bytes() {
         let hex = "0123456789abcdef0123456789abcdef";
-        let bytes = hex_to_bytes(hex).unwrap();
-        assert_eq!(bytes[0], 0x01);
-        assert_eq!(bytes[15], 0xef);
+        let maybe_bytes = hex_to_bytes(hex);
+        assert!(maybe_bytes.is_some());
+        if let Some(bytes) = maybe_bytes {
+            assert_eq!(bytes[0], 0x01);
+            assert_eq!(bytes[15], 0xef);
+        }
     }
 
     #[test]
     fn test_parse_detect_output() {
         let stdout = "pattern  all 0101c1d05978131b57f7deb8e22a0b78\n";
-        let result = parse_detect_output(stdout, "").unwrap().unwrap();
-        assert_eq!(result.pattern, "all");
-        assert_eq!(result.detect_score, None);
-        assert_eq!(result.raw_message[0], 0x01);
+        let parsed = parse_detect_output(stdout, "");
+        assert!(parsed.is_ok());
+        let maybe_result = parsed.ok().flatten();
+        assert!(maybe_result.is_some());
+        if let Some(result) = maybe_result {
+            assert_eq!(result.pattern, "all");
+            assert_eq!(result.detect_score, None);
+            assert_eq!(result.raw_message[0], 0x01);
+        }
     }
 
     #[test]
     fn test_parse_detect_with_errors() {
         let stdout = "pattern   single 0101c1d05978131b57f7deb8e22a0b78 3\n";
-        let result = parse_detect_output(stdout, "").unwrap().unwrap();
-        assert_eq!(result.pattern, "single");
-        assert_eq!(result.detect_score, None);
-        assert_eq!(result.bit_errors, 3);
+        let parsed = parse_detect_output(stdout, "");
+        assert!(parsed.is_ok());
+        let maybe_result = parsed.ok().flatten();
+        assert!(maybe_result.is_some());
+        if let Some(result) = maybe_result {
+            assert_eq!(result.pattern, "single");
+            assert_eq!(result.detect_score, None);
+            assert_eq!(result.bit_errors, 3);
+        }
     }
 
     #[test]
     fn test_parse_detect_zero_message_as_not_found() {
         let stdout = "pattern  0:00 00000000000000000000000000000000 0.000 -0.001 CLIP-B\n";
-        let result = parse_detect_output(stdout, "").unwrap();
-        assert!(result.is_none());
+        let parsed = parse_detect_output(stdout, "");
+        assert!(parsed.is_ok());
+        assert!(parsed.ok().flatten().is_none());
     }
 
     #[test]
@@ -1002,29 +1016,40 @@ mod tests {
             "pattern  0:00 00000000000000000000000000000000 0.000 -0.001 CLIP-B\n",
             "pattern  0:00 0101c1d05978131b57f7deb8e22a0b78 1.792 0.121 CLIP-B\n"
         );
-        let result = parse_detect_output(stdout, "").unwrap().unwrap();
-        assert_eq!(result.raw_message[0], 0x01);
-        assert!(result
-            .detect_score
-            .is_some_and(|value| (value - 1.792).abs() < 0.0001));
-        assert_eq!(result.bit_errors, 0);
+        let parsed = parse_detect_output(stdout, "");
+        assert!(parsed.is_ok());
+        let maybe_result = parsed.ok().flatten();
+        assert!(maybe_result.is_some());
+        if let Some(result) = maybe_result {
+            assert_eq!(result.raw_message[0], 0x01);
+            assert!(result
+                .detect_score
+                .is_some_and(|value| (value - 1.792).abs() < 0.0001));
+            assert_eq!(result.bit_errors, 0);
+        }
     }
 
     #[test]
     fn test_parse_detect_ignore_low_score_candidate() {
         let stdout = "pattern  1:28 bb4aaa05ad77bf5e73c8eb37e44f0c94 0.209 0.379 A\n";
-        let result = parse_detect_output(stdout, "").unwrap();
-        assert!(result.is_none());
+        let parsed = parse_detect_output(stdout, "");
+        assert!(parsed.is_ok());
+        assert!(parsed.ok().flatten().is_none());
     }
 
     #[test]
     fn test_parse_detect_accept_high_score_candidate() {
         let stdout = "pattern  0:05 023848c0200045fffff7d8743d035cda 1.427 0.065 A\n";
-        let result = parse_detect_output(stdout, "").unwrap().unwrap();
-        assert_eq!(result.raw_message[0], 0x02);
-        assert!(result
-            .detect_score
-            .is_some_and(|value| (value - 1.427).abs() < 0.0001));
+        let parsed = parse_detect_output(stdout, "");
+        assert!(parsed.is_ok());
+        let maybe_result = parsed.ok().flatten();
+        assert!(maybe_result.is_some());
+        if let Some(result) = maybe_result {
+            assert_eq!(result.raw_message[0], 0x02);
+            assert!(result
+                .detect_score
+                .is_some_and(|value| (value - 1.427).abs() < 0.0001));
+        }
     }
 
     #[test]
@@ -1040,12 +1065,12 @@ mod tests {
     #[test]
     fn test_parse_output_audio_format() {
         assert!(matches!(
-            parse_output_audio_format(Path::new("out.wav")).unwrap(),
-            OutputAudioFormat::Wav
+            parse_output_audio_format(Path::new("out.wav")),
+            Ok(OutputAudioFormat::Wav)
         ));
         assert!(matches!(
-            parse_output_audio_format(Path::new("out.flac")).unwrap(),
-            OutputAudioFormat::Flac
+            parse_output_audio_format(Path::new("out.flac")),
+            Ok(OutputAudioFormat::Flac)
         ));
         assert!(parse_output_audio_format(Path::new("out.m4a")).is_err());
     }

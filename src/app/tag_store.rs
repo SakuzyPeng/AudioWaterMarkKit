@@ -332,10 +332,7 @@ mod tests {
 
         store.save("alice", &tag1, false).unwrap();
         let err = store.save("alice", &tag2, false).unwrap_err();
-        match err {
-            AppError::MappingExists { .. } => {}
-            _ => panic!("unexpected error"),
-        }
+        assert!(matches!(err, AppError::MappingExists { .. }));
         let _ = fs::remove_file(path);
     }
 }

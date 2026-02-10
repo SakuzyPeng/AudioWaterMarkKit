@@ -99,14 +99,16 @@ mod tests {
 
     #[test]
     fn loads_known_key() {
-        set_language(Some("en-US")).expect("set language");
+        let set_result = set_language(Some("en-US"));
+        assert!(set_result.is_ok());
         let value = tr("ui-tabs-embed");
         assert!(!value.is_empty());
     }
 
     #[test]
     fn missing_key_falls_back() {
-        set_language(Some("en-US")).expect("set language");
+        let set_result = set_language(Some("en-US"));
+        assert!(set_result.is_ok());
         let value = tr("missing.key");
         assert!(value.contains("No localization for id"));
     }

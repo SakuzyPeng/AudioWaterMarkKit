@@ -64,8 +64,11 @@ mod tests {
     #[test]
     fn test_round_trip() {
         for i in 0..32u8 {
-            let c = index_to_char(i).unwrap();
-            assert_eq!(char_to_index(c), Some(i));
+            let maybe_char = index_to_char(i);
+            assert!(maybe_char.is_some());
+            if let Some(c) = maybe_char {
+                assert_eq!(char_to_index(c), Some(i));
+            }
         }
     }
 }

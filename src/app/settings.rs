@@ -85,9 +85,13 @@ mod tests {
         let settings = AppSettings {
             language: Some("zh-CN".to_string()),
         };
-        settings.save_to(&temp).expect("save");
-        let loaded = load_from(&temp).expect("load");
-        assert_eq!(loaded.language.as_deref(), Some("zh-CN"));
+        let save_result = settings.save_to(&temp);
+        assert!(save_result.is_ok());
+        let loaded_result = load_from(&temp);
+        assert!(loaded_result.is_ok());
+        if let Ok(loaded) = loaded_result {
+            assert_eq!(loaded.language.as_deref(), Some("zh-CN"));
+        }
         let _ = fs::remove_file(&temp);
     }
 }
