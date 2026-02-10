@@ -71,9 +71,11 @@ public sealed partial class KeyViewModel : ObservableObject
     public int ActiveKeySlot => _appViewModel.ActiveKeySlot;
     public string ActiveKeySlotText => $"当前激活槽位：{ActiveKeySlot}";
     public string KeyStatusText => KeyAvailable ? "已配置" : "未配置";
+    public Brush KeyStatusBrush => KeyAvailable ? SuccessBrush : ResolveWarningBrush();
     public string SlotHintText => "当前版本嵌入仍写槽位 0，槽位切换将在后续协议生效阶段接入。";
     public KeySlotSummary? ActiveKeySummary => _allSlotSummaries.FirstOrDefault(item => item.IsActive);
     public string ActiveSummaryTitle => $"槽位 {ActiveKeySlot}（{(ActiveKeySummary?.HasKey == true ? "已配置" : "未配置")}）";
+    public Brush ActiveSummaryTitleBrush => SuccessBrush;
     public string ActiveSummaryKeyLine
     {
         get
@@ -132,7 +134,7 @@ public sealed partial class KeyViewModel : ObservableObject
         }
     }
 
-    public Brush GenerateActionBrush => IsGenerateSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
+    public Brush GenerateActionBrush => IsGenerateSuccess ? SuccessBrush : ResolveAccentTextBrush();
     public Brush DeleteActionBrush => IsDeleteSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
     public Brush RefreshActionBrush => IsRefreshSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
 
@@ -275,8 +277,10 @@ public sealed partial class KeyViewModel : ObservableObject
         OnPropertyChanged(nameof(ActiveKeySlot));
         OnPropertyChanged(nameof(ActiveKeySlotText));
         OnPropertyChanged(nameof(KeyStatusText));
+        OnPropertyChanged(nameof(KeyStatusBrush));
         OnPropertyChanged(nameof(ActiveKeySummary));
         OnPropertyChanged(nameof(ActiveSummaryTitle));
+        OnPropertyChanged(nameof(ActiveSummaryTitleBrush));
         OnPropertyChanged(nameof(ActiveSummaryKeyLine));
         OnPropertyChanged(nameof(ActiveSummaryEvidenceLine));
         OnPropertyChanged(nameof(ConfiguredSlotCount));
@@ -351,6 +355,28 @@ public sealed partial class KeyViewModel : ObservableObject
         }
 
         return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32));
+    }
+
+    private static Brush ResolveAccentTextBrush()
+    {
+        if (Application.Current.Resources.TryGetValue("TextOnAccentFillColorPrimaryBrush", out var value)
+            && value is Brush brush)
+        {
+            return brush;
+        }
+
+        return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255));
+    }
+
+    private static Brush ResolveWarningBrush()
+    {
+        if (Application.Current.Resources.TryGetValue("WarningBrush", out var value)
+            && value is Brush brush)
+        {
+            return brush;
+        }
+
+        return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 152, 0));
     }
 
     private async Task FlashGenerateSuccessAsync()

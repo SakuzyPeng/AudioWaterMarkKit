@@ -88,7 +88,11 @@ struct KeyView: View {
 
     private var statusSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            row(label: "密钥状态", value: appState.keyLoaded ? "已配置" : "未配置")
+            row(
+                label: "密钥状态",
+                value: appState.keyLoaded ? "已配置" : "未配置",
+                valueColor: appState.keyLoaded ? DesignSystem.Colors.success : DesignSystem.Colors.warning
+            )
             row(label: "密钥来源", value: appState.keySourceLabel)
         }
     }
@@ -214,6 +218,7 @@ struct KeyView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("槽位 \(appState.activeKeySlot)\(summary?.hasKey == true ? "（已配置）" : "（未配置）")")
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(DesignSystem.Colors.success)
                 Text(keyText + labelText)
                     .font(.caption)
                     .foregroundStyle(.primary)
@@ -290,12 +295,13 @@ struct KeyView: View {
         }
     }
 
-    private func row(label: String, value: String) -> some View {
+    private func row(label: String, value: String, valueColor: Color = .primary) -> some View {
         HStack(spacing: 12) {
             Text(label)
                 .foregroundStyle(.secondary)
                 .frame(width: 70, alignment: .leading)
             Text(value)
+                .foregroundStyle(valueColor)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer()

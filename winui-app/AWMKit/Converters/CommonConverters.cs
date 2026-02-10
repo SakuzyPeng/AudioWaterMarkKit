@@ -276,3 +276,37 @@ public sealed class BoolToSelectionBackgroundBrushConverter : IValueConverter
         throw new NotImplementedException();
     }
 }
+
+/// <summary>
+/// Converts key slot status text to semantic brush.
+/// </summary>
+public sealed class KeySlotStatusBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, string language)
+    {
+        var resources = Application.Current.Resources;
+        var status = value as string ?? string.Empty;
+        return status switch
+        {
+            "active" => ResolveBrush(resources, "SuccessBrush"),
+            "duplicate" => ResolveBrush(resources, "WarningBrush"),
+            "configured" => ResolveBrush(resources, "TextFillColorPrimaryBrush"),
+            _ => ResolveBrush(resources, "TextFillColorSecondaryBrush")
+        };
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language)
+    {
+        throw new NotImplementedException();
+    }
+
+    private static Brush ResolveBrush(ResourceDictionary resources, string key)
+    {
+        if (resources.TryGetValue(key, out var value) && value is Brush brush)
+        {
+            return brush;
+        }
+
+        return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32));
+    }
+}

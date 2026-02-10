@@ -25,6 +25,7 @@
             <converters:BoolToDetectionTextConverter x:Key="BoolToDetectionTextConverter"/>
             <converters:BoolToSelectionBorderBrushConverter x:Key="BoolToSelectionBorderBrushConverter"/>
             <converters:BoolToSelectionBackgroundBrushConverter x:Key="BoolToSelectionBackgroundBrushConverter"/>
+            <converters:KeySlotStatusBrushConverter x:Key="KeySlotStatusBrushConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

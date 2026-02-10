@@ -56,7 +56,9 @@
                             <TextBlock Text="密钥状态"
                                        FontWeight="SemiBold"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.KeyStatusText, Mode=OneWay}"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Bind ViewModel.KeyStatusText, Mode=OneWay}"
+                                       Foreground="{x:Bind ViewModel.KeyStatusBrush, Mode=OneWay}"/>
                         </Grid>
                         <Grid ColumnSpacing="16">
                             <Grid.ColumnDefinitions>
@@ -103,7 +105,8 @@
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBlock Text="{x:Bind ViewModel.ActiveSummaryTitle, Mode=OneWay}"
-                                   FontWeight="SemiBold"/>
+                                   FontWeight="SemiBold"
+                                   Foreground="{x:Bind ViewModel.ActiveSummaryTitleBrush, Mode=OneWay}"/>
                         <TextBlock Text="{x:Bind ViewModel.ActiveSummaryKeyLine, Mode=OneWay}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextTrimming="CharacterEllipsis"/>
@@ -201,7 +204,9 @@
                     <ListView.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Spacing="2" Padding="8,6">
-                                <TextBlock Text="{Binding TitleWithStatus}" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding TitleWithStatus}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{Binding StatusText, Converter={StaticResource KeySlotStatusBrushConverter}}"/>
                                 <TextBlock Text="{Binding KeyLine}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                 <TextBlock Text="{Binding EvidenceLine}"

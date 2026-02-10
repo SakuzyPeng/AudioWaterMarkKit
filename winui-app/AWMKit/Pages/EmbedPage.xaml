@@ -188,7 +188,6 @@
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="*"/>
-                    <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
@@ -258,17 +257,6 @@
                 </Border>
 
                 <Border Grid.Row="5"
-                        Style="{StaticResource EmbedSettingCellBorderStyle}">
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="激活槽位（只读）" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Text="{x:Bind AppState.ActiveKeySlot, Mode=OneWay}" FontFamily="Consolas"/>
-                        <TextBlock Text="当前版本嵌入仍写槽位 0，槽位修改请在“密钥”页操作。"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   TextWrapping="WrapWholeWords"/>
-                    </StackPanel>
-                </Border>
-
-                <Border Grid.Row="6"
                         Style="{StaticResource EmbedSettingCellBorderStyle}"
                         Visibility="Collapsed">
                     <StackPanel Spacing="6">
