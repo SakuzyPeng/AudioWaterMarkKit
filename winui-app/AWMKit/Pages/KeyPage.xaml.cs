@@ -1,6 +1,7 @@
 using AWMKit.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using System.ComponentModel;
 using System.Threading.Tasks;
 
@@ -98,14 +99,44 @@ public sealed partial class KeyPage : Page
 
     private async void DeleteKeyButton_Click(object sender, RoutedEventArgs e)
     {
+        var slot = ViewModel.SelectedSlot;
+        var instruction = new TextBlock
+        {
+            Text = $"此操作不可恢复。请输入槽位号 {slot} 以确认删除该槽位密钥。",
+            TextWrapping = TextWrapping.Wrap
+        };
+
+        var inputBox = new TextBox
+        {
+            PlaceholderText = $"输入槽位号 {slot}"
+        };
+
+        var hint = new TextBlock
+        {
+            Text = "输入不匹配时无法确认删除",
+            Foreground = GetBrush("TextFillColorSecondaryBrush")
+        };
+
+        var content = new StackPanel
+        {
+            Spacing = 10,
+            Children = { instruction, inputBox, hint }
+        };
+
         var dialog = new ContentDialog
         {
             Title = "删除密钥",
-            Content = "删除后将无法继续嵌入/检测，是否确认删除？",
+            Content = content,
             PrimaryButtonText = "删除",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot
+            XamlRoot = XamlRoot,
+            IsPrimaryButtonEnabled = false
+        };
+
+        inputBox.TextChanged += (_, _) =>
+        {
+            dialog.IsPrimaryButtonEnabled = IsDeleteSlotInputValid(inputBox.Text, slot);
         };
 
         var result = await dialog.ShowAsync();
@@ -157,5 +188,20 @@ public sealed partial class KeyPage : Page
         };
 
         await dialog.ShowAsync();
+    }
+
+    private static bool IsDeleteSlotInputValid(string input, int expectedSlot)
+    {
+        return int.TryParse(input.Trim(), out var parsed) && parsed == expectedSlot;
+    }
+
+    private static Brush GetBrush(string resourceKey)
+    {
+        if (Application.Current.Resources.TryGetValue(resourceKey, out var value) && value is Brush brush)
+        {
+            return brush;
+        }
+
+        return new SolidColorBrush(Microsoft.UI.Colors.Gray);
     }
 }

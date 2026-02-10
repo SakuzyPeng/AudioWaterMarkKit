@@ -766,12 +766,25 @@ fn convert_wav_to_flac(input_wav: &Path, output_flac: &Path) -> Result<()> {
         }
     };
 
-    // flacenc does not expose a single "compression level" knob.
-    // Use the max block size to bias towards maximum compression ratio.
-    let mut encoder_config = flacenc::config::Encoder::default();
-    encoder_config.block_size = 32_767;
+    let mut config = flacenc::config::Encoder::default();
+    // Use a high-compression profile for FLAC output.
+    config.block_size = flacenc::constant::MAX_BLOCK_SIZE;
+    config.stereo_coding.use_leftside = true;
+    config.stereo_coding.use_rightside = true;
+    config.stereo_coding.use_midside = true;
+    config.subframe_coding.use_constant = true;
+    config.subframe_coding.use_fixed = true;
+    config.subframe_coding.use_lpc = true;
+    config.subframe_coding.fixed.max_order = flacenc::constant::fixed::MAX_LPC_ORDER;
+    config.subframe_coding.fixed.order_sel = flacenc::config::OrderSel::BitCount;
+    config.subframe_coding.qlpc.lpc_order = flacenc::constant::qlpc::MAX_ORDER;
+    config.subframe_coding.qlpc.quant_precision = flacenc::constant::qlpc::MAX_PRECISION;
+    config.subframe_coding.qlpc.use_direct_mse = false;
+    config.subframe_coding.qlpc.mae_optimization_steps = 0;
+    config.subframe_coding.qlpc.window = flacenc::config::Window::default();
+    config.subframe_coding.prc.max_parameter = flacenc::constant::rice::MAX_RICE_PARAMETER;
 
-    let config = encoder_config
+    let config = config
         .into_verified()
         .map_err(|(_, err)| Error::InvalidInput(format!("invalid FLAC encoder config: {err}")))?;
 

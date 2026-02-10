@@ -568,7 +568,9 @@ struct TagsView: View {
 
         deleteConfirmTarget = target
         deleteConfirmInput = ""
-        showingDeleteConfirm = true
+        DispatchQueue.main.async {
+            showingDeleteConfirm = true
+        }
     }
 
     private func performBatchDelete(target: DeleteTarget) {

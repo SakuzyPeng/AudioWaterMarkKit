@@ -130,7 +130,8 @@ public sealed partial class TagsPage : Page
             return;
         }
 
-        var confirmed = await ShowDeleteConfirmDialogAsync(selectedCount, ViewModel.DeleteTargetLabel);
+        var noun = ViewModel.DeleteMode == TagsDeleteMode.Evidence ? "证据" : "标签";
+        var confirmed = await ShowDeleteConfirmDialogAsync(selectedCount, noun);
         if (!confirmed)
         {
             return;

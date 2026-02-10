@@ -16,16 +16,6 @@ name = "awm"
 path = "src/bin/awm.rs"
 
 [[bin]]
-name = "FTSC-detect"
-path = "src/bin/awm-detect.rs"
-required-features = ["simple-cli"]
-
-[[bin]]
-name = "FTSC-embed"
-path = "src/bin/awm-embed.rs"
-required-features = ["simple-cli"]
-
-[[bin]]
 name = "awmkit"
 path = "src/bin/awmkit/main.rs"
 required-features = ["full-cli"]
@@ -61,7 +51,6 @@ app = [
   "dep:serde_json",
   "multichannel",
 ]
-simple-cli = ["multichannel", "dep:libc", "dep:security-framework", "dep:pbkdf2", "dep:rayon", "dep:sysinfo"]
 full-cli = [
   "app",
   "bundled",
@@ -98,26 +87,6 @@ optional = true
 
 [dependencies.hex]
 version = "0.4"
-optional = true
-
-[dependencies.libc]
-version = "0.2"
-optional = true
-
-[dependencies.security-framework]
-version = "2"
-optional = true
-
-[dependencies.pbkdf2]
-version = "0.12"
-optional = true
-
-[dependencies.rayon]
-version = "1.10"
-optional = true
-
-[dependencies.sysinfo]
-version = "0.32"
 optional = true
 
 [dependencies.keyring]

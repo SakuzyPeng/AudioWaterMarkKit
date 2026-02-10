@@ -5,7 +5,8 @@ struct KeyView: View {
     @EnvironmentObject private var appState: AppState
     @ObservedObject var viewModel: KeyViewModel
     @Environment(\.colorScheme) private var colorScheme
-    @State private var showDeleteConfirm = false
+    @State private var showDeleteConfirmSheet = false
+    @State private var deleteConfirmInput = ""
     @State private var showEditLabelSheet = false
     @State private var editLabelDraft = ""
 
@@ -41,14 +42,6 @@ struct KeyView: View {
             viewModel.sync(from: appState)
             Task { await appState.refreshRuntimeStatus() }
         }
-        .alert("删除密钥", isPresented: $showDeleteConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("删除", role: .destructive) {
-                Task { await viewModel.deleteKey(appState: appState) }
-            }
-        } message: {
-            Text("删除后将无法执行嵌入/检测，是否继续？")
-        }
         .alert("操作结果", isPresented: Binding(
             get: { viewModel.errorMessage != nil || viewModel.successMessage != nil },
             set: { newValue in
@@ -74,6 +67,20 @@ struct KeyView: View {
                     Task {
                         await viewModel.editActiveSlotLabel(appState: appState, label: editLabelDraft)
                         showEditLabelSheet = false
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $showDeleteConfirmSheet) {
+            KeyDeleteConfirmSheet(
+                slot: viewModel.selectedSlot,
+                input: $deleteConfirmInput,
+                isWorking: viewModel.isWorking,
+                onCancel: { showDeleteConfirmSheet = false },
+                onConfirm: {
+                    Task {
+                        await viewModel.deleteKey(appState: appState)
+                        showDeleteConfirmSheet = false
                     }
                 }
             )
@@ -185,7 +192,8 @@ struct KeyView: View {
                 .disabled(viewModel.isWorking)
 
                 Button {
-                    showDeleteConfirm = true
+                    deleteConfirmInput = ""
+                    showDeleteConfirmSheet = true
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "trash")
@@ -351,6 +359,71 @@ struct KeyView: View {
                     lineWidth: 1
                 )
         )
+    }
+}
+
+private struct KeyDeleteConfirmSheet: View {
+    let slot: Int
+    @Binding var input: String
+    let isWorking: Bool
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var trimmedInput: String {
+        input.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isValid: Bool {
+        Int(trimmedInput) == slot
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.card) {
+            Text("确认删除密钥")
+                .font(.title3.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("此操作不可恢复，删除后将无法执行嵌入/检测。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Text("请输入当前槽位号：\(slot)")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+
+            GlassEffectContainer {
+                TextField("输入槽位号 \(slot)", text: $input)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+            }
+            .background(DesignSystem.Colors.rowBackground(colorScheme))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(DesignSystem.Colors.border(colorScheme), lineWidth: DesignSystem.BorderWidth.standard)
+            )
+
+            HStack(spacing: DesignSystem.Spacing.item) {
+                Button("取消") {
+                    onCancel()
+                    dismiss()
+                }
+                .buttonStyle(GlassButtonStyle())
+
+                Button("确认删除") {
+                    onConfirm()
+                    dismiss()
+                }
+                .buttonStyle(GlassButtonStyle(accentOn: true))
+                .disabled(!isValid || isWorking)
+            }
+        }
+        .padding(24)
+        .frame(width: 420)
     }
 }
 
