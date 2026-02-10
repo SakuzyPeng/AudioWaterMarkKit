@@ -22,12 +22,13 @@ pub struct EncodeArgs {
 
 pub fn run(ctx: &Context, args: &EncodeArgs) -> Result<()> {
     let store = KeyStore::new()?;
-    let key = store.load()?;
+    let slot = store.active_slot()?;
+    let key = store.load_slot(slot)?;
     let tag = parse_tag(&args.tag)?;
 
     let message = match args.timestamp {
-        Some(ts) => Message::encode_with_timestamp(args.version, &tag, &key, ts)?,
-        None => Message::encode(args.version, &tag, &key)?,
+        Some(ts) => Message::encode_with_timestamp_and_slot(args.version, &tag, &key, ts, slot)?,
+        None => Message::encode_with_slot(args.version, &tag, &key, slot)?,
     };
 
     ctx.out.info(hex::encode(message));

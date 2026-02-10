@@ -18,6 +18,12 @@ pub fn run(ctx: &Context, args: &StatusArgs) -> Result<()> {
     ctx.out.info(i18n::tr_args("cli-status-version", &fmt_args));
 
     let store = KeyStore::new()?;
+    let active_slot = store.active_slot()?;
+    let mut slot_args = FluentArgs::new();
+    slot_args.set("slot", active_slot.to_string());
+    ctx.out
+        .info(i18n::tr_args("cli-key-slot-current", &slot_args));
+
     if store.exists() {
         let (key, backend) = store.load_with_backend()?;
         let mut fmt_args = FluentArgs::new();

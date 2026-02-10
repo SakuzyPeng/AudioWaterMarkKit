@@ -872,10 +872,7 @@ pub unsafe extern "C" fn awm_key_load(out_key: *mut u8, out_key_cap: usize) -> i
 /// - `out_key` 必须指向至少 `out_key_cap` 字节的缓冲区
 /// - `out_key_cap` 必须 >= 32
 #[no_mangle]
-pub unsafe extern "C" fn awm_key_generate_and_save(
-    out_key: *mut u8,
-    out_key_cap: usize,
-) -> i32 {
+pub unsafe extern "C" fn awm_key_generate_and_save(out_key: *mut u8, out_key_cap: usize) -> i32 {
     if out_key.is_null() {
         return AWMError::NullPointer as i32;
     }
@@ -931,10 +928,7 @@ pub extern "C" fn awm_key_delete() -> i32 {
 /// - `username` 必须是有效的 C 字符串
 /// - `out_tag` 必须指向至少 9 字节的缓冲区
 #[no_mangle]
-pub unsafe extern "C" fn awm_tag_suggest(
-    username: *const c_char,
-    out_tag: *mut c_char,
-) -> i32 {
+pub unsafe extern "C" fn awm_tag_suggest(username: *const c_char, out_tag: *mut c_char) -> i32 {
     if username.is_null() || out_tag.is_null() {
         return AWMError::NullPointer as i32;
     }

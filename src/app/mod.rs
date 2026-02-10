@@ -1,3 +1,4 @@
+pub mod app_settings_store;
 pub mod audio_engine;
 pub mod audio_proof;
 pub mod error;
@@ -8,6 +9,9 @@ pub mod maintenance;
 pub mod settings;
 pub mod tag_store;
 
+pub use app_settings_store::{
+    is_valid_slot, validate_slot, AppSettingsStore, KEY_SLOT_MAX, KEY_SLOT_MIN,
+};
 pub use audio_engine::{AppConfig, AudioEngine, DetectOutcome};
 pub use audio_proof::{build_audio_proof, AudioProof};
 pub use error::{AppError, Result};

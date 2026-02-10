@@ -1,7 +1,7 @@
 use crate::error::{CliError, Result};
 use crate::util::{audio_from_context, ensure_file, expand_inputs};
 use crate::Context;
-use awmkit::app::{build_audio_proof, i18n, EvidenceStore, KeyStore};
+use awmkit::app::{build_audio_proof, i18n, AppError, EvidenceStore, KeyStore};
 use awmkit::Message;
 use clap::Args;
 use fluent_bundle::FluentArgs;
@@ -43,6 +43,10 @@ struct DetectJson {
     clone_match_seconds: Option<f32>,
     clone_matched_evidence_id: Option<i64>,
     clone_reason: Option<String>,
+    decode_slot_hint: Option<u8>,
+    decode_slot_used: Option<u8>,
+    slot_status: Option<String>,
+    slot_scan_count: Option<u32>,
 }
 
 pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
@@ -51,8 +55,7 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
         ensure_file(input)?;
     }
 
-    let store = KeyStore::new()?;
-    let key = store.load()?;
+    let key_store = KeyStore::new()?;
     let audio = audio_from_context(ctx)?;
     let evidence_store = match EvidenceStore::load() {
         Ok(store) => Some(store),
@@ -67,7 +70,7 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
         for input in inputs {
             results.push(detect_one_json(
                 &audio,
-                &key,
+                &key_store,
                 &input,
                 evidence_store.as_ref(),
             ));
@@ -95,12 +98,16 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
     let mut invalid = 0usize;
 
     for input in inputs {
-        match detect_one(&audio, &key, &input, evidence_store.as_ref()) {
+        match detect_one(&audio, &key_store, &input, evidence_store.as_ref()) {
             Ok(DetectOutcome::Found {
                 tag,
                 identity,
                 clone_check,
                 detect_score,
+                decode_slot_hint,
+                decode_slot_used,
+                slot_status,
+                slot_scan_count,
             }) => {
                 ok += 1;
                 if ctx.out.verbose() && !ctx.out.quiet() {
@@ -109,17 +116,25 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
                         .unwrap_or_default();
                     if let Some(ref bar) = progress {
                         bar.println(format!(
-                            "[OK] {} (tag: {tag}, id: {identity}, clone: {}{})",
+                            "[OK] {} (tag: {tag}, id: {identity}, clone: {}{}, slot: hint={} used={} status={} scan={})",
                             input.display(),
                             clone_check.summary(),
-                            score_text
+                            score_text,
+                            decode_slot_hint,
+                            decode_slot_used,
+                            slot_status,
+                            slot_scan_count
                         ));
                     } else {
                         ctx.out.info(format!(
-                            "[OK] {} (tag: {tag}, id: {identity}, clone: {}{})",
+                            "[OK] {} (tag: {tag}, id: {identity}, clone: {}{}, slot: hint={} used={} status={} scan={})",
                             input.display(),
                             clone_check.summary(),
-                            score_text
+                            score_text,
+                            decode_slot_hint,
+                            decode_slot_used,
+                            slot_status,
+                            slot_scan_count
                         ));
                     }
                 }
@@ -137,24 +152,37 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
             Ok(DetectOutcome::Invalid {
                 error,
                 detect_score,
+                decode_slot_hint,
+                decode_slot_used,
+                slot_status,
+                slot_scan_count,
             }) => {
                 invalid += 1;
                 let score_text = detect_score
                     .map(|score| format!(" (score: {score:.3})"))
                     .unwrap_or_default();
+                let slot_text = format!(
+                    " (slot: hint={} used={} status={} scan={})",
+                    decode_slot_hint.map_or_else(|| "-".to_string(), |value| value.to_string()),
+                    decode_slot_used.map_or_else(|| "-".to_string(), |value| value.to_string()),
+                    slot_status,
+                    slot_scan_count
+                );
                 if let Some(ref bar) = progress {
                     bar.println(format!(
-                        "[INVALID] {}: {}{}",
+                        "[INVALID] {}: {}{}{}",
                         input.display(),
                         error,
-                        score_text
+                        score_text,
+                        slot_text
                     ));
                 } else {
                     ctx.out.error(format!(
-                        "[INVALID] {}: {}{}",
+                        "[INVALID] {}: {}{}{}",
                         input.display(),
                         error,
-                        score_text
+                        score_text,
+                        slot_text
                     ));
                 }
             }
@@ -198,11 +226,19 @@ enum DetectOutcome {
         identity: String,
         clone_check: CloneCheck,
         detect_score: Option<f32>,
+        decode_slot_hint: u8,
+        decode_slot_used: u8,
+        slot_status: String,
+        slot_scan_count: u32,
     },
     NotFound,
     Invalid {
         error: String,
         detect_score: Option<f32>,
+        decode_slot_hint: Option<u8>,
+        decode_slot_used: Option<u8>,
+        slot_status: String,
+        slot_scan_count: u32,
     },
 }
 
@@ -289,33 +325,44 @@ impl CloneCheck {
 
 fn detect_one(
     audio: &awmkit::Audio,
-    key: &[u8],
+    key_store: &KeyStore,
     input: &std::path::Path,
     evidence_store: Option<&EvidenceStore>,
 ) -> Result<DetectOutcome> {
     match audio.detect(input)? {
         None => Ok(DetectOutcome::NotFound),
-        Some(result) => match Message::decode(&result.raw_message, key) {
-            Ok(decoded) => {
-                let clone_check = evaluate_clone_check(input, &decoded, evidence_store);
-                Ok(DetectOutcome::Found {
-                    tag: decoded.tag.to_string(),
-                    identity: decoded.identity().to_string(),
-                    clone_check,
+        Some(result) => {
+            let slot_resolution = resolve_decode_slot(&result.raw_message, key_store);
+            match slot_resolution {
+                SlotResolution::Decoded(decoded) => {
+                    let clone_check = evaluate_clone_check(input, &decoded.message, evidence_store);
+                    Ok(DetectOutcome::Found {
+                        tag: decoded.message.tag.to_string(),
+                        identity: decoded.message.identity().to_string(),
+                        clone_check,
+                        detect_score: result.detect_score,
+                        decode_slot_hint: decoded.slot_hint,
+                        decode_slot_used: decoded.slot_used,
+                        slot_status: decoded.status,
+                        slot_scan_count: decoded.scan_count,
+                    })
+                }
+                SlotResolution::Invalid(invalid) => Ok(DetectOutcome::Invalid {
+                    error: invalid.error,
                     detect_score: result.detect_score,
-                })
+                    decode_slot_hint: Some(invalid.slot_hint),
+                    decode_slot_used: invalid.slot_used,
+                    slot_status: invalid.status,
+                    slot_scan_count: invalid.scan_count,
+                }),
             }
-            Err(err) => Ok(DetectOutcome::Invalid {
-                error: err.to_string(),
-                detect_score: result.detect_score,
-            }),
-        },
+        }
     }
 }
 
 fn detect_one_json(
     audio: &awmkit::Audio,
-    key: &[u8],
+    key_store: &KeyStore,
     input: &std::path::Path,
     evidence_store: Option<&EvidenceStore>,
 ) -> DetectJson {
@@ -339,19 +386,23 @@ fn detect_one_json(
             clone_match_seconds: None,
             clone_matched_evidence_id: None,
             clone_reason: None,
+            decode_slot_hint: None,
+            decode_slot_used: None,
+            slot_status: None,
+            slot_scan_count: None,
         },
-        Ok(Some(result)) => match Message::decode(&result.raw_message, key) {
-            Ok(decoded) => {
-                let clone_check = evaluate_clone_check(input, &decoded, evidence_store);
+        Ok(Some(result)) => match resolve_decode_slot(&result.raw_message, key_store) {
+            SlotResolution::Decoded(decoded) => {
+                let clone_check = evaluate_clone_check(input, &decoded.message, evidence_store);
                 DetectJson {
                     file: input.display().to_string(),
                     status: "ok".to_string(),
-                    tag: Some(decoded.tag.to_string()),
-                    identity: Some(decoded.identity().to_string()),
-                    version: Some(decoded.version),
-                    key_slot: Some(decoded.key_slot),
-                    timestamp_minutes: Some(decoded.timestamp_minutes),
-                    timestamp_utc: Some(decoded.timestamp_utc),
+                    tag: Some(decoded.message.tag.to_string()),
+                    identity: Some(decoded.message.identity().to_string()),
+                    version: Some(decoded.message.version),
+                    key_slot: Some(decoded.message.key_slot),
+                    timestamp_minutes: Some(decoded.message.timestamp_minutes),
+                    timestamp_utc: Some(decoded.message.timestamp_utc),
                     pattern: Some(result.pattern),
                     detect_score: result.detect_score,
                     bit_errors: Some(result.bit_errors),
@@ -362,9 +413,13 @@ fn detect_one_json(
                     clone_match_seconds: clone_check.match_seconds,
                     clone_matched_evidence_id: clone_check.matched_evidence_id,
                     clone_reason: clone_check.reason,
+                    decode_slot_hint: Some(decoded.slot_hint),
+                    decode_slot_used: Some(decoded.slot_used),
+                    slot_status: Some(decoded.status),
+                    slot_scan_count: Some(decoded.scan_count),
                 }
             }
-            Err(err) => DetectJson {
+            SlotResolution::Invalid(invalid) => DetectJson {
                 file: input.display().to_string(),
                 status: "invalid_hmac".to_string(),
                 tag: None,
@@ -377,12 +432,16 @@ fn detect_one_json(
                 detect_score: result.detect_score,
                 bit_errors: Some(result.bit_errors),
                 match_found: Some(result.match_found),
-                error: Some(err.to_string()),
+                error: Some(invalid.error),
                 clone_check: None,
                 clone_score: None,
                 clone_match_seconds: None,
                 clone_matched_evidence_id: None,
                 clone_reason: None,
+                decode_slot_hint: Some(invalid.slot_hint),
+                decode_slot_used: invalid.slot_used,
+                slot_status: Some(invalid.status),
+                slot_scan_count: Some(invalid.scan_count),
             },
         },
         Err(err) => DetectJson {
@@ -404,7 +463,120 @@ fn detect_one_json(
             clone_match_seconds: None,
             clone_matched_evidence_id: None,
             clone_reason: None,
+            decode_slot_hint: None,
+            decode_slot_used: None,
+            slot_status: None,
+            slot_scan_count: None,
         },
+    }
+}
+
+struct DecodedSlotMessage {
+    message: awmkit::MessageResult,
+    slot_hint: u8,
+    slot_used: u8,
+    status: String,
+    scan_count: u32,
+}
+
+struct InvalidSlotDecode {
+    slot_hint: u8,
+    slot_used: Option<u8>,
+    status: String,
+    scan_count: u32,
+    error: String,
+}
+
+enum SlotResolution {
+    Decoded(DecodedSlotMessage),
+    Invalid(InvalidSlotDecode),
+}
+
+fn resolve_decode_slot(message: &[u8], key_store: &KeyStore) -> SlotResolution {
+    let slot_hint = match Message::peek_version_and_slot(message) {
+        Ok((_, slot)) => slot,
+        Err(err) => {
+            return SlotResolution::Invalid(InvalidSlotDecode {
+                slot_hint: 0,
+                slot_used: None,
+                status: "mismatch".to_string(),
+                scan_count: 0,
+                error: err.to_string(),
+            });
+        }
+    };
+
+    let mut candidate_slots = vec![slot_hint];
+    for slot in key_store.list_configured_slots() {
+        if slot != slot_hint {
+            candidate_slots.push(slot);
+        }
+    }
+
+    let mut decode_successes: Vec<(u8, awmkit::MessageResult)> = Vec::new();
+    let mut scan_count: u32 = 0;
+    let mut hint_key_missing = false;
+
+    for slot in candidate_slots {
+        match key_store.load_slot(slot) {
+            Ok(key) => {
+                scan_count = scan_count.saturating_add(1);
+                if let Ok(decoded) = Message::decode(message, &key) {
+                    decode_successes.push((slot, decoded));
+                }
+            }
+            Err(AppError::KeyNotFound) => {
+                if slot == slot_hint {
+                    hint_key_missing = true;
+                }
+            }
+            Err(_) => {}
+        }
+    }
+
+    match decode_successes.len() {
+        1 => {
+            let (slot_used, decoded) = decode_successes.remove(0);
+            let status = if slot_used == slot_hint {
+                "matched".to_string()
+            } else {
+                "recovered".to_string()
+            };
+            SlotResolution::Decoded(DecodedSlotMessage {
+                message: decoded,
+                slot_hint,
+                slot_used,
+                status,
+                scan_count,
+            })
+        }
+        0 => {
+            let (status, error) = if hint_key_missing {
+                (
+                    "missing_key".to_string(),
+                    format!("key not found for slot {slot_hint}"),
+                )
+            } else {
+                (
+                    "mismatch".to_string(),
+                    format!("decode failed after scanning {scan_count} slot(s)"),
+                )
+            };
+            SlotResolution::Invalid(InvalidSlotDecode {
+                slot_hint,
+                slot_used: None,
+                status,
+                scan_count,
+                error,
+            })
+        }
+        _ => SlotResolution::Invalid(InvalidSlotDecode {
+            slot_hint,
+            slot_used: None,
+            status: "ambiguous".to_string(),
+            scan_count,
+            error: "decoded by multiple slots".to_string(),
+        }),
     }
 }
 

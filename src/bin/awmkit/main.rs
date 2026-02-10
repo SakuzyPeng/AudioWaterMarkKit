@@ -104,7 +104,7 @@ enum Commands {
 #[derive(Subcommand)]
 enum KeyCommand {
     /// Show key info (no key material)
-    Show,
+    Show(commands::key::ShowArgs),
 
     /// Import key from file (binary)
     Import(commands::key::ImportArgs),
@@ -113,7 +113,16 @@ enum KeyCommand {
     Export(commands::key::ExportArgs),
 
     /// Rotate key
-    Rotate,
+    Rotate(commands::key::RotateArgs),
+
+    /// Delete key in one slot
+    Delete(commands::key::DeleteArgs),
+
+    /// Slot management
+    Slot {
+        #[command(subcommand)]
+        command: commands::key::SlotCommand,
+    },
 }
 
 #[cfg(feature = "full-cli")]

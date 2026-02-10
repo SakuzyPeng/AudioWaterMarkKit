@@ -62,7 +62,7 @@ impl MessageResult {
 /// # Returns
 /// 16 bytes 消息
 pub fn encode(version: u8, tag: &Tag, key: &[u8]) -> Result<[u8; MESSAGE_LEN]> {
-    encode_with_timestamp(version, tag, key, current_utc_minutes())
+    encode_with_timestamp_and_slot(version, tag, key, current_utc_minutes(), DEFAULT_KEY_SLOT)
 }
 
 /// 编码消息（指定时间戳）
@@ -75,7 +75,8 @@ pub fn encode_with_timestamp(
     encode_with_timestamp_and_slot(version, tag, key, timestamp_minutes, DEFAULT_KEY_SLOT)
 }
 
-fn encode_with_timestamp_and_slot(
+/// 编码消息（指定时间戳 + 槽位）
+pub fn encode_with_timestamp_and_slot(
     version: u8,
     tag: &Tag,
     key: &[u8],
@@ -111,6 +112,16 @@ fn encode_with_timestamp_and_slot(
     msg[10..16].copy_from_slice(&mac);
 
     Ok(msg)
+}
+
+/// 编码消息（使用当前时间戳 + 指定槽位）
+pub fn encode_with_slot(
+    version: u8,
+    tag: &Tag,
+    key: &[u8],
+    key_slot: u8,
+) -> Result<[u8; MESSAGE_LEN]> {
+    encode_with_timestamp_and_slot(version, tag, key, current_utc_minutes(), key_slot)
 }
 
 /// 解码消息
@@ -167,6 +178,24 @@ pub fn verify(data: &[u8], key: &[u8]) -> bool {
 
     let expected_mac = compute_hmac(key, &data[..10]);
     constant_time_eq(&data[10..16], &expected_mac)
+}
+
+/// 读取消息头中的版本与槽位（不校验 HMAC）
+pub fn peek_version_and_slot(data: &[u8]) -> Result<(u8, u8)> {
+    if data.len() != MESSAGE_LEN {
+        return Err(Error::InvalidMessageLength(data.len()));
+    }
+    let version = data[0];
+    let packed_timestamp_bytes: [u8; 4] = data[1..5]
+        .try_into()
+        .map_err(|_| Error::InvalidMessageLength(data.len()))?;
+    let packed_timestamp = u32::from_be_bytes(packed_timestamp_bytes);
+    let key_slot = match version {
+        VERSION_V1 => DEFAULT_KEY_SLOT,
+        VERSION_V2 => unpack_timestamp_v2(packed_timestamp).1,
+        _ => return Err(Error::UnsupportedVersion(version)),
+    };
+    Ok((version, key_slot))
 }
 
 /// 计算 HMAC-SHA256 并截取前 6 字节

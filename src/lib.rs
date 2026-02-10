@@ -88,9 +88,30 @@ impl Message {
         message::encode_with_timestamp(version, tag, key, timestamp_minutes)
     }
 
+    /// 编码消息（指定时间戳 + 槽位）
+    pub fn encode_with_timestamp_and_slot(
+        version: u8,
+        tag: &Tag,
+        key: &[u8],
+        timestamp_minutes: u32,
+        key_slot: u8,
+    ) -> Result<[u8; 16]> {
+        message::encode_with_timestamp_and_slot(version, tag, key, timestamp_minutes, key_slot)
+    }
+
+    /// 编码消息（当前时间 + 槽位）
+    pub fn encode_with_slot(version: u8, tag: &Tag, key: &[u8], key_slot: u8) -> Result<[u8; 16]> {
+        message::encode_with_slot(version, tag, key, key_slot)
+    }
+
     /// 解码消息
     pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
         message::decode(data, key)
+    }
+
+    /// 读取消息中的版本与槽位（不校验 HMAC）
+    pub fn peek_version_and_slot(data: &[u8]) -> Result<(u8, u8)> {
+        message::peek_version_and_slot(data)
     }
 
     /// 仅验证 HMAC

@@ -224,7 +224,8 @@ impl Audio {
 
     /// 获取 audiowmark 版本
     pub fn version(&self) -> Result<String> {
-        let output = self.audiowmark_command()
+        let output = self
+            .audiowmark_command()
             .arg("--version")
             .output()
             .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;

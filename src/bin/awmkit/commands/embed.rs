@@ -38,9 +38,10 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
     }
 
     let store = KeyStore::new()?;
-    let key = store.load()?;
+    let active_slot = store.active_slot()?;
+    let key = store.load_slot(active_slot)?;
     let tag = parse_tag(&args.tag)?;
-    let message = Message::encode(awmkit::CURRENT_VERSION, &tag, &key)?;
+    let message = Message::encode_with_slot(awmkit::CURRENT_VERSION, &tag, &key, active_slot)?;
     let decoded_message = Message::decode(&message, &key)?;
     let evidence_store = match EvidenceStore::load() {
         Ok(store) => Some(store),

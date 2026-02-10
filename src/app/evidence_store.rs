@@ -47,6 +47,15 @@ pub struct EvidenceStore {
     conn: Connection,
 }
 
+/// Slot usage summary from evidence table.
+#[derive(Debug, Clone, Copy)]
+pub struct EvidenceSlotUsage {
+    /// Number of rows for slot.
+    pub count: usize,
+    /// Most recent evidence timestamp in unix seconds.
+    pub last_created_at: Option<u64>,
+}
+
 impl EvidenceStore {
     pub fn load() -> Result<Self> {
         let path = db_path()?;
@@ -189,6 +198,44 @@ impl EvidenceStore {
         #[allow(clippy::cast_sign_loss)]
         let count = count as usize;
         Ok(count)
+    }
+
+    /// Count evidence rows for one key slot.
+    pub fn count_by_slot(&self, key_slot: u8) -> Result<usize> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT COUNT(*) FROM audio_evidence WHERE key_slot = ?1")?;
+        let count: i64 = stmt
+            .query_row(params![i64::from(key_slot)], |row| row.get(0))
+            .optional()?
+            .unwrap_or(0);
+        #[allow(clippy::cast_sign_loss)]
+        let count = count as usize;
+        Ok(count)
+    }
+
+    /// Usage stats for one key slot.
+    pub fn usage_by_slot(&self, key_slot: u8) -> Result<EvidenceSlotUsage> {
+        let mut stmt = self.conn.prepare(
+            "SELECT COUNT(*), MAX(created_at)
+             FROM audio_evidence
+             WHERE key_slot = ?1",
+        )?;
+        let (count_i64, last_i64): (i64, Option<i64>) = stmt
+            .query_row(params![i64::from(key_slot)], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })
+            .optional()?
+            .unwrap_or((0, None));
+
+        #[allow(clippy::cast_sign_loss)]
+        let count = count_i64 as usize;
+        let last_created_at = last_i64.and_then(|value| u64::try_from(value).ok());
+
+        Ok(EvidenceSlotUsage {
+            count,
+            last_created_at,
+        })
     }
 
     pub fn path(&self) -> &Path {
