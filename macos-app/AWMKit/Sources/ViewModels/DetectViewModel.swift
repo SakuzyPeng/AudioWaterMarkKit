@@ -299,7 +299,7 @@ class DetectViewModel: ObservableObject {
                 isProcessing = false
                 return
             }
-            guard let key = try? AWMKeychain.require() else {
+            guard let key = try? AWMKeyStore.loadActiveKey() else {
                 log("检测失败", detail: "密钥未配置", isSuccess: false)
                 isProcessing = false
                 return

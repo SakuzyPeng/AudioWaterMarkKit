@@ -150,14 +150,12 @@ public sealed partial class AppViewModel : ObservableObject
     private readonly AppDatabase _database;
     private readonly TagMappingStore _tagStore;
     private readonly EvidenceStore _evidenceStore;
-    private readonly AppSettingsStore _appSettingsStore;
 
     private AppViewModel()
     {
         _database = new AppDatabase();
         _tagStore = new TagMappingStore(_database);
         _evidenceStore = new EvidenceStore(_database);
-        _appSettingsStore = new AppSettingsStore(_database);
     }
 
     /// <summary>
@@ -174,8 +172,6 @@ public sealed partial class AppViewModel : ObservableObject
     /// Gets the evidence store.
     /// </summary>
     public EvidenceStore EvidenceStore => _evidenceStore;
-
-    public AppSettingsStore AppSettingsStore => _appSettingsStore;
 
     /// <summary>
     /// Initializes application state (call on startup).
@@ -196,8 +192,7 @@ public sealed partial class AppViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Generates a new global key.
-    /// NOTE: This is a GLOBAL key, not per-user.
+    /// Generates key in current active slot.
     /// </summary>
     [RelayCommand]
     private async Task GenerateKeyAsync()
@@ -210,16 +205,15 @@ public sealed partial class AppViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Deletes the global key.
-    /// NOTE: This deletes the GLOBAL key, affecting all users.
+    /// Deletes key in current active slot.
     /// </summary>
     [RelayCommand]
     private async Task DeleteKeyAsync()
     {
-        var error = await Task.Run(AwmKeyBridge.DeleteKey);
+        var (_, error) = await Task.Run(AwmKeyBridge.DeleteKey);
         if (error == AwmError.Ok)
         {
-            await RefreshKeyStatusAsync();
+            await RefreshRuntimeStatusAsync();
         }
     }
 
@@ -295,32 +289,23 @@ public sealed partial class AppViewModel : ObservableObject
 
     public async Task RefreshActiveKeySlotAsync()
     {
-        if (!_database.IsOpen)
-        {
-            var opened = await _database.OpenAsync();
-            if (!opened)
-            {
-                ActiveKeySlot = 0;
-                return;
-            }
-        }
-
-        ActiveKeySlot = await _appSettingsStore.GetActiveKeySlotAsync();
+        await Task.CompletedTask;
+        var (slot, error) = AwmKeyBridge.GetActiveSlot();
+        ActiveKeySlot = error == AwmError.Ok ? Math.Clamp(slot, 0, 31) : 0;
     }
 
     public async Task SetActiveKeySlotAsync(int slot)
     {
-        if (!_database.IsOpen)
+        await Task.CompletedTask;
+        var error = AwmKeyBridge.SetActiveSlot(slot);
+        if (error == AwmError.Ok)
         {
-            var opened = await _database.OpenAsync();
-            if (!opened)
-            {
-                return;
-            }
+            ActiveKeySlot = Math.Clamp(slot, 0, 31);
+            return;
         }
 
-        await _appSettingsStore.SaveActiveKeySlotAsync(slot);
-        ActiveKeySlot = Math.Clamp(slot, 0, 31);
+        var (currentSlot, _) = AwmKeyBridge.GetActiveSlot();
+        ActiveKeySlot = Math.Clamp(currentSlot, 0, 31);
     }
 
     private void RefreshEngineStatus()

@@ -91,7 +91,7 @@
                     </Button>
                     <Button Click="DeleteKeyButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            IsEnabled="{x:Bind ViewModel.KeyAvailable, Mode=OneWay}">
+                            IsEnabled="{x:Bind ViewModel.SelectedSlotHasKey, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="Delete"/>
                             <TextBlock Text="删除密钥"/>

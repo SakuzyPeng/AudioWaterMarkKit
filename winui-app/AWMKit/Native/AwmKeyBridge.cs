@@ -5,23 +5,29 @@ using System.Runtime.InteropServices;
 namespace AWMKit.Native;
 
 /// <summary>
-/// Bridge for key management operations via Rust KeyStore.
+/// Bridge for slot-aware key management operations via Rust KeyStore.
 /// Backend order on Windows: keyring first, DPAPI file fallback.
-/// NOTE: Rust KeyStore is GLOBAL - only ONE key is stored per system (no per-user identity).
 /// All keys are 32 bytes (256-bit HMAC-SHA256 keys).
 /// </summary>
 public static class AwmKeyBridge
 {
     private const int KeySize = 32;
     private const int LabelBufferSize = 512;
+    private const int MinSlot = 0;
+    private const int MaxSlot = 31;
 
-    /// <summary>
-    /// Checks if a key exists in the system keystore.
-    /// NOTE: This checks for a GLOBAL key, not per-user.
-    /// </summary>
+    private static byte NormalizeSlot(int slot) => (byte)Math.Clamp(slot, MinSlot, MaxSlot);
+
+    /// <summary>Checks if key exists in current active slot.</summary>
     public static bool KeyExists()
     {
         return AwmNative.awm_key_exists();
+    }
+
+    /// <summary>Checks if key exists in specific slot.</summary>
+    public static bool KeyExistsInSlot(int slot)
+    {
+        return AwmNative.awm_key_exists_slot(NormalizeSlot(slot));
     }
 
     /// <summary>
@@ -53,7 +59,7 @@ public static class AwmKeyBridge
     }
 
     /// <summary>
-    /// Loads the global key from the system keystore.
+    /// Loads key from current active slot.
     /// </summary>
     /// <returns>(key bytes, error code). Key is null if error occurred.</returns>
     public static (byte[]? key, AwmError error) LoadKey()
@@ -76,17 +82,64 @@ public static class AwmKeyBridge
     }
 
     /// <summary>
-    /// Generates a new random key and saves it to the system keystore.
-    /// WARNING: This will REPLACE any existing global key.
+    /// Gets current active slot.
     /// </summary>
-    /// <returns>(generated key bytes, error code). Key is null if error occurred.</returns>
+    public static (int slot, AwmError error) GetActiveSlot()
+    {
+        var buffer = new byte[1];
+        var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+        try
+        {
+            int code = AwmNative.awm_key_active_slot_get(handle.AddrOfPinnedObject());
+            var error = (AwmError)code;
+            if (error != AwmError.Ok)
+            {
+                return (MinSlot, error);
+            }
+
+            return (buffer[0], AwmError.Ok);
+        }
+        finally
+        {
+            handle.Free();
+        }
+    }
+
+    /// <summary>
+    /// Sets current active slot.
+    /// </summary>
+    public static AwmError SetActiveSlot(int slot)
+    {
+        int code = AwmNative.awm_key_active_slot_set(NormalizeSlot(slot));
+        return (AwmError)code;
+    }
+
+    /// <summary>
+    /// Generates key and saves into current active slot.
+    /// </summary>
     public static (byte[]? key, AwmError error) GenerateAndSaveKey()
+    {
+        var (slot, slotErr) = GetActiveSlot();
+        if (slotErr != AwmError.Ok)
+        {
+            return (null, slotErr);
+        }
+        return GenerateAndSaveKeyInSlot(slot);
+    }
+
+    /// <summary>
+    /// Generates key and saves into specific slot.
+    /// </summary>
+    public static (byte[]? key, AwmError error) GenerateAndSaveKeyInSlot(int slot)
     {
         var keyBuffer = new byte[KeySize];
         var handle = GCHandle.Alloc(keyBuffer, GCHandleType.Pinned);
         try
         {
-            int code = AwmNative.awm_key_generate_and_save(handle.AddrOfPinnedObject(), (nuint)KeySize);
+            int code = AwmNative.awm_key_generate_and_save_slot(
+                NormalizeSlot(slot),
+                handle.AddrOfPinnedObject(),
+                (nuint)KeySize);
             if (code == 0)
             {
                 return (keyBuffer, AwmError.Ok);
@@ -100,31 +153,38 @@ public static class AwmKeyBridge
     }
 
     /// <summary>
-    /// Deletes the global key from the system keystore.
+    /// Deletes key from current active slot and returns effective active slot after fallback.
     /// </summary>
-    /// <returns>Error code (0 = success)</returns>
-    public static AwmError DeleteKey()
+    public static (int newActiveSlot, AwmError error) DeleteKey()
     {
-        int code = AwmNative.awm_key_delete();
-        return (AwmError)code;
+        var (slot, slotErr) = GetActiveSlot();
+        if (slotErr != AwmError.Ok)
+        {
+            return (MinSlot, slotErr);
+        }
+        return DeleteKeyInSlot(slot);
     }
 
     /// <summary>
-    /// Gets or creates the global key.
-    /// If key exists, loads it; otherwise generates a new one.
+    /// Deletes key from specific slot and returns effective active slot after fallback.
     /// </summary>
-    /// <returns>(key bytes, was newly generated, error code)</returns>
-    public static (byte[]? key, bool isNew, AwmError error)  GetOrCreateKey()
+    public static (int newActiveSlot, AwmError error) DeleteKeyInSlot(int slot)
     {
-        if (KeyExists())
+        var slotBuffer = new byte[1];
+        var handle = GCHandle.Alloc(slotBuffer, GCHandleType.Pinned);
+        try
         {
-            var (key, err) = LoadKey();
-            return (key, false, err);
+            int code = AwmNative.awm_key_delete_slot(NormalizeSlot(slot), handle.AddrOfPinnedObject());
+            var error = (AwmError)code;
+            if (error != AwmError.Ok)
+            {
+                return (MinSlot, error);
+            }
+            return (slotBuffer[0], AwmError.Ok);
         }
-        else
+        finally
         {
-            var (key, err) = GenerateAndSaveKey();
-            return (key, true, err);
+            handle.Free();
         }
     }
 }

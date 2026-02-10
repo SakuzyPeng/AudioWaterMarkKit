@@ -442,6 +442,49 @@ int32_t awm_key_load(uint8_t* out_key, size_t out_key_cap);
 int32_t awm_key_generate_and_save(uint8_t* out_key, size_t out_key_cap);
 
 /**
+ * Get current active key slot.
+ *
+ * @param out_slot  Output pointer for active slot value (0..31)
+ * @return          AWM_SUCCESS or error code
+ */
+int32_t awm_key_active_slot_get(uint8_t* out_slot);
+
+/**
+ * Set current active key slot.
+ *
+ * @param slot  Slot index (0..31)
+ * @return      AWM_SUCCESS or error code
+ */
+int32_t awm_key_active_slot_set(uint8_t slot);
+
+/**
+ * Check if a key exists in the specific slot.
+ *
+ * @param slot  Slot index (0..31)
+ * @return      true if configured
+ */
+bool awm_key_exists_slot(uint8_t slot);
+
+/**
+ * Generate and save key into a specific slot.
+ *
+ * @param slot         Slot index (0..31)
+ * @param out_key      Output buffer (at least 32 bytes)
+ * @param out_key_cap  Buffer capacity (must be >= 32)
+ * @return             AWM_SUCCESS or error code
+ */
+int32_t awm_key_generate_and_save_slot(uint8_t slot, uint8_t* out_key, size_t out_key_cap);
+
+/**
+ * Delete key in specific slot and return effective active slot after fallback.
+ *
+ * @param slot                 Slot index (0..31)
+ * @param out_new_active_slot  Output pointer for effective active slot after delete
+ * @return                     AWM_SUCCESS or error code
+ */
+int32_t awm_key_delete_slot(uint8_t slot, uint8_t* out_new_active_slot);
+
+/**
  * Delete the stored signing key
  *
  * @return  AWM_SUCCESS or error code

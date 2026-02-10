@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using AWMKit.Native;
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -24,12 +25,19 @@ public sealed partial class KeyViewModel : ObservableObject
     public int SelectedSlot
     {
         get => _selectedSlot;
-        set => SetProperty(ref _selectedSlot, Math.Clamp(value, 0, 31));
+        set
+        {
+            if (SetProperty(ref _selectedSlot, Math.Clamp(value, 0, 31)))
+            {
+                OnPropertyChanged(nameof(SelectedSlotHasKey));
+            }
+        }
     }
 
     public ObservableCollection<int> SlotOptions { get; } = new();
 
     public bool KeyAvailable => _appViewModel.KeyAvailable;
+    public bool SelectedSlotHasKey => AwmKeyBridge.KeyExistsInSlot(SelectedSlot);
     public string KeySourceLabel => _appViewModel.KeySourceLabel;
     public int ActiveKeySlot => _appViewModel.ActiveKeySlot;
     public string ActiveKeySlotText => $"当前激活槽位：{ActiveKeySlot}";
@@ -63,9 +71,11 @@ public sealed partial class KeyViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            await _appViewModel.GenerateKeyCommand.ExecuteAsync(null);
-            await _appViewModel.RefreshRuntimeStatusAsync();
-            SelectedSlot = _appViewModel.ActiveKeySlot;
+            var (_, error) = await Task.Run(() => AwmKeyBridge.GenerateAndSaveKeyInSlot(SelectedSlot));
+            if (error == AwmError.Ok)
+            {
+                await _appViewModel.RefreshRuntimeStatusAsync();
+            }
         }
         finally
         {
@@ -84,9 +94,12 @@ public sealed partial class KeyViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            await _appViewModel.DeleteKeyCommand.ExecuteAsync(null);
-            await _appViewModel.RefreshRuntimeStatusAsync();
-            SelectedSlot = _appViewModel.ActiveKeySlot;
+            var (_, error) = await Task.Run(() => AwmKeyBridge.DeleteKeyInSlot(SelectedSlot));
+            if (error == AwmError.Ok)
+            {
+                await _appViewModel.RefreshRuntimeStatusAsync();
+                SelectedSlot = _appViewModel.ActiveKeySlot;
+            }
         }
         finally
         {
@@ -136,6 +149,7 @@ public sealed partial class KeyViewModel : ObservableObject
     private void RaiseComputedProperties()
     {
         OnPropertyChanged(nameof(KeyAvailable));
+        OnPropertyChanged(nameof(SelectedSlotHasKey));
         OnPropertyChanged(nameof(KeySourceLabel));
         OnPropertyChanged(nameof(ActiveKeySlot));
         OnPropertyChanged(nameof(ActiveKeySlotText));

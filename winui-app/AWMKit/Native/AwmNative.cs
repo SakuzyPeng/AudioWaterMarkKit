@@ -141,6 +141,22 @@ internal static class AwmNative
     [DllImport(Lib, EntryPoint = "awm_key_generate_and_save", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_key_generate_and_save(IntPtr outKey, nuint outKeyCap);
 
+    [DllImport(Lib, EntryPoint = "awm_key_active_slot_get", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_key_active_slot_get(IntPtr outSlot);
+
+    [DllImport(Lib, EntryPoint = "awm_key_active_slot_set", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_key_active_slot_set(byte slot);
+
+    [DllImport(Lib, EntryPoint = "awm_key_exists_slot", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    internal static extern bool awm_key_exists_slot(byte slot);
+
+    [DllImport(Lib, EntryPoint = "awm_key_generate_and_save_slot", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_key_generate_and_save_slot(byte slot, IntPtr outKey, nuint outKeyCap);
+
+    [DllImport(Lib, EntryPoint = "awm_key_delete_slot", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_key_delete_slot(byte slot, IntPtr outNewActiveSlot);
+
     [DllImport(Lib, EntryPoint = "awm_key_delete", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_key_delete();
 }

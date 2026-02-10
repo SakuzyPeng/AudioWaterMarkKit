@@ -125,7 +125,7 @@ struct KeyView: View {
                 }
             }
             .buttonStyle(GlassButtonStyle(size: .compact))
-            .disabled(!appState.keyLoaded || viewModel.isWorking)
+            .disabled(!viewModel.selectedSlotHasKey || viewModel.isWorking)
 
             Button {
                 Task {

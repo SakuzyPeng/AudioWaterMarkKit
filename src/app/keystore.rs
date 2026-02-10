@@ -60,6 +60,12 @@ impl KeyStore {
         settings.active_key_slot()
     }
 
+    pub fn set_active_slot(&self, slot: u8) -> Result<()> {
+        validate_slot(slot)?;
+        let settings = AppSettingsStore::load()?;
+        settings.set_active_key_slot(slot)
+    }
+
     pub fn exists(&self) -> bool {
         self.active_slot().is_ok_and(|slot| self.exists_slot(slot))
     }
@@ -122,6 +128,23 @@ impl KeyStore {
         Ok(())
     }
 
+    /// Delete key material from a slot and reconcile active slot if needed.
+    ///
+    /// Returns the effective active slot after deletion.
+    pub fn delete_slot_and_reconcile_active(&self, slot: u8) -> Result<u8> {
+        validate_slot(slot)?;
+        let active_before = self.active_slot()?;
+        self.delete_slot(slot)?;
+
+        if slot != active_before {
+            return Ok(active_before);
+        }
+
+        let fallback_slot = self.fallback_active_slot();
+        self.set_active_slot(fallback_slot)?;
+        Ok(fallback_slot)
+    }
+
     pub fn load_with_backend(&self) -> Result<(Vec<u8>, KeyBackend)> {
         let slot = self.active_slot()?;
         self.load_slot_with_backend(slot)
@@ -158,6 +181,16 @@ impl KeyStore {
                 "failed to store key in keyring".to_string(),
             ))
         }
+    }
+
+    fn fallback_active_slot(&self) -> u8 {
+        if self.exists_slot(KEY_SLOT_MIN) {
+            return KEY_SLOT_MIN;
+        }
+        self.list_configured_slots()
+            .into_iter()
+            .min()
+            .unwrap_or(KEY_SLOT_MIN)
     }
 
     fn migrate_legacy_to_slot0(&self) -> Result<()> {

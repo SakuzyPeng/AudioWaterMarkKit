@@ -67,7 +67,6 @@ class AppState: ObservableObject {
     @Published private(set) var evidenceCount: Int = 0
 
     let audio: AWMAudio?
-    let keychain = AWMKeychain()
     private let audioInitError: String?
 
     enum Tab: String, CaseIterable, Identifiable {
@@ -115,17 +114,26 @@ class AppState: ObservableObject {
 
     func checkKey() async {
         do {
-            if let key = try keychain.loadKey() {
-                keyLoaded = true
-                keySourceLabel = "macOS Keychain"
-                keyStatusTone = .ready
-                keyStatusHelp = "密钥已配置（\(key.count) 字节）"
-            } else {
+            if !AWMKeyStore.exists() {
                 keyLoaded = false
                 keySourceLabel = "未配置"
                 keyStatusTone = .warning
                 keyStatusHelp = "密钥未配置，请前往“密钥”页面生成"
+                return
             }
+
+            let key = try AWMKeyStore.loadActiveKey()
+            keyLoaded = true
+
+            let backend = try? AWMKeyStore.backendLabel()
+            if let backend, !backend.isEmpty, backend != "none" {
+                keySourceLabel = backend
+            } else {
+                keySourceLabel = "已配置（来源未知）"
+            }
+
+            keyStatusTone = .ready
+            keyStatusHelp = "密钥已配置（\(key.count) 字节）"
         } catch {
             keyLoaded = false
             keySourceLabel = "读取失败"
@@ -274,19 +282,25 @@ class AppState: ObservableObject {
         return FileManager.default.isExecutableFile(atPath: bundledBinary) ? "bundled" : "PATH"
     }
 
-    func generateKey() async throws {
-        _ = try keychain.generateAndSaveKey()
-        await checkKey()
+    func generateKey(slot: Int) async throws {
+        let normalized = max(0, min(31, slot))
+        _ = try AWMKeyStore.generateAndSaveKey(slot: UInt8(normalized))
+        await refreshRuntimeStatus()
     }
 
-    func deleteKey() async throws {
-        try keychain.deleteKey()
-        await checkKey()
+    func deleteKey(slot: Int) async throws {
+        let normalized = max(0, min(31, slot))
+        _ = try AWMKeyStore.deleteKey(slot: UInt8(normalized))
+        await refreshRuntimeStatus()
+    }
+
+    func loadActiveKey() throws -> Data {
+        try AWMKeyStore.loadActiveKey()
     }
 
     func loadActiveKeySlot() {
         do {
-            activeKeySlot = try AppSettingsStore.getActiveKeySlot()
+            activeKeySlot = Int(try AWMKeyStore.activeSlot())
         } catch {
             activeKeySlot = 0
         }
@@ -294,8 +308,9 @@ class AppState: ObservableObject {
 
     func setActiveKeySlot(_ slot: Int) {
         do {
-            try AppSettingsStore.setActiveKeySlot(slot)
-            activeKeySlot = max(0, min(31, slot))
+            let normalized = max(0, min(31, slot))
+            try AWMKeyStore.setActiveSlot(UInt8(normalized))
+            activeKeySlot = Int(try AWMKeyStore.activeSlot())
         } catch {
             // Ignore setting persistence failure in UI state update path.
         }

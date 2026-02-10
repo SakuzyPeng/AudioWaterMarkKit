@@ -902,12 +902,145 @@ pub unsafe extern "C" fn awm_key_generate_and_save(out_key: *mut u8, out_key_cap
     }
 }
 
+/// 获取当前激活槽位
+///
+/// # Safety
+/// - `out_slot` 必须是有效指针
+#[no_mangle]
+pub unsafe extern "C" fn awm_key_active_slot_get(out_slot: *mut u8) -> i32 {
+    if out_slot.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    #[cfg(feature = "app")]
+    {
+        match crate::app::KeyStore::new().and_then(|ks| ks.active_slot()) {
+            Ok(slot) => {
+                *out_slot = slot;
+                AWMError::Success as i32
+            }
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = out_slot;
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// 设置当前激活槽位
+#[no_mangle]
+pub extern "C" fn awm_key_active_slot_set(slot: u8) -> i32 {
+    #[cfg(feature = "app")]
+    {
+        match crate::app::KeyStore::new().and_then(|ks| ks.set_active_slot(slot)) {
+            Ok(()) => AWMError::Success as i32,
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = slot;
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// 检查指定槽位是否存在密钥
+#[no_mangle]
+pub extern "C" fn awm_key_exists_slot(slot: u8) -> bool {
+    #[cfg(feature = "app")]
+    {
+        match crate::app::KeyStore::new() {
+            Ok(ks) => ks.exists_slot(slot),
+            Err(_) => false,
+        }
+    }
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = slot;
+        false
+    }
+}
+
+/// 生成并保存指定槽位密钥
+///
+/// # Safety
+/// - `out_key` 必须指向至少 `out_key_cap` 字节的缓冲区
+/// - `out_key_cap` 必须 >= 32
+#[no_mangle]
+pub unsafe extern "C" fn awm_key_generate_and_save_slot(
+    slot: u8,
+    out_key: *mut u8,
+    out_key_cap: usize,
+) -> i32 {
+    if out_key.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    #[cfg(feature = "app")]
+    {
+        if out_key_cap < crate::app::KEY_LEN {
+            return AWMError::InvalidMessageLength as i32;
+        }
+        let key = crate::app::generate_key();
+        match crate::app::KeyStore::new().and_then(|ks| {
+            ks.save_slot(slot, &key)?;
+            Ok(())
+        }) {
+            Ok(()) => {
+                ptr::copy_nonoverlapping(key.as_ptr(), out_key, key.len());
+                AWMError::Success as i32
+            }
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = (slot, out_key_cap);
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// 删除指定槽位密钥，并返回删除后激活槽位
+///
+/// # Safety
+/// - `out_new_active_slot` 必须是有效指针
+#[no_mangle]
+pub unsafe extern "C" fn awm_key_delete_slot(slot: u8, out_new_active_slot: *mut u8) -> i32 {
+    if out_new_active_slot.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    #[cfg(feature = "app")]
+    {
+        match crate::app::KeyStore::new().and_then(|ks| ks.delete_slot_and_reconcile_active(slot)) {
+            Ok(new_active_slot) => {
+                *out_new_active_slot = new_active_slot;
+                AWMError::Success as i32
+            }
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = (slot, out_new_active_slot);
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
 /// 删除已保存的密钥
 #[no_mangle]
 pub extern "C" fn awm_key_delete() -> i32 {
     #[cfg(feature = "app")]
     {
-        match crate::app::KeyStore::new().and_then(|ks| ks.delete()) {
+        match crate::app::KeyStore::new().and_then(|ks| {
+            let active_slot = ks.active_slot()?;
+            let _ = ks.delete_slot_and_reconcile_active(active_slot)?;
+            Ok(())
+        }) {
             Ok(()) => AWMError::Success as i32,
             Err(_) => AWMError::AudiowmarkExec as i32,
         }

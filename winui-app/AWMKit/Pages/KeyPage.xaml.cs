@@ -77,6 +77,7 @@ public sealed partial class KeyPage : Page
             }
 
             if (e.PropertyName is nameof(KeyViewModel.KeyAvailable)
+                or nameof(KeyViewModel.SelectedSlotHasKey)
                 or nameof(KeyViewModel.KeyStatusText)
                 or nameof(KeyViewModel.KeySourceLabel))
             {
