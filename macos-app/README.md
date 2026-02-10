@@ -7,7 +7,7 @@
 - **SwiftUI** - 现代 UI 框架
 - **XcodeGen** - 项目配置管理
 - **AWMKit Swift 绑定** - Rust 核心库的 Swift 封装
-- **玻璃效果设计** - 参考 AWMKitGlass 设计系统
+- **玻璃效果设计** - 基于项目内设计系统实现
 
 ## 项目结构
 
