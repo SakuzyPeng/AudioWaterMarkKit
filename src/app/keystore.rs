@@ -23,6 +23,7 @@ pub enum KeyBackend {
 }
 
 impl KeyBackend {
+    #[must_use]
     pub fn label(&self) -> String {
         match self {
             Self::Keyring => format!("keyring (service: {SERVICE})"),
@@ -82,10 +83,12 @@ impl KeyStore {
         settings.set_active_key_slot(slot)
     }
 
+    #[must_use]
     pub fn exists(&self) -> bool {
         self.active_slot().is_ok_and(|slot| self.exists_slot(slot))
     }
 
+    #[must_use]
     pub fn exists_slot(&self, slot: u8) -> bool {
         if validate_slot(slot).is_err() {
             return false;
@@ -93,6 +96,7 @@ impl KeyStore {
         self.load_slot_with_backend(slot).is_ok()
     }
 
+    #[must_use]
     pub fn list_configured_slots(&self) -> Vec<u8> {
         (KEY_SLOT_MIN..=KEY_SLOT_MAX)
             .filter(|slot| self.exists_slot(*slot))
@@ -126,10 +130,11 @@ impl KeyStore {
 
     pub fn delete_slot(&self, slot: u8) -> Result<()> {
         validate_slot(slot)?;
-        let mut removed = false;
-        if self.delete_from_keyring_slot(slot).is_ok() {
-            removed = true;
-        }
+        #[cfg(not(windows))]
+        let removed = Self::delete_from_keyring_slot(slot).is_ok();
+
+        #[cfg(windows)]
+        let mut removed = Self::delete_from_keyring_slot(slot).is_ok();
         #[cfg(windows)]
         {
             let slot_path = self.dpapi_slot_path(slot);
@@ -168,7 +173,7 @@ impl KeyStore {
 
     pub fn load_slot_with_backend(&self, slot: u8) -> Result<(Vec<u8>, KeyBackend)> {
         validate_slot(slot)?;
-        match self.load_from_keyring_slot(slot) {
+        match Self::load_from_keyring_slot(slot) {
             Ok(key) => Ok((key, KeyBackend::Keyring)),
             Err(keyring_err) => {
                 #[cfg(windows)]
@@ -229,7 +234,9 @@ impl KeyStore {
     }
 
     fn save_slot_raw(&self, slot: u8, key: &[u8]) -> Result<()> {
-        if self.save_to_keyring_slot(slot, key).is_ok() {
+        #[cfg(not(windows))]
+        let _ = self;
+        if Self::save_to_keyring_slot(slot, key).is_ok() {
             return Ok(());
         }
         #[cfg(windows)]
@@ -266,7 +273,9 @@ impl KeyStore {
     }
 
     fn try_load_legacy_key(&self) -> Result<Option<Vec<u8>>> {
-        match self.load_from_legacy_keyring() {
+        #[cfg(not(windows))]
+        let _ = self;
+        match Self::load_from_legacy_keyring() {
             Ok(key) => return Ok(Some(key)),
             Err(AppError::KeyNotFound | AppError::KeyStore(_)) => {}
             Err(err) => return Err(err),
@@ -280,7 +289,7 @@ impl KeyStore {
         Ok(None)
     }
 
-    fn load_from_keyring_slot(&self, slot: u8) -> Result<Vec<u8>> {
+    fn load_from_keyring_slot(slot: u8) -> Result<Vec<u8>> {
         let username = slot_username(slot);
         let entry = keyring_entry(&username)?;
         let hex_key = entry.get_password().map_err(|_| AppError::KeyNotFound)?;
@@ -289,7 +298,7 @@ impl KeyStore {
         Ok(key)
     }
 
-    fn save_to_keyring_slot(&self, slot: u8, key: &[u8]) -> Result<()> {
+    fn save_to_keyring_slot(slot: u8, key: &[u8]) -> Result<()> {
         let username = slot_username(slot);
         let entry = keyring_entry(&username)?;
         entry
@@ -298,7 +307,7 @@ impl KeyStore {
         Ok(())
     }
 
-    fn delete_from_keyring_slot(&self, slot: u8) -> Result<()> {
+    fn delete_from_keyring_slot(slot: u8) -> Result<()> {
         let username = slot_username(slot);
         let entry = keyring_entry(&username)?;
         entry
@@ -307,7 +316,7 @@ impl KeyStore {
         Ok(())
     }
 
-    fn load_from_legacy_keyring(&self) -> Result<Vec<u8>> {
+    fn load_from_legacy_keyring() -> Result<Vec<u8>> {
         let entry = keyring_entry(LEGACY_USERNAME)?;
         let hex_key = entry.get_password().map_err(|_| AppError::KeyNotFound)?;
         let key = hex::decode(hex_key).map_err(|e| AppError::Message(e.to_string()))?;
@@ -366,13 +375,14 @@ impl KeyStore {
     }
 }
 
+#[must_use]
 pub fn generate_key() -> [u8; KEY_LEN] {
     let mut key = [0u8; KEY_LEN];
     OsRng.fill_bytes(&mut key);
     key
 }
 
-fn validate_key_len(len: usize) -> Result<()> {
+const fn validate_key_len(len: usize) -> Result<()> {
     if len == KEY_LEN {
         Ok(())
     } else {
@@ -387,6 +397,7 @@ fn slot_username(slot: u8) -> String {
     format!("{SLOT_USERNAME_PREFIX}{slot}")
 }
 
+#[must_use]
 pub fn key_id_from_key_material(key: &[u8]) -> String {
     let digest = Sha256::digest(key);
     hex::encode_upper(digest)[..10].to_string()

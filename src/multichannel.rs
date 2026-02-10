@@ -160,7 +160,7 @@ impl MultichannelAudio {
 
     /// 获取声道数
     #[must_use]
-    pub fn num_channels(&self) -> usize {
+    pub const fn num_channels(&self) -> usize {
         self.channels.len()
     }
 
@@ -185,7 +185,8 @@ impl MultichannelAudio {
     /// 获取推断的声道布局
     #[must_use]
     pub fn layout(&self) -> ChannelLayout {
-        ChannelLayout::from_channels(self.num_channels() as u16)
+        let channels = u16::try_from(self.num_channels()).unwrap_or(u16::MAX);
+        ChannelLayout::from_channels(channels)
     }
 
     /// 从 WAV 文件加载
@@ -218,7 +219,7 @@ impl MultichannelAudio {
             SampleFormat::Float32 => reader
                 .into_samples::<f32>()
                 .map(|s| {
-                    s.map(|v| (v * 2_147_483_647.0) as i32)
+                    s.map(scale_float_to_i32)
                         .map_err(|e| Error::InvalidInput(format!("read error: {e}")))
                 })
                 .collect::<Result<Vec<_>>>()?,
@@ -275,9 +276,12 @@ impl MultichannelAudio {
             .read_next_or_eof(buffer)
             .map_err(|e| Error::InvalidInput(format!("FLAC decode error: {e}")))?
         {
-            for ch in 0..num_channels {
-                let ch_samples = block.channel(ch as u32);
-                channels[ch].extend(ch_samples.iter().copied());
+            for (ch, channel) in channels.iter_mut().enumerate().take(num_channels) {
+                let ch_idx = u32::try_from(ch).map_err(|_| {
+                    Error::InvalidInput("channel index overflow while decoding FLAC".to_string())
+                })?;
+                let ch_samples = block.channel(ch_idx);
+                channel.extend(ch_samples.iter().copied());
             }
 
             buffer = block.into_buffer();
@@ -317,8 +321,12 @@ impl MultichannelAudio {
             SampleFormat::Float32 => (HoundFormat::Float, 32),
         };
 
+        let channels = u16::try_from(self.num_channels()).map_err(|_| {
+            Error::InvalidInput("channel count overflow for WAV writer".to_string())
+        })?;
+
         let spec = WavSpec {
-            channels: self.num_channels() as u16,
+            channels,
             sample_rate: self.sample_rate,
             bits_per_sample: bits,
             sample_format: hound_format,
@@ -334,8 +342,11 @@ impl MultichannelAudio {
             for ch in &self.channels {
                 match self.sample_format {
                     SampleFormat::Int16 => {
+                        let sample_i16 = i16::try_from(ch[i]).map_err(|_| {
+                            Error::InvalidInput(format!("sample out of 16-bit range at index {i}"))
+                        })?;
                         writer
-                            .write_sample(ch[i] as i16)
+                            .write_sample(sample_i16)
                             .map_err(|e| Error::InvalidInput(format!("write error: {e}")))?;
                     }
                     SampleFormat::Int24 | SampleFormat::Int32 => {
@@ -344,7 +355,13 @@ impl MultichannelAudio {
                             .map_err(|e| Error::InvalidInput(format!("write error: {e}")))?;
                     }
                     SampleFormat::Float32 => {
-                        let f = ch[i] as f32 / 2_147_483_647.0;
+                        let sample_i16 = i16::try_from(
+                            (ch[i] >> 16).clamp(i32::from(i16::MIN), i32::from(i16::MAX)),
+                        )
+                        .map_err(|_| {
+                            Error::InvalidInput(format!("sample out of float32 range at index {i}"))
+                        })?;
+                        let f = f32::from(sample_i16) / f32::from(i16::MAX);
                         writer
                             .write_sample(f)
                             .map_err(|e| Error::InvalidInput(format!("write error: {e}")))?;
@@ -451,10 +468,37 @@ impl MultichannelAudio {
             )));
         }
 
-        self.channels[left_idx] = stereo.channels[0].clone();
-        self.channels[right_idx] = stereo.channels[1].clone();
+        self.channels[left_idx].clone_from(&stereo.channels[0]);
+        self.channels[right_idx].clone_from(&stereo.channels[1]);
 
         Ok(())
+    }
+}
+
+fn scale_float_to_i32(sample: f32) -> i32 {
+    use num_traits::ToPrimitive;
+
+    const I32_MIN_F64: f64 = -2_147_483_648.0_f64;
+    const I32_MAX_F64: f64 = 2_147_483_647.0_f64;
+
+    if !sample.is_finite() {
+        return 0;
+    }
+
+    let scaled = f64::from(sample) * 2_147_483_647.0_f64;
+    let rounded = scaled.round();
+    if rounded <= I32_MIN_F64 {
+        i32::MIN
+    } else if rounded >= I32_MAX_F64 {
+        i32::MAX
+    } else {
+        rounded.to_i32().unwrap_or_else(|| {
+            if rounded.is_sign_negative() {
+                i32::MIN
+            } else {
+                i32::MAX
+            }
+        })
     }
 }
 
@@ -486,11 +530,9 @@ mod tests {
             vec![13, 14, 15, 16],
         ];
 
-        let audio_result = MultichannelAudio::new(channels.clone(), 48000, SampleFormat::Int24);
+        let audio_result = MultichannelAudio::new(channels, 48000, SampleFormat::Int24);
         assert!(audio_result.is_ok());
-        let audio = if let Ok(value) = audio_result {
-            value
-        } else {
+        let Ok(audio) = audio_result else {
             return;
         };
 
@@ -504,9 +546,7 @@ mod tests {
         let merged_result =
             MultichannelAudio::merge_stereo_pairs(&pairs, 48000, SampleFormat::Int24);
         assert!(merged_result.is_ok());
-        let merged = if let Ok(value) = merged_result {
-            value
-        } else {
+        let Ok(merged) = merged_result else {
             return;
         };
         assert_eq!(merged.num_channels(), 4);

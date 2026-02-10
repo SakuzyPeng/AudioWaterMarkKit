@@ -140,8 +140,8 @@ fn run() -> Result<()> {
     let lang = cli
         .lang
         .as_deref()
-        .or_else(|| env_lang.as_deref())
-        .or_else(|| settings.language.as_deref());
+        .or(env_lang.as_deref())
+        .or(settings.language.as_deref());
     i18n::set_language(lang).map_err(CliError::from)?;
 
     if cli.quiet && cli.verbose {

@@ -19,7 +19,7 @@ pub enum CliLayout {
 }
 
 impl CliLayout {
-    pub fn to_channel_layout(self) -> Option<ChannelLayout> {
+    pub const fn to_channel_layout(self) -> Option<ChannelLayout> {
         match self {
             Self::Auto => None,
             Self::Stereo => Some(ChannelLayout::Stereo),

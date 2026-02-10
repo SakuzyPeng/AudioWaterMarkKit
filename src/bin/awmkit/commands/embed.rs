@@ -13,6 +13,8 @@ use fluent_bundle::FluentArgs;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::PathBuf;
 
+const EMBED_PROGRESS_TEMPLATE: &str = "{prefix} [{bar:40}] {pos}/{len}";
+
 #[derive(Args)]
 pub struct EmbedArgs {
     /// Tag (1-7 identity or full 8-char tag)
@@ -37,7 +39,7 @@ pub struct EmbedArgs {
 }
 
 pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
-    let mut inputs = expand_inputs(&args.inputs)?;
+    let inputs = expand_inputs(&args.inputs)?;
     if args.output.is_some() && inputs.len() != 1 {
         return Err(CliError::Message(i18n::tr("cli-embed-output_single")));
     }
@@ -68,7 +70,7 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
     } else {
         let bar = ProgressBar::new(inputs.len() as u64);
         bar.set_style(
-            ProgressStyle::with_template("{prefix} [{bar:40}] {pos}/{len}")
+            ProgressStyle::with_template(EMBED_PROGRESS_TEMPLATE)
                 .map_err(|e| CliError::Message(e.to_string()))?
                 .progress_chars("=>-"),
         );
@@ -79,7 +81,7 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
     let mut success = 0usize;
     let mut failed = 0usize;
 
-    for input in inputs.drain(..) {
+    for input in inputs {
         let output = match &args.output {
             Some(path) => path.clone(),
             None => default_output_path(&input)?,
@@ -139,7 +141,7 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
                 if let Some(ref bar) = progress {
                     bar.println(format!("[ERR] {}: {err}", input.display()));
                 } else {
-                    ctx.out.error(format!("[ERR] {}: {err}", input.display()));
+                    crate::output::Output::error(format!("[ERR] {}: {err}", input.display()));
                 }
             }
         }

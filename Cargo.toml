@@ -24,6 +24,7 @@ required-features = ["full-cli"]
 hmac = "0.12"
 sha2 = "0.10"
 thiserror = "2"
+num-traits = "0.2"
 
 [dev-dependencies]
 hex = "0.4"

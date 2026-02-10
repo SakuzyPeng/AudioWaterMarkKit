@@ -115,8 +115,9 @@ impl AppSettingsStore {
         while let Some(row) = rows.next()? {
             let slot_i64: i64 = row.get(0)?;
             let label: String = row.get(1)?;
-            #[allow(clippy::cast_possible_truncation)]
-            let slot = slot_i64 as u8;
+            let Ok(slot) = u8::try_from(slot_i64) else {
+                continue;
+            };
             if is_valid_slot(slot) {
                 out.push((slot, label));
             }
@@ -142,6 +143,7 @@ pub fn validate_slot(slot: u8) -> Result<()> {
 }
 
 /// Check if slot is inside valid range.
+#[must_use]
 pub const fn is_valid_slot(slot: u8) -> bool {
     slot <= KEY_SLOT_MAX
 }

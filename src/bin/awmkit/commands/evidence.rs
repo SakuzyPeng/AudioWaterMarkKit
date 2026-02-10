@@ -218,8 +218,7 @@ fn clear(ctx: &Context, args: &ClearArgs) -> Result<()> {
         .map_or_else(|| "-".to_string(), |slot| slot.to_string());
 
     ctx.out.info(format!(
-        "cleared evidence rows={} identity={} tag={} key_slot={}",
-        removed, identity, tag, key_slot
+        "cleared evidence rows={removed} identity={identity} tag={tag} key_slot={key_slot}"
     ));
 
     Ok(())
@@ -230,8 +229,7 @@ fn ensure_yes(yes: bool, action: &str) -> Result<()> {
         Ok(())
     } else {
         Err(CliError::Message(format!(
-            "{} requires --yes confirmation",
-            action
+            "{action} requires --yes confirmation"
         )))
     }
 }

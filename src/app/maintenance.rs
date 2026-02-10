@@ -20,7 +20,7 @@ pub fn reset_all() -> Result<()> {
     store.clear()?;
     let keystore = KeyStore::new()?;
     if keystore.exists() {
-        let _ = keystore.delete()?;
+        keystore.delete()?;
     }
     Ok(())
 }

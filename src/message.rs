@@ -47,6 +47,7 @@ pub struct MessageResult {
 
 impl MessageResult {
     /// 获取身份字符串
+    #[must_use]
     pub fn identity(&self) -> &str {
         self.tag.identity()
     }
@@ -163,7 +164,7 @@ pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
 
     Ok(MessageResult {
         version,
-        timestamp_utc: timestamp_minutes as u64 * 60,
+        timestamp_utc: u64::from(timestamp_minutes) * 60,
         timestamp_minutes,
         key_slot,
         tag,
@@ -171,6 +172,7 @@ pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
 }
 
 /// 仅验证 HMAC（不解析内容）
+#[must_use]
 pub fn verify(data: &[u8], key: &[u8]) -> bool {
     if data.len() != MESSAGE_LEN {
         return false;
@@ -237,7 +239,7 @@ fn pack_timestamp_v2(timestamp_minutes: u32, key_slot: u8) -> Result<u32> {
     Ok((timestamp_minutes << KEY_SLOT_BITS) | u32::from(key_slot))
 }
 
-fn unpack_timestamp_v2(packed_timestamp: u32) -> (u32, u8) {
+const fn unpack_timestamp_v2(packed_timestamp: u32) -> (u32, u8) {
     let timestamp_minutes = packed_timestamp >> KEY_SLOT_BITS;
     #[allow(clippy::cast_possible_truncation)]
     let key_slot = (packed_timestamp & KEY_SLOT_MASK) as u8;

@@ -309,6 +309,7 @@ dependencies = [
  "i18n-embed-fl",
  "indicatif",
  "keyring",
+ "num-traits",
  "once_cell",
  "rand",
  "rusqlite",

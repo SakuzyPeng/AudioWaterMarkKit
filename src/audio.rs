@@ -130,18 +130,21 @@ impl Audio {
     }
 
     /// 设置水印强度 (1-30)
+    #[must_use]
     pub fn strength(mut self, strength: u8) -> Self {
         self.strength = strength.clamp(1, 30);
         self
     }
 
     /// 设置密钥文件
+    #[must_use]
     pub fn key_file<P: AsRef<Path>>(mut self, path: P) -> Self {
         self.key_file = Some(path.as_ref().to_path_buf());
         self
     }
 
     /// 返回 audiowmark 二进制路径
+    #[must_use]
     pub fn binary_path(&self) -> &Path {
         &self.binary_path
     }
@@ -225,7 +228,7 @@ impl Audio {
         let stderr = String::from_utf8_lossy(&output.stderr);
 
         // 解析输出
-        parse_detect_output(&stdout, &stderr)
+        Ok(parse_detect_output(&stdout, &stderr))
     }
 
     /// 便捷方法：检测并解码消息
@@ -244,6 +247,7 @@ impl Audio {
     }
 
     /// 检查 audiowmark 是否可用
+    #[must_use]
     pub fn is_available(&self) -> bool {
         self.audiowmark_command()
             .arg("--version")
@@ -546,13 +550,13 @@ impl Default for Audio {
 }
 
 /// 解析 audiowmark get 输出
-fn parse_detect_output(stdout: &str, stderr: &str) -> Result<Option<DetectResult>> {
+fn parse_detect_output(stdout: &str, stderr: &str) -> Option<DetectResult> {
     // 查找 pattern 行
     // 格式: "pattern  all 0101c1d05978131b57f7deb8e22a0b78"
     // 或:   "pattern   single 0101c1d05978131b57f7deb8e22a0b78 0"
     // 或:   "pattern  0:00 00000000000000000000000000000000 0.000 -0.001 CLIP-B" (audiowmark 0.6.x)
 
-    let combined = format!("{}\n{}", stdout, stderr);
+    let combined = format!("{stdout}\n{stderr}");
 
     for line in combined.lines() {
         let line = line.trim();
@@ -588,27 +592,27 @@ fn parse_detect_output(stdout: &str, stderr: &str) -> Result<Option<DetectResult
                         0
                     };
 
-                    return Ok(Some(DetectResult {
+                    return Some(DetectResult {
                         raw_message,
                         pattern,
                         detect_score,
                         bit_errors,
                         match_found: true,
-                    }));
+                    });
                 }
             }
         }
     }
 
     // 没有检测到水印
-    Ok(None)
+    None
 }
 
 fn parse_input_audio_format(path: &Path) -> Result<InputAudioFormat> {
     let ext = path
         .extension()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_ascii_lowercase());
+        .map(str::to_ascii_lowercase);
     match ext.as_deref() {
         Some("wav") => Ok(InputAudioFormat::Wav),
         Some("flac") => Ok(InputAudioFormat::Flac),
@@ -628,7 +632,7 @@ fn parse_output_audio_format(path: &Path) -> Result<OutputAudioFormat> {
     let ext = path
         .extension()
         .and_then(|s| s.to_str())
-        .map(|s| s.to_ascii_lowercase());
+        .map(str::to_ascii_lowercase);
     match ext.as_deref() {
         Some("wav") => Ok(OutputAudioFormat::Wav),
         Some("flac") => Ok(OutputAudioFormat::Flac),
@@ -694,8 +698,11 @@ fn decode_to_wav(input: &Path, output_wav: &Path) -> Result<()> {
     for sample in decoded.samples {
         let clamped = clamp_sample_to_bits(sample, decoded.bits_per_sample);
         if decoded.bits_per_sample == 16 {
+            let sample_i16 = i16::try_from(clamped).map_err(|_| {
+                Error::InvalidInput(format!("16-bit sample out of range after clamp: {clamped}"))
+            })?;
             writer
-                .write_sample(clamped as i16)
+                .write_sample(sample_i16)
                 .map_err(|e| Error::InvalidInput(format!("write error: {e}")))?;
         } else {
             writer
@@ -753,15 +760,14 @@ fn convert_wav_to_flac(input_wav: &Path, output_flac: &Path) -> Result<()> {
                     .samples::<f32>()
                     .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
                 {
-                    let scaled = (sample? * 8_388_607.0_f32).round() as i32;
+                    let scaled = scale_float_to_i32(sample?, 8_388_607.0_f32);
                     out.push(clamp_sample_to_bits(scaled, 24));
                 }
                 (24, out)
             }
             (sample_format, bits) => {
                 return Err(Error::InvalidInput(format!(
-                    "unsupported WAV format for FLAC conversion: {:?} {bits}bit",
-                    sample_format
+                    "unsupported WAV format for FLAC conversion: {sample_format:?} {bits}bit"
                 )))
             }
         };
@@ -817,12 +823,12 @@ fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
     use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
     use symphonia::core::errors::Error as SymphoniaError;
     use symphonia::core::formats::FormatOptions;
-    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
     use symphonia::core::meta::MetadataOptions;
     use symphonia::core::probe::Hint;
 
     let file = std::fs::File::open(input)?;
-    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
 
     let mut hint = Hint::new();
     if let Some(ext) = input.extension().and_then(|value| value.to_str()) {
@@ -852,7 +858,7 @@ fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
     let channels = track
         .codec_params
         .channels
-        .map(|value| value.count() as u16)
+        .and_then(|value| u16::try_from(value.count()).ok())
         .ok_or_else(|| Error::InvalidInput("audio channel count is unknown".to_string()))?;
     let bits_per_sample = track
         .codec_params
@@ -900,7 +906,7 @@ fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
                     samples.extend_from_slice(buffer.samples());
                 }
             }
-            Err(SymphoniaError::DecodeError(_) | SymphoniaError::IoError(_)) => continue,
+            Err(SymphoniaError::DecodeError(_) | SymphoniaError::IoError(_)) => {}
             Err(err) => {
                 return Err(Error::InvalidInput(format!(
                     "failed to decode audio packet: {err}"
@@ -927,12 +933,39 @@ fn clamp_sample_to_bits(sample: i32, bits_per_sample: u16) -> i32 {
     let bits = bits_per_sample.clamp(1, 32);
     let min = -(1_i64 << (bits - 1));
     let max = (1_i64 << (bits - 1)) - 1;
-    (sample as i64).clamp(min, max) as i32
+    let clamped = i64::from(sample).clamp(min, max);
+    i32::try_from(clamped).unwrap_or(if clamped < 0 { i32::MIN } else { i32::MAX })
+}
+
+fn scale_float_to_i32(sample: f32, scale: f32) -> i32 {
+    use num_traits::ToPrimitive;
+
+    const I32_MIN_F32: f32 = -2_147_483_648.0;
+    const I32_MAX_F32: f32 = 2_147_483_647.0;
+
+    if !sample.is_finite() {
+        return 0;
+    }
+
+    let rounded = (sample * scale).round();
+    if rounded <= I32_MIN_F32 {
+        i32::MIN
+    } else if rounded >= I32_MAX_F32 {
+        i32::MAX
+    } else {
+        rounded.to_i32().unwrap_or_else(|| {
+            if rounded.is_sign_negative() {
+                i32::MIN
+            } else {
+                i32::MAX
+            }
+        })
+    }
 }
 
 /// 字节数组转 hex 字符串
 fn bytes_to_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+    hex::encode(bytes)
 }
 
 /// hex 字符串转字节数组
@@ -978,10 +1011,8 @@ mod tests {
     fn test_parse_detect_output() {
         let stdout = "pattern  all 0101c1d05978131b57f7deb8e22a0b78\n";
         let parsed = parse_detect_output(stdout, "");
-        assert!(parsed.is_ok());
-        let maybe_result = parsed.ok().flatten();
-        assert!(maybe_result.is_some());
-        if let Some(result) = maybe_result {
+        assert!(parsed.is_some());
+        if let Some(result) = parsed {
             assert_eq!(result.pattern, "all");
             assert_eq!(result.detect_score, None);
             assert_eq!(result.raw_message[0], 0x01);
@@ -992,10 +1023,8 @@ mod tests {
     fn test_parse_detect_with_errors() {
         let stdout = "pattern   single 0101c1d05978131b57f7deb8e22a0b78 3\n";
         let parsed = parse_detect_output(stdout, "");
-        assert!(parsed.is_ok());
-        let maybe_result = parsed.ok().flatten();
-        assert!(maybe_result.is_some());
-        if let Some(result) = maybe_result {
+        assert!(parsed.is_some());
+        if let Some(result) = parsed {
             assert_eq!(result.pattern, "single");
             assert_eq!(result.detect_score, None);
             assert_eq!(result.bit_errors, 3);
@@ -1006,8 +1035,7 @@ mod tests {
     fn test_parse_detect_zero_message_as_not_found() {
         let stdout = "pattern  0:00 00000000000000000000000000000000 0.000 -0.001 CLIP-B\n";
         let parsed = parse_detect_output(stdout, "");
-        assert!(parsed.is_ok());
-        assert!(parsed.ok().flatten().is_none());
+        assert!(parsed.is_none());
     }
 
     #[test]
@@ -1017,10 +1045,8 @@ mod tests {
             "pattern  0:00 0101c1d05978131b57f7deb8e22a0b78 1.792 0.121 CLIP-B\n"
         );
         let parsed = parse_detect_output(stdout, "");
-        assert!(parsed.is_ok());
-        let maybe_result = parsed.ok().flatten();
-        assert!(maybe_result.is_some());
-        if let Some(result) = maybe_result {
+        assert!(parsed.is_some());
+        if let Some(result) = parsed {
             assert_eq!(result.raw_message[0], 0x01);
             assert!(result
                 .detect_score
@@ -1033,18 +1059,15 @@ mod tests {
     fn test_parse_detect_ignore_low_score_candidate() {
         let stdout = "pattern  1:28 bb4aaa05ad77bf5e73c8eb37e44f0c94 0.209 0.379 A\n";
         let parsed = parse_detect_output(stdout, "");
-        assert!(parsed.is_ok());
-        assert!(parsed.ok().flatten().is_none());
+        assert!(parsed.is_none());
     }
 
     #[test]
     fn test_parse_detect_accept_high_score_candidate() {
         let stdout = "pattern  0:05 023848c0200045fffff7d8743d035cda 1.427 0.065 A\n";
         let parsed = parse_detect_output(stdout, "");
-        assert!(parsed.is_ok());
-        let maybe_result = parsed.ok().flatten();
-        assert!(maybe_result.is_some());
-        if let Some(result) = maybe_result {
+        assert!(parsed.is_some());
+        if let Some(result) = parsed {
             assert_eq!(result.raw_message[0], 0x02);
             assert!(result
                 .detect_score

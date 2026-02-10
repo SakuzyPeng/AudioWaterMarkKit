@@ -12,6 +12,7 @@ use serde::Serialize;
 
 const CLONE_LIKELY_MAX_SCORE: f64 = 7.0;
 const CLONE_LIKELY_MIN_SECONDS: f32 = 6.0;
+const DETECT_PROGRESS_TEMPLATE: &str = "{prefix} [{bar:40}] {pos}/{len}";
 
 #[derive(Args)]
 pub struct DetectArgs {
@@ -92,7 +93,7 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
     } else {
         let bar = ProgressBar::new(inputs.len() as u64);
         bar.set_style(
-            ProgressStyle::with_template("{prefix} [{bar:40}] {pos}/{len}")
+            ProgressStyle::with_template(DETECT_PROGRESS_TEMPLATE)
                 .map_err(|e| CliError::Message(e.to_string()))?
                 .progress_chars("=>-"),
         );
@@ -184,7 +185,7 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
                         slot_text
                     ));
                 } else {
-                    ctx.out.error(format!(
+                    crate::output::Output::error(format!(
                         "[INVALID] {}: {}{}{}",
                         input.display(),
                         error,
@@ -198,7 +199,7 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
                 if let Some(ref bar) = progress {
                     bar.println(format!("[ERR] {}: {err}", input.display()));
                 } else {
-                    ctx.out.error(format!("[ERR] {}: {err}", input.display()));
+                    crate::output::Output::error(format!("[ERR] {}: {err}", input.display()));
                 }
             }
         }

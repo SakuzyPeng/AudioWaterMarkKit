@@ -115,6 +115,7 @@ impl Message {
     }
 
     /// 仅验证 HMAC
+    #[must_use]
     pub fn verify(data: &[u8], key: &[u8]) -> bool {
         message::verify(data, key)
     }
@@ -130,23 +131,17 @@ mod tests {
 
         let tag_result = Tag::new("SAKUZY");
         assert!(tag_result.is_ok());
-        let tag = if let Ok(value) = tag_result {
-            value
-        } else {
+        let Ok(tag) = tag_result else {
             return;
         };
         let msg_result = Message::encode(CURRENT_VERSION, &tag, key);
         assert!(msg_result.is_ok());
-        let msg = if let Ok(value) = msg_result {
-            value
-        } else {
+        let Ok(msg) = msg_result else {
             return;
         };
         let decoded_result = Message::decode(&msg, key);
         assert!(decoded_result.is_ok());
-        let result = if let Ok(value) = decoded_result {
-            value
-        } else {
+        let Ok(result) = decoded_result else {
             return;
         };
 

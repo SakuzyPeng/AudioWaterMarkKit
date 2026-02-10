@@ -42,7 +42,7 @@ impl Tag {
         tag7[..len].copy_from_slice(identity.as_bytes());
 
         // 计算校验位
-        let check = calc_checksum(&tag7);
+        let check = calc_checksum(tag7);
 
         let mut chars = [0u8; 8];
         chars[..7].copy_from_slice(&tag7);
@@ -77,7 +77,7 @@ impl Tag {
         if !tag.verify() {
             // chars 长度固定为 8，切片 [..7] 必定成功
             #[allow(clippy::unwrap_used)]
-            let expected = calc_checksum(&chars[..7].try_into().unwrap());
+            let expected = calc_checksum(chars[..7].try_into().unwrap());
             return Err(Error::ChecksumMismatch {
                 expected: expected as char,
                 got: chars[7] as char,
@@ -107,7 +107,7 @@ impl Tag {
         if !tag.verify() {
             // chars 长度固定为 8，切片 [..7] 必定成功
             #[allow(clippy::unwrap_used)]
-            let expected = calc_checksum(&chars[..7].try_into().unwrap());
+            let expected = calc_checksum(chars[..7].try_into().unwrap());
             return Err(Error::ChecksumMismatch {
                 expected: expected as char,
                 got: chars[7] as char,
@@ -118,6 +118,7 @@ impl Tag {
     }
 
     /// 编码为 5 bytes packed 数据
+    #[must_use]
     pub fn to_packed(&self) -> [u8; 5] {
         let mut bits: u64 = 0;
         for &c in &self.chars {
@@ -138,14 +139,16 @@ impl Tag {
     }
 
     /// 验证校验位
+    #[must_use]
     pub fn verify(&self) -> bool {
         // chars 长度固定为 8，切片 [..7] 必定成功
         #[allow(clippy::unwrap_used)]
-        let expected = calc_checksum(&self.chars[..7].try_into().unwrap());
+        let expected = calc_checksum(self.chars[..7].try_into().unwrap());
         self.chars[7] == expected
     }
 
     /// 获取身份部分（去除尾部 _）
+    #[must_use]
     pub fn identity(&self) -> &str {
         // 所有字符都是 ASCII，from_utf8 必定成功
         #[allow(clippy::unwrap_used)]
@@ -154,6 +157,7 @@ impl Tag {
     }
 
     /// 获取完整 8 字符 Tag
+    #[must_use]
     pub fn as_str(&self) -> &str {
         // 所有字符都是 ASCII，from_utf8 必定成功
         #[allow(clippy::unwrap_used)]
@@ -161,7 +165,8 @@ impl Tag {
     }
 
     /// 获取字节数组
-    pub fn as_bytes(&self) -> &[u8; 8] {
+    #[must_use]
+    pub const fn as_bytes(&self) -> &[u8; 8] {
         &self.chars
     }
 }
@@ -177,15 +182,15 @@ impl std::str::FromStr for Tag {
 
     fn from_str(s: &str) -> Result<Self> {
         if s.len() <= 7 {
-            Tag::new(s)
+            Self::new(s)
         } else {
-            Tag::parse(s)
+            Self::parse(s)
         }
     }
 }
 
 /// 计算 7 字符的校验位
-fn calc_checksum(tag7: &[u8; 7]) -> u8 {
+fn calc_checksum(tag7: [u8; 7]) -> u8 {
     let total: u32 = tag7
         .iter()
         .enumerate()

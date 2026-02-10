@@ -2,7 +2,6 @@ use crate::app::error::{AppError, Result};
 use fluent_bundle::FluentArgs;
 use i18n_embed::fluent::FluentLanguageLoader;
 use i18n_embed::{DesktopLanguageRequester, LanguageLoader};
-use once_cell::sync::Lazy;
 use rust_embed::RustEmbed;
 use std::str::FromStr;
 use unic_langid::LanguageIdentifier;
@@ -11,11 +10,11 @@ use unic_langid::LanguageIdentifier;
 #[folder = "i18n"]
 struct Localizations;
 
-static FALLBACK_LANG: Lazy<LanguageIdentifier> = Lazy::new(|| {
+static FALLBACK_LANG: std::sync::LazyLock<LanguageIdentifier> = std::sync::LazyLock::new(|| {
     LanguageIdentifier::from_str("en-US").unwrap_or_else(|_| LanguageIdentifier::default())
 });
-static LOADER: Lazy<FluentLanguageLoader> =
-    Lazy::new(|| FluentLanguageLoader::new("awmkit", FALLBACK_LANG.clone()));
+static LOADER: std::sync::LazyLock<FluentLanguageLoader> =
+    std::sync::LazyLock::new(|| FluentLanguageLoader::new("awmkit", FALLBACK_LANG.clone()));
 
 #[derive(Clone, Copy)]
 pub struct LanguageInfo {
@@ -34,6 +33,7 @@ static LANGUAGES: &[LanguageInfo] = &[
     },
 ];
 
+#[must_use]
 pub fn available_languages() -> &'static [LanguageInfo] {
     LANGUAGES
 }
@@ -42,9 +42,10 @@ pub fn current_language() -> Option<String> {
     LOADER
         .current_languages()
         .first()
-        .map(|lang| lang.to_string())
+        .map(std::string::ToString::to_string)
 }
 
+#[must_use]
 pub fn env_language() -> Option<String> {
     let raw = std::env::var("LC_ALL")
         .ok()
@@ -60,11 +61,9 @@ pub fn env_language() -> Option<String> {
     if normalized.is_empty() {
         return None;
     }
-    if LanguageIdentifier::from_str(&normalized).is_ok() {
-        Some(normalized)
-    } else {
-        None
-    }
+    LanguageIdentifier::from_str(&normalized)
+        .is_ok()
+        .then_some(normalized)
 }
 
 pub fn set_language(lang: Option<&str>) -> Result<()> {

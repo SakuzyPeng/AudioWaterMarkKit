@@ -17,10 +17,10 @@ pub struct AudioProof {
 pub fn build_audio_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {
     let audio = MultichannelAudio::from_file(path)?;
     let sample_rate = audio.sample_rate();
-    #[allow(clippy::cast_possible_truncation)]
-    let channels = audio.num_channels() as u32;
-    #[allow(clippy::cast_possible_truncation)]
-    let sample_count = audio.num_samples() as u64;
+    let channels = u32::try_from(audio.num_channels())
+        .map_err(|_| AppError::Message("channel count overflow".to_string()))?;
+    let sample_count = u64::try_from(audio.num_samples())
+        .map_err(|_| AppError::Message("sample count overflow".to_string()))?;
     let sample_format = audio.sample_format();
     let interleaved = audio.interleaved_samples();
 
@@ -94,7 +94,7 @@ fn sample_to_i16(sample: i32, sample_format: SampleFormat) -> i16 {
 
     let min = i32::from(i16::MIN);
     let max = i32::from(i16::MAX);
-    scaled.clamp(min, max) as i16
+    i16::try_from(scaled.clamp(min, max)).unwrap_or(if scaled < 0 { i16::MIN } else { i16::MAX })
 }
 
 #[cfg(test)]

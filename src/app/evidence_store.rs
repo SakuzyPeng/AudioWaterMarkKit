@@ -73,11 +73,11 @@ impl EvidenceStore {
 
     pub fn insert(&self, input: &NewAudioEvidence) -> Result<bool> {
         let chromaprint_blob = encode_chromaprint_blob(&input.chromaprint);
-        #[allow(clippy::cast_possible_truncation)]
-        let fingerprint_len = input.chromaprint.len() as i64;
+        let fingerprint_len = i64::try_from(input.chromaprint.len())
+            .map_err(|_| AppError::Message("fingerprint length overflow".to_string()))?;
         let created_at = now_ts()?;
-        #[allow(clippy::cast_possible_wrap)]
-        let sample_count_i64 = input.sample_count as i64;
+        let sample_count_i64 = i64::try_from(input.sample_count)
+            .map_err(|_| AppError::Message("sample_count overflow".to_string()))?;
         let changed = self.conn.execute(
             "INSERT OR IGNORE INTO audio_evidence (
                 created_at, file_path, tag, identity, version, key_slot, timestamp_minutes,
@@ -126,8 +126,8 @@ impl EvidenceStore {
         key_slot: Option<u8>,
         limit: usize,
     ) -> Result<Vec<AudioEvidence>> {
-        #[allow(clippy::cast_possible_wrap)]
-        let limit_i64 = limit as i64;
+        let limit_i64 =
+            i64::try_from(limit).map_err(|_| AppError::Message("limit overflow".to_string()))?;
         let key_slot_i64 = key_slot.map(i64::from);
         let mut stmt = self.conn.prepare(
             "SELECT
@@ -198,8 +198,8 @@ impl EvidenceStore {
             .query_row([], |row| row.get(0))
             .optional()?
             .unwrap_or(0);
-        #[allow(clippy::cast_sign_loss)]
-        let count = count as usize;
+        let count = usize::try_from(count)
+            .map_err(|_| AppError::Message("count must be non-negative".to_string()))?;
         Ok(count)
     }
 
@@ -221,8 +221,8 @@ impl EvidenceStore {
             .query_row(params![i64::from(key_slot), key_id], |row| row.get(0))
             .optional()?
             .unwrap_or(0);
-        #[allow(clippy::cast_sign_loss)]
-        let count = count as usize;
+        let count = usize::try_from(count)
+            .map_err(|_| AppError::Message("count must be non-negative".to_string()))?;
         Ok(count)
     }
 
@@ -258,8 +258,8 @@ impl EvidenceStore {
             .optional()?
             .unwrap_or((0, None));
 
-        #[allow(clippy::cast_sign_loss)]
-        let count = count_i64 as usize;
+        let count = usize::try_from(count_i64)
+            .map_err(|_| AppError::Message("count must be non-negative".to_string()))?;
         let last_created_at = last_i64.and_then(|value| u64::try_from(value).ok());
 
         Ok(EvidenceSlotUsage {
@@ -287,32 +287,33 @@ fn parse_audio_evidence_row(row: &Row<'_>) -> Result<AudioEvidence> {
 
     Ok(AudioEvidence {
         id: row.get(0)?,
-        #[allow(clippy::cast_sign_loss)]
-        created_at: created_at_i64 as u64,
+        created_at: u64::try_from(created_at_i64)
+            .map_err(|_| AppError::Message("created_at must be non-negative".to_string()))?,
         file_path: row.get(2)?,
         tag: row.get(3)?,
         identity: row.get(4)?,
-        #[allow(clippy::cast_possible_truncation)]
-        version: version_i64 as u8,
-        #[allow(clippy::cast_possible_truncation)]
-        key_slot: key_slot_i64 as u8,
-        #[allow(clippy::cast_possible_truncation)]
-        timestamp_minutes: timestamp_minutes_i64 as u32,
+        version: u8::try_from(version_i64)
+            .map_err(|_| AppError::Message("version out of range".to_string()))?,
+        key_slot: u8::try_from(key_slot_i64)
+            .map_err(|_| AppError::Message("key_slot out of range".to_string()))?,
+        timestamp_minutes: u32::try_from(timestamp_minutes_i64)
+            .map_err(|_| AppError::Message("timestamp_minutes out of range".to_string()))?,
         message_hex: row.get(8)?,
-        #[allow(clippy::cast_possible_truncation)]
-        sample_rate: sample_rate_i64 as u32,
-        #[allow(clippy::cast_possible_truncation)]
-        channels: channels_i64 as u32,
-        #[allow(clippy::cast_sign_loss)]
-        sample_count: sample_count_i64 as u64,
+        sample_rate: u32::try_from(sample_rate_i64)
+            .map_err(|_| AppError::Message("sample_rate out of range".to_string()))?,
+        channels: u32::try_from(channels_i64)
+            .map_err(|_| AppError::Message("channels out of range".to_string()))?,
+        sample_count: u64::try_from(sample_count_i64)
+            .map_err(|_| AppError::Message("sample_count must be non-negative".to_string()))?,
         pcm_sha256: row.get(12)?,
         key_id: row.get(13)?,
         chromaprint,
-        #[allow(clippy::cast_possible_truncation)]
-        fp_config_id: fp_config_id_i64 as u8,
+        fp_config_id: u8::try_from(fp_config_id_i64)
+            .map_err(|_| AppError::Message("fp_config_id out of range".to_string()))?,
     })
 }
 
+#[must_use]
 pub fn encode_chromaprint_blob(chromaprint: &[u32]) -> Vec<u8> {
     let mut blob = Vec::with_capacity(chromaprint.len() * 4);
     for value in chromaprint {

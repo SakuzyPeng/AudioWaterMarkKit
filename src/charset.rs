@@ -10,19 +10,25 @@ pub const PRIMES: [u32; 7] = [3, 5, 7, 11, 13, 17, 19];
 
 /// 字符转索引 (0-31)，无效字符返回 None
 #[inline]
+#[must_use]
 pub fn char_to_index(c: u8) -> Option<u8> {
     let c = c.to_ascii_uppercase();
-    CHARSET.iter().position(|&x| x == c).map(|i| i as u8)
+    CHARSET
+        .iter()
+        .position(|&x| x == c)
+        .and_then(|i| u8::try_from(i).ok())
 }
 
 /// 索引转字符
 #[inline]
+#[must_use]
 pub fn index_to_char(i: u8) -> Option<u8> {
     CHARSET.get(i as usize).copied()
 }
 
 /// 验证字符是否在字符集内
 #[inline]
+#[must_use]
 pub fn is_valid_char(c: u8) -> bool {
     char_to_index(c).is_some()
 }

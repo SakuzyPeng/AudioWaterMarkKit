@@ -30,7 +30,7 @@ impl Output {
         }
     }
 
-    pub fn error(&self, msg: impl Display) {
+    pub fn error(msg: impl Display) {
         eprintln!("{msg}");
     }
 }

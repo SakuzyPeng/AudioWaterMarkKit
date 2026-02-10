@@ -50,22 +50,22 @@ impl From<awmkit::app::AppError> for CliError {
     fn from(err: awmkit::app::AppError) -> Self {
         use awmkit::app::AppError;
         match err {
-            AppError::Message(msg) => CliError::Message(msg),
-            AppError::KeyNotFound => CliError::KeyNotFound,
+            AppError::Message(msg) => Self::Message(msg),
+            AppError::KeyNotFound => Self::KeyNotFound,
             AppError::InvalidKeyLength { expected, actual } => {
-                CliError::InvalidKeyLength { expected, actual }
+                Self::InvalidKeyLength { expected, actual }
             }
-            AppError::KeyStore(msg) => CliError::KeyStore(msg),
+            AppError::KeyStore(msg) => Self::KeyStore(msg),
             AppError::MappingExists {
                 username,
                 existing_tag: _,
-            } => CliError::MappingExists(username),
-            AppError::Io(err) => CliError::Io(err),
-            AppError::Json(err) => CliError::Json(err),
-            AppError::Sqlite(err) => CliError::Message(err.to_string()),
-            AppError::Awmkit(err) => CliError::Awmkit(err),
-            AppError::TomlDe(err) => CliError::Message(err.to_string()),
-            AppError::TomlSer(err) => CliError::Message(err.to_string()),
+            } => Self::MappingExists(username),
+            AppError::Io(err) => Self::Io(err),
+            AppError::Json(err) => Self::Json(err),
+            AppError::Sqlite(err) => Self::Message(err.to_string()),
+            AppError::Awmkit(err) => Self::Awmkit(err),
+            AppError::TomlDe(err) => Self::Message(err.to_string()),
+            AppError::TomlSer(err) => Self::Message(err.to_string()),
         }
     }
 }
@@ -73,44 +73,44 @@ impl From<awmkit::app::AppError> for CliError {
 impl CliError {
     pub fn user_message(&self) -> String {
         match self {
-            CliError::Message(msg) => msg.clone(),
-            CliError::KeyNotFound => i18n::tr("cli-error-key_not_found"),
-            CliError::InvalidKeyLength { expected, actual } => {
+            Self::Message(msg) => msg.clone(),
+            Self::KeyNotFound => i18n::tr("cli-error-key_not_found"),
+            Self::InvalidKeyLength { expected, actual } => {
                 let mut args = FluentArgs::new();
                 args.set("expected", expected.to_string());
                 args.set("actual", actual.to_string());
                 i18n::tr_args("cli-error-invalid_key_length", &args)
             }
-            CliError::KeyStore(msg) => {
+            Self::KeyStore(msg) => {
                 let mut args = FluentArgs::new();
                 args.set("error", msg.as_str());
                 i18n::tr_args("cli-error-key_store", &args)
             }
-            CliError::AudiowmarkNotFound => i18n::tr("cli-error-audiowmark_not_found"),
-            CliError::InputNotFound(path) => {
+            Self::AudiowmarkNotFound => i18n::tr("cli-error-audiowmark_not_found"),
+            Self::InputNotFound(path) => {
                 let mut args = FluentArgs::new();
                 args.set("path", path.as_str());
                 i18n::tr_args("cli-error-input_not_found", &args)
             }
-            CliError::InvalidGlob(pattern) => {
+            Self::InvalidGlob(pattern) => {
                 let mut args = FluentArgs::new();
                 args.set("pattern", pattern.as_str());
                 i18n::tr_args("cli-error-invalid_glob", &args)
             }
-            CliError::Glob(error) => {
+            Self::Glob(error) => {
                 let mut args = FluentArgs::new();
                 args.set("error", error.as_str());
                 i18n::tr_args("cli-error-glob", &args)
             }
-            CliError::MappingExists(username) => {
+            Self::MappingExists(username) => {
                 let mut args = FluentArgs::new();
                 args.set("username", username.as_str());
                 i18n::tr_args("cli-error-mapping_exists", &args)
             }
-            CliError::Io(err) => err.to_string(),
-            CliError::Hex(err) => err.to_string(),
-            CliError::Awmkit(err) => err.to_string(),
-            CliError::Json(err) => err.to_string(),
+            Self::Io(err) => err.to_string(),
+            Self::Hex(err) => err.to_string(),
+            Self::Awmkit(err) => err.to_string(),
+            Self::Json(err) => err.to_string(),
         }
     }
 }
