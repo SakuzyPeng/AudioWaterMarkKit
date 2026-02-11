@@ -394,7 +394,7 @@ public sealed partial class EmbedViewModel : ObservableObject
 
         var count = SelectedFiles.Count;
         SelectedFiles.Clear();
-        AddLog("已清空队列", $"移除了 {count} 个文件", true, false, LogIconTone.Success);
+        AddLog("已清空队列", $"移除了 {count} 个文件", true, false, LogIconTone.Success, LogKind.QueueCleared);
         await FlashClearQueueAsync();
     }
 
@@ -409,7 +409,7 @@ public sealed partial class EmbedViewModel : ObservableObject
 
         var count = Logs.Count;
         Logs.Clear();
-        AddLog("已清空日志", $"移除了 {count} 条日志记录", true, true, LogIconTone.Success);
+        AddLog("已清空日志", $"移除了 {count} 条日志记录", true, true, LogIconTone.Success, LogKind.LogsCleared);
         await FlashClearLogsAsync();
     }
 
@@ -549,12 +549,12 @@ public sealed partial class EmbedViewModel : ObservableObject
                 }
 
                 successCount += 1;
-                AddLog($"成功: {Path.GetFileName(inputPath)}", $"→ {Path.GetFileName(outputPath)}", true, false, LogIconTone.Success);
+                AddLog($"成功: {Path.GetFileName(inputPath)}", $"→ {Path.GetFileName(outputPath)}", true, false, LogIconTone.Success, LogKind.ResultOk);
             }
             else
             {
                 failureCount += 1;
-                AddLog($"失败: {Path.GetFileName(inputPath)}", stepResult.embedError.ToString(), false, false, LogIconTone.Error);
+                AddLog($"失败: {Path.GetFileName(inputPath)}", stepResult.embedError.ToString(), false, false, LogIconTone.Error, LogKind.ResultError);
             }
 
             if (SelectedFiles.Count > 0)
@@ -833,7 +833,8 @@ public sealed partial class EmbedViewModel : ObservableObject
         string detail = "",
         bool isSuccess = true,
         bool isEphemeral = false,
-        LogIconTone iconTone = LogIconTone.Info)
+        LogIconTone iconTone = LogIconTone.Info,
+        LogKind kind = LogKind.Generic)
     {
         var entry = new LogEntry
         {
@@ -842,6 +843,7 @@ public sealed partial class EmbedViewModel : ObservableObject
             IsSuccess = isSuccess,
             IsEphemeral = isEphemeral,
             IconTone = iconTone,
+            Kind = kind,
         };
 
         Logs.Insert(0, entry);
@@ -850,7 +852,7 @@ public sealed partial class EmbedViewModel : ObservableObject
             Logs.RemoveAt(Logs.Count - 1);
         }
 
-        if (entry.IsEphemeral && entry.Title == "已清空日志")
+        if (entry.IsEphemeral && entry.Kind == LogKind.LogsCleared)
         {
             _ = DismissClearLogAsync(entry.Id);
         }
@@ -860,7 +862,7 @@ public sealed partial class EmbedViewModel : ObservableObject
     {
         await Task.Delay(TimeSpan.FromSeconds(3));
 
-        var target = Logs.FirstOrDefault(x => x.Id == logId && x.Title == "已清空日志");
+        var target = Logs.FirstOrDefault(x => x.Id == logId && x.Kind == LogKind.LogsCleared);
         if (target is not null)
         {
             Logs.Remove(target);

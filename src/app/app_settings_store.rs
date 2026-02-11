@@ -9,6 +9,9 @@ pub const KEY_SLOT_MIN: u8 = 0;
 /// Maximum valid key slot.
 pub const KEY_SLOT_MAX: u8 = 31;
 const ACTIVE_KEY_SLOT_KEY: &str = "active_key_slot";
+const UI_LANGUAGE_KEY: &str = "ui_language";
+const UI_LANG_ZH_CN: &str = "zh-CN";
+const UI_LANG_EN_US: &str = "en-US";
 
 /// App-level settings store backed by sqlite.
 pub struct AppSettingsStore {
@@ -54,6 +57,54 @@ impl AppSettingsStore {
                 updated_at = excluded.updated_at",
             params![ACTIVE_KEY_SLOT_KEY, slot.to_string(), now_ts()?],
         )?;
+        Ok(())
+    }
+
+    /// Read UI language override. Missing/invalid value returns None.
+    pub fn ui_language(&self) -> Result<Option<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM app_settings WHERE key = ?1 LIMIT 1")?;
+        let value: Option<String> = stmt
+            .query_row(params![UI_LANGUAGE_KEY], |row| row.get(0))
+            .optional()?;
+
+        let Some(raw) = value else {
+            return Ok(None);
+        };
+
+        Ok(normalize_ui_language(&raw).map(std::string::ToString::to_string))
+    }
+
+    /// Persist UI language override.
+    /// - `Some("zh-CN" | "en-US")`: set value
+    /// - `None`: clear value (use system default on app side)
+    pub fn set_ui_language(&self, lang: Option<&str>) -> Result<()> {
+        let now = now_ts()?;
+        match lang {
+            Some(raw) => {
+                let Some(normalized) = normalize_ui_language(raw) else {
+                    return Err(AppError::Message(format!(
+                        "invalid ui language: {raw} (expected {UI_LANG_ZH_CN} or {UI_LANG_EN_US})"
+                    )));
+                };
+
+                self.conn.execute(
+                    "INSERT INTO app_settings (key, value, updated_at)
+                     VALUES (?1, ?2, ?3)
+                     ON CONFLICT(key) DO UPDATE SET
+                        value = excluded.value,
+                        updated_at = excluded.updated_at",
+                    params![UI_LANGUAGE_KEY, normalized, now],
+                )?;
+            }
+            None => {
+                self.conn.execute(
+                    "DELETE FROM app_settings WHERE key = ?1",
+                    params![UI_LANGUAGE_KEY],
+                )?;
+            }
+        }
         Ok(())
     }
 
@@ -131,6 +182,14 @@ impl AppSettingsStore {
     }
 }
 
+fn normalize_ui_language(value: &str) -> Option<&'static str> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "zh-cn" => Some(UI_LANG_ZH_CN),
+        "en-us" => Some(UI_LANG_EN_US),
+        _ => None,
+    }
+}
+
 /// Validate slot range.
 pub fn validate_slot(slot: u8) -> Result<()> {
     if is_valid_slot(slot) {
@@ -197,4 +256,24 @@ fn now_ts() -> Result<u64> {
         .duration_since(UNIX_EPOCH)
         .map_err(|e| AppError::Message(format!("clock error: {e}")))?;
     Ok(now.as_secs())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_ui_language;
+
+    #[test]
+    fn normalize_supported_ui_language() {
+        assert_eq!(normalize_ui_language("zh-CN"), Some("zh-CN"));
+        assert_eq!(normalize_ui_language("ZH-cn"), Some("zh-CN"));
+        assert_eq!(normalize_ui_language("en-US"), Some("en-US"));
+        assert_eq!(normalize_ui_language("en-us"), Some("en-US"));
+    }
+
+    #[test]
+    fn reject_unsupported_ui_language() {
+        assert_eq!(normalize_ui_language("ja-JP"), None);
+        assert_eq!(normalize_ui_language(""), None);
+        assert_eq!(normalize_ui_language("system"), None);
+    }
 }

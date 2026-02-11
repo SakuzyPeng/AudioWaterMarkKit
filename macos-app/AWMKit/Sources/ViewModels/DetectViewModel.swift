@@ -103,6 +103,7 @@ class DetectViewModel: ObservableObject {
         _ title: String,
         detail: String = "",
         isSuccess: Bool = true,
+        kind: LogEntry.Kind = .generic,
         isEphemeral: Bool = false,
         relatedRecordId: UUID? = nil
     ) {
@@ -110,6 +111,7 @@ class DetectViewModel: ObservableObject {
             title: title,
             detail: detail,
             isSuccess: isSuccess,
+            kind: kind,
             isEphemeral: isEphemeral,
             relatedRecordId: relatedRecordId
         )
@@ -186,12 +188,13 @@ class DetectViewModel: ObservableObject {
                         "目录无可用音频",
                         detail: "当前目录未找到 WAV / FLAC / M4A / ALAC 文件",
                         isSuccess: false,
+                        kind: .directoryNoAudio,
                         isEphemeral: true
                     )
                 }
                 return files
             } catch {
-                log("读取目录失败", detail: error.localizedDescription, isSuccess: false)
+                log("读取目录失败", detail: error.localizedDescription, isSuccess: false, kind: .directoryReadFailed)
                 return []
             }
         }
@@ -201,6 +204,7 @@ class DetectViewModel: ObservableObject {
                 "不支持的输入源",
                 detail: "请选择 WAV / FLAC / M4A / ALAC 文件或包含这些文件的目录",
                 isSuccess: false,
+                kind: .unsupportedInput,
                 isEphemeral: true
             )
             return []
@@ -228,7 +232,7 @@ class DetectViewModel: ObservableObject {
             selectedFiles.append(contentsOf: deduped)
         }
         if duplicateCount > 0 {
-            log("已去重", detail: "跳过 \(duplicateCount) 个重复文件", isEphemeral: true)
+            log("已去重", detail: "跳过 \(duplicateCount) 个重复文件", kind: .deduplicated, isEphemeral: true)
         }
     }
 
@@ -252,18 +256,18 @@ class DetectViewModel: ObservableObject {
 
     func clearQueue() {
         guard !selectedFiles.isEmpty else {
-            log("队列为空", detail: "没有可移除的文件", isEphemeral: true)
+            log("队列为空", detail: "没有可移除的文件", kind: .queueEmpty, isEphemeral: true)
             return
         }
         let count = selectedFiles.count
         selectedFiles.removeAll()
-        log("已清空队列", detail: "移除了 \(count) 个文件")
+        log("已清空队列", detail: "移除了 \(count) 个文件", kind: .queueCleared)
         flash(\.isClearQueueSuccess)
     }
 
     func clearLogs() {
         guard !logs.isEmpty else {
-            log("日志为空", detail: "没有可清空的日志", isEphemeral: true)
+            log("日志为空", detail: "没有可清空的日志", kind: .logsEmpty, isEphemeral: true)
             return
         }
         let count = logs.count
@@ -271,7 +275,7 @@ class DetectViewModel: ObservableObject {
         detectRecords.removeAll()
         totalDetected = 0
         totalFound = 0
-        log("已清空日志", detail: "移除了 \(count) 条日志记录", isEphemeral: true)
+        log("已清空日志", detail: "移除了 \(count) 条日志记录", kind: .logsCleared, isEphemeral: true)
         flash(\.isClearLogsSuccess)
     }
 
@@ -281,7 +285,7 @@ class DetectViewModel: ObservableObject {
         guard !isProcessing else { return }
 
         guard !selectedFiles.isEmpty else {
-            log("队列为空", detail: "请先添加音频文件", isSuccess: false, isEphemeral: true)
+            log("队列为空", detail: "请先添加音频文件", isSuccess: false, kind: .queueEmpty, isEphemeral: true)
             return
         }
 
@@ -292,16 +296,16 @@ class DetectViewModel: ObservableObject {
         totalDetected = 0
         totalFound = 0
 
-        log("开始检测", detail: "准备检测 \(selectedFiles.count) 个文件")
+        log("开始检测", detail: "准备检测 \(selectedFiles.count) 个文件", kind: .processStarted)
 
         Task {
             guard let audio else {
-                log("检测失败", detail: "AudioWmark 未初始化", isSuccess: false)
+                log("检测失败", detail: "AudioWmark 未初始化", isSuccess: false, kind: .detectFailed)
                 isProcessing = false
                 return
             }
             guard let key = try? AWMKeyStore.loadActiveKey() else {
-                log("检测失败", detail: "密钥未配置", isSuccess: false)
+                log("检测失败", detail: "密钥未配置", isSuccess: false, kind: .detectFailed)
                 isProcessing = false
                 return
             }
@@ -328,7 +332,7 @@ class DetectViewModel: ObservableObject {
                 await Task.yield()
             }
 
-            log("检测完成", detail: "已检测: \(totalDetected), 发现水印: \(totalFound)")
+            log("检测完成", detail: "已检测: \(totalDetected), 发现水印: \(totalFound)", kind: .processFinished)
 
             currentProcessingIndex = -1
             isProcessing = false
@@ -348,6 +352,7 @@ class DetectViewModel: ObservableObject {
             log(
                 "成功: \(fileName)",
                 detail: "标签: \(record.identity ?? "-") | 时间: \(timeText) | 克隆: \(record.cloneCheck ?? "-")",
+                kind: .resultOk,
                 relatedRecordId: record.id
             )
         case "not_found":
@@ -355,6 +360,7 @@ class DetectViewModel: ObservableObject {
                 "无标记: \(fileName)",
                 detail: "未检测到水印",
                 isSuccess: false,
+                kind: .resultNotFound,
                 relatedRecordId: record.id
             )
         case "invalid_hmac":
@@ -362,6 +368,7 @@ class DetectViewModel: ObservableObject {
                 "失败: \(fileName)",
                 detail: "HMAC 校验失败: \(record.error ?? "unknown")",
                 isSuccess: false,
+                kind: .resultInvalidHmac,
                 relatedRecordId: record.id
             )
         default:
@@ -369,6 +376,7 @@ class DetectViewModel: ObservableObject {
                 "失败: \(fileName)",
                 detail: record.error ?? "未知错误",
                 isSuccess: false,
+                kind: .resultError,
                 relatedRecordId: record.id
             )
         }
@@ -400,13 +408,14 @@ class DetectViewModel: ObservableObject {
         let fileName = url.lastPathComponent
         if let entry = logs.first(where: { $0.title.hasSuffix(fileName) && !$0.isEphemeral }) {
             let status: String
-            if entry.title.hasPrefix("成功:") {
+            switch entry.kind {
+            case .resultOk:
                 status = "已检测"
-            } else if entry.title.hasPrefix("无标记:") {
+            case .resultNotFound:
                 status = "无标记"
-            } else if entry.title.hasPrefix("失败:") {
+            case .resultInvalidHmac, .resultError:
                 status = "失败"
-            } else {
+            default:
                 status = entry.isSuccess ? "已检测" : "无标记"
             }
             return (status, false)

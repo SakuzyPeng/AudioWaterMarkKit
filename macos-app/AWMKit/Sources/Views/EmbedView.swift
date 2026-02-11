@@ -527,7 +527,7 @@ struct EmbedView: View {
     }
 
     private func handleEphemeralEntry(_ entry: LogEntry) {
-        guard entry.isEphemeral, entry.title == "已清空日志" else { return }
+        guard entry.isEphemeral, entry.kind == .logsCleared else { return }
         Task {
             try? await Task.sleep(for: .seconds(3))
             withAnimation(.easeInOut(duration: 0.3)) {

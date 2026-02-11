@@ -13,6 +13,17 @@ public enum LogIconTone
     Error,
 }
 
+public enum LogKind
+{
+    Generic,
+    QueueCleared,
+    LogsCleared,
+    ResultOk,
+    ResultNotFound,
+    ResultInvalidHmac,
+    ResultError,
+}
+
 /// <summary>
 /// UI log entry for detect page timeline.
 /// </summary>
@@ -38,12 +49,24 @@ public sealed partial class LogEntry : ObservableObject
     public bool IsSuccess { get; init; }
     public bool IsEphemeral { get; init; }
     public Guid? RelatedRecordId { get; init; }
+    public LogKind Kind { get; init; } = LogKind.Generic;
     public DateTime Timestamp { get; init; } = DateTime.Now;
     public LogIconTone IconTone { get; init; } = LogIconTone.Info;
 
     public bool IsSelectable => RelatedRecordId.HasValue;
 
-    public string IconGlyph => IconTone switch
+    private LogIconTone EffectiveIconTone => Kind switch
+    {
+        LogKind.QueueCleared => LogIconTone.Success,
+        LogKind.LogsCleared => LogIconTone.Success,
+        LogKind.ResultOk => LogIconTone.Success,
+        LogKind.ResultNotFound => LogIconTone.Warning,
+        LogKind.ResultInvalidHmac => LogIconTone.Error,
+        LogKind.ResultError => LogIconTone.Error,
+        _ => IconTone,
+    };
+
+    public string IconGlyph => EffectiveIconTone switch
     {
         LogIconTone.Success => "\uE73E",
         LogIconTone.Warning => "\uE7BA",
@@ -51,7 +74,7 @@ public sealed partial class LogEntry : ObservableObject
         _ => "\uE946",
     };
 
-    public Brush IconBrush => IconTone switch
+    public Brush IconBrush => EffectiveIconTone switch
     {
         LogIconTone.Success => ResolveBrush("SuccessBrush", "TextFillColorSecondaryBrush"),
         LogIconTone.Warning => ResolveBrush("WarningBrush", "TextFillColorSecondaryBrush"),

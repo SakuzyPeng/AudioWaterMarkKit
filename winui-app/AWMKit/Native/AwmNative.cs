@@ -126,6 +126,14 @@ internal static class AwmNative
     [DllImport(Lib, EntryPoint = "awm_audio_binary_path", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_audio_binary_path(IntPtr handle, IntPtr outBuf, nuint outLen);
 
+    // ── UI Settings (app feature) ──
+
+    [DllImport(Lib, EntryPoint = "awm_ui_language_get", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_ui_language_get(IntPtr outBuf, nuint outLen, IntPtr outRequiredLen);
+
+    [DllImport(Lib, EntryPoint = "awm_ui_language_set", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_ui_language_set([MarshalAs(UnmanagedType.LPUTF8Str)] string? langOrNull);
+
     // ── Key Management (app feature) ──
 
     [DllImport(Lib, EntryPoint = "awm_key_exists", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]

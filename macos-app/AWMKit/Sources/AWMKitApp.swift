@@ -11,6 +11,7 @@ struct AWMKitApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
+                .environment(\.locale, appState.uiLocale)
                 .frame(
                     minWidth: DesignSystem.Window.minWidth,
                     idealWidth: DesignSystem.Window.defaultWidth,
@@ -64,15 +65,16 @@ class AppState: ObservableObject {
     @Published private(set) var databaseStatusHelp: String = "数据库状态检查中..."
     @Published private(set) var mappingCount: Int = 0
     @Published private(set) var evidenceCount: Int = 0
+    @Published var uiLanguage: UILanguageOption = .zhCN
 
     let audio: AWMAudio?
     private let audioInitError: String?
 
     enum Tab: String, CaseIterable, Identifiable {
-        case embed = "嵌入"
-        case detect = "检测"
-        case tags = "标签"
-        case key = "密钥"
+        case embed
+        case detect
+        case tags
+        case key
 
         var id: String { rawValue }
 
@@ -87,6 +89,8 @@ class AppState: ObservableObject {
     }
 
     init() {
+        uiLanguage = Self.resolveInitialLanguage()
+
         do {
             let instance = try AWMAudio()
             self.audio = instance
@@ -101,6 +105,36 @@ class AppState: ObservableObject {
         loadActiveKeySlot()
         Task {
             await refreshRuntimeStatus()
+        }
+    }
+
+    var uiLocale: Locale {
+        uiLanguage.locale
+    }
+
+    func localizedTabTitle(_ tab: Tab) -> String {
+        switch tab {
+        case .embed:
+            return l("嵌入", "Embed")
+        case .detect:
+            return l("检测", "Detect")
+        case .tags:
+            return l("标签", "Database")
+        case .key:
+            return l("密钥", "Keys")
+        }
+    }
+
+    func setUILanguage(_ language: UILanguageOption) {
+        guard uiLanguage != language else { return }
+        do {
+            try AWMUILanguageStore.set(AWMUILanguage(rawValue: language.rawValue))
+            uiLanguage = language
+            Task { [weak self] in
+                await self?.refreshRuntimeStatus()
+            }
+        } catch {
+            // Keep previous UI language when persistence fails.
         }
     }
 
@@ -124,7 +158,7 @@ class AppState: ObservableObject {
         do {
             if !AWMKeyStore.exists() {
                 keyLoaded = false
-                keySourceLabel = "未配置"
+                keySourceLabel = l("未配置", "Not configured")
                 keyStatusTone = .warning
                 keyStatusHelp = formatKeyStatusHelp(
                     activeSlot: resolvedActiveSlot,
@@ -141,7 +175,7 @@ class AppState: ObservableObject {
             if let backend, !backend.isEmpty, backend != "none" {
                 keySourceLabel = backend
             } else {
-                keySourceLabel = "已配置（来源未知）"
+                keySourceLabel = l("已配置（来源未知）", "Configured (unknown backend)")
             }
 
             keyStatusTone = .ready
@@ -152,9 +186,9 @@ class AppState: ObservableObject {
             )
         } catch {
             keyLoaded = false
-            keySourceLabel = "读取失败"
+            keySourceLabel = l("读取失败", "Read failed")
             keyStatusTone = .error
-            keyStatusHelp = "密钥读取失败：\(error.localizedDescription)"
+            keyStatusHelp = "\(l("密钥读取失败", "Key read failed")): \(error.localizedDescription)"
         }
     }
 
@@ -165,18 +199,18 @@ class AppState: ObservableObject {
     func checkAudioStatus() {
         guard let audio else {
             audioStatusTone = .error
-            audioStatusHelp = "AudioWmark 初始化失败：\(audioInitError ?? "未找到可用二进制")"
+            audioStatusHelp = "\(l("AudioWmark 初始化失败", "AudioWmark initialization failed")): \(audioInitError ?? l("未找到可用二进制", "No available binary"))"
             return
         }
 
         guard audio.isAvailable else {
             audioStatusTone = .error
-            audioStatusHelp = "AudioWmark 不可用：初始化成功但无法执行"
+            audioStatusHelp = l("AudioWmark 不可用：初始化成功但无法执行", "AudioWmark unavailable: initialized but execution failed")
             return
         }
 
         audioStatusTone = .ready
-        audioStatusHelp = "AudioWmark 可用（\(inferredAudioBackend())）"
+        audioStatusHelp = "\(l("AudioWmark 可用", "AudioWmark available")) (\(inferredAudioBackend()))"
     }
 
     func checkDatabaseStatus() {
@@ -186,14 +220,14 @@ class AppState: ObservableObject {
             evidenceCount = summary.evidenceCount
             databaseStatusTone = (summary.tagCount == 0 && summary.evidenceCount == 0) ? .warning : .ready
             databaseStatusHelp = """
-            映射总数：\(summary.tagCount)
-            证据总数（SHA256+指纹）：\(summary.evidenceCount)
+            \(l("映射总数", "Total mappings")): \(summary.tagCount)
+            \(l("证据总数（SHA256+指纹）", "Total evidence (SHA256 + fingerprint)")): \(summary.evidenceCount)
             """
         } catch {
             mappingCount = 0
             evidenceCount = 0
             databaseStatusTone = .error
-            databaseStatusHelp = "数据库读取失败：\(error.localizedDescription)"
+            databaseStatusHelp = "\(l("数据库读取失败", "Database read failed")): \(error.localizedDescription)"
         }
     }
 
@@ -256,13 +290,26 @@ class AppState: ObservableObject {
         }
     }
 
+    private static func resolveInitialLanguage() -> UILanguageOption {
+        if let stored = try? AWMUILanguageStore.get(),
+           let resolved = UILanguageOption(rawValue: stored.rawValue) {
+            return resolved
+        }
+
+        return UILanguageOption.defaultFromSystem()
+    }
+
+    private func l(_ zh: String, _ en: String) -> String {
+        uiLanguage == .enUS ? en : zh
+    }
+
     private func formatKeyStatusHelp(
         activeSlot: Int,
         summaries: [AWMKeySlotSummary],
         keyAvailable: Bool
     ) -> String {
         let configured = summaries.filter { $0.hasKey }
-        let activeKeyId = summaries.first(where: { $0.slot == UInt8(activeSlot) })?.keyId ?? "未配置"
+        let activeKeyId = summaries.first(where: { $0.slot == UInt8(activeSlot) })?.keyId ?? l("未配置", "Not configured")
         let listPreview = configured
             .prefix(6)
             .map { "\($0.slot):\($0.keyId ?? "-")" }
@@ -276,15 +323,19 @@ class AppState: ObservableObject {
             .joined(separator: ",")
 
         var lines: [String] = [
-            "激活槽位：\(activeSlot)",
-            "激活 Key ID：\(activeKeyId)",
-            "已配置槽位：\(configured.count)/32",
-            "槽位摘要：\(slotDigest)"
+            "\(l("激活槽位", "Active slot")): \(activeSlot)",
+            "\(l("激活 Key ID", "Active Key ID")): \(activeKeyId)",
+            "\(l("已配置槽位", "Configured slots")): \(configured.count)/32",
+            "\(l("槽位摘要", "Slot summary")): \(slotDigest)"
         ]
         if !duplicateSlots.isEmpty {
-            lines.append("重复密钥槽位：\(duplicateSlots)")
+            lines.append("\(l("重复密钥槽位", "Duplicate key slots")): \(duplicateSlots)")
         }
-        lines.append(keyAvailable ? "点击可刷新密钥状态" : "未配置密钥，请前往“密钥”页面生成")
+        lines.append(
+            keyAvailable
+                ? l("点击可刷新密钥状态", "Click to refresh key status")
+                : l("未配置密钥，请前往“密钥”页面生成", "No key configured. Open Key page to generate one.")
+        )
         return lines.joined(separator: "\n")
     }
 }

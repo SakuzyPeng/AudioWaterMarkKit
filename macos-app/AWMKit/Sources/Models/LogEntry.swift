@@ -2,6 +2,31 @@ import Foundation
 
 /// 统一日志条目模型，用于嵌入/检测事件日志展示
 struct LogEntry: Identifiable, Equatable {
+    enum Kind {
+        case generic
+        case processStarted
+        case processFinished
+        case processCancelling
+        case processCancelled
+        case queueCleared
+        case logsCleared
+        case queueEmpty
+        case logsEmpty
+        case deduplicated
+        case directoryNoAudio
+        case directoryReadFailed
+        case unsupportedInput
+        case usernameMissing
+        case embedFailed
+        case detectFailed
+        case resultOk
+        case resultNotFound
+        case resultInvalidHmac
+        case resultError
+        case mappingSaved
+        case evidenceWarning
+    }
+
     enum IconTone {
         case success
         case info
@@ -14,6 +39,7 @@ struct LogEntry: Identifiable, Equatable {
     let detail: String
     let timestamp: Date
     let isSuccess: Bool
+    let kind: Kind
     var isEphemeral: Bool
     let relatedRecordId: UUID?
 
@@ -21,6 +47,7 @@ struct LogEntry: Identifiable, Equatable {
         title: String,
         detail: String = "",
         isSuccess: Bool = true,
+        kind: Kind = .generic,
         isEphemeral: Bool = false,
         relatedRecordId: UUID? = nil
     ) {
@@ -28,6 +55,7 @@ struct LogEntry: Identifiable, Equatable {
         self.detail = detail
         self.timestamp = Date()
         self.isSuccess = isSuccess
+        self.kind = kind
         self.isEphemeral = isEphemeral
         self.relatedRecordId = relatedRecordId
     }
@@ -37,51 +65,53 @@ struct LogEntry: Identifiable, Equatable {
     }
 
     var iconName: String {
-        if title.hasPrefix("成功:") { return "checkmark.circle.fill" }
-        if title.hasPrefix("失败:") { return "xmark.circle.fill" }
-        if title.hasPrefix("无标记:") { return "questionmark.circle.fill" }
-
-        switch title {
-        case "开始处理", "开始检测":
+        switch kind {
+        case .processStarted:
             return "play.circle.fill"
-        case "处理完成", "检测完成":
+        case .processFinished:
             return "checkmark.seal.fill"
-        case "正在中止处理", "已取消":
+        case .processCancelling, .processCancelled:
             return "stop.circle.fill"
-        case "已清空队列":
+        case .queueCleared:
             return "trash.circle.fill"
-        case "队列为空":
+        case .queueEmpty:
             return "tray.fill"
-        case "已清空日志":
+        case .logsCleared:
             return "trash.circle.fill"
-        case "日志为空":
+        case .logsEmpty:
             return "doc.text.fill"
-        case "已去重":
+        case .deduplicated:
             return "minus.circle.fill"
-        case "目录无可用音频":
+        case .directoryNoAudio:
             return "folder.fill"
-        case "标签未填写":
+        case .usernameMissing:
             return "tag.fill"
-        case "读取目录失败", "不支持的输入源", "嵌入失败", "检测失败":
+        case .directoryReadFailed, .unsupportedInput, .embedFailed, .detectFailed:
             return "exclamationmark.triangle.fill"
+        case .resultOk:
+            return "checkmark.circle.fill"
+        case .resultNotFound:
+            return "questionmark.circle.fill"
+        case .resultInvalidHmac, .resultError:
+            return "xmark.circle.fill"
+        case .mappingSaved:
+            return "tag.circle.fill"
+        case .evidenceWarning:
+            return "exclamationmark.circle.fill"
         default:
             return isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill"
         }
     }
 
     var iconTone: IconTone {
-        if title.hasPrefix("成功:") { return .success }
-        if title.hasPrefix("失败:") { return .error }
-        if title.hasPrefix("无标记:") { return .warning }
-
-        switch title {
-        case "处理完成", "检测完成", "已清空队列", "已清空日志":
+        switch kind {
+        case .resultOk, .processFinished, .queueCleared, .logsCleared, .mappingSaved:
             return .success
-        case "开始处理", "开始检测":
+        case .processStarted:
             return .info
-        case "队列为空", "日志为空", "已去重", "目录无可用音频", "标签未填写", "不支持的输入源", "正在中止处理", "已取消":
+        case .queueEmpty, .logsEmpty, .deduplicated, .directoryNoAudio, .usernameMissing, .unsupportedInput, .processCancelling, .processCancelled, .resultNotFound, .evidenceWarning:
             return .warning
-        case "读取目录失败", "嵌入失败", "检测失败":
+        case .directoryReadFailed, .embedFailed, .detectFailed, .resultInvalidHmac, .resultError:
             return .error
         default:
             return isSuccess ? .success : .error

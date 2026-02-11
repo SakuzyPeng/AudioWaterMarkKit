@@ -403,6 +403,35 @@ int32_t awm_audio_binary_path(
 );
 
 // ============================================================================
+// UI Settings (requires "app" feature at build time)
+// ============================================================================
+
+/**
+ * Get persisted UI language override.
+ *
+ * Two-step usage:
+ * 1) call with out = NULL and out_len = 0 to get out_required_len
+ * 2) allocate buffer and call again to fetch UTF-8 language string
+ *
+ * Returns empty string when unset.
+ * Supported values: "zh-CN", "en-US".
+ *
+ * @param out               Output buffer for UTF-8 language string
+ * @param out_len           Buffer capacity in bytes
+ * @param out_required_len  Required bytes (includes null terminator)
+ * @return                  AWM_SUCCESS or error code
+ */
+int32_t awm_ui_language_get(char* out, size_t out_len, size_t* out_required_len);
+
+/**
+ * Set persisted UI language override.
+ *
+ * @param lang_or_null  UTF-8 language string ("zh-CN" | "en-US"), or NULL/"" to clear
+ * @return              AWM_SUCCESS or error code
+ */
+int32_t awm_ui_language_set(const char* lang_or_null);
+
+// ============================================================================
 // Key Management (requires "app" feature at build time)
 // ============================================================================
 

@@ -15,8 +15,8 @@ use crate::tag::Tag;
 
 #[cfg(feature = "app")]
 use crate::app::{
-    build_audio_proof, key_id_from_key_material, EvidenceStore, KeySlotSummary, NewAudioEvidence,
-    TagStore,
+    build_audio_proof, key_id_from_key_material, AppSettingsStore, EvidenceStore, KeySlotSummary,
+    NewAudioEvidence, TagStore,
 };
 #[cfg(feature = "app")]
 use rusty_chromaprint::{match_fingerprints, Configuration};
@@ -846,6 +846,81 @@ pub unsafe extern "C" fn awm_db_summary(
     {
         *out_tag_count = 0;
         *out_evidence_count = 0;
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// Get persisted UI language override ("zh-CN" | "en-US"), empty string when unset.
+///
+/// Two-step usage:
+/// 1) call with `out=nullptr, out_len=0` to get required length
+/// 2) allocate buffer and call again
+///
+/// # Safety
+/// - `out_required_len` must be valid writable pointer.
+#[no_mangle]
+pub unsafe extern "C" fn awm_ui_language_get(
+    out: *mut c_char,
+    out_len: usize,
+    out_required_len: *mut usize,
+) -> i32 {
+    #[cfg(feature = "app")]
+    {
+        let Ok(settings) = AppSettingsStore::load() else {
+            return AWMError::AudiowmarkExec as i32;
+        };
+        let Ok(value) = settings.ui_language() else {
+            return AWMError::AudiowmarkExec as i32;
+        };
+        let text = value.unwrap_or_default();
+        write_string_with_required(&text, out, out_len, out_required_len)
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = write_string_with_required("", out, out_len, out_required_len);
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// Set persisted UI language override.
+///
+/// - `lang_or_null = NULL` or empty string => clear override (use system default on app side)
+/// - supported values: "zh-CN", "en-US" (case-insensitive)
+///
+/// # Safety
+/// - `lang_or_null` may be null, otherwise must be valid UTF-8 C string.
+#[no_mangle]
+pub unsafe extern "C" fn awm_ui_language_set(lang_or_null: *const c_char) -> i32 {
+    #[cfg(feature = "app")]
+    {
+        let normalized: Option<&str> = if lang_or_null.is_null() {
+            None
+        } else {
+            let Ok(raw) = CStr::from_ptr(lang_or_null).to_str() else {
+                return AWMError::InvalidUtf8 as i32;
+            };
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                None
+            } else if trimmed.eq_ignore_ascii_case("zh-cn") {
+                Some("zh-CN")
+            } else if trimmed.eq_ignore_ascii_case("en-us") {
+                Some("en-US")
+            } else {
+                return AWMError::InvalidTag as i32;
+            }
+        };
+
+        match AppSettingsStore::load().and_then(|settings| settings.set_ui_language(normalized)) {
+            Ok(()) => AWMError::Success as i32,
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = lang_or_null;
         AWMError::AudiowmarkExec as i32
     }
 }

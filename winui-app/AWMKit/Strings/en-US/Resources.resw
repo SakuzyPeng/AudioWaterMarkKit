@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, ...</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, ...</value></resheader>
+  <data name="nav.embed" xml:space="preserve"><value>Embed</value></data>
+  <data name="nav.detect" xml:space="preserve"><value>Detect</value></data>
+  <data name="nav.tags" xml:space="preserve"><value>Database</value></data>
+  <data name="nav.key" xml:space="preserve"><value>Keys</value></data>
+  <data name="language.zh.short" xml:space="preserve"><value>中</value></data>
+  <data name="language.en.short" xml:space="preserve"><value>EN</value></data>
+  <data name="appearance.system" xml:space="preserve"><value>System</value></data>
+  <data name="appearance.light" xml:space="preserve"><value>Light</value></data>
+  <data name="appearance.dark" xml:space="preserve"><value>Dark</value></data>
+  <data name="status.key" xml:space="preserve"><value>Key status</value></data>
+  <data name="status.engine" xml:space="preserve"><value>Audio engine status</value></data>
+  <data name="status.database" xml:space="preserve"><value>Database status</value></data>
+</root>

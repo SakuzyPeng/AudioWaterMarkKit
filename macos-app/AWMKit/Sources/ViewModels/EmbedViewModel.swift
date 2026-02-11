@@ -47,8 +47,20 @@ class EmbedViewModel: ObservableObject {
 
     // MARK: - 日志
 
-    func log(_ title: String, detail: String = "", isSuccess: Bool = true, isEphemeral: Bool = false) {
-        let entry = LogEntry(title: title, detail: detail, isSuccess: isSuccess, isEphemeral: isEphemeral)
+    func log(
+        _ title: String,
+        detail: String = "",
+        isSuccess: Bool = true,
+        kind: LogEntry.Kind = .generic,
+        isEphemeral: Bool = false
+    ) {
+        let entry = LogEntry(
+            title: title,
+            detail: detail,
+            isSuccess: isSuccess,
+            kind: kind,
+            isEphemeral: isEphemeral
+        )
         logs.insert(entry, at: 0)
         if logs.count > maxLogCount {
             logs.removeLast(logs.count - maxLogCount)
@@ -126,12 +138,13 @@ class EmbedViewModel: ObservableObject {
                         "目录无可用音频",
                         detail: "当前目录未找到 WAV / FLAC / M4A / ALAC 文件",
                         isSuccess: false,
+                        kind: .directoryNoAudio,
                         isEphemeral: true
                     )
                 }
                 return files
             } catch {
-                log("读取目录失败", detail: error.localizedDescription, isSuccess: false)
+                log("读取目录失败", detail: error.localizedDescription, isSuccess: false, kind: .directoryReadFailed)
                 return []
             }
         }
@@ -141,6 +154,7 @@ class EmbedViewModel: ObservableObject {
                 "不支持的输入源",
                 detail: "请选择 WAV / FLAC / M4A / ALAC 文件或包含这些文件的目录",
                 isSuccess: false,
+                kind: .unsupportedInput,
                 isEphemeral: true
             )
             return []
@@ -168,7 +182,7 @@ class EmbedViewModel: ObservableObject {
             selectedFiles.append(contentsOf: deduped)
         }
         if duplicateCount > 0 {
-            log("已去重", detail: "跳过 \(duplicateCount) 个重复文件", isEphemeral: true)
+            log("已去重", detail: "跳过 \(duplicateCount) 个重复文件", kind: .deduplicated, isEphemeral: true)
         }
     }
 
@@ -200,23 +214,23 @@ class EmbedViewModel: ObservableObject {
 
     func clearQueue() {
         guard !selectedFiles.isEmpty else {
-            log("队列为空", detail: "没有可移除的文件", isEphemeral: true)
+            log("队列为空", detail: "没有可移除的文件", kind: .queueEmpty, isEphemeral: true)
             return
         }
         let count = selectedFiles.count
         selectedFiles.removeAll()
-        log("已清空队列", detail: "移除了 \(count) 个文件")
+        log("已清空队列", detail: "移除了 \(count) 个文件", kind: .queueCleared)
         flash(\.isClearQueueSuccess)
     }
 
     func clearLogs() {
         guard !logs.isEmpty else {
-            log("日志为空", detail: "没有可清空的日志", isEphemeral: true)
+            log("日志为空", detail: "没有可清空的日志", kind: .logsEmpty, isEphemeral: true)
             return
         }
         let count = logs.count
         logs.removeAll()
-        log("已清空日志", detail: "移除了 \(count) 条日志记录", isEphemeral: true)
+        log("已清空日志", detail: "移除了 \(count) 条日志记录", kind: .logsCleared, isEphemeral: true)
         flash(\.isClearLogsSuccess)
     }
 
@@ -225,19 +239,19 @@ class EmbedViewModel: ObservableObject {
     func embedFiles(audio: AWMAudio?) {
         if isProcessing {
             isCancelling = true
-            log("正在中止处理", detail: "等待当前文件完成...", isSuccess: false)
+            log("正在中止处理", detail: "等待当前文件完成...", isSuccess: false, kind: .processCancelling)
             return
         }
 
         guard !selectedFiles.isEmpty else {
-            log("队列为空", detail: "请先添加音频文件", isSuccess: false, isEphemeral: true)
+            log("队列为空", detail: "请先添加音频文件", isSuccess: false, kind: .queueEmpty, isEphemeral: true)
             return
         }
 
         refreshTagMappings()
         let normalizedUsername = normalizedUsernameInput
         guard let resolvedTag = resolvedTagValue, !normalizedUsername.isEmpty else {
-            log("用户名未填写", detail: "请输入用户名以自动生成 Tag", isSuccess: false, isEphemeral: true)
+            log("用户名未填写", detail: "请输入用户名以自动生成 Tag", isSuccess: false, kind: .usernameMissing, isEphemeral: true)
             return
         }
 
@@ -248,16 +262,16 @@ class EmbedViewModel: ObservableObject {
         currentProcessingIndex = 0
 
         let settingsStr = "用户: \(normalizedUsername) | Tag: \(resolvedTag) | 强度: \(Int(strength))"
-        log("开始处理", detail: "准备处理 \(selectedFiles.count) 个文件 | \(settingsStr)")
+        log("开始处理", detail: "准备处理 \(selectedFiles.count) 个文件 | \(settingsStr)", kind: .processStarted)
 
         Task {
             guard let audio else {
-                log("嵌入失败", detail: "AudioWmark 未初始化", isSuccess: false)
+                log("嵌入失败", detail: "AudioWmark 未初始化", isSuccess: false, kind: .embedFailed)
                 isProcessing = false
                 return
             }
             guard let key = try? AWMKeyStore.loadActiveKey() else {
-                log("嵌入失败", detail: "密钥未配置", isSuccess: false)
+                log("嵌入失败", detail: "密钥未配置", isSuccess: false, kind: .embedFailed)
                 isProcessing = false
                 return
             }
@@ -292,14 +306,15 @@ class EmbedViewModel: ObservableObject {
                             "证据记录失败",
                             detail: "\(outputURL.lastPathComponent): \(evidenceError)",
                             isSuccess: false,
+                            kind: .evidenceWarning,
                             isEphemeral: true
                         )
                     }
 
-                    log("成功: \(fileURL.lastPathComponent)", detail: "→ \(outputURL.lastPathComponent)")
+                    log("成功: \(fileURL.lastPathComponent)", detail: "→ \(outputURL.lastPathComponent)", kind: .resultOk)
                     successCount += 1
                 } catch {
-                    log("失败: \(fileURL.lastPathComponent)", detail: error.localizedDescription, isSuccess: false)
+                    log("失败: \(fileURL.lastPathComponent)", detail: error.localizedDescription, isSuccess: false, kind: .resultError)
                     failureCount += 1
                 }
                 if !selectedFiles.isEmpty {
@@ -310,9 +325,9 @@ class EmbedViewModel: ObservableObject {
             }
 
             if isCancelling {
-                log("已取消", detail: "已完成 \(successCount + failureCount) / \(initialTotal) 个文件", isSuccess: false)
+                log("已取消", detail: "已完成 \(successCount + failureCount) / \(initialTotal) 个文件", isSuccess: false, kind: .processCancelled)
             } else {
-                log("处理完成", detail: "成功: \(successCount), 失败: \(failureCount)")
+                log("处理完成", detail: "成功: \(successCount), 失败: \(failureCount)", kind: .processFinished)
             }
 
             if successCount > 0 {
@@ -323,10 +338,10 @@ class EmbedViewModel: ObservableObject {
                     )
                     if saveResult == .inserted {
                         refreshTagMappings()
-                        log("已保存映射", detail: "\(normalizedUsername) -> \(resolvedTag)")
+                        log("已保存映射", detail: "\(normalizedUsername) -> \(resolvedTag)", kind: .mappingSaved)
                     }
                 } catch {
-                    log("保存映射失败", detail: error.localizedDescription, isSuccess: false, isEphemeral: true)
+                    log("保存映射失败", detail: error.localizedDescription, isSuccess: false, kind: .embedFailed, isEphemeral: true)
                 }
             }
 

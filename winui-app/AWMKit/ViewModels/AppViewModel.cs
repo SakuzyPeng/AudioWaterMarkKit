@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -128,12 +129,46 @@ public sealed partial class AppViewModel : ObservableObject
     public string KeyStatusTooltip => BuildKeyStatusTooltip();
 
     public string EngineStatusTooltip => EngineAvailable
-        ? $"音频引擎：可用\n路径：{EnginePath}\n点击刷新状态"
-        : "音频引擎：不可用\n请检查 bundled 或 PATH\n点击刷新状态";
+        ? $"{L("音频引擎", "Audio engine")}：{L("可用", "Available")}\n{L("路径", "Path")}：{EnginePath}\n{L("点击刷新状态", "Click to refresh status")}"
+        : $"{L("音频引擎", "Audio engine")}：{L("不可用", "Unavailable")}\n{L("请检查 bundled 或 PATH", "Check bundled binary or PATH")}\n{L("点击刷新状态", "Click to refresh status")}";
 
     public string DatabaseStatusTooltip => DatabaseAvailable
-        ? $"数据库：可用\n映射：{TotalTags}\n证据：{TotalEvidence}\n点击刷新状态"
-        : "数据库：不可用\n点击刷新状态";
+        ? $"{L("数据库", "Database")}：{L("可用", "Available")}\n{L("映射", "Mappings")}：{TotalTags}\n{L("证据", "Evidence")}：{TotalEvidence}\n{L("点击刷新状态", "Click to refresh status")}"
+        : $"{L("数据库", "Database")}：{L("不可用", "Unavailable")}\n{L("点击刷新状态", "Click to refresh status")}";
+
+    private string _uiLanguageCode = "zh-CN";
+    public string UiLanguageCode
+    {
+        get => _uiLanguageCode;
+        private set
+        {
+            if (SetProperty(ref _uiLanguageCode, value))
+            {
+                OnPropertyChanged(nameof(IsChineseLanguage));
+                OnPropertyChanged(nameof(IsEnglishLanguage));
+                OnPropertyChanged(nameof(ThemeSystemLabel));
+                OnPropertyChanged(nameof(ThemeLightLabel));
+                OnPropertyChanged(nameof(ThemeDarkLabel));
+                OnPropertyChanged(nameof(LanguageChineseLabel));
+                OnPropertyChanged(nameof(LanguageEnglishLabel));
+                OnPropertyChanged(nameof(KeyStatusName));
+                OnPropertyChanged(nameof(EngineStatusName));
+                OnPropertyChanged(nameof(DatabaseStatusName));
+                NotifyStatusPresentationChanged();
+            }
+        }
+    }
+
+    public bool IsChineseLanguage => string.Equals(UiLanguageCode, "zh-CN", StringComparison.OrdinalIgnoreCase);
+    public bool IsEnglishLanguage => string.Equals(UiLanguageCode, "en-US", StringComparison.OrdinalIgnoreCase);
+    public string ThemeSystemLabel => L("系统", "System");
+    public string ThemeLightLabel => L("亮色", "Light");
+    public string ThemeDarkLabel => L("暗色", "Dark");
+    public string LanguageChineseLabel => "中";
+    public string LanguageEnglishLabel => "EN";
+    public string KeyStatusName => L("密钥状态", "Key status");
+    public string EngineStatusName => L("音频引擎状态", "Audio engine status");
+    public string DatabaseStatusName => L("数据库状态", "Database status");
 
     private int _activeKeySlot;
     public int ActiveKeySlot
@@ -180,6 +215,7 @@ public sealed partial class AppViewModel : ObservableObject
     /// </summary>
     public async Task InitializeAsync()
     {
+        await RefreshUiLanguageAsync();
         await RefreshRuntimeStatusAsync();
     }
 
@@ -231,6 +267,35 @@ public sealed partial class AppViewModel : ObservableObject
         await RefreshActiveKeySlotAsync();
     }
 
+    public Task RefreshUiLanguageAsync()
+    {
+        var (value, error) = AwmBridge.GetUiLanguage();
+        if (error == AwmError.Ok && !string.IsNullOrWhiteSpace(value))
+        {
+            UiLanguageCode = NormalizeLanguageCode(value!);
+            return Task.CompletedTask;
+        }
+
+        var defaultCode = CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
+            ? "zh-CN"
+            : "en-US";
+        UiLanguageCode = defaultCode;
+        return Task.CompletedTask;
+    }
+
+    public Task SetUiLanguageAsync(string code)
+    {
+        var normalized = NormalizeLanguageCode(code);
+        var error = AwmBridge.SetUiLanguage(normalized);
+        if (error == AwmError.Ok)
+        {
+            UiLanguageCode = normalized;
+            return Task.CompletedTask;
+        }
+
+        return RefreshUiLanguageAsync();
+    }
+
     /// <summary>
     /// Refreshes statistics (tags and evidence counts).
     /// </summary>
@@ -253,7 +318,7 @@ public sealed partial class AppViewModel : ObservableObject
         KeyAvailable = exists;
         if (!exists)
         {
-            KeySourceLabel = "未配置";
+            KeySourceLabel = L("未配置", "Not configured");
             return Task.CompletedTask;
         }
 
@@ -264,7 +329,7 @@ public sealed partial class AppViewModel : ObservableObject
         }
         else
         {
-            KeySourceLabel = "已配置（来源未知）";
+            KeySourceLabel = L("已配置（来源未知）", "Configured (unknown backend)");
         }
 
         NotifyStatusPresentationChanged();
@@ -369,7 +434,7 @@ public sealed partial class AppViewModel : ObservableObject
             .OrderBy(item => item.Slot)
             .ToList();
         var active = _keySlotSummaries.FirstOrDefault(item => item.Slot == ActiveKeySlot);
-        var activeKeyId = active?.KeyId ?? "未配置";
+        var activeKeyId = active?.KeyId ?? L("未配置", "Not configured");
 
         var digest = configured.Count == 0
             ? "-"
@@ -388,16 +453,27 @@ public sealed partial class AppViewModel : ObservableObject
 
         var lines = new List<string>
         {
-            $"激活槽位：{ActiveKeySlot}",
-            $"激活 Key ID：{activeKeyId}",
-            $"已配置槽位：{configured.Count}/32",
-            $"槽位摘要：{digest}"
+            $"{L("激活槽位", "Active slot")}：{ActiveKeySlot}",
+            $"{L("激活 Key ID", "Active Key ID")}：{activeKeyId}",
+            $"{L("已配置槽位", "Configured slots")}：{configured.Count}/32",
+            $"{L("槽位摘要", "Slot summary")}：{digest}"
         };
         if (duplicateSlots.Length > 0)
         {
-            lines.Add($"重复密钥槽位：{string.Join(",", duplicateSlots)}");
+            lines.Add($"{L("重复密钥槽位", "Duplicate key slots")}：{string.Join(",", duplicateSlots)}");
         }
-        lines.Add(KeyAvailable ? "点击刷新状态" : "未配置密钥，请前往“密钥”页面生成");
+        lines.Add(KeyAvailable
+            ? L("点击刷新状态", "Click to refresh status")
+            : L("未配置密钥，请前往“密钥”页面生成", "No key configured. Open Key page to create one."));
         return string.Join('\n', lines);
     }
+
+    private static string NormalizeLanguageCode(string? value)
+    {
+        return string.Equals(value?.Trim(), "en-US", StringComparison.OrdinalIgnoreCase)
+            ? "en-US"
+            : "zh-CN";
+    }
+
+    private string L(string zh, string en) => IsEnglishLanguage ? en : zh;
 }

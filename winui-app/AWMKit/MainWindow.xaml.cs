@@ -31,6 +31,8 @@ public sealed partial class MainWindow : Window
     private NavigationViewItem? _themeSystemItem;
     private NavigationViewItem? _themeLightItem;
     private NavigationViewItem? _themeDarkItem;
+    private NavigationViewItem? _languageChineseItem;
+    private NavigationViewItem? _languageEnglishItem;
     private NavigationViewItem? _keyStatusItem;
     private NavigationViewItem? _engineStatusItem;
     private NavigationViewItem? _databaseStatusItem;
@@ -83,14 +85,18 @@ public sealed partial class MainWindow : Window
 
     private void InitializeStatusIndicators()
     {
-        _themeSystemItem = CreateThemeItem("theme:system", "系统");
-        _themeLightItem = CreateThemeItem("theme:light", "亮色");
-        _themeDarkItem = CreateThemeItem("theme:dark", "暗色");
-        _keyStatusItem = CreateStatusItem("status:key", Symbol.Permissions, "密钥状态");
-        _engineStatusItem = CreateStatusItem("status:engine", Symbol.Audio, "音频引擎状态");
-        _databaseStatusItem = CreateStatusItem("status:database", Symbol.Library, "数据库状态");
+        _languageChineseItem = CreateThemeItem("lang:zh", ViewModel.LanguageChineseLabel);
+        _languageEnglishItem = CreateThemeItem("lang:en", ViewModel.LanguageEnglishLabel);
+        _themeSystemItem = CreateThemeItem("theme:system", ViewModel.ThemeSystemLabel);
+        _themeLightItem = CreateThemeItem("theme:light", ViewModel.ThemeLightLabel);
+        _themeDarkItem = CreateThemeItem("theme:dark", ViewModel.ThemeDarkLabel);
+        _keyStatusItem = CreateStatusItem("status:key", Symbol.Permissions, ViewModel.KeyStatusName);
+        _engineStatusItem = CreateStatusItem("status:engine", Symbol.Audio, ViewModel.EngineStatusName);
+        _databaseStatusItem = CreateStatusItem("status:database", Symbol.Library, ViewModel.DatabaseStatusName);
 
         MainNavigation.FooterMenuItems.Clear();
+        MainNavigation.FooterMenuItems.Add(_languageChineseItem);
+        MainNavigation.FooterMenuItems.Add(_languageEnglishItem);
         MainNavigation.FooterMenuItems.Add(_themeSystemItem);
         MainNavigation.FooterMenuItems.Add(_themeLightItem);
         MainNavigation.FooterMenuItems.Add(_themeDarkItem);
@@ -150,9 +156,64 @@ public sealed partial class MainWindow : Window
 
     private void UpdateStatusIndicators()
     {
+        UpdateLocalizedLabels();
+        UpdateLanguageItems();
         UpdateStatusItem(_keyStatusItem, ViewModel.KeyStatusBrush, ViewModel.KeyStatusTooltip);
         UpdateStatusItem(_engineStatusItem, ViewModel.EngineStatusBrush, ViewModel.EngineStatusTooltip);
         UpdateStatusItem(_databaseStatusItem, ViewModel.DatabaseStatusBrush, ViewModel.DatabaseStatusTooltip);
+    }
+
+    private void UpdateLocalizedLabels()
+    {
+        SetMenuItemContent("embed", ViewModel.IsEnglishLanguage ? "Embed" : "嵌入");
+        SetMenuItemContent("detect", ViewModel.IsEnglishLanguage ? "Detect" : "检测");
+        SetMenuItemContent("tags", ViewModel.IsEnglishLanguage ? "Database" : "标签");
+        SetMenuItemContent("key", ViewModel.IsEnglishLanguage ? "Keys" : "密钥");
+
+        if (_themeSystemItem is not null)
+        {
+            _themeSystemItem.Content = ViewModel.ThemeSystemLabel;
+            AutomationProperties.SetName(_themeSystemItem, ViewModel.IsEnglishLanguage ? "Switch to system theme" : "切换到系统主题");
+        }
+
+        if (_themeLightItem is not null)
+        {
+            _themeLightItem.Content = ViewModel.ThemeLightLabel;
+            AutomationProperties.SetName(_themeLightItem, ViewModel.IsEnglishLanguage ? "Switch to light theme" : "切换到亮色主题");
+        }
+
+        if (_themeDarkItem is not null)
+        {
+            _themeDarkItem.Content = ViewModel.ThemeDarkLabel;
+            AutomationProperties.SetName(_themeDarkItem, ViewModel.IsEnglishLanguage ? "Switch to dark theme" : "切换到暗色主题");
+        }
+
+        if (_languageChineseItem is not null)
+        {
+            _languageChineseItem.Content = ViewModel.LanguageChineseLabel;
+            AutomationProperties.SetName(_languageChineseItem, ViewModel.IsEnglishLanguage ? "Switch language to Chinese" : "切换语言到中文");
+        }
+
+        if (_languageEnglishItem is not null)
+        {
+            _languageEnglishItem.Content = ViewModel.LanguageEnglishLabel;
+            AutomationProperties.SetName(_languageEnglishItem, ViewModel.IsEnglishLanguage ? "Switch language to English" : "切换语言到英文");
+        }
+
+        if (_keyStatusItem is not null)
+        {
+            AutomationProperties.SetName(_keyStatusItem, ViewModel.KeyStatusName);
+        }
+
+        if (_engineStatusItem is not null)
+        {
+            AutomationProperties.SetName(_engineStatusItem, ViewModel.EngineStatusName);
+        }
+
+        if (_databaseStatusItem is not null)
+        {
+            AutomationProperties.SetName(_databaseStatusItem, ViewModel.DatabaseStatusName);
+        }
     }
 
     private static void UpdateStatusItem(NavigationViewItem? item, Brush brush, string tooltip)
@@ -232,6 +293,12 @@ public sealed partial class MainWindow : Window
         SetThemeItemActive(_themeDarkItem, _currentThemeMode == ThemeMode.Dark);
     }
 
+    private void UpdateLanguageItems()
+    {
+        SetThemeItemActive(_languageChineseItem, ViewModel.IsChineseLanguage);
+        SetThemeItemActive(_languageEnglishItem, ViewModel.IsEnglishLanguage);
+    }
+
     private static void SetThemeItemActive(NavigationViewItem? item, bool active)
     {
         if (item is null)
@@ -304,6 +371,18 @@ public sealed partial class MainWindow : Window
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         _ = DispatcherQueue.TryEnqueue(UpdateStatusIndicators);
+    }
+
+    private void SetMenuItemContent(string tag, string content)
+    {
+        foreach (var menuItem in MainNavigation.MenuItems)
+        {
+            if (menuItem is NavigationViewItem item && string.Equals(item.Tag?.ToString(), tag, StringComparison.Ordinal))
+            {
+                item.Content = content;
+                return;
+            }
+        }
     }
 
     private void NavigateToEmbed()
@@ -382,6 +461,22 @@ public sealed partial class MainWindow : Window
                     MainNavigation.SelectedItem = _lastPageItem;
                 }
                 break;
+            case "lang:zh":
+                _ = SwitchLanguageAsync("zh-CN");
+                break;
+            case "lang:en":
+                _ = SwitchLanguageAsync("en-US");
+                break;
+        }
+    }
+
+    private async System.Threading.Tasks.Task SwitchLanguageAsync(string code)
+    {
+        await ViewModel.SetUiLanguageAsync(code);
+        UpdateStatusIndicators();
+        if (_lastPageItem is not null)
+        {
+            MainNavigation.SelectedItem = _lastPageItem;
         }
     }
 

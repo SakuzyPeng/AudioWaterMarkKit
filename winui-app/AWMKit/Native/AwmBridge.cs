@@ -517,4 +517,70 @@ public static class AwmBridge
             Marshal.FreeHGlobal(buffer);
         }
     }
+
+    /// <summary>
+    /// Gets persisted UI language override ("zh-CN" | "en-US"), null if unset.
+    /// </summary>
+    public static (string? language, AwmError error) GetUiLanguage()
+    {
+        var requiredPtr = Marshal.AllocHGlobal(IntPtr.Size);
+        try
+        {
+            if (IntPtr.Size == 8)
+            {
+                Marshal.WriteInt64(requiredPtr, 0);
+            }
+            else
+            {
+                Marshal.WriteInt32(requiredPtr, 0);
+            }
+
+            int first = AwmNative.awm_ui_language_get(IntPtr.Zero, 0, requiredPtr);
+            var firstError = (AwmError)first;
+            if (firstError != AwmError.Ok)
+            {
+                return (null, firstError);
+            }
+
+            var required = IntPtr.Size == 8
+                ? (nuint)Marshal.ReadInt64(requiredPtr)
+                : (nuint)Marshal.ReadInt32(requiredPtr);
+            if (required == 0)
+            {
+                return (null, AwmError.Ok);
+            }
+
+            var buffer = Marshal.AllocHGlobal((int)required);
+            try
+            {
+                int second = AwmNative.awm_ui_language_get(buffer, required, requiredPtr);
+                var secondError = (AwmError)second;
+                if (secondError != AwmError.Ok)
+                {
+                    return (null, secondError);
+                }
+
+                var value = Marshal.PtrToStringUTF8(buffer);
+                return (string.IsNullOrWhiteSpace(value) ? null : value, AwmError.Ok);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(requiredPtr);
+        }
+    }
+
+    /// <summary>
+    /// Sets persisted UI language override. Null/empty clears override.
+    /// </summary>
+    public static AwmError SetUiLanguage(string? language)
+    {
+        var normalized = string.IsNullOrWhiteSpace(language) ? null : language.Trim();
+        int code = AwmNative.awm_ui_language_set(normalized);
+        return (AwmError)code;
+    }
 }

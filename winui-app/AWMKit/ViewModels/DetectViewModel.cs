@@ -409,7 +409,7 @@ public sealed partial class DetectViewModel : ObservableObject
 
         var count = SelectedFiles.Count;
         SelectedFiles.Clear();
-        AddLog("已清空队列", $"移除了 {count} 个文件", true, false, null, LogIconTone.Success);
+        AddLog("已清空队列", $"移除了 {count} 个文件", true, false, null, LogIconTone.Success, LogKind.QueueCleared);
         await FlashClearQueueAsync();
     }
 
@@ -428,7 +428,7 @@ public sealed partial class DetectViewModel : ObservableObject
         TotalDetected = 0;
         TotalFound = 0;
 
-        AddLog("已清空日志", $"移除了 {count} 条日志记录", true, true, null, LogIconTone.Success);
+        AddLog("已清空日志", $"移除了 {count} 条日志记录", true, true, null, LogIconTone.Success, LogKind.LogsCleared);
         await FlashClearLogsAsync();
     }
 
@@ -692,11 +692,12 @@ public sealed partial class DetectViewModel : ObservableObject
                     true,
                     false,
                     record.Id,
-                    LogIconTone.Success);
+                    LogIconTone.Success,
+                    LogKind.ResultOk);
                 break;
             }
             case "not_found":
-                AddLog($"无标记: {fileName}", "未检测到水印", false, false, record.Id, LogIconTone.Warning);
+                AddLog($"无标记: {fileName}", "未检测到水印", false, false, record.Id, LogIconTone.Warning, LogKind.ResultNotFound);
                 break;
             case "invalid_hmac":
                 AddLog(
@@ -705,10 +706,11 @@ public sealed partial class DetectViewModel : ObservableObject
                     false,
                     false,
                     record.Id,
-                    LogIconTone.Error);
+                    LogIconTone.Error,
+                    LogKind.ResultInvalidHmac);
                 break;
             default:
-                AddLog($"失败: {fileName}", record.Error ?? "未知错误", false, false, record.Id, LogIconTone.Error);
+                AddLog($"失败: {fileName}", record.Error ?? "未知错误", false, false, record.Id, LogIconTone.Error, LogKind.ResultError);
                 break;
         }
     }
@@ -822,7 +824,8 @@ public sealed partial class DetectViewModel : ObservableObject
         bool isSuccess = true,
         bool isEphemeral = false,
         Guid? relatedRecordId = null,
-        LogIconTone iconTone = LogIconTone.Info)
+        LogIconTone iconTone = LogIconTone.Info,
+        LogKind kind = LogKind.Generic)
     {
         var entry = new LogEntry
         {
@@ -832,6 +835,7 @@ public sealed partial class DetectViewModel : ObservableObject
             IsEphemeral = isEphemeral,
             RelatedRecordId = relatedRecordId,
             IconTone = iconTone,
+            Kind = kind,
         };
 
         Logs.Insert(0, entry);
@@ -840,7 +844,7 @@ public sealed partial class DetectViewModel : ObservableObject
             Logs.RemoveAt(Logs.Count - 1);
         }
 
-        if (entry.IsEphemeral && entry.Title == "已清空日志")
+        if (entry.IsEphemeral && entry.Kind == LogKind.LogsCleared)
         {
             _ = DismissClearLogAsync(entry.Id);
         }
@@ -850,7 +854,7 @@ public sealed partial class DetectViewModel : ObservableObject
     {
         await Task.Delay(TimeSpan.FromSeconds(3));
 
-        var target = Logs.FirstOrDefault(x => x.Id == logId && x.Title == "已清空日志");
+        var target = Logs.FirstOrDefault(x => x.Id == logId && x.Kind == LogKind.LogsCleared);
         if (target is not null)
         {
             Logs.Remove(target);
