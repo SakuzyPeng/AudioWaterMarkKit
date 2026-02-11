@@ -140,13 +140,12 @@ public sealed partial class MainWindow : Window
         {
             Tag = tag,
             Content = label,
-            Width = 60,
             Height = 32,
-            MinWidth = 60,
-            Padding = new Thickness(0),
+            MinWidth = 72,
+            Padding = new Thickness(12, 0, 12, 0),
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 4, 0),
         };

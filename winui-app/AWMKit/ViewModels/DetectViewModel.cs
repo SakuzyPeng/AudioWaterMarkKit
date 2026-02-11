@@ -290,6 +290,7 @@ public sealed partial class DetectViewModel : ObservableObject
     public string GoToKeyPageText => L("前往密钥页", "Go to Key page");
     public string SelectActionText => L("选择", "Select");
     public string ClearActionText => L("清空", "Clear");
+    public string LayoutLabel => L("声道布局", "Channel layout");
     public string DropZoneTitle => L("拖拽音频文件到此处", "Drag audio files here");
     public string DropZoneSubtitle => L("检测文件中是否包含水印标签", "Check whether files contain watermark tags");
     public string DetectInfoTitle => L("检测信息", "Detection info");
@@ -1373,6 +1374,7 @@ public sealed partial class DetectViewModel : ObservableObject
         OnPropertyChanged(nameof(GoToKeyPageText));
         OnPropertyChanged(nameof(SelectActionText));
         OnPropertyChanged(nameof(ClearActionText));
+        OnPropertyChanged(nameof(LayoutLabel));
         OnPropertyChanged(nameof(DropZoneTitle));
         OnPropertyChanged(nameof(DropZoneSubtitle));
         OnPropertyChanged(nameof(DetectInfoTitle));
