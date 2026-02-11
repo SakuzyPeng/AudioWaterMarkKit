@@ -664,6 +664,7 @@ public sealed partial class EmbedViewModel : ObservableObject
         var failureCount = 0;
         var deferredFiles = new List<string>();
         var deferredKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var legacyFfiWarned = false;
 
         for (var processed = 0; processed < initialTotal; processed++)
         {
@@ -873,12 +874,20 @@ public sealed partial class EmbedViewModel : ObservableObject
                 }
                 else if (stepResult.snrResult is { } nonOkSnr && !string.Equals(nonOkSnr.SnrStatus, "ok", StringComparison.OrdinalIgnoreCase))
                 {
-                    AddLog(
-                        L("SNR 不可用", "SNR unavailable"),
-                        nonOkSnr.SnrDetail ?? nonOkSnr.SnrStatus,
-                        false,
-                        true,
-                        LogIconTone.Warning);
+                    var isLegacyFfi = string.Equals(nonOkSnr.SnrDetail, "legacy_ffi", StringComparison.OrdinalIgnoreCase);
+                    if (!isLegacyFfi || !legacyFfiWarned)
+                    {
+                        legacyFfiWarned = legacyFfiWarned || isLegacyFfi;
+                        var warningDetail = isLegacyFfi
+                            ? L("本地核心库版本较旧，暂不支持 SNR 分析", "Native core is outdated and does not support SNR analysis yet")
+                            : (nonOkSnr.SnrDetail ?? nonOkSnr.SnrStatus);
+                        AddLog(
+                            L("SNR 不可用", "SNR unavailable"),
+                            warningDetail,
+                            false,
+                            true,
+                            LogIconTone.Warning);
+                    }
                 }
 
                 AddLog($"{L("成功", "Success")}: {Path.GetFileName(inputPath)}", successDetail, true, false, LogIconTone.Success, LogKind.ResultOk);
