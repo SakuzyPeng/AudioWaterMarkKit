@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using AWMKit.Models;
 using AWMKit.Native;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
@@ -58,6 +59,10 @@ public sealed partial class KeyViewModel : ObservableObject
     }
 
     public bool KeyAvailable => _appViewModel.KeyAvailable;
+    public InfoBarSeverity KeyStatusSeverity => KeyAvailable ? InfoBarSeverity.Success : InfoBarSeverity.Warning;
+    public string KeyStatusMessage => KeyAvailable
+        ? "密钥已配置，可正常嵌入与检测。"
+        : "未配置密钥。请先生成密钥后再执行嵌入/检测。";
     public bool SelectedSlotHasKey
     {
         get
@@ -67,6 +72,11 @@ public sealed partial class KeyViewModel : ObservableObject
         }
     }
     public string KeySourceLabel => _appViewModel.KeySourceLabel;
+    public bool CanOperate => !IsBusy;
+    public bool CanGenerateKey => !IsBusy && !SelectedSlotHasKey;
+    public string GenerateKeyTooltip => SelectedSlotHasKey
+        ? "当前槽位已有密钥，已禁止覆盖。请先删除后再生成。"
+        : "在当前槽位生成新密钥";
     public int ActiveKeySlot => _appViewModel.ActiveKeySlot;
     public string ActiveKeySlotText => $"当前激活槽位：{ActiveKeySlot}";
     public string KeyStatusText => KeyAvailable ? "已配置" : "未配置";
@@ -323,6 +333,8 @@ public sealed partial class KeyViewModel : ObservableObject
         OnPropertyChanged(nameof(ActiveKeySlotText));
         OnPropertyChanged(nameof(KeyStatusText));
         OnPropertyChanged(nameof(KeyStatusBrush));
+        OnPropertyChanged(nameof(KeyStatusSeverity));
+        OnPropertyChanged(nameof(KeyStatusMessage));
         OnPropertyChanged(nameof(ActiveKeySummary));
         OnPropertyChanged(nameof(ActiveSummaryTitle));
         OnPropertyChanged(nameof(ActiveSummaryTitleBrush));
@@ -331,6 +343,9 @@ public sealed partial class KeyViewModel : ObservableObject
         OnPropertyChanged(nameof(ConfiguredSlotCount));
         OnPropertyChanged(nameof(ShowConfiguredSlotCount));
         OnPropertyChanged(nameof(ConfiguredSlotCountText));
+        OnPropertyChanged(nameof(CanOperate));
+        OnPropertyChanged(nameof(CanGenerateKey));
+        OnPropertyChanged(nameof(GenerateKeyTooltip));
     }
 
     public async Task<AwmError> EditActiveSlotLabelAsync(string? label)

@@ -10,23 +10,9 @@ namespace AWMKit.Pages;
 /// <summary>
 /// Key management page.
 /// </summary>
-public sealed partial class KeyPage : Page, INotifyPropertyChanged
+public sealed partial class KeyPage : Page
 {
-    public event PropertyChangedEventHandler? PropertyChanged;
-
     public KeyViewModel ViewModel { get; } = new();
-
-    public bool IsNotBusy => !ViewModel.IsBusy;
-    public bool CanGenerateKey => IsNotBusy && !ViewModel.SelectedSlotHasKey;
-    public string GenerateKeyTooltip => ViewModel.SelectedSlotHasKey
-        ? "当前槽位已有密钥，已禁止覆盖。请先删除后再生成。"
-        : "在当前槽位生成新密钥";
-
-    public InfoBarSeverity KeyStatusSeverity => ViewModel.KeyAvailable ? InfoBarSeverity.Success : InfoBarSeverity.Warning;
-
-    public string KeyStatusMessage => ViewModel.KeyAvailable
-        ? "密钥已配置，可正常嵌入与检测。"
-        : "未配置密钥。请先生成密钥后再执行嵌入/检测。";
 
     public KeyPage()
     {
@@ -162,31 +148,20 @@ public sealed partial class KeyPage : Page, INotifyPropertyChanged
     {
         _ = DispatcherQueue.TryEnqueue(() =>
         {
-            RaiseComputedStateChanged();
-
-            if (e.PropertyName == nameof(KeyViewModel.IsBusy))
-            {
-                Bindings.Update();
-                return;
-            }
-
-            if (e.PropertyName is nameof(KeyViewModel.KeyAvailable)
+            if (e.PropertyName is nameof(KeyViewModel.IsBusy)
+                or nameof(KeyViewModel.KeyAvailable)
                 or nameof(KeyViewModel.SelectedSlotHasKey)
                 or nameof(KeyViewModel.KeyStatusText)
-                or nameof(KeyViewModel.KeySourceLabel))
+                or nameof(KeyViewModel.KeySourceLabel)
+                or nameof(KeyViewModel.KeyStatusSeverity)
+                or nameof(KeyViewModel.KeyStatusMessage)
+                or nameof(KeyViewModel.CanOperate)
+                or nameof(KeyViewModel.CanGenerateKey)
+                or nameof(KeyViewModel.GenerateKeyTooltip))
             {
                 Bindings.Update();
             }
         });
-    }
-
-    private void RaiseComputedStateChanged()
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsNotBusy)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanGenerateKey)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(GenerateKeyTooltip)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(KeyStatusSeverity)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(KeyStatusMessage)));
     }
 
     private async Task ShowMessageDialogAsync(string title, string content)

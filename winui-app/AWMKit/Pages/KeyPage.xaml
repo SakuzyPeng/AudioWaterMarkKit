@@ -42,8 +42,8 @@
 
                 <InfoBar Grid.Row="2"
                          IsClosable="False"
-                         Severity="{Binding ElementName=RootPage, Path=KeyStatusSeverity, Mode=OneWay}"
-                         Message="{Binding ElementName=RootPage, Path=KeyStatusMessage, Mode=OneWay}"/>
+                         Severity="{x:Bind ViewModel.KeyStatusSeverity, Mode=OneWay}"
+                         Message="{x:Bind ViewModel.KeyStatusMessage, Mode=OneWay}"/>
 
                 <Border Grid.Row="3" Style="{StaticResource ListItemBorderStyle}">
                     <StackPanel Spacing="8">
@@ -89,7 +89,7 @@
                                           ItemsSource="{x:Bind ViewModel.SlotOptions, Mode=OneWay}"
                                           SelectedItem="{x:Bind ViewModel.SelectedSlot, Mode=TwoWay}"/>
                                 <Button Click="ApplySlotButton_Click"
-                                        IsEnabled="{Binding ElementName=RootPage, Path=IsNotBusy, Mode=OneWay}">
+                                        IsEnabled="{x:Bind ViewModel.CanOperate, Mode=OneWay}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <SymbolIcon Symbol="AllApps"
                                                     Foreground="{x:Bind ViewModel.ApplyActionBrush, Mode=OneWay}"/>
@@ -128,9 +128,9 @@
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Click="GenerateKeyButton_Click"
                                 Style="{StaticResource PrimaryButtonStyle}"
-                                IsEnabled="{Binding ElementName=RootPage, Path=CanGenerateKey, Mode=OneWay}">
+                                IsEnabled="{x:Bind ViewModel.CanGenerateKey, Mode=OneWay}">
                             <ToolTipService.ToolTip>
-                                <TextBlock Text="{Binding ElementName=RootPage, Path=GenerateKeyTooltip, Mode=OneWay}"/>
+                                <TextBlock Text="{x:Bind ViewModel.GenerateKeyTooltip, Mode=OneWay}"/>
                             </ToolTipService.ToolTip>
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Permissions"
@@ -141,7 +141,7 @@
 
                         <Button Click="EditLabelButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
-                                IsEnabled="{Binding ElementName=RootPage, Path=IsNotBusy, Mode=OneWay}">
+                                IsEnabled="{x:Bind ViewModel.CanOperate, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Tag"
                                             Foreground="{x:Bind ViewModel.EditActionBrush, Mode=OneWay}"/>
@@ -161,7 +161,7 @@
 
                         <Button Click="RefreshButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
-                                IsEnabled="{Binding ElementName=RootPage, Path=IsNotBusy, Mode=OneWay}">
+                                IsEnabled="{x:Bind ViewModel.CanOperate, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Refresh"
                                             Foreground="{x:Bind ViewModel.RefreshActionBrush, Mode=OneWay}"/>
