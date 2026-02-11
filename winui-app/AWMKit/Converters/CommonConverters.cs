@@ -252,7 +252,7 @@ public sealed partial class BoolToSelectionBorderBrushConverter : IValueConverte
             return fallbackBrush;
         }
 
-        return new SolidColorBrush(Windows.UI.Colors.Transparent);
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 }
 
@@ -287,7 +287,7 @@ public sealed partial class BoolToSelectionBackgroundBrushConverter : IValueConv
             return fallbackBrush;
         }
 
-        return new SolidColorBrush(Windows.UI.Colors.Transparent);
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 }
 
@@ -335,7 +335,7 @@ public sealed partial class KeySlotStatusBrushConverter : IValueConverter
             return fallbackBrush;
         }
 
-        return new SolidColorBrush(Windows.UI.Colors.Transparent);
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 }
 
@@ -373,6 +373,6 @@ public sealed partial class BoolToKeySlotIconBrushConverter : IValueConverter
             return fallbackBrush;
         }
 
-        return new SolidColorBrush(Windows.UI.Colors.Transparent);
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 }

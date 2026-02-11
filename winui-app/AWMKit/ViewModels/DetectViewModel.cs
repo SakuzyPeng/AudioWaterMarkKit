@@ -1244,6 +1244,6 @@ public sealed partial class DetectViewModel : ObservableObject
             return fallbackBrush;
         }
 
-        return new SolidColorBrush(Windows.UI.Colors.Transparent);
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 }
