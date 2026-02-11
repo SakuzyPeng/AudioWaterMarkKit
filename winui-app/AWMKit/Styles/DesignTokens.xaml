@@ -14,18 +14,26 @@
     <CornerRadius x:Key="CornerRadiusMD">8</CornerRadius>
     <CornerRadius x:Key="CornerRadiusLG">12</CornerRadius>
 
-    <!-- Semantic Colors (Fluent Design System) -->
-    <SolidColorBrush x:Key="SuccessBrush" Color="#4CAF50"/>
-    <SolidColorBrush x:Key="WarningBrush" Color="#FF9800"/>
-    <SolidColorBrush x:Key="ErrorBrush" Color="#F44336"/>
-    <SolidColorBrush x:Key="InfoBrush" Color="#2196F3"/>
-    <SolidColorBrush x:Key="NeutralBrush" Color="#9E9E9E"/>
+    <!-- Theme-aware semantic colors -->
+    <SolidColorBrush x:Key="SuccessBrush" Color="{ThemeResource AWMSuccessColor}"/>
+    <SolidColorBrush x:Key="WarningBrush" Color="{ThemeResource AWMWarningColor}"/>
+    <SolidColorBrush x:Key="ErrorBrush" Color="{ThemeResource AWMErrorColor}"/>
+    <SolidColorBrush x:Key="InfoBrush" Color="{ThemeResource AWMInfoColor}"/>
+    <SolidColorBrush x:Key="NeutralBrush" Color="{ThemeResource AWMNeutralColor}"/>
+    <SolidColorBrush x:Key="YellowBrush" Color="{ThemeResource AWMYellowColor}"/>
+    <SolidColorBrush x:Key="PageBackdropBrush" Color="{ThemeResource AWMPageBackdropColor}"/>
+    <SolidColorBrush x:Key="SelectionBackgroundBrush" Color="{ThemeResource AWMSelectionBackgroundColor}"/>
+    <SolidColorBrush x:Key="SelectionBorderBrush" Color="{ThemeResource AWMSelectionBorderColor}"/>
+    <SolidColorBrush x:Key="ListItemPointerOverBrush" Color="{ThemeResource AWMListItemPointerOverColor}"/>
+    <SolidColorBrush x:Key="ListItemPressedBrush" Color="{ThemeResource AWMListItemPressedColor}"/>
+    <SolidColorBrush x:Key="ListItemSelectedBrush" Color="{ThemeResource AWMListItemSelectedColor}"/>
+    <SolidColorBrush x:Key="TransparentBrush" Color="Transparent"/>
 
-    <!-- Status Colors (matching macOS semantics) -->
-    <SolidColorBrush x:Key="KeyStatusBrush" Color="#4CAF50"/>      <!-- Green -->
-    <SolidColorBrush x:Key="EngineStatusBrush" Color="#2196F3"/>   <!-- Blue -->
-    <SolidColorBrush x:Key="DatabaseStatusBrush" Color="#FF9800"/> <!-- Orange -->
-    <SolidColorBrush x:Key="UnavailableStatusBrush" Color="#9E9E9E"/> <!-- Gray -->
+    <!-- Status colors -->
+    <SolidColorBrush x:Key="KeyStatusBrush" Color="{ThemeResource AWMSuccessColor}"/>
+    <SolidColorBrush x:Key="EngineStatusBrush" Color="{ThemeResource AWMInfoColor}"/>
+    <SolidColorBrush x:Key="DatabaseStatusBrush" Color="{ThemeResource AWMWarningColor}"/>
+    <SolidColorBrush x:Key="UnavailableStatusBrush" Color="{ThemeResource AWMNeutralColor}"/>
 
     <!-- Card Style -->
     <Style x:Key="CardBorderStyle" TargetType="Border">

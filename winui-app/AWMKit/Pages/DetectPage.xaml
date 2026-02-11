@@ -8,8 +8,6 @@
     xmlns:models="using:AWMKit.Models"
     mc:Ignorable="d">
     <Page.Resources>
-        <SolidColorBrush x:Key="DetectPageBackdropBrush" Color="#0D5B9BFF"/>
-
         <Style x:Key="DetectMainCardBorderStyle" TargetType="Border" BasedOn="{StaticResource CardBorderStyle}">
             <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -35,7 +33,7 @@
         </Style>
     </Page.Resources>
 
-    <Grid Padding="24" RowSpacing="12" ColumnSpacing="12" Background="{StaticResource DetectPageBackdropBrush}">
+    <Grid Padding="24" RowSpacing="12" ColumnSpacing="12" Background="{ThemeResource PageBackdropBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="*"/>

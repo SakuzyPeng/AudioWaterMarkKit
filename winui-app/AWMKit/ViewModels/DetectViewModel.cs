@@ -2,6 +2,7 @@ using AWMKit.Models;
 using AWMKit.Native;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
@@ -21,13 +22,13 @@ public sealed partial class DetectViewModel : ObservableObject
 {
     private const int MaxLogCount = 200;
 
-    private static readonly SolidColorBrush SuccessBrush = new(Windows.UI.Color.FromArgb(255, 76, 175, 80));
-    private static readonly SolidColorBrush WarningBrush = new(Windows.UI.Color.FromArgb(255, 255, 152, 0));
-    private static readonly SolidColorBrush ErrorColorBrush = new(Windows.UI.Color.FromArgb(255, 244, 67, 54));
-    private static readonly SolidColorBrush InfoBrush = new(Windows.UI.Color.FromArgb(255, 33, 150, 243));
-    private static readonly SolidColorBrush SecondaryBrush = new(Windows.UI.Color.FromArgb(255, 158, 158, 158));
-    private static readonly SolidColorBrush PrimaryBrush = new(Windows.UI.Color.FromArgb(255, 240, 240, 240));
-    private static readonly SolidColorBrush YellowBrush = new(Windows.UI.Color.FromArgb(255, 255, 213, 79));
+    private static Brush SuccessBrush => ThemeBrush("SuccessBrush", "TextFillColorPrimaryBrush");
+    private static Brush WarningBrush => ThemeBrush("WarningBrush", "TextFillColorPrimaryBrush");
+    private static Brush ErrorColorBrush => ThemeBrush("ErrorBrush", "TextFillColorPrimaryBrush");
+    private static Brush InfoBrush => ThemeBrush("InfoBrush", "TextFillColorPrimaryBrush");
+    private static Brush SecondaryBrush => ThemeBrush("TextFillColorSecondaryBrush", "NeutralBrush");
+    private static Brush PrimaryBrush => ThemeBrush("TextFillColorPrimaryBrush", "NeutralBrush");
+    private static Brush YellowBrush => ThemeBrush("YellowBrush", "WarningBrush");
 
     private readonly HashSet<string> _supportedAudioExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -1228,5 +1229,21 @@ public sealed partial class DetectViewModel : ObservableObject
             default:
                 return PrimaryBrush;
         }
+    }
+
+    private static Brush ThemeBrush(string key, string fallbackKey)
+    {
+        var resources = Application.Current.Resources;
+        if (resources.TryGetValue(key, out var value) && value is Brush brush)
+        {
+            return brush;
+        }
+
+        if (resources.TryGetValue(fallbackKey, out var fallbackValue) && fallbackValue is Brush fallbackBrush)
+        {
+            return fallbackBrush;
+        }
+
+        return new SolidColorBrush(Windows.UI.Colors.Transparent);
     }
 }

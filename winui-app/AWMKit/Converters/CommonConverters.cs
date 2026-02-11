@@ -230,22 +230,29 @@ public sealed partial class BoolToSelectionBorderBrushConverter : IValueConverte
     {
         var selected = value is bool isSelected && isSelected;
         var resources = Application.Current.Resources;
-        if (selected && resources.TryGetValue("AccentFillColorDefaultBrush", out var accent) && accent is Brush accentBrush)
-        {
-            return accentBrush;
-        }
-
-        if (resources.TryGetValue("CardStrokeColorDefaultBrush", out var defaultBorder) && defaultBorder is Brush defaultBrush)
-        {
-            return defaultBrush;
-        }
-
-        return resources["NeutralBrush"];
+        return selected
+            ? ResolveBrush(resources, "SelectionBorderBrush", "AccentFillColorDefaultBrush")
+            : ResolveBrush(resources, "CardStrokeColorDefaultBrush", "TextFillColorSecondaryBrush");
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)
     {
         throw new NotImplementedException();
+    }
+
+    private static Brush ResolveBrush(ResourceDictionary resources, string key, string fallbackKey)
+    {
+        if (resources.TryGetValue(key, out var value) && value is Brush brush)
+        {
+            return brush;
+        }
+
+        if (resources.TryGetValue(fallbackKey, out var fallbackValue) && fallbackValue is Brush fallbackBrush)
+        {
+            return fallbackBrush;
+        }
+
+        return new SolidColorBrush(Windows.UI.Colors.Transparent);
     }
 }
 
@@ -258,22 +265,29 @@ public sealed partial class BoolToSelectionBackgroundBrushConverter : IValueConv
     {
         var selected = value is bool isSelected && isSelected;
         var resources = Application.Current.Resources;
-        if (!selected)
-        {
-            return resources["SubtleFillColorTransparentBrush"];
-        }
-
-        if (resources.TryGetValue("AccentFillColorSecondaryBrush", out var accent) && accent is Brush accentBrush)
-        {
-            return accentBrush;
-        }
-
-        return resources["SubtleFillColorTransparentBrush"];
+        return selected
+            ? ResolveBrush(resources, "SelectionBackgroundBrush", "AccentFillColorSecondaryBrush")
+            : ResolveBrush(resources, "TransparentBrush", "SubtleFillColorTransparentBrush");
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, string language)
     {
         throw new NotImplementedException();
+    }
+
+    private static Brush ResolveBrush(ResourceDictionary resources, string key, string fallbackKey)
+    {
+        if (resources.TryGetValue(key, out var value) && value is Brush brush)
+        {
+            return brush;
+        }
+
+        if (resources.TryGetValue(fallbackKey, out var fallbackValue) && fallbackValue is Brush fallbackBrush)
+        {
+            return fallbackBrush;
+        }
+
+        return new SolidColorBrush(Windows.UI.Colors.Transparent);
     }
 }
 
@@ -306,8 +320,22 @@ public sealed partial class KeySlotStatusBrushConverter : IValueConverter
         {
             return brush;
         }
+        return ResolveBrush(resources, "TextFillColorSecondaryBrush", "NeutralBrush");
+    }
 
-        return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32));
+    private static Brush ResolveBrush(ResourceDictionary resources, string key, string fallbackKey)
+    {
+        if (resources.TryGetValue(key, out var value) && value is Brush brush)
+        {
+            return brush;
+        }
+
+        if (resources.TryGetValue(fallbackKey, out var fallbackValue) && fallbackValue is Brush fallbackBrush)
+        {
+            return fallbackBrush;
+        }
+
+        return new SolidColorBrush(Windows.UI.Colors.Transparent);
     }
 }
 
@@ -340,7 +368,11 @@ public sealed partial class BoolToKeySlotIconBrushConverter : IValueConverter
         {
             return brush;
         }
+        if (resources.TryGetValue("TextFillColorSecondaryBrush", out var fallback) && fallback is Brush fallbackBrush)
+        {
+            return fallbackBrush;
+        }
 
-        return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32));
+        return new SolidColorBrush(Windows.UI.Colors.Transparent);
     }
 }

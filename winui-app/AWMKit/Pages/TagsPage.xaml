@@ -9,7 +9,6 @@
     mc:Ignorable="d"
     Loaded="Page_Loaded">
     <Page.Resources>
-        <SolidColorBrush x:Key="TagsPageBackdropBrush" Color="#0D5B9BFF"/>
         <Style x:Key="CapsuleListViewItemStyle" TargetType="ListViewItem">
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Margin" Value="0"/>
@@ -32,7 +31,7 @@
         </Style>
     </Page.Resources>
 
-    <Grid Padding="24" RowSpacing="12" Background="{StaticResource TagsPageBackdropBrush}">
+    <Grid Padding="24" RowSpacing="12" Background="{ThemeResource PageBackdropBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -135,19 +134,19 @@
                             </GridView.ItemsPanel>
                             <GridView.Resources>
                                 <SolidColorBrush x:Key="ListViewItemBackground" Color="Transparent"/>
-                                <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="Transparent"/>
-                                <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="Transparent"/>
-                                <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="Transparent"/>
-                                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="Transparent"/>
-                                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="{ThemeResource AWMListItemPointerOverColor}"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="{ThemeResource AWMListItemPressedColor}"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="{ThemeResource AWMListItemSelectedColor}"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="{ThemeResource AWMListItemSelectedColor}"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="{ThemeResource AWMListItemPressedColor}"/>
                                 <SolidColorBrush x:Key="ListViewItemBorderBrush" Color="Transparent"/>
                                 <SolidColorBrush x:Key="ListViewItemBorderBrushPointerOver" Color="Transparent"/>
                                 <SolidColorBrush x:Key="GridViewItemBackground" Color="Transparent"/>
-                                <SolidColorBrush x:Key="GridViewItemBackgroundPointerOver" Color="Transparent"/>
-                                <SolidColorBrush x:Key="GridViewItemBackgroundPressed" Color="Transparent"/>
-                                <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="Transparent"/>
-                                <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="Transparent"/>
-                                <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="Transparent"/>
+                                <SolidColorBrush x:Key="GridViewItemBackgroundPointerOver" Color="{ThemeResource AWMListItemPointerOverColor}"/>
+                                <SolidColorBrush x:Key="GridViewItemBackgroundPressed" Color="{ThemeResource AWMListItemPressedColor}"/>
+                                <SolidColorBrush x:Key="GridViewItemBackgroundSelected" Color="{ThemeResource AWMListItemSelectedColor}"/>
+                                <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPointerOver" Color="{ThemeResource AWMListItemSelectedColor}"/>
+                                <SolidColorBrush x:Key="GridViewItemBackgroundSelectedPressed" Color="{ThemeResource AWMListItemPressedColor}"/>
                                 <SolidColorBrush x:Key="GridViewItemBorderBrush" Color="Transparent"/>
                                 <SolidColorBrush x:Key="GridViewItemBorderBrushPointerOver" Color="Transparent"/>
                             </GridView.Resources>
@@ -227,11 +226,11 @@
                                   Visibility="{x:Bind ViewModel.ShowEvidenceEmptyHint, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                             <ListView.Resources>
                                 <SolidColorBrush x:Key="ListViewItemBackground" Color="Transparent"/>
-                                <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="Transparent"/>
-                                <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="Transparent"/>
-                                <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="Transparent"/>
-                                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="Transparent"/>
-                                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="Transparent"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="{ThemeResource AWMListItemPointerOverColor}"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="{ThemeResource AWMListItemPressedColor}"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="{ThemeResource AWMListItemSelectedColor}"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="{ThemeResource AWMListItemSelectedColor}"/>
+                                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="{ThemeResource AWMListItemPressedColor}"/>
                                 <SolidColorBrush x:Key="ListViewItemBorderBrush" Color="Transparent"/>
                                 <SolidColorBrush x:Key="ListViewItemBorderBrushPointerOver" Color="Transparent"/>
                             </ListView.Resources>

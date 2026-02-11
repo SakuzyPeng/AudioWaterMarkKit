@@ -25,10 +25,6 @@ public sealed partial class EmbedViewModel : ObservableObject
     private const int MaxLogCount = 200;
     private static readonly char[] SuggestedIdentityCharset = "ABCDEFGHJKMNPQRSTUVWXYZ23456789_".ToCharArray();
 
-    private static readonly SolidColorBrush SuccessBrush = new(Windows.UI.Color.FromArgb(255, 76, 175, 80));
-    private static readonly SolidColorBrush FallbackPrimaryBrush = new(Windows.UI.Color.FromArgb(255, 48, 48, 48));
-    private static readonly SolidColorBrush FallbackSecondaryBrush = new(Windows.UI.Color.FromArgb(255, 130, 130, 130));
-
     private readonly HashSet<string> _supportedAudioExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".wav",
@@ -239,7 +235,7 @@ public sealed partial class EmbedViewModel : ObservableObject
 
     public Brush PreviewTagBrush =>
         MatchedMappingForInput is not null
-            ? SuccessBrush
+            ? ThemeSuccessBrush()
             : (PreviewTagText == "-" ? ThemeSecondaryBrush() : ThemePrimaryBrush());
 
     public ObservableCollection<string> SelectedFiles { get; } = new();
@@ -979,19 +975,31 @@ public sealed partial class EmbedViewModel : ObservableObject
 
     private static Brush ThemePrimaryBrush()
     {
-        if (Application.Current.Resources.TryGetValue("TextFillColorPrimaryBrush", out var brush) && brush is Brush typed)
-        {
-            return typed;
-        }
-        return FallbackPrimaryBrush;
+        return ResolveBrush("TextFillColorPrimaryBrush", "NeutralBrush");
     }
 
     private static Brush ThemeSecondaryBrush()
     {
-        if (Application.Current.Resources.TryGetValue("TextFillColorSecondaryBrush", out var brush) && brush is Brush typed)
+        return ResolveBrush("TextFillColorSecondaryBrush", "NeutralBrush");
+    }
+
+    private static Brush ThemeSuccessBrush()
+    {
+        return ResolveBrush("SuccessBrush", "TextFillColorPrimaryBrush");
+    }
+
+    private static Brush ResolveBrush(string key, string fallbackKey)
+    {
+        if (Application.Current.Resources.TryGetValue(key, out var brush) && brush is Brush typed)
         {
             return typed;
         }
-        return FallbackSecondaryBrush;
+
+        if (Application.Current.Resources.TryGetValue(fallbackKey, out var fallback) && fallback is Brush fallbackBrush)
+        {
+            return fallbackBrush;
+        }
+
+        return new SolidColorBrush(Windows.UI.Colors.Transparent);
     }
 }

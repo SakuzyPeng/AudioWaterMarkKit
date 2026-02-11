@@ -334,12 +334,17 @@ public sealed partial class AppViewModel : ObservableObject
             return brush;
         }
 
-        if (resources.TryGetValue("NeutralBrush", out var fallback) && fallback is Brush fallbackBrush)
+        if (resources.TryGetValue("TextFillColorSecondaryBrush", out var fallback) && fallback is Brush fallbackBrush)
         {
             return fallbackBrush;
         }
 
-        return new SolidColorBrush(Microsoft.UI.Colors.Gray);
+        if (resources.TryGetValue("NeutralBrush", out var neutralFallback) && neutralFallback is Brush neutralBrush)
+        {
+            return neutralBrush;
+        }
+
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 
     private static Brush GetAvailabilityBrush(bool available)

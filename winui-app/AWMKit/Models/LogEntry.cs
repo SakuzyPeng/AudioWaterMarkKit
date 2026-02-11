@@ -1,5 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using Microsoft.UI;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using System;
 
@@ -18,14 +18,6 @@ public enum LogIconTone
 /// </summary>
 public sealed partial class LogEntry : ObservableObject
 {
-    private static readonly SolidColorBrush SuccessBrush = new(Windows.UI.Color.FromArgb(255, 76, 175, 80));
-    private static readonly SolidColorBrush InfoBrush = new(Windows.UI.Color.FromArgb(255, 33, 150, 243));
-    private static readonly SolidColorBrush WarningBrush = new(Windows.UI.Color.FromArgb(255, 255, 152, 0));
-    private static readonly SolidColorBrush ErrorBrush = new(Windows.UI.Color.FromArgb(255, 244, 67, 54));
-    private static readonly SolidColorBrush NeutralBrush = new(Windows.UI.Color.FromArgb(0, 0, 0, 0));
-    private static readonly SolidColorBrush AccentBorderBrush = new(Windows.UI.Color.FromArgb(255, 33, 150, 243));
-    private static readonly SolidColorBrush AccentBackgroundBrush = new(Windows.UI.Color.FromArgb(30, 33, 150, 243));
-
     private bool _isSelected;
     public bool IsSelected
     {
@@ -61,14 +53,34 @@ public sealed partial class LogEntry : ObservableObject
 
     public Brush IconBrush => IconTone switch
     {
-        LogIconTone.Success => SuccessBrush,
-        LogIconTone.Warning => WarningBrush,
-        LogIconTone.Error => ErrorBrush,
-        _ => InfoBrush,
+        LogIconTone.Success => ResolveBrush("SuccessBrush", "TextFillColorSecondaryBrush"),
+        LogIconTone.Warning => ResolveBrush("WarningBrush", "TextFillColorSecondaryBrush"),
+        LogIconTone.Error => ResolveBrush("ErrorBrush", "TextFillColorSecondaryBrush"),
+        _ => ResolveBrush("InfoBrush", "TextFillColorSecondaryBrush"),
     };
 
-    public Brush CardBorderBrush => IsSelected ? AccentBorderBrush : NeutralBrush;
+    public Brush CardBorderBrush => IsSelected
+        ? ResolveBrush("SelectionBorderBrush", "AccentFillColorDefaultBrush")
+        : ResolveBrush("TransparentBrush", "SubtleFillColorTransparentBrush");
 
-    public Brush CardBackgroundBrush => IsSelected ? AccentBackgroundBrush : NeutralBrush;
+    public Brush CardBackgroundBrush => IsSelected
+        ? ResolveBrush("SelectionBackgroundBrush", "AccentFillColorSecondaryBrush")
+        : ResolveBrush("TransparentBrush", "SubtleFillColorTransparentBrush");
+
+    private static Brush ResolveBrush(string key, string fallbackKey)
+    {
+        var resources = Application.Current.Resources;
+        if (resources.TryGetValue(key, out var value) && value is Brush brush)
+        {
+            return brush;
+        }
+
+        if (resources.TryGetValue(fallbackKey, out var fallbackValue) && fallbackValue is Brush fallbackBrush)
+        {
+            return fallbackBrush;
+        }
+
+        return new SolidColorBrush(Windows.UI.Colors.Transparent);
+    }
 
 }

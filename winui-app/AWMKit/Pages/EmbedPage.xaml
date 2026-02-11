@@ -9,8 +9,6 @@
     mc:Ignorable="d"
     Loaded="Page_Loaded">
     <Page.Resources>
-        <SolidColorBrush x:Key="EmbedPageBackdropBrush" Color="#0D5B9BFF"/>
-
         <Style x:Key="EmbedMainCardBorderStyle" TargetType="Border" BasedOn="{StaticResource CardBorderStyle}">
             <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -36,7 +34,7 @@
         </Style>
     </Page.Resources>
 
-    <Grid Padding="24" RowSpacing="12" ColumnSpacing="12" Background="{StaticResource EmbedPageBackdropBrush}">
+    <Grid Padding="24" RowSpacing="12" ColumnSpacing="12" Background="{ThemeResource PageBackdropBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="*"/>

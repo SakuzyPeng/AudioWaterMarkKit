@@ -8,7 +8,6 @@
     mc:Ignorable="d"
     Loaded="Page_Loaded">
     <Page.Resources>
-        <SolidColorBrush x:Key="KeyPageBackdropBrush" Color="#0D5B9BFF"/>
         <Style x:Key="KeyHeaderBorderStyle" TargetType="Border">
             <Setter Property="Background" Value="{ThemeResource ControlFillColorSecondaryBrush}"/>
             <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
@@ -19,7 +18,7 @@
         </Style>
     </Page.Resources>
 
-    <Grid Padding="24" ColumnSpacing="12" Background="{StaticResource KeyPageBackdropBrush}">
+    <Grid Padding="24" ColumnSpacing="12" Background="{ThemeResource PageBackdropBrush}">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" MinWidth="500"/>
             <ColumnDefinition Width="*"/>

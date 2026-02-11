@@ -5,6 +5,51 @@
     xmlns:converters="using:AWMKit.Converters">
     <Application.Resources>
         <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <Color x:Key="AWMSuccessColor">#0F7B0F</Color>
+                    <Color x:Key="AWMWarningColor">#B95000</Color>
+                    <Color x:Key="AWMErrorColor">#C42B1C</Color>
+                    <Color x:Key="AWMInfoColor">#0067C0</Color>
+                    <Color x:Key="AWMNeutralColor">#5E5E5E</Color>
+                    <Color x:Key="AWMYellowColor">#8A6C00</Color>
+                    <Color x:Key="AWMPageBackdropColor">#0D5B9BFF</Color>
+                    <Color x:Key="AWMSelectionBackgroundColor">#1A0078D4</Color>
+                    <Color x:Key="AWMSelectionBorderColor">#660078D4</Color>
+                    <Color x:Key="AWMListItemPointerOverColor">#08000000</Color>
+                    <Color x:Key="AWMListItemPressedColor">#12000000</Color>
+                    <Color x:Key="AWMListItemSelectedColor">#140078D4</Color>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <Color x:Key="AWMSuccessColor">#6CCB5F</Color>
+                    <Color x:Key="AWMWarningColor">#FFB34D</Color>
+                    <Color x:Key="AWMErrorColor">#FF7B72</Color>
+                    <Color x:Key="AWMInfoColor">#6CB8FF</Color>
+                    <Color x:Key="AWMNeutralColor">#A0A0A0</Color>
+                    <Color x:Key="AWMYellowColor">#EEDC82</Color>
+                    <Color x:Key="AWMPageBackdropColor">#142B4D6A</Color>
+                    <Color x:Key="AWMSelectionBackgroundColor">#2A3B82F6</Color>
+                    <Color x:Key="AWMSelectionBorderColor">#803B82F6</Color>
+                    <Color x:Key="AWMListItemPointerOverColor">#14FFFFFF</Color>
+                    <Color x:Key="AWMListItemPressedColor">#22FFFFFF</Color>
+                    <Color x:Key="AWMListItemSelectedColor">#243B82F6</Color>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="HighContrast">
+                    <Color x:Key="AWMSuccessColor">#00FF00</Color>
+                    <Color x:Key="AWMWarningColor">#FFFF00</Color>
+                    <Color x:Key="AWMErrorColor">#FF0000</Color>
+                    <Color x:Key="AWMInfoColor">#00FFFF</Color>
+                    <Color x:Key="AWMNeutralColor">#FFFFFF</Color>
+                    <Color x:Key="AWMYellowColor">#FFFF00</Color>
+                    <Color x:Key="AWMPageBackdropColor">#00000000</Color>
+                    <Color x:Key="AWMSelectionBackgroundColor">#4400FFFF</Color>
+                    <Color x:Key="AWMSelectionBorderColor">#FFFFFFFF</Color>
+                    <Color x:Key="AWMListItemPointerOverColor">#33FFFFFF</Color>
+                    <Color x:Key="AWMListItemPressedColor">#66FFFFFF</Color>
+                    <Color x:Key="AWMListItemSelectedColor">#44FFFFFF</Color>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
                 <ResourceDictionary Source="Styles/DesignTokens.xaml"/>

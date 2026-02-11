@@ -19,7 +19,6 @@ public sealed partial class KeyViewModel : ObservableObject
 {
     private readonly AppViewModel _appViewModel = AppViewModel.Instance;
     private readonly List<KeySlotSummary> _allSlotSummaries = new();
-    private static readonly SolidColorBrush SuccessBrush = new(Windows.UI.Color.FromArgb(255, 76, 175, 80));
 
     private bool _isBusy;
     public bool IsBusy
@@ -71,10 +70,10 @@ public sealed partial class KeyViewModel : ObservableObject
     public int ActiveKeySlot => _appViewModel.ActiveKeySlot;
     public string ActiveKeySlotText => $"当前激活槽位：{ActiveKeySlot}";
     public string KeyStatusText => KeyAvailable ? "已配置" : "未配置";
-    public Brush KeyStatusBrush => KeyAvailable ? SuccessBrush : ResolveWarningBrush();
+    public Brush KeyStatusBrush => KeyAvailable ? ResolveSuccessBrush() : ResolveWarningBrush();
     public KeySlotSummary? ActiveKeySummary => _allSlotSummaries.FirstOrDefault(item => item.IsActive);
     public string ActiveSummaryTitle => $"槽位 {ActiveKeySlot}（{(ActiveKeySummary?.HasKey == true ? "已配置" : "未配置")}）";
-    public Brush ActiveSummaryTitleBrush => SuccessBrush;
+    public Brush ActiveSummaryTitleBrush => ResolveSuccessBrush();
     public string ActiveSummaryKeyLine
     {
         get
@@ -159,11 +158,11 @@ public sealed partial class KeyViewModel : ObservableObject
         }
     }
 
-    public Brush ApplyActionBrush => IsApplySuccess ? SuccessBrush : ResolvePrimaryTextBrush();
-    public Brush GenerateActionBrush => IsGenerateSuccess ? SuccessBrush : ResolveAccentTextBrush();
-    public Brush EditActionBrush => IsEditSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
-    public Brush DeleteActionBrush => IsDeleteSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
-    public Brush RefreshActionBrush => IsRefreshSuccess ? SuccessBrush : ResolvePrimaryTextBrush();
+    public Brush ApplyActionBrush => IsApplySuccess ? ResolveSuccessBrush() : ResolvePrimaryTextBrush();
+    public Brush GenerateActionBrush => IsGenerateSuccess ? ResolveSuccessBrush() : ResolveAccentTextBrush();
+    public Brush EditActionBrush => IsEditSuccess ? ResolveSuccessBrush() : ResolvePrimaryTextBrush();
+    public Brush DeleteActionBrush => IsDeleteSuccess ? ResolveSuccessBrush() : ResolvePrimaryTextBrush();
+    public Brush RefreshActionBrush => IsRefreshSuccess ? ResolveSuccessBrush() : ResolvePrimaryTextBrush();
 
     public KeyViewModel()
     {
@@ -426,35 +425,39 @@ public sealed partial class KeyViewModel : ObservableObject
 
     private static Brush ResolvePrimaryTextBrush()
     {
-        if (Application.Current.Resources.TryGetValue("TextFillColorPrimaryBrush", out var value)
-            && value is Brush brush)
-        {
-            return brush;
-        }
-
-        return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 32, 32, 32));
+        return ResolveBrush("TextFillColorPrimaryBrush", "NeutralBrush");
     }
 
     private static Brush ResolveAccentTextBrush()
     {
-        if (Application.Current.Resources.TryGetValue("TextOnAccentFillColorPrimaryBrush", out var value)
-            && value is Brush brush)
-        {
-            return brush;
-        }
+        return ResolveBrush("TextOnAccentFillColorPrimaryBrush", "TextFillColorPrimaryBrush");
+    }
 
-        return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 255, 255));
+    private static Brush ResolveSuccessBrush()
+    {
+        return ResolveBrush("SuccessBrush", "TextFillColorPrimaryBrush");
     }
 
     private static Brush ResolveWarningBrush()
     {
-        if (Application.Current.Resources.TryGetValue("WarningBrush", out var value)
+        return ResolveBrush("WarningBrush", "TextFillColorSecondaryBrush");
+    }
+
+    private static Brush ResolveBrush(string key, string fallbackKey)
+    {
+        if (Application.Current.Resources.TryGetValue(key, out var value)
             && value is Brush brush)
         {
             return brush;
         }
 
-        return new SolidColorBrush(Windows.UI.Color.FromArgb(255, 255, 152, 0));
+        if (Application.Current.Resources.TryGetValue(fallbackKey, out var fallbackValue)
+            && fallbackValue is Brush fallbackBrush)
+        {
+            return fallbackBrush;
+        }
+
+        return new SolidColorBrush(Windows.UI.Colors.Transparent);
     }
 
     private async Task FlashGenerateSuccessAsync()

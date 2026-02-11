@@ -212,6 +212,12 @@ public sealed partial class TagsPage : Page
             return brush;
         }
 
-        return new SolidColorBrush(Microsoft.UI.Colors.Gray);
+        if (Application.Current.Resources.TryGetValue("TextFillColorSecondaryBrush", out var fallback)
+            && fallback is Brush fallbackBrush)
+        {
+            return fallbackBrush;
+        }
+
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 }
