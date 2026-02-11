@@ -37,13 +37,13 @@
                 </Grid.RowDefinitions>
 
                 <Border Grid.Row="0" Style="{StaticResource KeyHeaderBorderStyle}">
-                    <TextBlock Text="密钥管理" Style="{StaticResource SectionHeaderStyle}" Margin="0"/>
+                    <TextBlock Text="{x:Bind ViewModel.KeyPageTitle, Mode=OneWay}" Style="{StaticResource SectionHeaderStyle}" Margin="0"/>
                 </Border>
 
                 <InfoBar Grid.Row="2"
                          IsClosable="False"
-                         Severity="{x:Bind ViewModel.KeyStatusSeverity, Mode=OneTime}"
-                         Message="{x:Bind ViewModel.KeyStatusMessage, Mode=OneTime}"/>
+                         Severity="{x:Bind ViewModel.KeyStatusSeverity, Mode=OneWay}"
+                         Message="{x:Bind ViewModel.KeyStatusMessage, Mode=OneWay}"/>
 
                 <Border Grid.Row="3" Style="{StaticResource ListItemBorderStyle}">
                     <StackPanel Spacing="8">
@@ -52,7 +52,7 @@
                                 <ColumnDefinition Width="96"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="密钥状态"
+                            <TextBlock Text="{x:Bind ViewModel.KeyStatusFieldLabel, Mode=OneWay}"
                                        FontWeight="SemiBold"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Grid.Column="1"
@@ -64,7 +64,7 @@
                                 <ColumnDefinition Width="96"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="密钥来源"
+                            <TextBlock Text="{x:Bind ViewModel.KeySourceFieldLabel, Mode=OneWay}"
                                        FontWeight="SemiBold"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Grid.Column="1"
@@ -81,7 +81,7 @@
                                 <ColumnDefinition Width="96"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="激活槽位"
+                            <TextBlock Text="{x:Bind ViewModel.ActiveSlotFieldLabel, Mode=OneWay}"
                                        FontWeight="SemiBold"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
@@ -89,11 +89,11 @@
                                           ItemsSource="{x:Bind ViewModel.SlotOptions, Mode=OneWay}"
                                           SelectedItem="{x:Bind ViewModel.SelectedSlot, Mode=TwoWay}"/>
                                 <Button Click="ApplySlotButton_Click"
-                                        IsEnabled="{x:Bind ViewModel.CanOperate, Mode=OneTime}">
+                                        IsEnabled="{x:Bind ViewModel.CanOperate, Mode=OneWay}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <SymbolIcon Symbol="AllApps"
                                                     Foreground="{x:Bind ViewModel.ApplyActionBrush, Mode=OneWay}"/>
-                                        <TextBlock Text="应用"/>
+                                        <TextBlock Text="{x:Bind ViewModel.ApplyActionText, Mode=OneWay}"/>
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
@@ -105,7 +105,7 @@
 
                 <Border Grid.Row="5" Style="{StaticResource ListItemBorderStyle}">
                     <StackPanel Spacing="4">
-                        <TextBlock Text="当前激活密钥"
+                        <TextBlock Text="{x:Bind ViewModel.ActiveKeySectionTitle, Mode=OneWay}"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -128,24 +128,24 @@
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Button Click="GenerateKeyButton_Click"
                                 Style="{StaticResource PrimaryButtonStyle}"
-                                IsEnabled="{x:Bind ViewModel.CanGenerateKey, Mode=OneTime}">
+                                IsEnabled="{x:Bind ViewModel.CanGenerateKey, Mode=OneWay}">
                             <ToolTipService.ToolTip>
-                                <TextBlock Text="{x:Bind ViewModel.GenerateKeyTooltip, Mode=OneTime}"/>
+                                <TextBlock Text="{x:Bind ViewModel.GenerateKeyTooltip, Mode=OneWay}"/>
                             </ToolTipService.ToolTip>
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Permissions"
                                             Foreground="{x:Bind ViewModel.GenerateActionBrush, Mode=OneWay}"/>
-                                <TextBlock Text="生成"/>
+                                <TextBlock Text="{x:Bind ViewModel.GenerateActionText, Mode=OneWay}"/>
                             </StackPanel>
                         </Button>
 
                         <Button Click="EditLabelButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
-                                IsEnabled="{x:Bind ViewModel.CanOperate, Mode=OneTime}">
+                                IsEnabled="{x:Bind ViewModel.CanOperate, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Tag"
                                             Foreground="{x:Bind ViewModel.EditActionBrush, Mode=OneWay}"/>
-                                <TextBlock Text="编辑"/>
+                                <TextBlock Text="{x:Bind ViewModel.EditActionText, Mode=OneWay}"/>
                             </StackPanel>
                         </Button>
 
@@ -155,17 +155,17 @@
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Delete"
                                             Foreground="{x:Bind ViewModel.DeleteActionBrush, Mode=OneWay}"/>
-                                <TextBlock Text="删除"/>
+                                <TextBlock Text="{x:Bind ViewModel.DeleteActionText, Mode=OneWay}"/>
                             </StackPanel>
                         </Button>
 
                         <Button Click="RefreshButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
-                                IsEnabled="{x:Bind ViewModel.CanOperate, Mode=OneTime}">
+                                IsEnabled="{x:Bind ViewModel.CanOperate, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <SymbolIcon Symbol="Refresh"
                                             Foreground="{x:Bind ViewModel.RefreshActionBrush, Mode=OneWay}"/>
-                                <TextBlock Text="刷新"/>
+                                <TextBlock Text="{x:Bind ViewModel.RefreshActionText, Mode=OneWay}"/>
                             </StackPanel>
                         </Button>
                     </StackPanel>
@@ -188,7 +188,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <TextBlock Text="槽位摘要"
+                        <TextBlock Text="{x:Bind ViewModel.SlotSummaryTitle, Mode=OneWay}"
                                    Style="{StaticResource SectionHeaderStyle}"
                                    Margin="0"/>
 
@@ -207,7 +207,7 @@
                 </Border>
 
                 <TextBox Grid.Row="1"
-                         PlaceholderText="搜索槽位 / Key ID / 标签 / 状态"
+                         PlaceholderText="{x:Bind ViewModel.SlotSearchPlaceholder, Mode=OneWay}"
                          Text="{x:Bind ViewModel.SlotSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
                 <ListView Grid.Row="2"

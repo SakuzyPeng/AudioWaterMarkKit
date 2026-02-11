@@ -31,16 +31,16 @@ public sealed partial class KeyPage : Page
         if (error == Native.AwmError.KeyAlreadyExists)
         {
             await ShowMessageDialogAsync(
-                "槽位已有密钥",
-                "当前槽位已存在密钥，已阻止覆盖。\n如需替换，请先删除该槽位密钥后再生成。");
+                L("槽位已有密钥", "Slot already has key"),
+                L("当前槽位已存在密钥，已阻止覆盖。\n如需替换，请先删除该槽位密钥后再生成。", "Current slot already has a key and overwrite is blocked.\nDelete this slot key before generating a new one."));
             return;
         }
 
         if (error != Native.AwmError.Ok)
         {
             await ShowMessageDialogAsync(
-                "生成失败",
-                $"密钥生成失败：{error}");
+                L("生成失败", "Generate failed"),
+                $"{L("密钥生成失败", "Key generation failed")}: {error}");
         }
     }
 
@@ -50,22 +50,22 @@ public sealed partial class KeyPage : Page
         var activeSummary = ViewModel.ActiveKeySummary;
         var editor = new TextBox
         {
-            PlaceholderText = "输入新标签（留空表示清除）",
+            PlaceholderText = L("输入新标签（留空表示清除）", "Enter new label (leave empty to clear)"),
             Text = activeSummary?.Label ?? string.Empty
         };
 
         var content = new StackPanel { Spacing = 8 };
-        content.Children.Add(new TextBlock { Text = $"当前激活槽位：{activeSlot}" });
-        content.Children.Add(new TextBlock { Text = $"Key ID：{activeSummary?.KeyId ?? "未配置"}" });
-        content.Children.Add(new TextBlock { Text = $"当前标签：{(string.IsNullOrWhiteSpace(activeSummary?.Label) ? "未设置" : activeSummary!.Label)}" });
+        content.Children.Add(new TextBlock { Text = L($"当前激活槽位：{activeSlot}", $"Active slot: {activeSlot}") });
+        content.Children.Add(new TextBlock { Text = $"Key ID: {activeSummary?.KeyId ?? L("未配置", "Not configured")}" });
+        content.Children.Add(new TextBlock { Text = L($"当前标签：{(string.IsNullOrWhiteSpace(activeSummary?.Label) ? "未设置" : activeSummary!.Label)}", $"Current label: {(string.IsNullOrWhiteSpace(activeSummary?.Label) ? "not set" : activeSummary!.Label)}") });
         content.Children.Add(editor);
 
         var dialog = new ContentDialog
         {
-            Title = "编辑槽位标签",
+            Title = L("编辑槽位标签", "Edit slot label"),
             Content = content,
-            PrimaryButtonText = "保存",
-            CloseButtonText = "取消",
+            PrimaryButtonText = L("保存", "Save"),
+            CloseButtonText = L("取消", "Cancel"),
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot
         };
@@ -80,8 +80,8 @@ public sealed partial class KeyPage : Page
         if (error != Native.AwmError.Ok)
         {
             await ShowMessageDialogAsync(
-                "编辑失败",
-                $"密钥标签更新失败：{error}");
+                L("编辑失败", "Edit failed"),
+                $"{L("密钥标签更新失败", "Key label update failed")}: {error}");
         }
     }
 
@@ -90,18 +90,20 @@ public sealed partial class KeyPage : Page
         var slot = ViewModel.SelectedSlot;
         var instruction = new TextBlock
         {
-            Text = $"此操作不可恢复。请输入槽位号 {slot} 以确认删除该槽位密钥。",
+            Text = L(
+                $"此操作不可恢复。请输入槽位号 {slot} 以确认删除该槽位密钥。",
+                $"This action cannot be undone. Enter slot number {slot} to confirm deleting this slot key."),
             TextWrapping = TextWrapping.Wrap
         };
 
         var inputBox = new TextBox
         {
-            PlaceholderText = $"输入槽位号 {slot}"
+            PlaceholderText = L($"输入槽位号 {slot}", $"Enter slot number {slot}")
         };
 
         var hint = new TextBlock
         {
-            Text = "输入不匹配时无法确认删除",
+            Text = L("输入不匹配时无法确认删除", "Delete confirmation disabled when input does not match"),
             Foreground = GetBrush("TextFillColorSecondaryBrush")
         };
 
@@ -113,10 +115,10 @@ public sealed partial class KeyPage : Page
 
         var dialog = new ContentDialog
         {
-            Title = "删除密钥",
+            Title = L("删除密钥", "Delete key"),
             Content = content,
-            PrimaryButtonText = "删除",
-            CloseButtonText = "取消",
+            PrimaryButtonText = L("删除", "Delete"),
+            CloseButtonText = L("取消", "Cancel"),
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = XamlRoot,
             IsPrimaryButtonEnabled = false
@@ -170,7 +172,7 @@ public sealed partial class KeyPage : Page
         {
             Title = title,
             Content = content,
-            CloseButtonText = "确定",
+            CloseButtonText = L("确定", "OK"),
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = XamlRoot
         };
@@ -198,4 +200,6 @@ public sealed partial class KeyPage : Page
 
         return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
+
+    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
 }

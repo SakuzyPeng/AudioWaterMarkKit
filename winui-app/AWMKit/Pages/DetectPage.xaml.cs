@@ -58,11 +58,11 @@ public sealed partial class DetectPage : Page
     {
         var dialog = new ContentDialog
         {
-            Title = "选择输入源",
-            Content = "请选择输入类型",
-            PrimaryButtonText = "文件",
-            SecondaryButtonText = "目录",
-            CloseButtonText = "取消",
+            Title = L("选择输入源", "Select input source"),
+            Content = L("请选择输入类型", "Choose input type"),
+            PrimaryButtonText = L("文件", "File"),
+            SecondaryButtonText = L("目录", "Folder"),
+            CloseButtonText = L("取消", "Cancel"),
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot,
         };
@@ -153,7 +153,7 @@ public sealed partial class DetectPage : Page
             e.AcceptedOperation = DataPackageOperation.None;
         }
 
-        e.DragUIOverride.Caption = "拖拽到此处添加到队列";
+        e.DragUIOverride.Caption = L("拖拽到此处添加到队列", "Drop here to add into queue");
         e.DragUIOverride.IsCaptionVisible = true;
     }
 
@@ -182,4 +182,6 @@ public sealed partial class DetectPage : Page
 
         ViewModel.AddDroppedFiles(droppedFiles);
     }
+
+    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
 }

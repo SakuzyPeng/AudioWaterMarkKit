@@ -1,4 +1,5 @@
 using System;
+using AWMKit.ViewModels;
 
 namespace AWMKit.Models;
 
@@ -17,14 +18,14 @@ public sealed class KeySlotSummary
     public string StatusText { get; init; } = "empty";
     public int[] DuplicateOfSlots { get; init; } = Array.Empty<int>();
 
-    public string SlotTitle => IsActive ? $"槽位 {Slot}（激活）" : $"槽位 {Slot}";
+    public string SlotTitle => IsActive ? L($"槽位 {Slot}（激活）", $"Slot {Slot} (active)") : L($"槽位 {Slot}", $"Slot {Slot}");
 
     public string StatusDisplayText => StatusText switch
     {
-        "active" => "激活",
-        "configured" => "已配置",
-        "duplicate" => "重复",
-        _ => "未配置"
+        "active" => L("激活", "Active"),
+        "configured" => L("已配置", "Configured"),
+        "duplicate" => L("重复", "Duplicate"),
+        _ => L("未配置", "Empty")
     };
 
     public string TitleWithStatus => $"{SlotTitle} · {StatusDisplayText}";
@@ -35,7 +36,7 @@ public sealed class KeySlotSummary
         {
             if (!HasKey)
             {
-                return "未配置";
+                return L("未配置", "Not configured");
             }
 
             if (string.IsNullOrWhiteSpace(Label))
@@ -51,13 +52,15 @@ public sealed class KeySlotSummary
     {
         get
         {
-            var baseText = $"证据: {EvidenceCount}";
+            var baseText = L($"证据: {EvidenceCount}", $"Evidence: {EvidenceCount}");
             if (DuplicateOfSlots.Length == 0)
             {
                 return baseText;
             }
 
-            return $"{baseText} · 重复: {string.Join(",", DuplicateOfSlots)}";
+            return L($"{baseText} · 重复: {string.Join(",", DuplicateOfSlots)}", $"{baseText} · duplicate: {string.Join(",", DuplicateOfSlots)}");
         }
     }
+
+    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
 }

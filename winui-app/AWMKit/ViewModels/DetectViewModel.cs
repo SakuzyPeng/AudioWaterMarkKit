@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -40,6 +41,7 @@ public sealed partial class DetectViewModel : ObservableObject
 
     private CancellationTokenSource? _detectCts;
     private CancellationTokenSource? _progressResetCts;
+    private readonly AppViewModel _appState = AppViewModel.Instance;
 
     private bool _isInputSelectSuccess;
     public bool IsInputSelectSuccess
@@ -75,7 +77,7 @@ public sealed partial class DetectViewModel : ObservableObject
         }
     }
 
-    public string InputSourceText => string.IsNullOrWhiteSpace(InputSource) ? "尚未选择输入源" : InputSource;
+    public string InputSourceText => string.IsNullOrWhiteSpace(InputSource) ? L("尚未选择输入源", "No input source selected") : InputSource;
 
     public ObservableCollection<ChannelLayoutOption> ChannelLayoutOptions { get; } = BuildChannelLayoutOptions();
 
@@ -164,7 +166,7 @@ public sealed partial class DetectViewModel : ObservableObject
 
     public bool HasDetectCount => TotalDetected > 0;
 
-    public string DetectCountText => $"{TotalFound}（成功）/{TotalDetected}（总）";
+    public string DetectCountText => $"{TotalFound}{L("（成功）", " (success)")}/{TotalDetected}{L("（总）", " (total)")}";
 
     private bool _isClearQueueSuccess;
     public bool IsClearQueueSuccess
@@ -232,7 +234,7 @@ public sealed partial class DetectViewModel : ObservableObject
 
     public bool ShowNoLogsHint => !HasLogs;
 
-    public string LogCountText => $"共 {Logs.Count} 条";
+    public string LogCountText => L($"共 {Logs.Count} 条", $"Total {Logs.Count}");
 
     public bool HasFilteredLogs => FilteredLogs.Any();
 
@@ -262,7 +264,7 @@ public sealed partial class DetectViewModel : ObservableObject
 
     public bool ShowQueueEmptyHint => !HasQueueFiles;
 
-    public string QueueCountText => $"共 {QueueCount} 个";
+    public string QueueCountText => L($"共 {QueueCount} 个", $"Total {QueueCount}");
 
     private bool _isKeyAvailable;
     public bool IsKeyAvailable
@@ -279,10 +281,41 @@ public sealed partial class DetectViewModel : ObservableObject
 
     public bool CanDetectOrStop => IsKeyAvailable && (IsProcessing || SelectedFiles.Count > 0);
 
-    public string DetectButtonText => IsProcessing ? "停止" : "检测";
+    public string DetectButtonText => IsProcessing ? L("停止", "Stop") : L("检测", "Detect");
     public bool ShowDetectStopIcon => IsProcessing;
     public bool ShowDetectDefaultPlayIcon => !IsProcessing && !IsDetectSuccess;
     public bool ShowDetectSuccessPlayIcon => !IsProcessing && IsDetectSuccess;
+    public string InputSectionTitle => L("待检测文件", "Input files");
+    public string MissingKeyMessage => L("未配置密钥，请前往密钥页完成生成。", "No key configured. Please go to Key page to create one.");
+    public string GoToKeyPageText => L("前往密钥页", "Go to Key page");
+    public string SelectActionText => L("选择", "Select");
+    public string ClearActionText => L("清空", "Clear");
+    public string DropZoneTitle => L("拖拽音频文件到此处", "Drag audio files here");
+    public string DropZoneSubtitle => L("检测文件中是否包含水印标签", "Check whether files contain watermark tags");
+    public string DetectInfoTitle => L("检测信息", "Detection info");
+    public string FileFieldLabel => L("文件", "File");
+    public string StatusFieldLabel => L("状态", "Status");
+    public string MatchFieldLabel => L("匹配标记", "Match");
+    public string PatternFieldLabel => L("检测模式", "Mode");
+    public string TagFieldLabel => L("标签", "Tag");
+    public string IdentityFieldLabel => L("身份", "Identity");
+    public string VersionFieldLabel => L("版本", "Version");
+    public string TimeFieldLabel => L("检测时间", "Detect time");
+    public string KeySlotFieldLabel => L("密钥槽位", "Key slot");
+    public string BitErrorsFieldLabel => L("位错误", "Bit errors");
+    public string DetectScoreFieldLabel => L("检测分数", "Detect score");
+    public string CloneCheckFieldLabel => L("克隆校验", "Clone check");
+    public string FingerprintScoreFieldLabel => L("指纹分数", "Fingerprint score");
+    public string ErrorFieldLabel => L("错误信息", "Error");
+    public string QueueTitle => L("待检测文件", "Pending files");
+    public string QueueEmptyText => L("暂无文件", "No files");
+    public string LogsTitle => L("检测日志", "Detection logs");
+    public string LogSearchPlaceholder => L("搜索日志（标题/详情）", "Search logs (title/detail)");
+    public string NoFilteredLogsText => L("暂无或无匹配日志", "No logs or no matches");
+    public string SelectInputSourceAccessibility => L("选择输入源", "Select input source");
+    public string DetectActionAccessibility => L("开始或停止检测", "Start or stop detection");
+    public string ClearQueueAccessibility => L("清空队列", "Clear queue");
+    public string ClearLogsAccessibility => L("清空日志", "Clear logs");
 
     public DetectRecord? DisplayedRecord
     {
@@ -312,12 +345,12 @@ public sealed partial class DetectViewModel : ObservableObject
 
     public string DisplayFile => DetailValue(DisplayedRecord?.FilePath);
 
-    public string DisplayStatus => DetailValue(DisplayedRecord?.Status);
+    public string DisplayStatus => StatusDisplayValue(DisplayedRecord?.Status);
 
     public string DisplayMatchFound => DisplayedRecord?.MatchFound switch
     {
-        true => "true",
-        false => "false",
+        true => L("是", "true"),
+        false => L("否", "false"),
         _ => "-",
     };
 
@@ -337,7 +370,7 @@ public sealed partial class DetectViewModel : ObservableObject
 
     public string DisplayDetectScore => DisplayedRecord?.DetectScore is float score ? $"{score:0.000}" : "-";
 
-    public string DisplayCloneCheck => DetailValue(DisplayedRecord?.CloneCheck);
+    public string DisplayCloneCheck => CloneCheckDisplayValue(DisplayedRecord?.CloneCheck);
 
     public string DisplayFingerprintScore => FingerprintScoreDisplay(DisplayedRecord);
 
@@ -363,6 +396,28 @@ public sealed partial class DetectViewModel : ObservableObject
         SelectedFiles.CollectionChanged += OnSelectedFilesChanged;
         Logs.CollectionChanged += OnLogsChanged;
         DetectRecords.CollectionChanged += OnDetectRecordsChanged;
+        _appState.PropertyChanged += OnAppStatePropertyChanged;
+    }
+
+    private void OnAppStatePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(AppViewModel.UiLanguageCode))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(InputSourceText));
+        OnPropertyChanged(nameof(DetectCountText));
+        OnPropertyChanged(nameof(LogCountText));
+        OnPropertyChanged(nameof(QueueCountText));
+        OnPropertyChanged(nameof(DetectButtonText));
+        OnPropertyChanged(nameof(DisplayStatus));
+        OnPropertyChanged(nameof(DisplayMatchFound));
+        OnPropertyChanged(nameof(DisplayPattern));
+        OnPropertyChanged(nameof(DisplayDetectTime));
+        OnPropertyChanged(nameof(DisplayCloneCheck));
+        NotifyLocalizedTextChanged();
+        RebuildLayoutOptions();
     }
 
     public void SetInputSource(string sourcePath)
@@ -403,13 +458,13 @@ public sealed partial class DetectViewModel : ObservableObject
     {
         if (!SelectedFiles.Any())
         {
-            AddLog("队列为空", "没有可移除的文件", true, true, null, LogIconTone.Info);
+            AddLog(L("队列为空", "Queue is empty"), L("没有可移除的文件", "No files to remove"), true, true, null, LogIconTone.Info);
             return;
         }
 
         var count = SelectedFiles.Count;
         SelectedFiles.Clear();
-        AddLog("已清空队列", $"移除了 {count} 个文件", true, false, null, LogIconTone.Success, LogKind.QueueCleared);
+        AddLog(L("已清空队列", "Queue cleared"), L($"移除了 {count} 个文件", $"Removed {count} files"), true, false, null, LogIconTone.Success, LogKind.QueueCleared);
         await FlashClearQueueAsync();
     }
 
@@ -418,7 +473,7 @@ public sealed partial class DetectViewModel : ObservableObject
     {
         if (!Logs.Any())
         {
-            AddLog("日志为空", "没有可清空的日志", true, true, null, LogIconTone.Info);
+            AddLog(L("日志为空", "Logs are empty"), L("没有可清空的日志", "No logs to clear"), true, true, null, LogIconTone.Info);
             return;
         }
 
@@ -428,7 +483,7 @@ public sealed partial class DetectViewModel : ObservableObject
         TotalDetected = 0;
         TotalFound = 0;
 
-        AddLog("已清空日志", $"移除了 {count} 条日志记录", true, true, null, LogIconTone.Success, LogKind.LogsCleared);
+        AddLog(L("已清空日志", "Logs cleared"), L($"移除了 {count} 条日志记录", $"Removed {count} log entries"), true, true, null, LogIconTone.Success, LogKind.LogsCleared);
         await FlashClearLogsAsync();
     }
 
@@ -459,7 +514,7 @@ public sealed partial class DetectViewModel : ObservableObject
             if (IsProcessing)
             {
                 _detectCts?.Cancel();
-                AddLog("检测已停止", "用户手动停止", false, true, null, LogIconTone.Warning);
+                AddLog(L("检测已停止", "Detection stopped"), L("用户手动停止", "Stopped by user"), false, true, null, LogIconTone.Warning);
                 return;
             }
 
@@ -467,7 +522,7 @@ public sealed partial class DetectViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            AddLog("检测异常", ex.Message, false, false, null, LogIconTone.Error);
+            AddLog(L("检测异常", "Detection error"), ex.Message, false, false, null, LogIconTone.Error);
             CurrentProcessingFile = null;
             CurrentProcessingIndex = -1;
             IsProcessing = false;
@@ -483,7 +538,7 @@ public sealed partial class DetectViewModel : ObservableObject
 
         if (!SelectedFiles.Any())
         {
-            AddLog("队列为空", "请先添加音频文件", false, true, null, LogIconTone.Warning);
+            AddLog(L("队列为空", "Queue is empty"), L("请先添加音频文件", "Add audio files first"), false, true, null, LogIconTone.Warning);
             return;
         }
 
@@ -492,7 +547,7 @@ public sealed partial class DetectViewModel : ObservableObject
             var (key, keyError) = AwmKeyBridge.LoadKey();
             if (keyError != AwmError.Ok || key is null)
             {
-                AddLog("检测失败", "密钥未配置", false, false, null, LogIconTone.Error);
+                AddLog(L("检测失败", "Detection failed"), L("密钥未配置", "Key not configured"), false, false, null, LogIconTone.Error);
                 return;
             }
 
@@ -506,9 +561,15 @@ public sealed partial class DetectViewModel : ObservableObject
             TotalDetected = 0;
             TotalFound = 0;
             var channelLayout = SelectedChannelLayout?.Layout ?? AwmChannelLayout.Auto;
-            var layoutText = SelectedChannelLayout?.DisplayText ?? "自动";
+            var layoutText = SelectedChannelLayout?.DisplayText ?? L("自动", "Auto");
 
-            AddLog("开始检测", $"准备检测 {SelectedFiles.Count} 个文件（{layoutText}）", true, false, null, LogIconTone.Info);
+            AddLog(
+                L("开始检测", "Detection started"),
+                L($"准备检测 {SelectedFiles.Count} 个文件（{layoutText}）", $"Preparing to detect {SelectedFiles.Count} files ({layoutText})"),
+                true,
+                false,
+                null,
+                LogIconTone.Info);
 
             var initialTotal = SelectedFiles.Count;
             for (var processed = 0; processed < initialTotal; processed++)
@@ -563,7 +624,13 @@ public sealed partial class DetectViewModel : ObservableObject
 
             if (!token.IsCancellationRequested)
             {
-                AddLog("检测完成", $"已检测: {TotalDetected}, 发现水印: {TotalFound}", true, false, null, LogIconTone.Info);
+                AddLog(
+                    L("检测完成", "Detection finished"),
+                    L($"已检测: {TotalDetected}, 发现水印: {TotalFound}", $"Processed: {TotalDetected}, found: {TotalFound}"),
+                    true,
+                    false,
+                    null,
+                    LogIconTone.Info);
                 if (TotalDetected > 0)
                 {
                     _ = FlashDetectSuccessAsync();
@@ -572,7 +639,7 @@ public sealed partial class DetectViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            AddLog("检测失败", ex.Message, false, false, null, LogIconTone.Error);
+            AddLog(L("检测失败", "Detection failed"), ex.Message, false, false, null, LogIconTone.Error);
         }
         finally
         {
@@ -687,8 +754,8 @@ public sealed partial class DetectViewModel : ObservableObject
             {
                 var timeText = LocalTimestampDisplay(record);
                 AddLog(
-                    $"成功: {fileName}",
-                    $"标签: {record.Identity ?? "-"} | 时间: {timeText} | 克隆: {record.CloneCheck ?? "-"}",
+                    $"{L("成功", "Success")}: {fileName}",
+                    L($"标签: {record.Identity ?? "-"} | 时间: {timeText} | 克隆: {record.CloneCheck ?? "-"}", $"Identity: {record.Identity ?? "-"} | Time: {timeText} | Clone: {record.CloneCheck ?? "-"}"),
                     true,
                     false,
                     record.Id,
@@ -697,12 +764,12 @@ public sealed partial class DetectViewModel : ObservableObject
                 break;
             }
             case "not_found":
-                AddLog($"无标记: {fileName}", "未检测到水印", false, false, record.Id, LogIconTone.Warning, LogKind.ResultNotFound);
+                AddLog($"{L("无标记", "Not found")}: {fileName}", L("未检测到水印", "No watermark detected"), false, false, record.Id, LogIconTone.Warning, LogKind.ResultNotFound);
                 break;
             case "invalid_hmac":
                 AddLog(
-                    $"失败: {fileName}",
-                    $"HMAC 校验失败: {record.Error ?? "unknown"}",
+                    $"{L("失败", "Failed")}: {fileName}",
+                    L($"HMAC 校验失败: {record.Error ?? "unknown"}", $"HMAC verification failed: {record.Error ?? "unknown"}"),
                     false,
                     false,
                     record.Id,
@@ -710,7 +777,7 @@ public sealed partial class DetectViewModel : ObservableObject
                     LogKind.ResultInvalidHmac);
                 break;
             default:
-                AddLog($"失败: {fileName}", record.Error ?? "未知错误", false, false, record.Id, LogIconTone.Error, LogKind.ResultError);
+                AddLog($"{L("失败", "Failed")}: {fileName}", record.Error ?? L("未知错误", "Unknown error"), false, false, record.Id, LogIconTone.Error, LogKind.ResultError);
                 break;
         }
     }
@@ -728,14 +795,14 @@ public sealed partial class DetectViewModel : ObservableObject
 
                 if (files.Count == 0)
                 {
-                    AddLog("目录无可用音频", "当前目录未找到 WAV / FLAC / M4A / ALAC 文件", false, true, null, LogIconTone.Warning);
+                    AddLog(L("目录无可用音频", "No audio files in directory"), L("当前目录未找到 WAV / FLAC / M4A / ALAC 文件", "No WAV / FLAC / M4A / ALAC files found in this directory"), false, true, null, LogIconTone.Warning);
                 }
 
                 return files;
             }
             catch (Exception ex)
             {
-                AddLog("读取目录失败", ex.Message, false, false, null, LogIconTone.Error);
+                AddLog(L("读取目录失败", "Failed to read directory"), ex.Message, false, false, null, LogIconTone.Error);
                 return Array.Empty<string>();
             }
         }
@@ -745,7 +812,7 @@ public sealed partial class DetectViewModel : ObservableObject
             return new[] { sourcePath };
         }
 
-        AddLog("不支持的输入源", "请选择 WAV / FLAC / M4A / ALAC 文件或包含这些文件的目录", false, true, null, LogIconTone.Warning);
+        AddLog(L("不支持的输入源", "Unsupported input source"), L("请选择 WAV / FLAC / M4A / ALAC 文件或包含这些文件的目录", "Select a WAV / FLAC / M4A / ALAC file or a directory containing those files"), false, true, null, LogIconTone.Warning);
         return Array.Empty<string>();
     }
 
@@ -784,7 +851,7 @@ public sealed partial class DetectViewModel : ObservableObject
 
         if (duplicateCount > 0)
         {
-            AddLog("已去重", $"跳过 {duplicateCount} 个重复文件", true, true, null, LogIconTone.Info);
+            AddLog(L("已去重", "Deduplicated"), L($"跳过 {duplicateCount} 个重复文件", $"Skipped {duplicateCount} duplicate files"), true, true, null, LogIconTone.Info);
         }
     }
 
@@ -1011,6 +1078,40 @@ public sealed partial class DetectViewModel : ObservableObject
         return string.IsNullOrWhiteSpace(value) ? "-" : value;
     }
 
+    private string StatusDisplayValue(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return "-";
+        }
+
+        return status switch
+        {
+            "ok" => L("成功", "ok"),
+            "not_found" => L("无标记", "not_found"),
+            "invalid_hmac" => L("校验失败", "invalid_hmac"),
+            "error" => L("错误", "error"),
+            _ => status,
+        };
+    }
+
+    private string CloneCheckDisplayValue(string? cloneCheck)
+    {
+        if (string.IsNullOrWhiteSpace(cloneCheck))
+        {
+            return "-";
+        }
+
+        return cloneCheck switch
+        {
+            "exact" => L("一致", "exact"),
+            "likely" => L("疑似一致", "likely"),
+            "suspect" => L("可疑", "suspect"),
+            "unavailable" => L("不可用", "unavailable"),
+            _ => cloneCheck,
+        };
+    }
+
     private static string CloneKindToString(AwmCloneCheckKind kind)
     {
         return kind switch
@@ -1022,7 +1123,7 @@ public sealed partial class DetectViewModel : ObservableObject
         };
     }
 
-    private static string DetectPatternText(
+    private string DetectPatternText(
         AwmChannelLayout layout,
         uint pairCount,
         AwmBridge.DetectAudioResult? singleDetected)
@@ -1037,12 +1138,12 @@ public sealed partial class DetectViewModel : ObservableObject
         return layout switch
         {
             AwmChannelLayout.Stereo => "stereo",
-            AwmChannelLayout.Surround51 => $"multichannel 5.1 ({pairCount} 对)",
-            AwmChannelLayout.Surround512 => $"multichannel 5.1.2 ({pairCount} 对)",
-            AwmChannelLayout.Surround71 => $"multichannel 7.1 ({pairCount} 对)",
-            AwmChannelLayout.Surround714 => $"multichannel 7.1.4 ({pairCount} 对)",
-            AwmChannelLayout.Surround916 => $"multichannel 9.1.6 ({pairCount} 对)",
-            _ => $"multichannel auto ({pairCount} 对)",
+            AwmChannelLayout.Surround51 => L($"multichannel 5.1 ({pairCount} 对)", $"multichannel 5.1 ({pairCount} pairs)"),
+            AwmChannelLayout.Surround512 => L($"multichannel 5.1.2 ({pairCount} 对)", $"multichannel 5.1.2 ({pairCount} pairs)"),
+            AwmChannelLayout.Surround71 => L($"multichannel 7.1 ({pairCount} 对)", $"multichannel 7.1 ({pairCount} pairs)"),
+            AwmChannelLayout.Surround714 => L($"multichannel 7.1.4 ({pairCount} 对)", $"multichannel 7.1.4 ({pairCount} pairs)"),
+            AwmChannelLayout.Surround916 => L($"multichannel 9.1.6 ({pairCount} 对)", $"multichannel 9.1.6 ({pairCount} pairs)"),
+            _ => L($"multichannel auto ({pairCount} 对)", $"multichannel auto ({pairCount} pairs)"),
         };
     }
 
@@ -1050,8 +1151,8 @@ public sealed partial class DetectViewModel : ObservableObject
     {
         return new ObservableCollection<ChannelLayoutOption>
         {
-            CreateLayoutOption(AwmChannelLayout.Auto, "自动"),
-            CreateLayoutOption(AwmChannelLayout.Stereo, "立体声"),
+            CreateLayoutOption(AwmChannelLayout.Auto, L("自动", "Auto")),
+            CreateLayoutOption(AwmChannelLayout.Stereo, L("立体声", "Stereo")),
             CreateLayoutOption(AwmChannelLayout.Surround51, "5.1"),
             CreateLayoutOption(AwmChannelLayout.Surround512, "5.1.2"),
             CreateLayoutOption(AwmChannelLayout.Surround71, "7.1"),
@@ -1080,7 +1181,7 @@ public sealed partial class DetectViewModel : ObservableObject
         return $"{score:0.00}";
     }
 
-    private static string ErrorDisplayValue(DetectRecord? record)
+    private string ErrorDisplayValue(DetectRecord? record)
     {
         if (!string.IsNullOrWhiteSpace(record?.Error))
         {
@@ -1089,7 +1190,7 @@ public sealed partial class DetectViewModel : ObservableObject
 
         if (!string.IsNullOrWhiteSpace(record?.CloneReason))
         {
-            return $"clone: {record.CloneReason}";
+            return $"{L("克隆", "clone")}: {record.CloneReason}";
         }
 
         return "-";
@@ -1250,4 +1351,55 @@ public sealed partial class DetectViewModel : ObservableObject
 
         return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
+
+    private void RebuildLayoutOptions()
+    {
+        var selectedLayout = SelectedChannelLayout?.Layout ?? AwmChannelLayout.Auto;
+        var options = BuildChannelLayoutOptions();
+        ChannelLayoutOptions.Clear();
+        foreach (var option in options)
+        {
+            ChannelLayoutOptions.Add(option);
+        }
+
+        SelectedChannelLayout = ChannelLayoutOptions.FirstOrDefault(x => x.Layout == selectedLayout)
+            ?? ChannelLayoutOptions.FirstOrDefault();
+    }
+
+    private void NotifyLocalizedTextChanged()
+    {
+        OnPropertyChanged(nameof(InputSectionTitle));
+        OnPropertyChanged(nameof(MissingKeyMessage));
+        OnPropertyChanged(nameof(GoToKeyPageText));
+        OnPropertyChanged(nameof(SelectActionText));
+        OnPropertyChanged(nameof(ClearActionText));
+        OnPropertyChanged(nameof(DropZoneTitle));
+        OnPropertyChanged(nameof(DropZoneSubtitle));
+        OnPropertyChanged(nameof(DetectInfoTitle));
+        OnPropertyChanged(nameof(FileFieldLabel));
+        OnPropertyChanged(nameof(StatusFieldLabel));
+        OnPropertyChanged(nameof(MatchFieldLabel));
+        OnPropertyChanged(nameof(PatternFieldLabel));
+        OnPropertyChanged(nameof(TagFieldLabel));
+        OnPropertyChanged(nameof(IdentityFieldLabel));
+        OnPropertyChanged(nameof(VersionFieldLabel));
+        OnPropertyChanged(nameof(TimeFieldLabel));
+        OnPropertyChanged(nameof(KeySlotFieldLabel));
+        OnPropertyChanged(nameof(BitErrorsFieldLabel));
+        OnPropertyChanged(nameof(DetectScoreFieldLabel));
+        OnPropertyChanged(nameof(CloneCheckFieldLabel));
+        OnPropertyChanged(nameof(FingerprintScoreFieldLabel));
+        OnPropertyChanged(nameof(ErrorFieldLabel));
+        OnPropertyChanged(nameof(QueueTitle));
+        OnPropertyChanged(nameof(QueueEmptyText));
+        OnPropertyChanged(nameof(LogsTitle));
+        OnPropertyChanged(nameof(LogSearchPlaceholder));
+        OnPropertyChanged(nameof(NoFilteredLogsText));
+        OnPropertyChanged(nameof(SelectInputSourceAccessibility));
+        OnPropertyChanged(nameof(DetectActionAccessibility));
+        OnPropertyChanged(nameof(ClearQueueAccessibility));
+        OnPropertyChanged(nameof(ClearLogsAccessibility));
+    }
+
+    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
 }

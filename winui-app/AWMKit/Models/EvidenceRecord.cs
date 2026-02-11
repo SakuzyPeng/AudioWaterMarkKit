@@ -1,4 +1,5 @@
 using System;
+using AWMKit.ViewModels;
 
 namespace AWMKit.Models;
 
@@ -33,10 +34,12 @@ public sealed class EvidenceRecord
     public string Pattern => "-";
     public string TagDisplayText => $"Tag {Tag}";
     public string KeyIdDisplayText => string.IsNullOrWhiteSpace(KeyId) ? "-" : KeyId;
-    public string TagSlotDisplayText => $"Tag {Tag} · 槽位 {KeySlot} · Key ID {KeyIdDisplayText}";
+    public string TagSlotDisplayText => L($"Tag {Tag} · 槽位 {KeySlot} · Key ID {KeyIdDisplayText}", $"Tag {Tag} · Slot {KeySlot} · Key ID {KeyIdDisplayText}");
 
     /// <summary>
     /// UI-only selected state for delete mode.
     /// </summary>
     public bool IsSelected { get; set; }
+
+    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
 }

@@ -62,7 +62,7 @@
                         Margin="2,2,2,0">
                     <StackPanel Spacing="12">
                         <StackPanel Spacing="4">
-                            <TextBlock Text="输入源" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.InputSourceLabel, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.InputSourceText, Mode=OneWay}"
                                        TextWrapping="Wrap"
                                        MaxLines="2"
@@ -70,7 +70,7 @@
                         </StackPanel>
                         <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
                         <StackPanel Spacing="4">
-                            <TextBlock Text="输出目录" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.OutputDirectoryLabel, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.OutputDirectoryText, Mode=OneWay}"
                                        TextWrapping="Wrap"
                                        MaxLines="2"
@@ -83,41 +83,41 @@
                          IsClosable="False"
                          Severity="Warning"
                          Visibility="{x:Bind AppState.KeyAvailable, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"
-                         Message="未配置密钥，请前往密钥页完成生成。">
+                         Message="{x:Bind ViewModel.MissingKeyMessage, Mode=OneWay}">
                     <InfoBar.ActionButton>
-                        <Button Content="前往密钥页" Click="GoToKeyPageButton_Click"/>
+                        <Button Content="{x:Bind ViewModel.GoToKeyPageText, Mode=OneWay}" Click="GoToKeyPageButton_Click"/>
                     </InfoBar.ActionButton>
                 </InfoBar>
 
                 <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,2,0,0">
                     <Button Click="SelectInputSourceButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            AutomationProperties.Name="选择输入源">
+                            AutomationProperties.Name="{x:Bind ViewModel.SelectInputSourceAccessibility, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="OpenFile"
                                         Visibility="{x:Bind ViewModel.IsInputSelectSuccess, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
                             <SymbolIcon Symbol="OpenFile"
                                         Foreground="{StaticResource SuccessBrush}"
                                         Visibility="{x:Bind ViewModel.IsInputSelectSuccess, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                            <TextBlock Text="选择"/>
+                            <TextBlock Text="{x:Bind ViewModel.SelectActionText, Mode=OneWay}"/>
                         </StackPanel>
                     </Button>
                     <Button Click="SelectOutputDirectoryButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            AutomationProperties.Name="选择输出目录">
+                            AutomationProperties.Name="{x:Bind ViewModel.SelectOutputDirectoryAccessibility, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="Folder"
                                         Visibility="{x:Bind ViewModel.IsOutputSelectSuccess, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
                             <SymbolIcon Symbol="Folder"
                                         Foreground="{StaticResource SuccessBrush}"
                                         Visibility="{x:Bind ViewModel.IsOutputSelectSuccess, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                            <TextBlock Text="选择"/>
+                            <TextBlock Text="{x:Bind ViewModel.SelectActionText, Mode=OneWay}"/>
                         </StackPanel>
                     </Button>
                     <Button Command="{x:Bind ViewModel.EmbedOrStopCommand}"
                             IsEnabled="{x:Bind ViewModel.CanEmbedOrStop, Mode=OneWay}"
                             Style="{StaticResource PrimaryButtonStyle}"
-                            AutomationProperties.Name="开始或停止嵌入">
+                            AutomationProperties.Name="{x:Bind ViewModel.EmbedActionAccessibility, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="Play"
                                         Visibility="{x:Bind ViewModel.ShowEmbedDefaultPlayIcon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
@@ -132,26 +132,26 @@
                     </Button>
                     <Button Command="{x:Bind ViewModel.ClearQueueCommand}"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            AutomationProperties.Name="清空队列">
+                            AutomationProperties.Name="{x:Bind ViewModel.ClearQueueAccessibility, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="List"
                                         Visibility="{x:Bind ViewModel.IsClearQueueSuccess, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
                             <SymbolIcon Symbol="List"
                                         Foreground="{StaticResource SuccessBrush}"
                                         Visibility="{x:Bind ViewModel.IsClearQueueSuccess, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                            <TextBlock Text="清空"/>
+                            <TextBlock Text="{x:Bind ViewModel.ClearActionText, Mode=OneWay}"/>
                         </StackPanel>
                     </Button>
                     <Button Command="{x:Bind ViewModel.ClearLogsCommand}"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            AutomationProperties.Name="清空日志">
+                            AutomationProperties.Name="{x:Bind ViewModel.ClearLogsAccessibility, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="Message"
                                         Visibility="{x:Bind ViewModel.IsClearLogsSuccess, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
                             <SymbolIcon Symbol="Message"
                                         Foreground="{StaticResource SuccessBrush}"
                                         Visibility="{x:Bind ViewModel.IsClearLogsSuccess, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                            <TextBlock Text="清空"/>
+                            <TextBlock Text="{x:Bind ViewModel.ClearActionText, Mode=OneWay}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -169,8 +169,8 @@
                         Background="{ThemeResource ControlFillColorSecondaryBrush}">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
                         <SymbolIcon Symbol="Audio"/>
-                        <TextBlock Text="拖拽音频文件到此处" FontWeight="SemiBold" TextAlignment="Center"/>
-                        <TextBlock Text="支持 WAV / FLAC / M4A / ALAC 格式，可批量拖入"
+                        <TextBlock Text="{x:Bind ViewModel.DropZoneTitle, Mode=OneWay}" FontWeight="SemiBold" TextAlignment="Center"/>
+                        <TextBlock Text="{x:Bind ViewModel.DropZoneSubtitle, Mode=OneWay}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                    TextAlignment="Center"/>
                     </StackPanel>
@@ -190,7 +190,7 @@
                 </Grid.RowDefinitions>
 
                 <Border Grid.Row="0" Style="{StaticResource EmbedHeaderBorderStyle}">
-                    <TextBlock Text="嵌入设置" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                    <TextBlock Text="{x:Bind ViewModel.SettingsTitle, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                 </Border>
 
                 <Border Grid.Row="1" Style="{StaticResource EmbedSettingCellBorderStyle}">
@@ -200,7 +200,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="用户名" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Grid.Column="0" Text="{x:Bind ViewModel.UsernameLabel, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0">
                                 <TextBlock Text="{x:Bind ViewModel.ReuseHintText, Mode=OneWay}"
                                            Foreground="{x:Bind ViewModel.PreviewTagBrush, Mode=OneWay}"
@@ -213,14 +213,14 @@
                             </StackPanel>
                         </Grid>
                         <TextBox Text="{x:Bind ViewModel.UsernameInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 PlaceholderText="例如: user_001"/>
+                                 PlaceholderText="{x:Bind ViewModel.UsernamePlaceholder, Mode=OneWay}"/>
                     </StackPanel>
                 </Border>
 
                 <Border Grid.Row="2"
                         Style="{StaticResource EmbedSettingCellBorderStyle}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="已存储的映射" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{x:Bind ViewModel.StoredMappingsLabel, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ComboBox ItemsSource="{x:Bind ViewModel.MappingSuggestions, Mode=OneWay}"
                                   SelectedItem="{x:Bind ViewModel.SelectedMapping, Mode=TwoWay}"
                                   PlaceholderText="{x:Bind ViewModel.MappingPlaceholderText, Mode=OneWay}"
@@ -236,7 +236,7 @@
 
                 <Border Grid.Row="3" Style="{StaticResource EmbedSettingCellBorderStyle}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="水印强度" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{x:Bind ViewModel.StrengthLabel, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBlock Text="{x:Bind ViewModel.Strength, Mode=OneWay}"/>
                         <Slider Minimum="1"
                                 Maximum="30"
@@ -249,7 +249,7 @@
 
                 <Border Grid.Row="4" Style="{StaticResource EmbedSettingCellBorderStyle}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="输出后缀" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{x:Bind ViewModel.SuffixLabel, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBox Text="{x:Bind ViewModel.CustomSuffix, Mode=TwoWay}" PlaceholderText="_wm"/>
                     </StackPanel>
                 </Border>
@@ -258,11 +258,11 @@
                         Style="{StaticResource EmbedSettingCellBorderStyle}"
                         Visibility="Collapsed">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="声道布局" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{x:Bind ViewModel.LayoutLabel, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <ComboBox ItemsSource="{x:Bind ViewModel.ChannelLayoutOptions, Mode=OneWay}"
                                   SelectedItem="{x:Bind ViewModel.SelectedChannelLayout, Mode=TwoWay}"
                                   DisplayMemberPath="DisplayText"
-                                  PlaceholderText="自动"/>
+                                  PlaceholderText="{x:Bind ViewModel.LayoutLabel, Mode=OneWay}"/>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -282,7 +282,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="待处理文件" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="{x:Bind ViewModel.QueueTitle, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                         <TextBlock Grid.Column="1"
                                    VerticalAlignment="Center"
                                    Text="{x:Bind ViewModel.QueueCountText, Mode=OneWay}"
@@ -304,7 +304,7 @@
                 </Grid>
 
                 <TextBlock Grid.Row="2"
-                           Text="暂无文件"
+                           Text="{x:Bind ViewModel.QueueEmptyText, Mode=OneWay}"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -353,7 +353,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="事件日志" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="{x:Bind ViewModel.LogsTitle, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                         <TextBlock Grid.Column="1"
                                    VerticalAlignment="Center"
                                    Text="{x:Bind ViewModel.LogCountText, Mode=OneWay}"
@@ -363,7 +363,7 @@
                 </Border>
 
                 <TextBlock Grid.Row="1"
-                           Text="暂无日志"
+                           Text="{x:Bind ViewModel.LogsEmptyText, Mode=OneWay}"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"

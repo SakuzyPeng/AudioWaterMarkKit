@@ -150,7 +150,7 @@ public sealed partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 4, 0),
         };
-        AutomationProperties.SetName(item, $"切换到{label}主题");
+        AutomationProperties.SetName(item, label);
         return item;
     }
 

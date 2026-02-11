@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -25,7 +26,13 @@ public sealed class TagsViewModel : ObservableObject
     private readonly HashSet<long> _selectedEvidenceIds = new();
     private readonly List<TagMapping> _allMappings = [];
     private readonly List<EvidenceRecord> _allEvidence = [];
+    private readonly AppViewModel _appState = AppViewModel.Instance;
     private int? _scopeBeforeDeleteMode;
+
+    public TagsViewModel()
+    {
+        _appState.PropertyChanged += OnAppStatePropertyChanged;
+    }
 
     private bool _isLoading;
     public bool IsLoading
@@ -137,7 +144,7 @@ public sealed class TagsViewModel : ObservableObject
     public bool CanClearSelection => SelectedCount > 0;
     public bool CanExecuteDelete => DeleteMode != TagsDeleteMode.None && !IsLoading;
 
-    public string DeleteTargetLabel => DeleteMode == TagsDeleteMode.Evidence ? "证据" : "标签";
+    public string DeleteTargetLabel => DeleteMode == TagsDeleteMode.Evidence ? L("证据", "evidence") : L("标签", "mapping");
     public int SelectedCount => DeleteMode switch
     {
         TagsDeleteMode.Mappings => _selectedMappingUsernames.Count,
@@ -147,15 +154,30 @@ public sealed class TagsViewModel : ObservableObject
 
     public int MappingTotalCount => _allMappings.Count;
     public int EvidenceTotalCount => _allEvidence.Count;
-    public string MappingTotalBadgeText => $"{MappingTotalCount} 映射";
-    public string EvidenceTotalBadgeText => $"{EvidenceTotalCount} 证据";
+    public string MappingTotalBadgeText => L($"{MappingTotalCount} 映射", $"{MappingTotalCount} mappings");
+    public string EvidenceTotalBadgeText => L($"{EvidenceTotalCount} 证据", $"{EvidenceTotalCount} evidence");
     public string MappingSummaryText => $"{FilteredMappings.Count}/{MappingTotalCount}";
     public string EvidenceSummaryText => $"{FilteredEvidence.Count}/{EvidenceTotalCount}";
 
     public bool ShowMappingEmptyHint => FilteredMappings.Count == 0;
     public bool ShowEvidenceEmptyHint => FilteredEvidence.Count == 0;
-    public string MappingEmptyHint => MappingTotalCount == 0 ? "暂无标签映射" : "未找到匹配映射";
-    public string EvidenceEmptyHint => EvidenceTotalCount == 0 ? "暂无证据记录" : "未找到匹配证据";
+    public string MappingEmptyHint => MappingTotalCount == 0 ? L("暂无标签映射", "No tag mappings") : L("未找到匹配映射", "No matching mappings");
+    public string EvidenceEmptyHint => EvidenceTotalCount == 0 ? L("暂无证据记录", "No evidence records") : L("未找到匹配证据", "No matching evidence");
+    public string SearchPlaceholder => L("搜索用户名 / Tag / Identity / 路径", "Search username / tag / identity / path");
+    public string ScopeAllText => L("全部", "All");
+    public string ScopeMappingsText => L("映射", "Mappings");
+    public string ScopeEvidenceText => L("证据", "Evidence");
+    public string ErrorInfoTitle => L("操作失败", "Operation failed");
+    public string InfoInfoTitle => L("操作提示", "Message");
+    public string MappingPanelTitle => L("标签映射", "Tag mappings");
+    public string EvidencePanelTitle => L("音频证据", "Audio evidence");
+    public string AddMappingButtonText => L("添加映射", "Add mapping");
+    public string DeleteMappingButtonText => L("删除标签", "Delete mappings");
+    public string DeleteEvidenceButtonText => L("删除证据", "Delete evidence");
+    public string ExitDeleteButtonText => L("退出删除", "Exit delete");
+    public string SelectAllButtonText => L("全选", "Select all");
+    public string ClearSelectionButtonText => L("全不选", "Clear selection");
+    public string ExecuteDeleteButtonText => L("执行删除", "Execute delete");
 
     public ObservableCollection<TagMapping> FilteredMappings { get; } = [];
     public ObservableCollection<EvidenceRecord> FilteredEvidence { get; } = [];
@@ -188,7 +210,7 @@ public sealed class TagsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"加载数据库记录失败: {ex.Message}";
+            ErrorMessage = $"{L("加载数据库记录失败", "Failed to load database records")}: {ex.Message}";
         }
         finally
         {
@@ -356,11 +378,11 @@ public sealed class TagsViewModel : ObservableObject
             {
                 case TagsDeleteMode.Mappings:
                     deleted = await AppViewModel.Instance.TagStore.RemoveByUsernamesAsync(_selectedMappingUsernames);
-                    InfoMessage = deleted > 0 ? $"已删除 {deleted} 条标签映射" : "未删除任何标签映射";
+                    InfoMessage = deleted > 0 ? L($"已删除 {deleted} 条标签映射", $"Deleted {deleted} mappings") : L("未删除任何标签映射", "No mappings deleted");
                     break;
                 case TagsDeleteMode.Evidence:
                     deleted = await AppViewModel.Instance.EvidenceStore.RemoveByIdsAsync(_selectedEvidenceIds);
-                    InfoMessage = deleted > 0 ? $"已删除 {deleted} 条证据记录" : "未删除任何证据记录";
+                    InfoMessage = deleted > 0 ? L($"已删除 {deleted} 条证据记录", $"Deleted {deleted} evidence records") : L("未删除任何证据记录", "No evidence records deleted");
                     break;
                 default:
                     return;
@@ -372,7 +394,7 @@ public sealed class TagsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"删除失败: {ex.Message}";
+            ErrorMessage = $"{L("删除失败", "Delete failed")}: {ex.Message}";
         }
     }
 
@@ -407,20 +429,20 @@ public sealed class TagsViewModel : ObservableObject
         var normalized = username.Trim();
         if (string.IsNullOrWhiteSpace(normalized))
         {
-            ErrorMessage = "用户名不能为空";
+            ErrorMessage = L("用户名不能为空", "Username cannot be empty");
             return false;
         }
 
         var previewTag = ResolveTagPreview(normalized, out var reusedExisting);
         if (previewTag == "-")
         {
-            ErrorMessage = "无法生成有效 Tag，请更换用户名后重试";
+            ErrorMessage = L("无法生成有效 Tag，请更换用户名后重试", "Unable to generate a valid tag. Try another username.");
             return false;
         }
 
         if (reusedExisting)
         {
-            InfoMessage = "已存在映射，自动复用";
+            InfoMessage = L("已存在映射，自动复用", "Mapping already exists, auto reused");
             ErrorMessage = null;
             return true;
         }
@@ -428,12 +450,12 @@ public sealed class TagsViewModel : ObservableObject
         var inserted = await AppViewModel.Instance.TagStore.SaveIfAbsentAsync(normalized, previewTag);
         if (!inserted)
         {
-            InfoMessage = "已存在映射，自动复用";
+            InfoMessage = L("已存在映射，自动复用", "Mapping already exists, auto reused");
             ErrorMessage = null;
             return true;
         }
 
-        InfoMessage = $"已新增映射: {normalized} -> {previewTag}";
+        InfoMessage = L($"已新增映射: {normalized} -> {previewTag}", $"Added mapping: {normalized} -> {previewTag}");
         ErrorMessage = null;
         await LoadDataAsync();
         return true;
@@ -543,4 +565,38 @@ public sealed class TagsViewModel : ObservableObject
         OnPropertyChanged(nameof(DeleteTargetLabel));
         OnPropertyChanged(nameof(SelectedCount));
     }
+
+    private void OnAppStatePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(AppViewModel.UiLanguageCode))
+        {
+            return;
+        }
+
+        RefreshFilteredCollections();
+        NotifyLocalizedTextChanged();
+        NotifyCountersChanged();
+        NotifyDeletePresentationChanged();
+    }
+
+    private void NotifyLocalizedTextChanged()
+    {
+        OnPropertyChanged(nameof(SearchPlaceholder));
+        OnPropertyChanged(nameof(ScopeAllText));
+        OnPropertyChanged(nameof(ScopeMappingsText));
+        OnPropertyChanged(nameof(ScopeEvidenceText));
+        OnPropertyChanged(nameof(ErrorInfoTitle));
+        OnPropertyChanged(nameof(InfoInfoTitle));
+        OnPropertyChanged(nameof(MappingPanelTitle));
+        OnPropertyChanged(nameof(EvidencePanelTitle));
+        OnPropertyChanged(nameof(AddMappingButtonText));
+        OnPropertyChanged(nameof(DeleteMappingButtonText));
+        OnPropertyChanged(nameof(DeleteEvidenceButtonText));
+        OnPropertyChanged(nameof(ExitDeleteButtonText));
+        OnPropertyChanged(nameof(SelectAllButtonText));
+        OnPropertyChanged(nameof(ClearSelectionButtonText));
+        OnPropertyChanged(nameof(ExecuteDeleteButtonText));
+    }
+
+    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
 }

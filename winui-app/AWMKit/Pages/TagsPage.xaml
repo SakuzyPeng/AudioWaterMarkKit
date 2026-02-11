@@ -48,14 +48,14 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBox Grid.Column="0"
-                         PlaceholderText="搜索用户名 / Tag / Identity / 路径"
+                         PlaceholderText="{x:Bind ViewModel.SearchPlaceholder, Mode=OneWay}"
                          Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
                 <ComboBox Grid.Column="1"
                           SelectedIndex="{x:Bind ViewModel.SearchScopeIndex, Mode=TwoWay}">
-                    <ComboBoxItem Content="全部"/>
-                    <ComboBoxItem Content="映射"/>
-                    <ComboBoxItem Content="证据"/>
+                    <ComboBoxItem Content="{x:Bind ViewModel.ScopeAllText, Mode=OneWay}"/>
+                    <ComboBoxItem Content="{x:Bind ViewModel.ScopeMappingsText, Mode=OneWay}"/>
+                    <ComboBoxItem Content="{x:Bind ViewModel.ScopeEvidenceText, Mode=OneWay}"/>
                 </ComboBox>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -71,13 +71,13 @@
 
         <StackPanel Grid.Row="1" Spacing="8">
             <InfoBar Severity="Error"
-                     Title="操作失败"
+                     Title="{x:Bind ViewModel.ErrorInfoTitle, Mode=OneWay}"
                      Message="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
                      IsOpen="{x:Bind ViewModel.HasErrorMessage, Mode=OneWay}"
                      IsClosable="True"
                      CloseButtonClick="ErrorInfoBar_CloseButtonClick"/>
             <InfoBar Severity="Success"
-                     Title="操作提示"
+                     Title="{x:Bind ViewModel.InfoInfoTitle, Mode=OneWay}"
                      Message="{x:Bind ViewModel.InfoMessage, Mode=OneWay}"
                      IsOpen="{x:Bind ViewModel.HasInfoMessage, Mode=OneWay}"
                      IsClosable="True"
@@ -105,7 +105,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="标签映射" Style="{StaticResource SectionHeaderStyle}" Margin="0"/>
+                        <TextBlock Text="{x:Bind ViewModel.MappingPanelTitle, Mode=OneWay}" Style="{StaticResource SectionHeaderStyle}" Margin="0"/>
                         <Border Grid.Column="1" Style="{StaticResource ListItemBorderStyle}" Padding="8,4">
                             <TextBlock Text="{x:Bind ViewModel.MappingSummaryText, Mode=OneWay}"/>
                         </Border>
@@ -205,7 +205,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="音频证据" Style="{StaticResource SectionHeaderStyle}" Margin="0"/>
+                        <TextBlock Text="{x:Bind ViewModel.EvidencePanelTitle, Mode=OneWay}" Style="{StaticResource SectionHeaderStyle}" Margin="0"/>
                         <Border Grid.Column="1" Style="{StaticResource ListItemBorderStyle}" Padding="8,4">
                             <TextBlock Text="{x:Bind ViewModel.EvidenceSummaryText, Mode=OneWay}"/>
                         </Border>
@@ -292,15 +292,15 @@
                 <StackPanel Orientation="Horizontal"
                             Spacing="8"
                             Visibility="{x:Bind ViewModel.IsNormalMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Button Content="添加映射"
+                    <Button Content="{x:Bind ViewModel.AddMappingButtonText, Mode=OneWay}"
                             Click="AddMappingButton_Click"
                             Style="{StaticResource PrimaryButtonStyle}"
                             IsEnabled="{x:Bind ViewModel.CanOpenAddDialog, Mode=OneWay}"/>
-                    <Button Content="删除标签"
+                    <Button Content="{x:Bind ViewModel.DeleteMappingButtonText, Mode=OneWay}"
                             Click="EnterDeleteMappingsModeButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{x:Bind ViewModel.CanEnterMappingsDeleteMode, Mode=OneWay}"/>
-                    <Button Content="删除证据"
+                    <Button Content="{x:Bind ViewModel.DeleteEvidenceButtonText, Mode=OneWay}"
                             Click="EnterDeleteEvidenceModeButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{x:Bind ViewModel.CanEnterEvidenceDeleteMode, Mode=OneWay}"/>
@@ -309,18 +309,18 @@
                 <StackPanel Orientation="Horizontal"
                             Spacing="8"
                             Visibility="{x:Bind ViewModel.IsMappingsDeleteMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Button Content="退出删除"
+                    <Button Content="{x:Bind ViewModel.ExitDeleteButtonText, Mode=OneWay}"
                             Click="ExitDeleteModeButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"/>
-                    <Button Content="全选"
+                    <Button Content="{x:Bind ViewModel.SelectAllButtonText, Mode=OneWay}"
                             Click="SelectAllButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{x:Bind ViewModel.CanSelectAll, Mode=OneWay}"/>
-                    <Button Content="全不选"
+                    <Button Content="{x:Bind ViewModel.ClearSelectionButtonText, Mode=OneWay}"
                             Click="ClearSelectionButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{x:Bind ViewModel.CanClearSelection, Mode=OneWay}"/>
-                    <Button Content="执行删除"
+                    <Button Content="{x:Bind ViewModel.ExecuteDeleteButtonText, Mode=OneWay}"
                             Click="ExecuteDeleteButton_Click"
                             Style="{StaticResource PrimaryButtonStyle}"
                             IsEnabled="{x:Bind ViewModel.CanExecuteDelete, Mode=OneWay}"/>
@@ -329,18 +329,18 @@
                 <StackPanel Orientation="Horizontal"
                             Spacing="8"
                             Visibility="{x:Bind ViewModel.IsEvidenceDeleteMode, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <Button Content="退出删除"
+                    <Button Content="{x:Bind ViewModel.ExitDeleteButtonText, Mode=OneWay}"
                             Click="ExitDeleteModeButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"/>
-                    <Button Content="全选"
+                    <Button Content="{x:Bind ViewModel.SelectAllButtonText, Mode=OneWay}"
                             Click="SelectAllButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{x:Bind ViewModel.CanSelectAll, Mode=OneWay}"/>
-                    <Button Content="全不选"
+                    <Button Content="{x:Bind ViewModel.ClearSelectionButtonText, Mode=OneWay}"
                             Click="ClearSelectionButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
                             IsEnabled="{x:Bind ViewModel.CanClearSelection, Mode=OneWay}"/>
-                    <Button Content="执行删除"
+                    <Button Content="{x:Bind ViewModel.ExecuteDeleteButtonText, Mode=OneWay}"
                             Click="ExecuteDeleteButton_Click"
                             Style="{StaticResource PrimaryButtonStyle}"
                             IsEnabled="{x:Bind ViewModel.CanExecuteDelete, Mode=OneWay}"/>

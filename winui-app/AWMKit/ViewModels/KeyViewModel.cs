@@ -61,8 +61,8 @@ public sealed partial class KeyViewModel : ObservableObject
     public bool KeyAvailable => _appViewModel.KeyAvailable;
     public InfoBarSeverity KeyStatusSeverity => KeyAvailable ? InfoBarSeverity.Success : InfoBarSeverity.Warning;
     public string KeyStatusMessage => KeyAvailable
-        ? "密钥已配置，可正常嵌入与检测。"
-        : "未配置密钥。请先生成密钥后再执行嵌入/检测。";
+        ? L("密钥已配置，可正常嵌入与检测。", "Key is configured and ready for embed/detect.")
+        : L("未配置密钥。请先生成密钥后再执行嵌入/检测。", "No key configured. Generate a key before embed/detect.");
     public bool SelectedSlotHasKey
     {
         get
@@ -75,14 +75,16 @@ public sealed partial class KeyViewModel : ObservableObject
     public bool CanOperate => !IsBusy;
     public bool CanGenerateKey => !IsBusy && !SelectedSlotHasKey;
     public string GenerateKeyTooltip => SelectedSlotHasKey
-        ? "当前槽位已有密钥，已禁止覆盖。请先删除后再生成。"
-        : "在当前槽位生成新密钥";
+        ? L("当前槽位已有密钥，已禁止覆盖。请先删除后再生成。", "A key already exists in this slot. Delete it before generating.")
+        : L("在当前槽位生成新密钥", "Generate a new key in current slot");
     public int ActiveKeySlot => _appViewModel.ActiveKeySlot;
-    public string ActiveKeySlotText => $"当前激活槽位：{ActiveKeySlot}";
-    public string KeyStatusText => KeyAvailable ? "已配置" : "未配置";
+    public string ActiveKeySlotText => L($"当前激活槽位：{ActiveKeySlot}", $"Active slot: {ActiveKeySlot}");
+    public string KeyStatusText => KeyAvailable ? L("已配置", "Configured") : L("未配置", "Not configured");
     public Brush KeyStatusBrush => KeyAvailable ? ResolveSuccessBrush() : ResolveWarningBrush();
     public KeySlotSummary? ActiveKeySummary => _allSlotSummaries.FirstOrDefault(item => item.IsActive);
-    public string ActiveSummaryTitle => $"槽位 {ActiveKeySlot}（{(ActiveKeySummary?.HasKey == true ? "已配置" : "未配置")}）";
+    public string ActiveSummaryTitle => L(
+        $"槽位 {ActiveKeySlot}（{(ActiveKeySummary?.HasKey == true ? "已配置" : "未配置")}）",
+        $"Slot {ActiveKeySlot} ({(ActiveKeySummary?.HasKey == true ? "configured" : "empty")})");
     public Brush ActiveSummaryTitleBrush => ResolveSuccessBrush();
     public string ActiveSummaryKeyLine
     {
@@ -90,7 +92,7 @@ public sealed partial class KeyViewModel : ObservableObject
         {
             if (ActiveKeySummary is not { HasKey: true } summary)
             {
-                return "未配置";
+                return L("未配置", "Not configured");
             }
 
             return string.IsNullOrWhiteSpace(summary.Label)
@@ -98,10 +100,22 @@ public sealed partial class KeyViewModel : ObservableObject
                 : $"Key ID: {summary.KeyId ?? "-"} · {summary.Label}";
         }
     }
-    public string ActiveSummaryEvidenceLine => $"证据: {ActiveKeySummary?.EvidenceCount ?? 0}";
+    public string ActiveSummaryEvidenceLine => L($"证据: {ActiveKeySummary?.EvidenceCount ?? 0}", $"Evidence: {ActiveKeySummary?.EvidenceCount ?? 0}");
     public int ConfiguredSlotCount => _allSlotSummaries.Count(item => item.HasKey);
     public bool ShowConfiguredSlotCount => ConfiguredSlotCount > 0;
     public string ConfiguredSlotCountText => ConfiguredSlotCount.ToString();
+    public string KeyPageTitle => L("密钥管理", "Key management");
+    public string KeyStatusFieldLabel => L("密钥状态", "Key status");
+    public string KeySourceFieldLabel => L("密钥来源", "Key source");
+    public string ActiveSlotFieldLabel => L("激活槽位", "Active slot");
+    public string ApplyActionText => L("应用", "Apply");
+    public string ActiveKeySectionTitle => L("当前激活密钥", "Current active key");
+    public string GenerateActionText => L("生成", "Generate");
+    public string EditActionText => L("编辑", "Edit");
+    public string DeleteActionText => L("删除", "Delete");
+    public string RefreshActionText => L("刷新", "Refresh");
+    public string SlotSummaryTitle => L("槽位摘要", "Slot summary");
+    public string SlotSearchPlaceholder => L("搜索槽位 / Key ID / 标签 / 状态", "Search slot / Key ID / label / status");
 
     private bool _isGenerateSuccess;
     public bool IsGenerateSuccess
@@ -313,6 +327,7 @@ public sealed partial class KeyViewModel : ObservableObject
             case nameof(AppViewModel.KeyAvailable):
             case nameof(AppViewModel.KeySourceLabel):
             case nameof(AppViewModel.ActiveKeySlot):
+            case nameof(AppViewModel.UiLanguageCode):
                 RefreshSlotSummaries();
                 if (e.PropertyName == nameof(AppViewModel.ActiveKeySlot))
                 {
@@ -346,6 +361,18 @@ public sealed partial class KeyViewModel : ObservableObject
         OnPropertyChanged(nameof(CanOperate));
         OnPropertyChanged(nameof(CanGenerateKey));
         OnPropertyChanged(nameof(GenerateKeyTooltip));
+        OnPropertyChanged(nameof(KeyPageTitle));
+        OnPropertyChanged(nameof(KeyStatusFieldLabel));
+        OnPropertyChanged(nameof(KeySourceFieldLabel));
+        OnPropertyChanged(nameof(ActiveSlotFieldLabel));
+        OnPropertyChanged(nameof(ApplyActionText));
+        OnPropertyChanged(nameof(ActiveKeySectionTitle));
+        OnPropertyChanged(nameof(GenerateActionText));
+        OnPropertyChanged(nameof(EditActionText));
+        OnPropertyChanged(nameof(DeleteActionText));
+        OnPropertyChanged(nameof(RefreshActionText));
+        OnPropertyChanged(nameof(SlotSummaryTitle));
+        OnPropertyChanged(nameof(SlotSearchPlaceholder));
     }
 
     public async Task<AwmError> EditActiveSlotLabelAsync(string? label)
@@ -422,10 +449,12 @@ public sealed partial class KeyViewModel : ObservableObject
             {
                 var fields = string.Join(" ", new[]
                 {
+                    $"slot {item.Slot}",
                     $"槽位 {item.Slot}",
                     item.KeyId ?? string.Empty,
                     item.Label ?? string.Empty,
                     item.StatusText,
+                    $"evidence {item.EvidenceCount}",
                     $"证据 {item.EvidenceCount}"
                 }).ToLowerInvariant();
                 return fields.Contains(query, StringComparison.Ordinal);
@@ -509,4 +538,6 @@ public sealed partial class KeyViewModel : ObservableObject
         await Task.Delay(1000);
         IsEditSuccess = false;
     }
+
+    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
 }

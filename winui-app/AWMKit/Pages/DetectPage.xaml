@@ -60,7 +60,7 @@
                         Padding="12"
                         Margin="2,2,2,0">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="待检测文件" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{x:Bind ViewModel.InputSectionTitle, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBlock Text="{x:Bind ViewModel.InputSourceText, Mode=OneWay}"
                                    TextWrapping="Wrap"
                                    MaxLines="2"
@@ -72,9 +72,9 @@
                          IsClosable="False"
                          Severity="Warning"
                          Visibility="{x:Bind AppState.KeyAvailable, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"
-                         Message="未配置密钥，请前往密钥页完成生成。">
+                         Message="{x:Bind ViewModel.MissingKeyMessage, Mode=OneWay}">
                     <InfoBar.ActionButton>
-                        <Button Content="前往密钥页" Click="GoToKeyPageButton_Click"/>
+                        <Button Content="{x:Bind ViewModel.GoToKeyPageText, Mode=OneWay}" Click="GoToKeyPageButton_Click"/>
                     </InfoBar.ActionButton>
                 </InfoBar>
 
@@ -83,25 +83,25 @@
                               ItemsSource="{x:Bind ViewModel.ChannelLayoutOptions, Mode=OneWay}"
                               SelectedItem="{x:Bind ViewModel.SelectedChannelLayout, Mode=TwoWay}"
                               DisplayMemberPath="DisplayText"
-                              PlaceholderText="声道布局"
-                              AutomationProperties.Name="选择声道布局"
+                              PlaceholderText="{x:Bind ViewModel.LayoutLabel, Mode=OneWay}"
+                              AutomationProperties.Name="{x:Bind ViewModel.LayoutLabel, Mode=OneWay}"
                               Visibility="Collapsed"/>
                     <Button Click="SelectInputSourceButton_Click"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            AutomationProperties.Name="选择输入源">
+                            AutomationProperties.Name="{x:Bind ViewModel.SelectInputSourceAccessibility, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="OpenFile"
                                         Visibility="{x:Bind ViewModel.IsInputSelectSuccess, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
                             <SymbolIcon Symbol="OpenFile"
                                         Foreground="{StaticResource SuccessBrush}"
                                         Visibility="{x:Bind ViewModel.IsInputSelectSuccess, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                            <TextBlock Text="选择"/>
+                            <TextBlock Text="{x:Bind ViewModel.SelectActionText, Mode=OneWay}"/>
                         </StackPanel>
                     </Button>
                     <Button Command="{x:Bind ViewModel.DetectOrStopCommand}"
                             IsEnabled="{x:Bind ViewModel.CanDetectOrStop, Mode=OneWay}"
                             Style="{StaticResource PrimaryButtonStyle}"
-                            AutomationProperties.Name="开始或停止检测">
+                            AutomationProperties.Name="{x:Bind ViewModel.DetectActionAccessibility, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="Play"
                                         Visibility="{x:Bind ViewModel.ShowDetectDefaultPlayIcon, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
@@ -116,26 +116,26 @@
                     </Button>
                     <Button Command="{x:Bind ViewModel.ClearQueueCommand}"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            AutomationProperties.Name="清空队列">
+                            AutomationProperties.Name="{x:Bind ViewModel.ClearQueueAccessibility, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="List"
                                         Visibility="{x:Bind ViewModel.IsClearQueueSuccess, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
                             <SymbolIcon Symbol="List"
                                         Foreground="{StaticResource SuccessBrush}"
                                         Visibility="{x:Bind ViewModel.IsClearQueueSuccess, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                            <TextBlock Text="清空"/>
+                            <TextBlock Text="{x:Bind ViewModel.ClearActionText, Mode=OneWay}"/>
                         </StackPanel>
                     </Button>
                     <Button Command="{x:Bind ViewModel.ClearLogsCommand}"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            AutomationProperties.Name="清空日志">
+                            AutomationProperties.Name="{x:Bind ViewModel.ClearLogsAccessibility, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <SymbolIcon Symbol="Message"
                                         Visibility="{x:Bind ViewModel.IsClearLogsSuccess, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
                             <SymbolIcon Symbol="Message"
                                         Foreground="{StaticResource SuccessBrush}"
                                         Visibility="{x:Bind ViewModel.IsClearLogsSuccess, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                            <TextBlock Text="清空"/>
+                            <TextBlock Text="{x:Bind ViewModel.ClearActionText, Mode=OneWay}"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -153,8 +153,8 @@
                         Background="{ThemeResource ControlFillColorSecondaryBrush}">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
                         <FontIcon Glyph="&#xE8B8;" FontSize="26"/>
-                        <TextBlock Text="拖拽音频文件到此处" FontWeight="SemiBold" TextAlignment="Center"/>
-                        <TextBlock Text="检测文件中是否包含水印标签" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Center"/>
+                        <TextBlock Text="{x:Bind ViewModel.DropZoneTitle, Mode=OneWay}" FontWeight="SemiBold" TextAlignment="Center"/>
+                        <TextBlock Text="{x:Bind ViewModel.DropZoneSubtitle, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextAlignment="Center"/>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -178,7 +178,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="检测信息" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="{x:Bind ViewModel.DetectInfoTitle, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                         <TextBlock Grid.Column="1"
                                    VerticalAlignment="Center"
                                    Text="{x:Bind ViewModel.DetectCountText, Mode=OneWay}"
@@ -193,7 +193,7 @@
                             <ColumnDefinition Width="68"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="文件" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{x:Bind ViewModel.FileFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.DisplayFile, Mode=OneWay}" TextTrimming="CharacterEllipsis"/>
                     </Grid>
                 </Border>
@@ -206,19 +206,19 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Style="{StaticResource DetectMatrixCellBorderStyle}">
                         <StackPanel Spacing="2">
-                            <TextBlock Text="状态" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.StatusFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayStatus, Mode=OneWay}" Foreground="{x:Bind ViewModel.StatusBrush, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="1" Style="{StaticResource DetectMatrixCellBorderStyle}">
                         <StackPanel Spacing="2">
-                            <TextBlock Text="匹配标记" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.MatchFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayMatchFound, Mode=OneWay}" Foreground="{x:Bind ViewModel.MatchFoundBrush, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="2" Style="{StaticResource DetectMatrixCellBorderStyle}">
                         <StackPanel Spacing="2">
-                            <TextBlock Text="检测模式" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.PatternFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayPattern, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
@@ -232,19 +232,19 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Style="{StaticResource DetectMatrixCellBorderStyle}">
                         <StackPanel Spacing="2">
-                            <TextBlock Text="标签" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.TagFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayTag, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="1" Style="{StaticResource DetectMatrixCellBorderStyle}">
                         <StackPanel Spacing="2">
-                            <TextBlock Text="身份" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.IdentityFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayIdentity, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="2" Style="{StaticResource DetectMatrixCellBorderStyle}">
                         <StackPanel Spacing="2">
-                            <TextBlock Text="版本" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.VersionFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayVersion, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
@@ -258,19 +258,19 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Style="{StaticResource DetectMatrixCellBorderStyle}">
                         <StackPanel Spacing="2">
-                            <TextBlock Text="检测时间" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.TimeFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayDetectTime, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="1" Style="{StaticResource DetectMatrixCellBorderStyle}">
                         <StackPanel Spacing="2">
-                            <TextBlock Text="密钥槽位" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.KeySlotFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayKeySlot, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="2" Style="{StaticResource DetectMatrixCellBorderStyle}">
                         <StackPanel Spacing="2">
-                            <TextBlock Text="位错误" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.BitErrorsFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayBitErrors, Mode=OneWay}" Foreground="{x:Bind ViewModel.BitErrorsBrush, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
@@ -284,19 +284,19 @@
                     </Grid.ColumnDefinitions>
                     <Border Grid.Column="0" Style="{StaticResource DetectMatrixCellBorderStyle}">
                         <StackPanel Spacing="2">
-                            <TextBlock Text="检测分数" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.DetectScoreFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayDetectScore, Mode=OneWay}" Foreground="{x:Bind ViewModel.DetectScoreBrush, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="1" Style="{StaticResource DetectMatrixCellBorderStyle}">
                         <StackPanel Spacing="2">
-                            <TextBlock Text="克隆校验" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.CloneCheckFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayCloneCheck, Mode=OneWay}" Foreground="{x:Bind ViewModel.CloneCheckBrush, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="2" Style="{StaticResource DetectMatrixCellBorderStyle}">
                         <StackPanel Spacing="2">
-                            <TextBlock Text="指纹分数" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.FingerprintScoreFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                             <TextBlock Text="{x:Bind ViewModel.DisplayFingerprintScore, Mode=OneWay}" Foreground="{x:Bind ViewModel.FingerprintScoreBrush, Mode=OneWay}"/>
                         </StackPanel>
                     </Border>
@@ -308,7 +308,7 @@
                             <ColumnDefinition Width="68"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="错误信息" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="{x:Bind ViewModel.ErrorFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                         <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.DisplayError, Mode=OneWay}" Foreground="{x:Bind ViewModel.ErrorBrush, Mode=OneWay}" TextTrimming="CharacterEllipsis"/>
                     </Grid>
                 </Border>
@@ -329,7 +329,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="待检测文件" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="{x:Bind ViewModel.QueueTitle, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                         <TextBlock Grid.Column="1"
                                    VerticalAlignment="Center"
                                    Text="{x:Bind ViewModel.QueueCountText, Mode=OneWay}"
@@ -348,7 +348,7 @@
                 </Grid>
 
                 <TextBlock Grid.Row="2"
-                           Text="暂无文件"
+                           Text="{x:Bind ViewModel.QueueEmptyText, Mode=OneWay}"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -398,7 +398,7 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="检测日志" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <TextBlock Text="{x:Bind ViewModel.LogsTitle, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}"/>
                         <TextBlock Grid.Column="1"
                                    VerticalAlignment="Center"
                                    Text="{x:Bind ViewModel.LogCountText, Mode=OneWay}"
@@ -408,13 +408,13 @@
                 </Border>
 
                 <TextBox Grid.Row="1"
-                         PlaceholderText="搜索日志（标题/详情）"
+                         PlaceholderText="{x:Bind ViewModel.LogSearchPlaceholder, Mode=OneWay}"
                          Text="{x:Bind ViewModel.LogSearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          Margin="2,0,2,0"
                          Visibility="{x:Bind ViewModel.ShowSearchBox, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
 
                 <TextBlock Grid.Row="2"
-                           Text="暂无或无匹配日志"
+                           Text="{x:Bind ViewModel.NoFilteredLogsText, Mode=OneWay}"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"

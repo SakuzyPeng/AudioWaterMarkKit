@@ -39,7 +39,7 @@ public sealed partial class TagsPage : Page
     {
         var usernameBox = new TextBox
         {
-            PlaceholderText = "例如: user_001"
+            PlaceholderText = L("例如: user_001", "e.g. user_001")
         };
         var previewValue = new TextBlock
         {
@@ -58,9 +58,9 @@ public sealed partial class TagsPage : Page
             Spacing = 10,
             Children =
             {
-                new TextBlock { Text = "用户名" },
+                new TextBlock { Text = L("用户名", "Username") },
                 usernameBox,
-                new TextBlock { Text = "Tag 预览" },
+                new TextBlock { Text = L("Tag 预览", "Tag preview") },
                 previewValue,
                 hintText
             }
@@ -68,9 +68,9 @@ public sealed partial class TagsPage : Page
 
         var dialog = new ContentDialog
         {
-            Title = "添加标签映射",
-            PrimaryButtonText = "保存",
-            CloseButtonText = "取消",
+            Title = L("添加标签映射", "Add mapping"),
+            PrimaryButtonText = L("保存", "Save"),
+            CloseButtonText = L("取消", "Cancel"),
             DefaultButton = ContentDialogButton.Primary,
             Content = content,
             XamlRoot = XamlRoot,
@@ -81,7 +81,9 @@ public sealed partial class TagsPage : Page
         {
             var preview = ViewModel.ResolveTagPreview(usernameBox.Text, out var reusedExisting);
             previewValue.Text = preview;
-            hintText.Text = reusedExisting ? "已存在映射，自动复用" : "将新增该用户名映射";
+            hintText.Text = reusedExisting
+                ? L("已存在映射，自动复用", "Mapping already exists, auto reused")
+                : L("将新增该用户名映射", "A new mapping will be added for this username");
             dialog.IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(usernameBox.Text) && preview != "-";
         }
 
@@ -130,7 +132,7 @@ public sealed partial class TagsPage : Page
             return;
         }
 
-        var noun = ViewModel.DeleteMode == TagsDeleteMode.Evidence ? "证据" : "标签";
+        var noun = ViewModel.DeleteMode == TagsDeleteMode.Evidence ? L("证据", "evidence") : L("标签", "mapping");
         var confirmed = await ShowDeleteConfirmDialogAsync(selectedCount, noun);
         if (!confirmed)
         {
@@ -149,18 +151,20 @@ public sealed partial class TagsPage : Page
     {
         var instruction = new TextBlock
         {
-            Text = $"请输入数字 {expectedCount} 以确认删除 {expectedCount} 条{noun}",
+            Text = L(
+                $"请输入数字 {expectedCount} 以确认删除 {expectedCount} 条{noun}",
+                $"Type number {expectedCount} to confirm deleting {expectedCount} {noun} item(s)"),
             TextWrapping = TextWrapping.Wrap
         };
 
         var inputBox = new TextBox
         {
-            PlaceholderText = $"输入 {expectedCount}"
+            PlaceholderText = L($"输入 {expectedCount}", $"Enter {expectedCount}")
         };
 
         var hint = new TextBlock
         {
-            Text = "数量不匹配时无法确认",
+            Text = L("数量不匹配时无法确认", "Confirmation disabled when number does not match"),
             Foreground = GetBrush("TextFillColorSecondaryBrush")
         };
 
@@ -172,9 +176,9 @@ public sealed partial class TagsPage : Page
 
         var dialog = new ContentDialog
         {
-            Title = "确认删除",
-            PrimaryButtonText = "确认删除",
-            CloseButtonText = "取消",
+            Title = L("确认删除", "Confirm deletion"),
+            PrimaryButtonText = L("确认删除", "Delete"),
+            CloseButtonText = L("取消", "Cancel"),
             DefaultButton = ContentDialogButton.Close,
             Content = content,
             XamlRoot = XamlRoot,
@@ -220,4 +224,6 @@ public sealed partial class TagsPage : Page
 
         return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
+
+    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
 }
