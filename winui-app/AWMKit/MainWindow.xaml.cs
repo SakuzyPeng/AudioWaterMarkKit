@@ -35,6 +35,7 @@ public sealed partial class MainWindow : Window
     private NavigationViewItem? _engineStatusItem;
     private NavigationViewItem? _databaseStatusItem;
     private ThemeMode _currentThemeMode = ThemeMode.System;
+    private AppWindow? _appWindow;
 
     public MainWindow()
     {
@@ -56,6 +57,9 @@ public sealed partial class MainWindow : Window
     {
         // Keep native WinUI title bar and window controls.
         Title = "AWMKit";
+        var hwnd = WindowNative.GetWindowHandle(this);
+        var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
+        _appWindow = AppWindow.GetFromWindowId(windowId);
         TrySetWindowIcon();
     }
 
@@ -69,10 +73,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            var hwnd = WindowNative.GetWindowHandle(this);
-            var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd);
-            var appWindow = AppWindow.GetFromWindowId(windowId);
-            appWindow.SetIcon(iconPath);
+            _appWindow?.SetIcon(iconPath);
         }
         catch
         {
@@ -181,8 +182,39 @@ public sealed partial class MainWindow : Window
 
         MainNavigation.RequestedTheme = elementTheme;
         ContentFrame.RequestedTheme = elementTheme;
+        if (Content is FrameworkElement root)
+        {
+            root.RequestedTheme = elementTheme;
+        }
+        ApplyTitleBarTheme(mode);
         ApplyThemeToCurrentPage(elementTheme);
         UpdateThemeItems();
+    }
+
+    private void ApplyTitleBarTheme(ThemeMode mode)
+    {
+        if (_appWindow is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var titleTheme = mode switch
+            {
+                ThemeMode.Dark => TitleBarTheme.Dark,
+                ThemeMode.Light => TitleBarTheme.Light,
+                _ => MainNavigation.ActualTheme == ElementTheme.Dark
+                    ? TitleBarTheme.Dark
+                    : TitleBarTheme.Light,
+            };
+
+            _appWindow.TitleBar.PreferredTheme = titleTheme;
+        }
+        catch
+        {
+            // Ignore title bar theme failures on unsupported systems.
+        }
     }
 
     private void ApplyThemeToCurrentPage(ElementTheme elementTheme)

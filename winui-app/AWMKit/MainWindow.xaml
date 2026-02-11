@@ -9,31 +9,47 @@
                     IsBackButtonVisible="Collapsed"
                     IsSettingsVisible="False"
                     PaneDisplayMode="Top"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
-                    PaneBackground="{ThemeResource LayerFillColorDefaultBrush}"
+                    Background="{ThemeResource CardBackgroundBrush}"
+                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                     SelectionChanged="MainNavigation_SelectionChanged">
+        <NavigationView.Resources>
+            <SolidColorBrush x:Key="NavigationViewTopPaneBackground" Color="{ThemeResource AWMCardBackgroundColor}" />
+            <SolidColorBrush x:Key="TopNavigationViewItemForeground" Color="{ThemeResource TextFillColorPrimary}" />
+            <SolidColorBrush x:Key="TopNavigationViewItemForegroundPointerOver" Color="{ThemeResource TextFillColorPrimary}" />
+            <SolidColorBrush x:Key="TopNavigationViewItemForegroundPressed" Color="{ThemeResource TextFillColorPrimary}" />
+            <SolidColorBrush x:Key="TopNavigationViewItemForegroundSelected" Color="{ThemeResource TextFillColorPrimary}" />
+            <SolidColorBrush x:Key="TopNavigationViewItemForegroundSelectedPointerOver" Color="{ThemeResource TextFillColorPrimary}" />
+            <SolidColorBrush x:Key="TopNavigationViewItemForegroundSelectedPressed" Color="{ThemeResource TextFillColorPrimary}" />
+            <SolidColorBrush x:Key="TopNavigationViewItemBackground" Color="{ThemeResource AWMCardBackgroundColor}" />
+            <SolidColorBrush x:Key="TopNavigationViewItemBackgroundPointerOver" Color="{ThemeResource AWMListItemPointerOverColor}" />
+            <SolidColorBrush x:Key="TopNavigationViewItemBackgroundPressed" Color="{ThemeResource AWMListItemPressedColor}" />
+            <SolidColorBrush x:Key="TopNavigationViewItemBackgroundSelected" Color="{ThemeResource AWMListItemSelectedColor}" />
+            <SolidColorBrush x:Key="TopNavigationViewItemBackgroundSelectedPointerOver" Color="{ThemeResource AWMListItemSelectedColor}" />
+            <SolidColorBrush x:Key="TopNavigationViewItemBackgroundSelectedPressed" Color="{ThemeResource AWMListItemSelectedColor}" />
+        </NavigationView.Resources>
+
         <NavigationView.MenuItems>
-            <NavigationViewItem Content="嵌入" Tag="embed">
+            <NavigationViewItem Content="嵌入" Tag="embed" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
                 <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Audio"/>
+                    <SymbolIcon Symbol="Audio" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
 
-            <NavigationViewItem Content="检测" Tag="detect">
+            <NavigationViewItem Content="检测" Tag="detect" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
                 <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Find"/>
+                    <SymbolIcon Symbol="Find" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
 
-            <NavigationViewItem Content="标签" Tag="tags">
+            <NavigationViewItem Content="标签" Tag="tags" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
                 <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Tag"/>
+                    <SymbolIcon Symbol="Tag" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
 
-            <NavigationViewItem Content="密钥" Tag="key">
+            <NavigationViewItem Content="密钥" Tag="key" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
                 <NavigationViewItem.Icon>
-                    <SymbolIcon Symbol="Permissions"/>
+                    <SymbolIcon Symbol="Permissions" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
         </NavigationView.MenuItems>

@@ -27,6 +27,8 @@
     <SolidColorBrush x:Key="ListItemPointerOverBrush" Color="{ThemeResource AWMListItemPointerOverColor}"/>
     <SolidColorBrush x:Key="ListItemPressedBrush" Color="{ThemeResource AWMListItemPressedColor}"/>
     <SolidColorBrush x:Key="ListItemSelectedBrush" Color="{ThemeResource AWMListItemSelectedColor}"/>
+    <SolidColorBrush x:Key="CardBackgroundBrush" Color="{ThemeResource AWMCardBackgroundColor}"/>
+    <SolidColorBrush x:Key="ListItemBaseBackgroundBrush" Color="{ThemeResource AWMListItemBackgroundColor}"/>
     <SolidColorBrush x:Key="TransparentBrush" Color="Transparent"/>
 
     <!-- Status colors -->
@@ -37,7 +39,7 @@
 
     <!-- Card Style -->
     <Style x:Key="CardBorderStyle" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+        <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}"/>
         <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="CornerRadius" Value="{StaticResource CornerRadiusMD}"/>
@@ -85,7 +87,7 @@
 
     <!-- List Item Style -->
     <Style x:Key="ListItemBorderStyle" TargetType="Border">
-        <Setter Property="Background" Value="{ThemeResource SubtleFillColorTransparentBrush}"/>
+        <Setter Property="Background" Value="{StaticResource ListItemBaseBackgroundBrush}"/>
         <Setter Property="BorderBrush" Value="{ThemeResource DividerStrokeColorDefaultBrush}"/>
         <Setter Property="BorderThickness" Value="0,0,0,1"/>
         <Setter Property="Padding" Value="12"/>

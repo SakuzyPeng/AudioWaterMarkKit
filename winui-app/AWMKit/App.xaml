@@ -19,6 +19,8 @@
                     <Color x:Key="AWMListItemPointerOverColor">#08000000</Color>
                     <Color x:Key="AWMListItemPressedColor">#12000000</Color>
                     <Color x:Key="AWMListItemSelectedColor">#140078D4</Color>
+                    <Color x:Key="AWMCardBackgroundColor">#FFF8F9FC</Color>
+                    <Color x:Key="AWMListItemBackgroundColor">#00FFFFFF</Color>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <Color x:Key="AWMSuccessColor">#6CCB5F</Color>
@@ -27,12 +29,14 @@
                     <Color x:Key="AWMInfoColor">#6CB8FF</Color>
                     <Color x:Key="AWMNeutralColor">#C3C6CE</Color>
                     <Color x:Key="AWMYellowColor">#EEDC82</Color>
-                    <Color x:Key="AWMPageBackdropColor">#FF0B1220</Color>
+                    <Color x:Key="AWMPageBackdropColor">#FF070C16</Color>
                     <Color x:Key="AWMSelectionBackgroundColor">#2B3B82F6</Color>
                     <Color x:Key="AWMSelectionBorderColor">#8C3B82F6</Color>
                     <Color x:Key="AWMListItemPointerOverColor">#18FFFFFF</Color>
                     <Color x:Key="AWMListItemPressedColor">#2AFFFFFF</Color>
                     <Color x:Key="AWMListItemSelectedColor">#2F3B82F6</Color>
+                    <Color x:Key="AWMCardBackgroundColor">#FF111A29</Color>
+                    <Color x:Key="AWMListItemBackgroundColor">#14FFFFFF</Color>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
                     <Color x:Key="AWMSuccessColor">#00FF00</Color>
@@ -47,6 +51,8 @@
                     <Color x:Key="AWMListItemPointerOverColor">#33FFFFFF</Color>
                     <Color x:Key="AWMListItemPressedColor">#66FFFFFF</Color>
                     <Color x:Key="AWMListItemSelectedColor">#44FFFFFF</Color>
+                    <Color x:Key="AWMCardBackgroundColor">#FF000000</Color>
+                    <Color x:Key="AWMListItemBackgroundColor">#00000000</Color>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
