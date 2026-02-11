@@ -7,6 +7,7 @@ pub mod i18n;
 pub mod keystore;
 pub mod maintenance;
 pub mod settings;
+pub mod snr;
 pub mod tag_store;
 
 pub use app_settings_store::{
@@ -24,4 +25,5 @@ pub use keystore::{
 };
 pub use maintenance::{clear_local_cache, reset_all};
 pub use settings::AppSettings;
+pub use snr::{analyze_snr, SnrAnalysis, SNR_STATUS_ERROR, SNR_STATUS_OK, SNR_STATUS_UNAVAILABLE};
 pub use tag_store::{TagEntry, TagStore};

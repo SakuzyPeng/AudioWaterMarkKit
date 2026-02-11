@@ -119,6 +119,24 @@ internal static class AwmNative
         IntPtr key,
         nuint keyLen);
 
+    [DllImport(Lib, EntryPoint = "awm_evidence_record_file_ex", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_evidence_record_file_ex(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string filePath,
+        IntPtr rawMessage,
+        IntPtr key,
+        nuint keyLen,
+        [MarshalAs(UnmanagedType.U1)] bool isForcedEmbed);
+
+    [DllImport(Lib, EntryPoint = "awm_evidence_record_embed_file_ex", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_evidence_record_embed_file_ex(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string inputPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string outputPath,
+        IntPtr rawMessage,
+        IntPtr key,
+        nuint keyLen,
+        [MarshalAs(UnmanagedType.U1)] bool isForcedEmbed,
+        IntPtr result);
+
     [DllImport(Lib, EntryPoint = "awm_audio_is_available", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
     internal static extern bool awm_audio_is_available(IntPtr handle);

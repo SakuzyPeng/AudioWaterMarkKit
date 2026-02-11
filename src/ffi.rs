@@ -15,8 +15,8 @@ use crate::tag::Tag;
 
 #[cfg(feature = "app")]
 use crate::app::{
-    build_audio_proof, key_id_from_key_material, AppSettingsStore, EvidenceStore, KeySlotSummary,
-    NewAudioEvidence, TagStore,
+    analyze_snr, build_audio_proof, key_id_from_key_material, AppSettingsStore, EvidenceStore,
+    KeySlotSummary, NewAudioEvidence, TagStore,
 };
 #[cfg(feature = "app")]
 use rusty_chromaprint::{match_fingerprints, Configuration};
@@ -52,6 +52,7 @@ pub struct AWMResult {
 
 const CLONE_LIKELY_MAX_SCORE: f64 = 7.0;
 const CLONE_LIKELY_MIN_SECONDS: f32 = 6.0;
+const FFI_SNR_STATUS_UNAVAILABLE: &str = "unavailable";
 
 fn copy_str_to_c_buf(dst: &mut [c_char], text: &str) {
     dst.fill(0);
@@ -402,6 +403,29 @@ impl AWMCloneCheckResult {
     }
 }
 
+/// 嵌入证据记录结果（含 SNR）
+#[repr(C)]
+pub struct AWMEmbedEvidenceResult {
+    /// 是否有 SNR 数值
+    pub has_snr_db: bool,
+    /// SNR（dB）
+    pub snr_db: f64,
+    /// SNR 状态（ok / unavailable / error）
+    pub snr_status: [c_char; 16],
+    /// SNR 详情（失败原因）
+    pub snr_detail: [c_char; 128],
+}
+
+impl AWMEmbedEvidenceResult {
+    fn reset(&mut self) {
+        self.has_snr_db = false;
+        self.snr_db = 0.0;
+        self.snr_status.fill(0);
+        self.snr_detail.fill(0);
+        copy_str_to_c_buf(&mut self.snr_status, FFI_SNR_STATUS_UNAVAILABLE);
+    }
+}
+
 /// 创建 Audio 实例（自动搜索 audiowmark）
 ///
 /// # Safety
@@ -721,6 +745,125 @@ pub unsafe extern "C" fn awm_evidence_record_file(
     key: *const u8,
     key_len: usize,
 ) -> i32 {
+    record_evidence_file_impl(
+        file_path,
+        raw_message,
+        key,
+        key_len,
+        false,
+        None,
+        FFI_SNR_STATUS_UNAVAILABLE,
+    )
+}
+
+/// 对水印输出文件生成证据并写入数据库（可标记为强行嵌入）
+///
+/// # Safety
+/// - `file_path` 必须是有效 C 字符串
+/// - `raw_message` 必须指向 16 字节数据
+/// - `key` 必须指向 `key_len` 字节
+#[no_mangle]
+pub unsafe extern "C" fn awm_evidence_record_file_ex(
+    file_path: *const c_char,
+    raw_message: *const u8,
+    key: *const u8,
+    key_len: usize,
+    is_forced_embed: bool,
+) -> i32 {
+    record_evidence_file_impl(
+        file_path,
+        raw_message,
+        key,
+        key_len,
+        is_forced_embed,
+        None,
+        FFI_SNR_STATUS_UNAVAILABLE,
+    )
+}
+
+/// 对嵌入结果文件生成证据并计算 SNR
+///
+/// # Safety
+/// - `input_path` / `output_path` 必须是有效 C 字符串
+/// - `raw_message` 必须指向 16 字节数据
+/// - `key` 必须指向 `key_len` 字节
+/// - `result` 必须是有效指针
+#[no_mangle]
+pub unsafe extern "C" fn awm_evidence_record_embed_file_ex(
+    input_path: *const c_char,
+    output_path: *const c_char,
+    raw_message: *const u8,
+    key: *const u8,
+    key_len: usize,
+    is_forced_embed: bool,
+    result: *mut AWMEmbedEvidenceResult,
+) -> i32 {
+    if input_path.is_null() || output_path.is_null() || result.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    (*result).reset();
+
+    let Ok(input_path_str_raw) = CStr::from_ptr(input_path).to_str() else {
+        return AWMError::InvalidUtf8 as i32;
+    };
+    let Ok(output_path_str_raw) = CStr::from_ptr(output_path).to_str() else {
+        return AWMError::InvalidUtf8 as i32;
+    };
+
+    #[cfg(feature = "app")]
+    let snr = analyze_snr(input_path_str_raw, output_path_str_raw);
+    #[cfg(feature = "app")]
+    let snr_db = snr.snr_db;
+    #[cfg(feature = "app")]
+    let snr_status = snr.status.clone();
+    #[cfg(feature = "app")]
+    let snr_detail = snr.detail.clone();
+
+    #[cfg(not(feature = "app"))]
+    let snr_db = None;
+    #[cfg(not(feature = "app"))]
+    let snr_status = "unavailable".to_string();
+    #[cfg(not(feature = "app"))]
+    let snr_detail = Some("app_feature_disabled".to_string());
+
+    #[cfg(not(feature = "app"))]
+    let _ = (input_path_str_raw, output_path_str_raw);
+
+    let code = record_evidence_file_impl(
+        output_path,
+        raw_message,
+        key,
+        key_len,
+        is_forced_embed,
+        snr_db,
+        &snr_status,
+    );
+    if code != AWMError::Success as i32 {
+        return code;
+    }
+
+    if let Some(value) = snr_db {
+        (*result).has_snr_db = true;
+        (*result).snr_db = value;
+    }
+    copy_str_to_c_buf(&mut (*result).snr_status, &snr_status);
+    if let Some(detail) = snr_detail {
+        copy_str_to_c_buf(&mut (*result).snr_detail, &detail);
+    }
+
+    AWMError::Success as i32
+}
+
+unsafe fn record_evidence_file_impl(
+    file_path: *const c_char,
+    raw_message: *const u8,
+    key: *const u8,
+    key_len: usize,
+    is_forced_embed: bool,
+    snr_db: Option<f64>,
+    snr_status: &str,
+) -> i32 {
     if file_path.is_null() || raw_message.is_null() || key.is_null() {
         return AWMError::NullPointer as i32;
     }
@@ -728,7 +871,9 @@ pub unsafe extern "C" fn awm_evidence_record_file(
     let Ok(file_path_str) = CStr::from_ptr(file_path).to_str() else {
         return AWMError::InvalidUtf8 as i32;
     };
-    let raw: [u8; 16] = slice::from_raw_parts(raw_message, 16).try_into().unwrap();
+    let Ok(raw) = <[u8; 16]>::try_from(slice::from_raw_parts(raw_message, 16)) else {
+        return AWMError::InvalidMessageLength as i32;
+    };
     let key_slice = slice::from_raw_parts(key, key_len);
 
     #[cfg(feature = "app")]
@@ -760,6 +905,9 @@ pub unsafe extern "C" fn awm_evidence_record_file(
             sample_count: proof.sample_count,
             pcm_sha256: proof.pcm_sha256,
             key_id: key_id_from_key_material(key_slice),
+            is_forced_embed,
+            snr_db,
+            snr_status: snr_status.to_string(),
             chromaprint: proof.chromaprint,
             fp_config_id: proof.fp_config_id,
         };
@@ -775,6 +923,9 @@ pub unsafe extern "C" fn awm_evidence_record_file(
         let _ = file_path_str;
         let _ = raw;
         let _ = key_slice;
+        let _ = is_forced_embed;
+        let _ = snr_db;
+        let _ = snr_status;
         AWMError::AudiowmarkExec as i32
     }
 }
@@ -800,6 +951,9 @@ struct FfiAudioEvidence {
     sample_count: u64,
     pcm_sha256: String,
     key_id: Option<String>,
+    is_forced_embed: bool,
+    snr_db: Option<f64>,
+    snr_status: String,
     chromaprint_blob: String,
     fingerprint_len: usize,
     fp_config_id: u8,
@@ -1134,6 +1288,9 @@ pub unsafe extern "C" fn awm_db_evidence_list_json(
                 sample_count: row.sample_count,
                 pcm_sha256: row.pcm_sha256,
                 key_id: row.key_id,
+                is_forced_embed: row.is_forced_embed,
+                snr_db: row.snr_db,
+                snr_status: row.snr_status,
                 chromaprint_blob: encode_chromaprint_blob_hex(&row.chromaprint),
                 fingerprint_len: row.chromaprint.len(),
                 fp_config_id: row.fp_config_id,

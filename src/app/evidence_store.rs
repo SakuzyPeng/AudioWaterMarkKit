@@ -20,6 +20,9 @@ pub struct NewAudioEvidence {
     pub sample_count: u64,
     pub pcm_sha256: String,
     pub key_id: String,
+    pub is_forced_embed: bool,
+    pub snr_db: Option<f64>,
+    pub snr_status: String,
     pub chromaprint: Vec<u32>,
     pub fp_config_id: u8,
 }
@@ -40,6 +43,9 @@ pub struct AudioEvidence {
     pub sample_count: u64,
     pub pcm_sha256: String,
     pub key_id: Option<String>,
+    pub is_forced_embed: bool,
+    pub snr_db: Option<f64>,
+    pub snr_status: String,
     pub chromaprint: Vec<u32>,
     pub fp_config_id: u8,
 }
@@ -81,9 +87,10 @@ impl EvidenceStore {
         let changed = self.conn.execute(
             "INSERT OR IGNORE INTO audio_evidence (
                 created_at, file_path, tag, identity, version, key_slot, timestamp_minutes,
-                message_hex, sample_rate, channels, sample_count, pcm_sha256, key_id,
+                message_hex, sample_rate, channels, sample_count, pcm_sha256, key_id, is_forced_embed,
+                snr_db, snr_status,
                 chromaprint_blob, fingerprint_len, fp_config_id
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
             params![
                 created_at,
                 input.file_path,
@@ -98,12 +105,46 @@ impl EvidenceStore {
                 sample_count_i64,
                 input.pcm_sha256,
                 input.key_id,
+                if input.is_forced_embed { 1_i64 } else { 0_i64 },
+                input.snr_db,
+                input.snr_status,
                 chromaprint_blob,
                 fingerprint_len,
                 i64::from(input.fp_config_id),
             ],
         )?;
-        Ok(changed > 0)
+        if changed > 0 {
+            return Ok(true);
+        }
+
+        let promoted = self.conn.execute(
+            "UPDATE audio_evidence
+             SET is_forced_embed = CASE WHEN ?5 != 0 THEN 1 ELSE is_forced_embed END,
+                 snr_db = CASE WHEN snr_db IS NULL AND ?6 IS NOT NULL THEN ?6 ELSE snr_db END,
+                 snr_status = CASE
+                    WHEN (?7 = 'ok' AND snr_status != 'ok') THEN 'ok'
+                    ELSE snr_status
+                 END
+             WHERE identity = ?1
+               AND key_slot = ?2
+               AND key_id = ?3
+               AND pcm_sha256 = ?4
+               AND (
+                   (?5 != 0 AND is_forced_embed = 0)
+                   OR (?6 IS NOT NULL AND snr_db IS NULL)
+                   OR (?7 = 'ok' AND snr_status != 'ok')
+               )",
+            params![
+                input.identity,
+                i64::from(input.key_slot),
+                input.key_id,
+                input.pcm_sha256,
+                if input.is_forced_embed { 1_i64 } else { 0_i64 },
+                input.snr_db,
+                input.snr_status,
+            ],
+        )?;
+        Ok(promoted > 0)
     }
 
     pub fn list_candidates(&self, identity: &str, key_slot: u8) -> Result<Vec<AudioEvidence>> {
@@ -132,7 +173,8 @@ impl EvidenceStore {
         let mut stmt = self.conn.prepare(
             "SELECT
                 id, created_at, file_path, tag, identity, version, key_slot, timestamp_minutes,
-                message_hex, sample_rate, channels, sample_count, pcm_sha256, key_id,
+                message_hex, sample_rate, channels, sample_count, pcm_sha256, key_id, is_forced_embed,
+                snr_db, snr_status,
                 chromaprint_blob, fp_config_id
              FROM audio_evidence
              WHERE (?1 IS NULL OR identity = ?1)
@@ -155,7 +197,8 @@ impl EvidenceStore {
         let mut stmt = self.conn.prepare(
             "SELECT
                 id, created_at, file_path, tag, identity, version, key_slot, timestamp_minutes,
-                message_hex, sample_rate, channels, sample_count, pcm_sha256, key_id,
+                message_hex, sample_rate, channels, sample_count, pcm_sha256, key_id, is_forced_embed,
+                snr_db, snr_status,
                 chromaprint_blob, fp_config_id
              FROM audio_evidence
              WHERE id = ?1
@@ -274,7 +317,7 @@ impl EvidenceStore {
 }
 
 fn parse_audio_evidence_row(row: &Row<'_>) -> Result<AudioEvidence> {
-    let blob: Vec<u8> = row.get(14)?;
+    let blob: Vec<u8> = row.get(17)?;
     let chromaprint = decode_chromaprint_blob(&blob)?;
     let created_at_i64: i64 = row.get(1)?;
     let sample_count_i64: i64 = row.get(11)?;
@@ -283,7 +326,10 @@ fn parse_audio_evidence_row(row: &Row<'_>) -> Result<AudioEvidence> {
     let timestamp_minutes_i64: i64 = row.get(7)?;
     let sample_rate_i64: i64 = row.get(9)?;
     let channels_i64: i64 = row.get(10)?;
-    let fp_config_id_i64: i64 = row.get(15)?;
+    let is_forced_embed_i64: i64 = row.get(14)?;
+    let snr_db: Option<f64> = row.get(15)?;
+    let snr_status: String = row.get(16)?;
+    let fp_config_id_i64: i64 = row.get(18)?;
 
     Ok(AudioEvidence {
         id: row.get(0)?,
@@ -307,6 +353,9 @@ fn parse_audio_evidence_row(row: &Row<'_>) -> Result<AudioEvidence> {
             .map_err(|_| AppError::Message("sample_count must be non-negative".to_string()))?,
         pcm_sha256: row.get(12)?,
         key_id: row.get(13)?,
+        is_forced_embed: is_forced_embed_i64 != 0,
+        snr_db,
+        snr_status,
         chromaprint,
         fp_config_id: u8::try_from(fp_config_id_i64)
             .map_err(|_| AppError::Message("fp_config_id out of range".to_string()))?,
@@ -380,6 +429,9 @@ fn open_db(path: &Path) -> Result<Connection> {
             sample_count INTEGER NOT NULL,
             pcm_sha256 TEXT NOT NULL,
             key_id TEXT NOT NULL,
+            is_forced_embed INTEGER NOT NULL DEFAULT 0,
+            snr_db REAL NULL,
+            snr_status TEXT NOT NULL DEFAULT 'unavailable',
             chromaprint_blob BLOB NOT NULL,
             fingerprint_len INTEGER NOT NULL,
             fp_config_id INTEGER NOT NULL,
@@ -433,6 +485,9 @@ mod tests {
             sample_count: 10_000,
             pcm_sha256: sha256.to_string(),
             key_id: "AAAAAAAAAA".to_string(),
+            is_forced_embed: false,
+            snr_db: Some(36.5),
+            snr_status: "ok".to_string(),
             chromaprint: vec![1, 2, 3, 4],
             fp_config_id: 1,
         }
@@ -566,6 +621,26 @@ mod tests {
 
         let all = store.usage_by_slot(0).unwrap();
         assert_eq!(all.count, 2);
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn duplicate_insert_can_promote_forced_flag() {
+        let db_path = temp_db_path();
+        let store = EvidenceStore::load_at(db_path.clone()).unwrap();
+
+        let mut normal = sample_evidence("PROMOTE", 3, "z1");
+        normal.is_forced_embed = false;
+        assert!(store.insert(&normal).unwrap());
+
+        let mut forced = sample_evidence("PROMOTE", 3, "z1");
+        forced.is_forced_embed = true;
+        assert!(store.insert(&forced).unwrap());
+
+        let rows = store.list_candidates("PROMOTE", 3).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].is_forced_embed);
+
         let _ = fs::remove_file(db_path);
     }
 }

@@ -96,6 +96,9 @@ struct EvidenceJson {
     channels: u32,
     sample_count: u64,
     pcm_sha256: String,
+    is_forced_embed: bool,
+    snr_db: Option<f64>,
+    snr_status: String,
     fingerprint_len: usize,
     fp_config_id: u8,
 }
@@ -133,13 +136,21 @@ fn list(ctx: &Context, args: &ListArgs) -> Result<()> {
     for item in &items {
         let sha_prefix = sha_prefix(&item.pcm_sha256);
         let short_path = shorten_middle(&item.file_path, 54);
+        let forced = if item.is_forced_embed { " FORCED" } else { "" };
+        let snr_text = if item.snr_status == "ok" {
+            format!(" snr={:.2}dB", item.snr_db.unwrap_or_default())
+        } else {
+            format!(" snr={}", item.snr_status)
+        };
         ctx.out.info(format!(
-            "{} {} {} {} slot={} {} {}",
+            "{} {} {} {} slot={}{}{} {} {}",
             item.id,
             item.created_at,
             item.identity,
             item.tag,
             item.key_slot,
+            forced,
+            snr_text,
             sha_prefix,
             short_path
         ));
@@ -177,6 +188,13 @@ fn show(ctx: &Context, args: &ShowArgs) -> Result<()> {
     ctx.out.info(format!("channels={}", item.channels));
     ctx.out.info(format!("sample_count={}", item.sample_count));
     ctx.out.info(format!("pcm_sha256={}", item.pcm_sha256));
+    if item.is_forced_embed {
+        ctx.out.info("is_forced_embed=true");
+    }
+    ctx.out.info(format!("snr_status={}", item.snr_status));
+    if let Some(value) = item.snr_db {
+        ctx.out.info(format!("snr_db={value:.2}"));
+    }
     ctx.out
         .info(format!("fingerprint_len={}", item.chromaprint.len()));
     ctx.out.info(format!("fp_config_id={}", item.fp_config_id));
@@ -249,6 +267,9 @@ fn evidence_json(item: &AudioEvidence) -> EvidenceJson {
         channels: item.channels,
         sample_count: item.sample_count,
         pcm_sha256: item.pcm_sha256.clone(),
+        is_forced_embed: item.is_forced_embed,
+        snr_db: item.snr_db,
+        snr_status: item.snr_status.clone(),
         fingerprint_len: item.chromaprint.len(),
         fp_config_id: item.fp_config_id,
     }

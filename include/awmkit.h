@@ -250,6 +250,13 @@ typedef struct {
     char reason[128];          // Optional reason string
 } AWMCloneCheckResult;
 
+typedef struct {
+    bool has_snr_db;           // Whether snr_db is available
+    double snr_db;             // SNR in dB
+    char snr_status[16];       // "ok" | "unavailable" | "error"
+    char snr_detail[128];      // Optional detail (e.g. mismatch reason)
+} AWMEmbedEvidenceResult;
+
 /**
  * Create Audio instance (auto-search for audiowmark)
  *
@@ -378,6 +385,46 @@ int32_t awm_evidence_record_file(
     const uint8_t* raw_message,
     const uint8_t* key,
     size_t key_len
+);
+
+/**
+ * Record evidence for embedded output file with forced flag.
+ *
+ * @param file_path        Embedded output audio file path
+ * @param raw_message      16-byte encoded message
+ * @param key              HMAC key bytes
+ * @param key_len          Key length
+ * @param is_forced_embed  Whether this record comes from forced embed
+ * @return                 AWM_SUCCESS or error code
+ */
+int32_t awm_evidence_record_file_ex(
+    const char* file_path,
+    const uint8_t* raw_message,
+    const uint8_t* key,
+    size_t key_len,
+    bool is_forced_embed
+);
+
+/**
+ * Record evidence for embedded output file and calculate SNR.
+ *
+ * @param input_path        Original input audio file path
+ * @param output_path       Embedded output audio file path
+ * @param raw_message       16-byte encoded message
+ * @param key               HMAC key bytes
+ * @param key_len           Key length
+ * @param is_forced_embed   Whether this record comes from forced embed
+ * @param result            Output SNR result payload
+ * @return                  AWM_SUCCESS or error code
+ */
+int32_t awm_evidence_record_embed_file_ex(
+    const char* input_path,
+    const char* output_path,
+    const uint8_t* raw_message,
+    const uint8_t* key,
+    size_t key_len,
+    bool is_forced_embed,
+    AWMEmbedEvidenceResult* result
 );
 
 /**
@@ -631,6 +678,7 @@ int32_t awm_db_tag_remove_json(const char* usernames_json, uint32_t* out_deleted
 /**
  * List evidence rows as JSON.
  * Two-step usage is same as awm_db_tag_list_json.
+ * JSON includes `is_forced_embed` (0/1 as boolean).
  *
  * @param limit             Max row count (>=1)
  * @param out               Output buffer for JSON UTF-8

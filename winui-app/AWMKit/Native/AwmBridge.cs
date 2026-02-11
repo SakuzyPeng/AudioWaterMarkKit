@@ -37,6 +37,12 @@ public static class AwmBridge
         string? Reason
     );
 
+    public readonly record struct EmbedEvidenceResult(
+        double? SnrDb,
+        string SnrStatus,
+        string? SnrDetail
+    );
+
     /// <summary>
     /// Gets the current message format version.
     /// </summary>
@@ -485,6 +491,68 @@ public static class AwmBridge
         }
         finally
         {
+            keyHandle.Free();
+            messageHandle.Free();
+        }
+    }
+
+    /// <summary>
+    /// Records embed evidence and returns SNR analysis payload.
+    /// </summary>
+    public static (EmbedEvidenceResult? result, AwmError error) RecordEmbedEvidence(
+        string inputPath,
+        string outputPath,
+        byte[] rawMessage,
+        byte[] key,
+        bool isForcedEmbed = false)
+    {
+        if (rawMessage.Length != MessageLength || key.Length == 0)
+        {
+            return (null, AwmError.InvalidMessageLength);
+        }
+
+        var messageHandle = GCHandle.Alloc(rawMessage, GCHandleType.Pinned);
+        var keyHandle = GCHandle.Alloc(key, GCHandleType.Pinned);
+        var resultPtr = Marshal.AllocHGlobal(Marshal.SizeOf<AWMEmbedEvidenceResult>());
+        try
+        {
+            try
+            {
+                int code = AwmNative.awm_evidence_record_embed_file_ex(
+                    inputPath,
+                    outputPath,
+                    messageHandle.AddrOfPinnedObject(),
+                    keyHandle.AddrOfPinnedObject(),
+                    (nuint)key.Length,
+                    isForcedEmbed,
+                    resultPtr);
+                var error = (AwmError)code;
+                if (error != AwmError.Ok)
+                {
+                    return (null, error);
+                }
+
+                var native = Marshal.PtrToStructure<AWMEmbedEvidenceResult>(resultPtr);
+                var payload = new EmbedEvidenceResult(
+                    native.HasSnrDb ? native.SnrDb : null,
+                    string.IsNullOrWhiteSpace(native.GetSnrStatus()) ? "unavailable" : native.GetSnrStatus(),
+                    native.GetSnrDetail());
+                return (payload, AwmError.Ok);
+            }
+            catch (EntryPointNotFoundException)
+            {
+                var fallback = RecordEvidenceFile(outputPath, rawMessage, key, isForcedEmbed);
+                if (fallback != AwmError.Ok)
+                {
+                    return (null, fallback);
+                }
+
+                return (new EmbedEvidenceResult(null, "unavailable", "legacy_ffi"), AwmError.Ok);
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(resultPtr);
             keyHandle.Free();
             messageHandle.Free();
         }

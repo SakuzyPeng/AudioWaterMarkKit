@@ -790,7 +790,7 @@ public sealed partial class EmbedViewModel : ObservableObject
                 continue;
             }
 
-            (AwmError embedError, AwmError evidenceError) stepResult;
+            (AwmError embedError, AwmError evidenceError, AwmBridge.EmbedEvidenceResult? snrResult) stepResult;
             try
             {
                 stepResult = await RunCancelableNativeCallAsync(() =>
@@ -803,12 +803,20 @@ public sealed partial class EmbedViewModel : ObservableObject
                         Strength);
 
                     var evidence = AwmError.Ok;
+                    AwmBridge.EmbedEvidenceResult? snrResult = null;
                     if (embed == AwmError.Ok)
                     {
-                        evidence = AwmBridge.RecordEvidenceFile(outputPath, message, key, isForcedPass);
+                        var record = AwmBridge.RecordEmbedEvidence(
+                            inputPath,
+                            outputPath,
+                            message,
+                            key,
+                            isForcedPass);
+                        evidence = record.error;
+                        snrResult = record.result;
                     }
 
-                    return (embed, evidence);
+                    return (embed, evidence, snrResult);
                 }, token);
             }
             catch (OperationCanceledException)
@@ -858,7 +866,22 @@ public sealed partial class EmbedViewModel : ObservableObject
                 }
 
                 successCount += 1;
-                AddLog($"{L("成功", "Success")}: {Path.GetFileName(inputPath)}", $"→ {Path.GetFileName(outputPath)}", true, false, LogIconTone.Success, LogKind.ResultOk);
+                string successDetail = $"→ {Path.GetFileName(outputPath)}";
+                if (stepResult.snrResult is { } snr && string.Equals(snr.SnrStatus, "ok", StringComparison.OrdinalIgnoreCase) && snr.SnrDb.HasValue)
+                {
+                    successDetail += $" · SNR {snr.SnrDb.Value:F2} dB";
+                }
+                else if (stepResult.snrResult is { } nonOkSnr && !string.Equals(nonOkSnr.SnrStatus, "ok", StringComparison.OrdinalIgnoreCase))
+                {
+                    AddLog(
+                        L("SNR 不可用", "SNR unavailable"),
+                        nonOkSnr.SnrDetail ?? nonOkSnr.SnrStatus,
+                        false,
+                        true,
+                        LogIconTone.Warning);
+                }
+
+                AddLog($"{L("成功", "Success")}: {Path.GetFileName(inputPath)}", successDetail, true, false, LogIconTone.Success, LogKind.ResultOk);
             }
             else
             {

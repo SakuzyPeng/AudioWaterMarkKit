@@ -65,13 +65,6 @@ enum InputAudioFormat {
     Alac,
 }
 
-#[cfg(feature = "multichannel")]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum OutputAudioFormat {
-    Wav,
-    Flac,
-}
-
 struct TempDirGuard {
     path: PathBuf,
 }
@@ -368,17 +361,9 @@ impl Audio {
             audio.sample_format(),
         )?;
 
-        // 按输出扩展名保存
-        match parse_output_audio_format(output)? {
-            OutputAudioFormat::Wav => {
-                result.to_wav(output)?;
-            }
-            OutputAudioFormat::Flac => {
-                let temp_output_wav = temp_dir.join("output_multichannel.wav");
-                result.to_wav(&temp_output_wav)?;
-                convert_wav_to_flac(&temp_output_wav, output)?;
-            }
-        }
+        // 当前仅支持输出 WAV（FLAC 输出已暂时下线）。
+        ensure_wav_output_extension(output)?;
+        result.to_wav(output)?;
 
         // 清理临时目录
         let _ = fs::remove_dir(&temp_dir);
@@ -628,19 +613,18 @@ fn parse_input_audio_format(path: &Path) -> Result<InputAudioFormat> {
 }
 
 #[cfg(feature = "multichannel")]
-fn parse_output_audio_format(path: &Path) -> Result<OutputAudioFormat> {
+fn ensure_wav_output_extension(path: &Path) -> Result<()> {
     let ext = path
         .extension()
         .and_then(|s| s.to_str())
         .map(str::to_ascii_lowercase);
     match ext.as_deref() {
-        Some("wav") => Ok(OutputAudioFormat::Wav),
-        Some("flac") => Ok(OutputAudioFormat::Flac),
+        Some("wav") => Ok(()),
         Some(ext) => Err(Error::InvalidInput(format!(
-            "unsupported output format: .{ext} (supported: wav, flac)"
+            "unsupported output format: .{ext} (supported: wav)"
         ))),
         None => Err(Error::InvalidInput(
-            "output file has no extension (supported: wav, flac)".to_string(),
+            "output file has no extension (supported: wav)".to_string(),
         )),
     }
 }
@@ -714,100 +698,6 @@ fn decode_to_wav(input: &Path, output_wav: &Path) -> Result<()> {
     writer
         .finalize()
         .map_err(|e| Error::InvalidInput(format!("finalize error: {e}")))?;
-    Ok(())
-}
-
-#[cfg(feature = "multichannel")]
-fn convert_wav_to_flac(input_wav: &Path, output_flac: &Path) -> Result<()> {
-    use flacenc::component::BitRepr;
-    use flacenc::error::Verify;
-    use hound::SampleFormat as HoundSampleFormat;
-
-    let mut reader = hound::WavReader::open(input_wav)
-        .map_err(|e| Error::InvalidInput(format!("failed to open WAV: {e}")))?;
-    let spec = reader.spec();
-
-    let channels = spec.channels as usize;
-    if channels == 0 {
-        return Err(Error::InvalidInput("invalid WAV channels: 0".to_string()));
-    }
-
-    let (bits_per_sample, samples): (usize, Vec<i32>) =
-        match (spec.sample_format, spec.bits_per_sample) {
-            (HoundSampleFormat::Int, 16) => {
-                let mut out = Vec::new();
-                for sample in reader
-                    .samples::<i16>()
-                    .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
-                {
-                    out.push(i32::from(sample?));
-                }
-                (16, out)
-            }
-            (HoundSampleFormat::Int, 24 | 32) => {
-                let mut out = Vec::new();
-                for sample in reader
-                    .samples::<i32>()
-                    .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
-                {
-                    out.push(sample?);
-                }
-                (usize::from(spec.bits_per_sample), out)
-            }
-            (HoundSampleFormat::Float, 32) => {
-                let mut out = Vec::new();
-                for sample in reader
-                    .samples::<f32>()
-                    .map(|value| value.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
-                {
-                    let scaled = scale_float_to_i32(sample?, 8_388_607.0_f32);
-                    out.push(clamp_sample_to_bits(scaled, 24));
-                }
-                (24, out)
-            }
-            (sample_format, bits) => {
-                return Err(Error::InvalidInput(format!(
-                    "unsupported WAV format for FLAC conversion: {sample_format:?} {bits}bit"
-                )))
-            }
-        };
-
-    let mut config = flacenc::config::Encoder::default();
-    // Use a high-compression profile for FLAC output.
-    config.block_size = flacenc::constant::MAX_BLOCK_SIZE;
-    config.stereo_coding.use_leftside = true;
-    config.stereo_coding.use_rightside = true;
-    config.stereo_coding.use_midside = true;
-    config.subframe_coding.use_constant = true;
-    config.subframe_coding.use_fixed = true;
-    config.subframe_coding.use_lpc = true;
-    config.subframe_coding.fixed.max_order = flacenc::constant::fixed::MAX_LPC_ORDER;
-    config.subframe_coding.fixed.order_sel = flacenc::config::OrderSel::BitCount;
-    config.subframe_coding.qlpc.lpc_order = flacenc::constant::qlpc::MAX_ORDER;
-    config.subframe_coding.qlpc.quant_precision = flacenc::constant::qlpc::MAX_PRECISION;
-    config.subframe_coding.qlpc.use_direct_mse = false;
-    config.subframe_coding.qlpc.mae_optimization_steps = 0;
-    config.subframe_coding.qlpc.window = flacenc::config::Window::default();
-    config.subframe_coding.prc.max_parameter = flacenc::constant::rice::MAX_RICE_PARAMETER;
-
-    let config = config
-        .into_verified()
-        .map_err(|(_, err)| Error::InvalidInput(format!("invalid FLAC encoder config: {err}")))?;
-
-    let source = flacenc::source::MemSource::from_samples(
-        &samples,
-        channels,
-        bits_per_sample,
-        spec.sample_rate as usize,
-    );
-    let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size)
-        .map_err(|err| Error::AudiowmarkExec(format!("flac encode failed: {err}")))?;
-
-    let mut sink = flacenc::bitsink::ByteSink::new();
-    stream
-        .write(&mut sink)
-        .map_err(|err| Error::AudiowmarkExec(format!("flac write failed: {err}")))?;
-    std::fs::write(output_flac, sink.as_slice())?;
     Ok(())
 }
 
@@ -937,32 +827,6 @@ fn clamp_sample_to_bits(sample: i32, bits_per_sample: u16) -> i32 {
     i32::try_from(clamped).unwrap_or(if clamped < 0 { i32::MIN } else { i32::MAX })
 }
 
-fn scale_float_to_i32(sample: f32, scale: f32) -> i32 {
-    use num_traits::ToPrimitive;
-
-    const I32_MIN_F32: f32 = -2_147_483_648.0;
-    const I32_MAX_F32: f32 = 2_147_483_647.0;
-
-    if !sample.is_finite() {
-        return 0;
-    }
-
-    let rounded = (sample * scale).round();
-    if rounded <= I32_MIN_F32 {
-        i32::MIN
-    } else if rounded >= I32_MAX_F32 {
-        i32::MAX
-    } else {
-        rounded.to_i32().unwrap_or_else(|| {
-            if rounded.is_sign_negative() {
-                i32::MIN
-            } else {
-                i32::MAX
-            }
-        })
-    }
-}
-
 /// 字节数组转 hex 字符串
 fn bytes_to_hex(bytes: &[u8]) -> String {
     hex::encode(bytes)
@@ -1086,15 +950,9 @@ mod tests {
 
     #[cfg(feature = "multichannel")]
     #[test]
-    fn test_parse_output_audio_format() {
-        assert!(matches!(
-            parse_output_audio_format(Path::new("out.wav")),
-            Ok(OutputAudioFormat::Wav)
-        ));
-        assert!(matches!(
-            parse_output_audio_format(Path::new("out.flac")),
-            Ok(OutputAudioFormat::Flac)
-        ));
-        assert!(parse_output_audio_format(Path::new("out.m4a")).is_err());
+    fn test_output_wav_only() {
+        assert!(ensure_wav_output_extension(Path::new("out.wav")).is_ok());
+        assert!(ensure_wav_output_extension(Path::new("out.flac")).is_err());
+        assert!(ensure_wav_output_extension(Path::new("out.m4a")).is_err());
     }
 }

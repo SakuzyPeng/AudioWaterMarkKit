@@ -20,7 +20,7 @@ cargo build --bin awmkit --features full-cli --release
 ## 2. 支持格式与布局
 
 - 输入音频：`wav` / `flac` / `m4a` / `alac`
-- 输出音频：`wav` / `flac`（由输出文件扩展名决定）
+- 输出音频：`wav`（当前仅支持 WAV 输出）
 - 声道布局：`auto`、`stereo`、`surround51`、`surround512`、`surround71`、`surround714`、`surround916`
 
 ## 3. 全局参数
@@ -41,11 +41,14 @@ awmkit init
 # 2) 编码（可选，便于调试）
 awmkit encode --tag SAKUZY
 
-# 3) 嵌入（自动按输出后缀决定 wav/flac）
-awmkit embed --tag SAKUZY input.wav --output output_wm.flac
+# 3) 嵌入（当前仅输出 wav）
+awmkit embed --tag SAKUZY input.wav --output output_wm.wav
+
+# 风险场景下强制嵌入（证据会标记为强行嵌入）
+awmkit embed --tag SAKUZY input.wav --output output_wm.wav --force-embed
 
 # 4) 检测
-awmkit detect output_wm.flac
+awmkit detect output_wm.wav
 
 # 5) 查看状态
 awmkit status --doctor
@@ -97,6 +100,10 @@ awmkit evidence remove 123 --yes
 # 条件清理
 awmkit evidence clear --identity SAKUZY --key-slot 0 --yes
 ```
+
+说明：
+- `evidence list/show` 仅在强行嵌入记录上显示 `FORCED` / `is_forced_embed=true`。
+- `evidence --json` 始终包含 `is_forced_embed` 布尔字段。
 
 ## 8. 检测 JSON 关键字段
 

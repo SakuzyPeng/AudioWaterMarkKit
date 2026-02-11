@@ -20,7 +20,7 @@ cargo build --bin awmkit --features full-cli --release
 ## 2. Supported Formats and Layouts
 
 - Input audio: `wav` / `flac` / `m4a` / `alac`
-- Output audio: `wav` / `flac` (selected by output extension)
+- Output audio: `wav` (WAV-only output at the moment)
 - Channel layout: `auto`, `stereo`, `surround51`, `surround512`, `surround71`, `surround714`, `surround916`
 
 ## 3. Global Options
@@ -41,11 +41,14 @@ awmkit init
 # 2) Encode (optional for debugging)
 awmkit encode --tag SAKUZY
 
-# 3) Embed (output extension controls wav/flac)
-awmkit embed --tag SAKUZY input.wav --output output_wm.flac
+# 3) Embed (WAV-only output)
+awmkit embed --tag SAKUZY input.wav --output output_wm.wav
+
+# Force embed in risk scenarios (evidence row will be marked as forced)
+awmkit embed --tag SAKUZY input.wav --output output_wm.wav --force-embed
 
 # 4) Detect
-awmkit detect output_wm.flac
+awmkit detect output_wm.wav
 
 # 5) System status
 awmkit status --doctor
@@ -97,6 +100,10 @@ awmkit evidence remove 123 --yes
 # filtered cleanup
 awmkit evidence clear --identity SAKUZY --key-slot 0 --yes
 ```
+
+Notes:
+- `evidence list/show` only surfaces `FORCED` / `is_forced_embed=true` on forced rows.
+- `evidence --json` always includes the boolean `is_forced_embed`.
 
 ## 8. Detect JSON Fields
 

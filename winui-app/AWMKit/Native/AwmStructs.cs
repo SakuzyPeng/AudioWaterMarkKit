@@ -171,3 +171,34 @@ public struct AWMCloneCheckResult
         return System.Text.Encoding.UTF8.GetString(Reason, 0, len);
     }
 }
+
+/// <summary>Embed evidence record result with SNR.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct AWMEmbedEvidenceResult
+{
+    [MarshalAs(UnmanagedType.U1)]
+    public bool HasSnrDb;
+
+    public double SnrDb;
+
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
+    public byte[] SnrStatus;
+
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 128)]
+    public byte[] SnrDetail;
+
+    public string GetSnrStatus()
+    {
+        int len = Array.IndexOf(SnrStatus, (byte)0);
+        if (len < 0) len = SnrStatus.Length;
+        return System.Text.Encoding.UTF8.GetString(SnrStatus, 0, len);
+    }
+
+    public string? GetSnrDetail()
+    {
+        int len = Array.IndexOf(SnrDetail, (byte)0);
+        if (len < 0) len = SnrDetail.Length;
+        if (len == 0) return null;
+        return System.Text.Encoding.UTF8.GetString(SnrDetail, 0, len);
+    }
+}

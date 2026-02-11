@@ -36,6 +36,10 @@ public sealed class DatabaseStoreTests
                 "channels",
                 "sample_count",
                 "pcm_sha256",
+                "key_id",
+                "is_forced_embed",
+                "snr_db",
+                "snr_status",
                 "chromaprint_blob",
                 "fingerprint_len",
                 "fp_config_id"

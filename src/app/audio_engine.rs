@@ -73,14 +73,7 @@ pub fn default_output_path(input: &Path) -> Result<PathBuf> {
     let mut name = std::ffi::OsString::from(stem);
     name.push("_wm");
 
-    let normalized_ext = input
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(str::to_ascii_lowercase);
-    let output_ext = match normalized_ext.as_deref() {
-        Some("wav" | "flac") => normalized_ext.as_deref().unwrap_or("wav"),
-        _ => "wav",
-    };
+    let output_ext = "wav";
     name.push(".");
     name.push(output_ext);
 

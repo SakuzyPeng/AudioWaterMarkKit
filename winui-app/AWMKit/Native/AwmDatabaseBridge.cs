@@ -157,6 +157,9 @@ public static class AwmDatabaseBridge
                 SampleCount = row.SampleCount,
                 PcmSha256 = row.PcmSha256,
                 KeyId = row.KeyId,
+                IsForcedEmbed = row.IsForcedEmbed,
+                SnrDb = row.SnrDb,
+                SnrStatus = row.SnrStatus,
                 ChromaprintBlob = DecodeHex(row.ChromaprintBlob),
                 FingerprintLen = row.FingerprintLen,
                 FpConfigId = row.FpConfigId
@@ -339,6 +342,15 @@ public static class AwmDatabaseBridge
 
         [JsonPropertyName("key_id")]
         public string? KeyId { get; set; }
+
+        [JsonPropertyName("is_forced_embed")]
+        public bool IsForcedEmbed { get; set; }
+
+        [JsonPropertyName("snr_db")]
+        public double? SnrDb { get; set; }
+
+        [JsonPropertyName("snr_status")]
+        public string SnrStatus { get; set; } = "unavailable";
 
         [JsonPropertyName("chromaprint_blob")]
         public string ChromaprintBlob { get; set; } = string.Empty;

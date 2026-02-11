@@ -32,6 +32,8 @@ class EmbedViewModel: ObservableObject {
     // MARK: - 按钮闪烁
     @Published var isClearQueueSuccess = false
     @Published var isClearLogsSuccess = false
+    @Published private(set) var pendingForceReviewFiles: [URL] = []
+    @Published private(set) var forceReviewPromptVersion: Int = 0
 
     private let maxLogCount = 200
     private let supportedAudioExtensions: Set<String> = ["wav", "flac", "m4a", "alac"]
@@ -208,10 +210,6 @@ class EmbedViewModel: ObservableObject {
     }
 
     private func normalizedOutputExtension(from ext: String) -> String {
-        let lower = ext.lowercased()
-        if lower == "wav" || lower == "flac" {
-            return lower
-        }
         return "wav"
     }
 
@@ -240,6 +238,7 @@ class EmbedViewModel: ObservableObject {
         }
         let count = selectedFiles.count
         selectedFiles.removeAll()
+        pendingForceReviewFiles.removeAll()
         log(
             localized("已清空队列", "Queue cleared"),
             detail: localized("移除了 \(count) 个文件", "Removed \(count) files"),
@@ -283,6 +282,66 @@ class EmbedViewModel: ObservableObject {
             return
         }
 
+        if !pendingForceReviewFiles.isEmpty {
+            requestForceReviewPrompt()
+            return
+        }
+
+        startEmbedPass(audio: audio, forceTargets: nil)
+    }
+
+    func forceEmbedPending(audio: AWMAudio?) {
+        guard !pendingForceReviewFiles.isEmpty else {
+            log(
+                localized("无待确认文件", "No pending files"),
+                detail: localized("当前没有需要强行嵌入的文件", "No files are pending force-embed review"),
+                isSuccess: false,
+                kind: .queueEmpty,
+                isEphemeral: true
+            )
+            return
+        }
+        if isProcessing { return }
+        startEmbedPass(audio: audio, forceTargets: pendingForceReviewFiles)
+    }
+
+    func removePendingForceFromQueue() {
+        guard !pendingForceReviewFiles.isEmpty else { return }
+        let targetKeys = Set(pendingForceReviewFiles.map(Self.normalizedPathKey))
+        let before = selectedFiles.count
+        selectedFiles.removeAll(where: { targetKeys.contains(Self.normalizedPathKey($0)) })
+        let removed = before - selectedFiles.count
+        let reviewed = pendingForceReviewFiles.count
+        pendingForceReviewFiles.removeAll()
+        log(
+            localized("已移出待确认文件", "Pending files removed"),
+            detail: localized(
+                "已移出 \(removed) 个文件（待确认 \(reviewed) 个）",
+                "Removed \(removed) files (\(reviewed) pending reviewed)"
+            ),
+            kind: .queueCleared
+        )
+    }
+
+    func keepPendingForceInQueue() {
+        guard !pendingForceReviewFiles.isEmpty else { return }
+        log(
+            localized("已保留待确认文件", "Pending files kept"),
+            detail: localized(
+                "待确认文件仍保留在队列中，可稍后决定是否强行嵌入",
+                "Pending files remain in queue; you can decide force embed later"
+            ),
+            isSuccess: false,
+            kind: .processCancelled,
+            isEphemeral: true
+        )
+    }
+
+    private func requestForceReviewPrompt() {
+        forceReviewPromptVersion += 1
+    }
+
+    private func startEmbedPass(audio: AWMAudio?, forceTargets: [URL]?) {
         guard !selectedFiles.isEmpty else {
             log(
                 localized("队列为空", "Queue is empty"),
@@ -293,6 +352,7 @@ class EmbedViewModel: ObservableObject {
             )
             return
         }
+        let isForcedPass = forceTargets != nil
 
         refreshTagMappings()
         let normalizedUsername = normalizedUsernameInput
@@ -313,15 +373,27 @@ class EmbedViewModel: ObservableObject {
         progress = 0
         currentProcessingIndex = 0
 
-        let settingsStr = localized(
-            "用户: \(normalizedUsername) | Tag: \(resolvedTag) | 强度: \(Int(strength))",
-            "User: \(normalizedUsername) | Tag: \(resolvedTag) | Strength: \(Int(strength))"
-        )
-        log(
-            localized("开始处理", "Processing started"),
-            detail: localized("准备处理 \(selectedFiles.count) 个文件", "Preparing to process \(selectedFiles.count) files") + " | \(settingsStr)",
-            kind: .processStarted
-        )
+        if isForcedPass {
+            log(
+                localized("开始强行嵌入", "Force embed started"),
+                detail: localized(
+                    "准备处理 \(forceTargets?.count ?? 0) 个待确认文件",
+                    "Preparing \(forceTargets?.count ?? 0) reviewed files for force embed"
+                ),
+                isSuccess: false,
+                kind: .processStarted
+            )
+        } else {
+            let settingsStr = localized(
+                "用户: \(normalizedUsername) | Tag: \(resolvedTag) | 强度: \(Int(strength))",
+                "User: \(normalizedUsername) | Tag: \(resolvedTag) | Strength: \(Int(strength))"
+            )
+            log(
+                localized("开始处理", "Processing started"),
+                detail: localized("准备处理 \(selectedFiles.count) 个文件", "Preparing to process \(selectedFiles.count) files") + " | \(settingsStr)",
+                kind: .processStarted
+            )
+        }
 
         Task {
             guard let audio else {
@@ -346,16 +418,65 @@ class EmbedViewModel: ObservableObject {
             }
             let audioBox = UnsafeAudioBox(audio: audio)
 
-            let initialTotal = selectedFiles.count
+            let targetKeys = forceTargets.map { Set($0.map(Self.normalizedPathKey)) }
+            let initialTotal = max(targetKeys?.count ?? selectedFiles.count, 1)
             let total = Double(initialTotal)
             let suffix = customSuffix.isEmpty ? "_wm" : customSuffix
             var successCount = 0
             var failureCount = 0
+            var deferredFiles: [URL] = []
+            var deferredKeys = Set<String>()
 
             for processedCount in 0..<initialTotal {
                 if isCancelling { break }
-                guard let fileURL = selectedFiles.first else { break }
-                currentProcessingIndex = 0
+                guard let fileURL = nextQueueFile(matching: targetKeys) else { break }
+                let fileKey = Self.normalizedPathKey(fileURL)
+                guard let queueIndex = selectedFiles.firstIndex(where: { Self.normalizedPathKey($0) == fileKey }) else { continue }
+                currentProcessingIndex = queueIndex
+
+                if !isForcedPass {
+                    do {
+                        let hasWatermark = try await Self.performPrecheckStep(
+                            audio: audioBox,
+                            fileURL: fileURL
+                        )
+                        if hasWatermark {
+                            if queueIndex < selectedFiles.count {
+                                let deferred = selectedFiles.remove(at: queueIndex)
+                                selectedFiles.append(deferred)
+                                if deferredKeys.insert(fileKey).inserted {
+                                    deferredFiles.append(deferred)
+                                }
+                            }
+                            log(
+                                localized("检测到已有水印", "Existing watermark detected"),
+                                detail: localized(
+                                    "\(fileURL.lastPathComponent) 已移至队尾，等待汇总确认",
+                                    "\(fileURL.lastPathComponent) moved to queue tail, awaiting review"
+                                ),
+                                isSuccess: false,
+                                kind: .resultNotFound
+                            )
+                            progress = Double(processedCount + 1) / total
+                            await Task.yield()
+                            continue
+                        }
+                    } catch {
+                        log(
+                            "\(localized("失败", "Failed")): \(fileURL.lastPathComponent)",
+                            detail: localized("预检失败", "Precheck failed") + ": \(error.localizedDescription)",
+                            isSuccess: false,
+                            kind: .resultError
+                        )
+                        failureCount += 1
+                        if queueIndex < selectedFiles.count {
+                            selectedFiles.remove(at: queueIndex)
+                        }
+                        progress = Double(processedCount + 1) / total
+                        await Task.yield()
+                        continue
+                    }
+                }
 
                 do {
                     let baseName = fileURL.deletingPathExtension().lastPathComponent
@@ -368,7 +489,8 @@ class EmbedViewModel: ObservableObject {
                         outputURL: outputURL,
                         tagValue: resolvedTag,
                         key: key,
-                        strength: UInt8(strength)
+                        strength: UInt8(strength),
+                        isForcedEmbed: isForcedPass
                     )
                     if let evidenceError = step.evidenceErrorDescription {
                         log(
@@ -380,9 +502,23 @@ class EmbedViewModel: ObservableObject {
                         )
                     }
 
+                    var successDetail = "→ \(outputURL.lastPathComponent)"
+                    if step.snrStatus == "ok", let snrDb = step.snrDb {
+                        successDetail += String(format: " · SNR %.2f dB", snrDb)
+                    } else if let snrStatus = step.snrStatus, snrStatus != "ok" {
+                        let reason = step.snrDetail ?? snrStatus
+                        log(
+                            localized("SNR 不可用", "SNR unavailable"),
+                            detail: reason,
+                            isSuccess: false,
+                            kind: .evidenceWarning,
+                            isEphemeral: true
+                        )
+                    }
+
                     log(
                         "\(localized("成功", "Success")): \(fileURL.lastPathComponent)",
-                        detail: "→ \(outputURL.lastPathComponent)",
+                        detail: successDetail,
                         kind: .resultOk
                     )
                     successCount += 1
@@ -395,8 +531,11 @@ class EmbedViewModel: ObservableObject {
                     )
                     failureCount += 1
                 }
-                if !selectedFiles.isEmpty {
-                    selectedFiles.removeFirst()
+                if let indexToRemove = selectedFiles.firstIndex(where: { Self.normalizedPathKey($0) == fileKey }) {
+                    selectedFiles.remove(at: indexToRemove)
+                }
+                if isForcedPass {
+                    pendingForceReviewFiles.removeAll(where: { Self.normalizedPathKey($0) == fileKey })
                 }
                 progress = Double(processedCount + 1) / total
                 await Task.yield()
@@ -414,7 +553,9 @@ class EmbedViewModel: ObservableObject {
                 )
             } else {
                 log(
-                    localized("处理完成", "Processing finished"),
+                    isForcedPass
+                        ? localized("强行嵌入完成", "Force embed finished")
+                        : localized("处理完成", "Processing finished"),
                     detail: localized("成功: \(successCount), 失败: \(failureCount)", "Success: \(successCount), Failed: \(failureCount)"),
                     kind: .processFinished
                 )
@@ -449,6 +590,20 @@ class EmbedViewModel: ObservableObject {
             isProcessing = false
             isCancelling = false
             scheduleProgressResetIfNeeded()
+
+            if !isForcedPass, !isCancelling, !deferredFiles.isEmpty {
+                pendingForceReviewFiles = deferredFiles
+                log(
+                    localized("发现已含水印文件", "Watermarked files found"),
+                    detail: localized(
+                        "共 \(deferredFiles.count) 个文件待确认：可强行嵌入或移出队列",
+                        "\(deferredFiles.count) files require review: force embed or remove from queue"
+                    ),
+                    isSuccess: false,
+                    kind: .resultNotFound
+                )
+                requestForceReviewPrompt()
+            }
         }
     }
 
@@ -474,6 +629,32 @@ class EmbedViewModel: ObservableObject {
     var matchedMappingHintText: String? {
         guard matchedMappingForInput != nil else { return nil }
         return localized("已存在映射，自动复用", "Existing mapping found, auto reused")
+    }
+
+    var pendingForceReviewCount: Int {
+        pendingForceReviewFiles.count
+    }
+
+    var pendingForceReviewMessage: String {
+        let preview = pendingForceReviewFiles.prefix(3).map(\.lastPathComponent).joined(separator: "、")
+        if pendingForceReviewFiles.count <= 3 {
+            return localized(
+                "检测到 \(pendingForceReviewFiles.count) 个已含水印文件：\(preview)",
+                "Detected \(pendingForceReviewFiles.count) already-watermarked files: \(preview)"
+            )
+        }
+        let remain = pendingForceReviewFiles.count - 3
+        return localized(
+            "检测到 \(pendingForceReviewFiles.count) 个已含水印文件：\(preview) 等 \(remain) 个",
+            "Detected \(pendingForceReviewFiles.count) already-watermarked files: \(preview) and \(remain) more"
+        )
+    }
+
+    private func nextQueueFile(matching targetKeys: Set<String>?) -> URL? {
+        guard let targetKeys else {
+            return selectedFiles.first
+        }
+        return selectedFiles.first(where: { targetKeys.contains(Self.normalizedPathKey($0)) })
     }
 
     private func scheduleProgressResetIfNeeded() {
@@ -589,6 +770,9 @@ private struct UnsafeAudioBox: @unchecked Sendable {
 
 private struct EmbedStepOutput: Sendable {
     let evidenceErrorDescription: String?
+    let snrDb: Double?
+    let snrStatus: String?
+    let snrDetail: String?
 }
 
 private extension EmbedViewModel {
@@ -598,17 +782,48 @@ private extension EmbedViewModel {
         outputURL: URL,
         tagValue: String,
         key: Data,
-        strength: UInt8
+        strength: UInt8,
+        isForcedEmbed: Bool
     ) async throws -> EmbedStepOutput {
         try await Task.detached(priority: .userInitiated) {
             let tag = try AWMTag(tag: tagValue)
             audio.audio.setStrength(strength)
             let rawMessage = try audio.audio.embedMultichannel(input: fileURL, output: outputURL, tag: tag, key: key, layout: nil)
             do {
-                try audio.audio.recordEvidence(file: outputURL, rawMessage: rawMessage, key: key)
-                return EmbedStepOutput(evidenceErrorDescription: nil)
+                let snr = try audio.audio.recordEmbedEvidence(
+                    input: fileURL,
+                    output: outputURL,
+                    rawMessage: rawMessage,
+                    key: key,
+                    isForcedEmbed: isForcedEmbed
+                )
+                return EmbedStepOutput(
+                    evidenceErrorDescription: nil,
+                    snrDb: snr.snrDb,
+                    snrStatus: snr.snrStatus,
+                    snrDetail: snr.snrDetail
+                )
             } catch {
-                return EmbedStepOutput(evidenceErrorDescription: error.localizedDescription)
+                return EmbedStepOutput(
+                    evidenceErrorDescription: error.localizedDescription,
+                    snrDb: nil,
+                    snrStatus: nil,
+                    snrDetail: nil
+                )
+            }
+        }.value
+    }
+
+    nonisolated static func performPrecheckStep(
+        audio: UnsafeAudioBox,
+        fileURL: URL
+    ) async throws -> Bool {
+        try await Task.detached(priority: .userInitiated) {
+            do {
+                let detectResult = try audio.audio.detectMultichannel(input: fileURL, layout: nil)
+                return detectResult.best != nil
+            } catch AWMError.noWatermarkFound {
+                return false
             }
         }.value
     }

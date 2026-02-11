@@ -66,6 +66,12 @@ public struct AWMCloneCheckResultSwift {
     public let reason: String?
 }
 
+public struct AWMEmbedEvidenceResultSwift {
+    public let snrDb: Double?
+    public let snrStatus: String
+    public let snrDetail: String?
+}
+
 /// Single channel pair detection result
 public struct AWMPairResultSwift {
     /// Channel pair index (0-based)
@@ -282,7 +288,7 @@ public class AWMAudio {
     }
 
     /// Build and record audio evidence for embedded output file
-    public func recordEvidence(file: URL, rawMessage: Data, key: Data) throws {
+    public func recordEvidence(file: URL, rawMessage: Data, key: Data, isForcedEmbed: Bool = false) throws {
         guard rawMessage.count == 16 else {
             throw AWMError.invalidMessageLength(rawMessage.count)
         }
@@ -290,11 +296,12 @@ public class AWMAudio {
         let result = file.path.withCString { filePathPtr in
             rawMessage.withUnsafeBytes { rawPtr in
                 key.withUnsafeBytes { keyPtr in
-                    awm_evidence_record_file(
+                    awm_evidence_record_file_ex(
                         filePathPtr,
                         rawPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
                         keyPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                        key.count
+                        key.count,
+                        isForcedEmbed
                     )
                 }
             }
@@ -303,6 +310,59 @@ public class AWMAudio {
         if result != AWM_SUCCESS.rawValue {
             throw AWMError(code: result)
         }
+    }
+
+    /// Build and record audio evidence for embedded output file, and return SNR analysis.
+    public func recordEmbedEvidence(
+        input: URL,
+        output: URL,
+        rawMessage: Data,
+        key: Data,
+        isForcedEmbed: Bool = false
+    ) throws -> AWMEmbedEvidenceResultSwift {
+        guard rawMessage.count == 16 else {
+            throw AWMError.invalidMessageLength(rawMessage.count)
+        }
+
+        var cResult = AWMEmbedEvidenceResult()
+        let result = input.path.withCString { inputPathPtr in
+            output.path.withCString { outputPathPtr in
+                rawMessage.withUnsafeBytes { rawPtr in
+                    key.withUnsafeBytes { keyPtr in
+                        awm_evidence_record_embed_file_ex(
+                            inputPathPtr,
+                            outputPathPtr,
+                            rawPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                            keyPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                            key.count,
+                            isForcedEmbed,
+                            &cResult
+                        )
+                    }
+                }
+            }
+        }
+
+        if result != AWM_SUCCESS.rawValue {
+            throw AWMError(code: result)
+        }
+
+        let snrStatus = withUnsafePointer(to: cResult.snr_status) { ptr in
+            ptr.withMemoryRebound(to: CChar.self, capacity: 16) { charPtr in
+                String(cString: charPtr)
+            }
+        }
+        let snrDetailRaw = withUnsafePointer(to: cResult.snr_detail) { ptr in
+            ptr.withMemoryRebound(to: CChar.self, capacity: 128) { charPtr in
+                String(cString: charPtr)
+            }
+        }
+
+        return AWMEmbedEvidenceResultSwift(
+            snrDb: cResult.has_snr_db ? cResult.snr_db : nil,
+            snrStatus: snrStatus.isEmpty ? "unavailable" : snrStatus,
+            snrDetail: snrDetailRaw.isEmpty ? nil : snrDetailRaw
+        )
     }
 
     /// Convenience: Detect and decode watermark

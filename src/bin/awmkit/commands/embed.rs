@@ -4,8 +4,8 @@ use crate::util::{
 };
 use crate::Context;
 use awmkit::app::{
-    build_audio_proof, i18n, key_id_from_key_material, EvidenceStore, KeyStore, NewAudioEvidence,
-    TagStore,
+    analyze_snr, build_audio_proof, i18n, key_id_from_key_material, EvidenceStore, KeyStore,
+    NewAudioEvidence, TagStore, SNR_STATUS_OK,
 };
 use awmkit::Message;
 use clap::Args;
@@ -36,6 +36,10 @@ pub struct EmbedArgs {
     /// Input files (supports glob)
     #[arg(value_name = "INPUT")]
     pub inputs: Vec<String>,
+
+    /// Force embed and mark evidence row as forced
+    #[arg(long, default_value_t = false)]
+    pub force_embed: bool,
 }
 
 pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
@@ -80,6 +84,8 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
 
     let mut success = 0usize;
     let mut failed = 0usize;
+    let mut skipped = 0usize;
+    let mut failure_details: Vec<String> = Vec::new();
 
     for input in inputs {
         let output = match &args.output {
@@ -87,10 +93,65 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
             None => default_output_path(&input)?,
         };
 
+        let mut is_forced_embed = false;
+        match audio.detect_multichannel(&input, layout) {
+            Ok(detect) => {
+                if detect.best.is_some() {
+                    if args.force_embed {
+                        is_forced_embed = true;
+                        if ctx.out.verbose() && !ctx.out.quiet() {
+                            if let Some(ref bar) = progress {
+                                bar.println(format!(
+                                    "[FORCE] {}: already watermarked, continue due to --force-embed",
+                                    input.display()
+                                ));
+                            } else {
+                                ctx.out.warn(format!(
+                                    "[FORCE] {}: already watermarked, continue due to --force-embed",
+                                    input.display()
+                                ));
+                            }
+                        }
+                    } else {
+                        skipped += 1;
+                        if let Some(ref bar) = progress {
+                            bar.println(format!(
+                                "[SKIP] {}: already watermarked (use --force-embed to override)",
+                                input.display()
+                            ));
+                        } else if !ctx.out.quiet() {
+                            ctx.out.warn(format!(
+                                "[SKIP] {}: already watermarked (use --force-embed to override)",
+                                input.display()
+                            ));
+                        }
+                        if let Some(ref bar) = progress {
+                            bar.inc(1);
+                        }
+                        continue;
+                    }
+                }
+            }
+            Err(err) => {
+                failed += 1;
+                if let Some(ref bar) = progress {
+                    bar.println(format!("[ERR] {}: precheck failed: {err}", input.display()));
+                    bar.inc(1);
+                } else {
+                    crate::output::Output::error(format!(
+                        "[ERR] {}: precheck failed: {err}",
+                        input.display()
+                    ));
+                }
+                continue;
+            }
+        }
+
         let result = audio.embed_multichannel(&input, &output, &message, layout);
         match result {
             Ok(()) => {
                 success += 1;
+                let snr = analyze_snr(&input, &output);
                 if let Some(evidence_store) = evidence_store.as_ref() {
                     match build_audio_proof(&output) {
                         Ok(proof) => {
@@ -107,6 +168,9 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
                                 sample_count: proof.sample_count,
                                 pcm_sha256: proof.pcm_sha256,
                                 key_id: key_id_from_key_material(&key),
+                                is_forced_embed,
+                                snr_db: snr.snr_db,
+                                snr_status: snr.status.clone(),
                                 chromaprint: proof.chromaprint,
                                 fp_config_id: proof.fp_config_id,
                             };
@@ -127,17 +191,25 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
                         }
                     }
                 }
-                if ctx.out.verbose() && !ctx.out.quiet() {
-                    if let Some(ref bar) = progress {
-                        bar.println(format!("[OK] {} -> {}", input.display(), output.display()));
+                if !ctx.out.quiet() {
+                    let snr_text = if snr.status == SNR_STATUS_OK {
+                        format!("SNR {:.2} dB", snr.snr_db.unwrap_or_default())
                     } else {
-                        ctx.out
-                            .info(format!("[OK] {} -> {}", input.display(), output.display()));
-                    }
+                        let reason = snr.detail.unwrap_or_else(|| snr.status.clone());
+                        format!("SNR unavailable ({reason})")
+                    };
+                    let line = format!(
+                        "[OK] {} -> {} | {}",
+                        input.display(),
+                        output.display(),
+                        snr_text
+                    );
+                    ctx.out.info(line);
                 }
             }
             Err(err) => {
                 failed += 1;
+                failure_details.push(format!("{}: {err}", input.display()));
                 if let Some(ref bar) = progress {
                     bar.println(format!("[ERR] {}: {err}", input.display()));
                 } else {
@@ -160,6 +232,21 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
         args.set("success", success.to_string());
         args.set("failed", failed.to_string());
         ctx.out.info(i18n::tr_args("cli-embed-done", &args));
+        if skipped > 0 {
+            ctx.out.warn(format!(
+                "已跳过 {skipped} 个已含水印文件（如需覆盖请使用 --force-embed）"
+            ));
+        }
+        if !failure_details.is_empty() {
+            ctx.out.warn("失败详情：");
+            for detail in failure_details.iter().take(8) {
+                ctx.out.warn(format!("- {detail}"));
+            }
+            let remain = failure_details.len().saturating_sub(8);
+            if remain > 0 {
+                ctx.out.warn(format!("- 其余 {remain} 条失败详情已省略"));
+            }
+        }
     }
 
     if success > 0 {

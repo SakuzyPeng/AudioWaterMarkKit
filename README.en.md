@@ -10,6 +10,7 @@ AWMKit is a cross-platform audio watermark toolkit built around a Rust core, wit
 - End-to-end CLI workflow: keys, tag mapping, embed, detect, evidence management
 - Native macOS / Windows apps sharing the same Rust FFI core
 - SQLite persistence for mappings, evidence, and app settings
+- Current output limitation: embed output is `WAV` only (`FLAC` output is temporarily disabled)
 
 ## Platform Matrix
 
