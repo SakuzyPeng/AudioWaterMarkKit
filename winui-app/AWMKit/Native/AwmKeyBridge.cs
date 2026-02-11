@@ -20,8 +20,6 @@ public static class AwmKeyBridge
     private const int LabelBufferSize = 512;
     private const int MinSlot = 0;
     private const int MaxSlot = 31;
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     private static byte NormalizeSlot(int slot) => (byte)Math.Clamp(slot, MinSlot, MaxSlot);
 
     /// <summary>Checks if key exists in current active slot.</summary>
@@ -227,7 +225,10 @@ public static class AwmKeyBridge
         try
         {
             var payload = string.IsNullOrWhiteSpace(json) ? "[]" : json;
-            var rows = JsonSerializer.Deserialize<List<KeySlotSummaryRow>>(payload, JsonOptions) ?? [];
+            var rows = JsonSerializer.Deserialize(
+                payload,
+                typeof(List<KeySlotSummaryRow>),
+                AwmJsonContext.Default) as List<KeySlotSummaryRow> ?? [];
             var mapped = rows.Select(row => new KeySlotSummary
             {
                 Slot = Math.Clamp(row.Slot, MinSlot, MaxSlot),
@@ -306,7 +307,7 @@ public static class AwmKeyBridge
             : (nuint)Marshal.ReadInt32(pointer);
     }
 
-    private sealed class KeySlotSummaryRow
+    internal sealed class KeySlotSummaryRow
     {
         [JsonPropertyName("slot")]
         public int Slot { get; set; }

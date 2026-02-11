@@ -8,7 +8,7 @@ namespace AWMKit.Converters;
 /// <summary>
 /// Converts null to false for IsOpen binding.
 /// </summary>
-public sealed class NullToFalseConverter : IValueConverter
+public sealed partial class NullToFalseConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -24,7 +24,7 @@ public sealed class NullToFalseConverter : IValueConverter
 /// <summary>
 /// Converts null to Collapsed for Visibility binding.
 /// </summary>
-public sealed class NullToCollapsedConverter : IValueConverter
+public sealed partial class NullToCollapsedConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -40,7 +40,7 @@ public sealed class NullToCollapsedConverter : IValueConverter
 /// <summary>
 /// Inverts boolean value.
 /// </summary>
-public sealed class InverseBoolConverter : IValueConverter
+public sealed partial class InverseBoolConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -56,7 +56,7 @@ public sealed class InverseBoolConverter : IValueConverter
 /// <summary>
 /// Converts inverse bool to Visibility.
 /// </summary>
-public sealed class InverseBoolToVisibilityConverter : IValueConverter
+public sealed partial class InverseBoolToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -72,7 +72,7 @@ public sealed class InverseBoolToVisibilityConverter : IValueConverter
 /// <summary>
 /// Converts bool to Visibility.
 /// </summary>
-public sealed class BoolToVisibilityConverter : IValueConverter
+public sealed partial class BoolToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -88,7 +88,7 @@ public sealed class BoolToVisibilityConverter : IValueConverter
 /// <summary>
 /// Converts count to Visibility (visible if count > 0).
 /// </summary>
-public sealed class CountToVisibilityConverter : IValueConverter
+public sealed partial class CountToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -104,7 +104,7 @@ public sealed class CountToVisibilityConverter : IValueConverter
 /// <summary>
 /// Converts zero to Visibility (visible if count == 0).
 /// </summary>
-public sealed class ZeroToVisibilityConverter : IValueConverter
+public sealed partial class ZeroToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -120,7 +120,7 @@ public sealed class ZeroToVisibilityConverter : IValueConverter
 /// <summary>
 /// Converts DateTime to readable string.
 /// </summary>
-public sealed class DateTimeConverter : IValueConverter
+public sealed partial class DateTimeConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -141,7 +141,7 @@ public sealed class DateTimeConverter : IValueConverter
 /// Formats DateTime into 3 centered Chinese lines:
 /// line1: 年, line2: 月日, line3: 时分秒.
 /// </summary>
-public sealed class ChineseThreeLineDateTimeConverter : IValueConverter
+public sealed partial class ChineseThreeLineDateTimeConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -170,7 +170,7 @@ public sealed class ChineseThreeLineDateTimeConverter : IValueConverter
 /// <summary>
 /// Formats display name with parentheses (null-safe).
 /// </summary>
-public sealed class DisplayNameConverter : IValueConverter
+public sealed partial class DisplayNameConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -186,7 +186,7 @@ public sealed class DisplayNameConverter : IValueConverter
 /// <summary>
 /// Converts bool success to color brush (green/red).
 /// </summary>
-public sealed class BoolToSuccessColorConverter : IValueConverter
+public sealed partial class BoolToSuccessColorConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -208,7 +208,7 @@ public sealed class BoolToSuccessColorConverter : IValueConverter
 /// <summary>
 /// Converts bool success to detection text.
 /// </summary>
-public sealed class BoolToDetectionTextConverter : IValueConverter
+public sealed partial class BoolToDetectionTextConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -224,7 +224,7 @@ public sealed class BoolToDetectionTextConverter : IValueConverter
 /// <summary>
 /// Converts selected flag to row border brush.
 /// </summary>
-public sealed class BoolToSelectionBorderBrushConverter : IValueConverter
+public sealed partial class BoolToSelectionBorderBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -252,7 +252,7 @@ public sealed class BoolToSelectionBorderBrushConverter : IValueConverter
 /// <summary>
 /// Converts selected flag to row background brush.
 /// </summary>
-public sealed class BoolToSelectionBackgroundBrushConverter : IValueConverter
+public sealed partial class BoolToSelectionBackgroundBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -280,7 +280,7 @@ public sealed class BoolToSelectionBackgroundBrushConverter : IValueConverter
 /// <summary>
 /// Converts key slot status text to semantic brush.
 /// </summary>
-public sealed class KeySlotStatusBrushConverter : IValueConverter
+public sealed partial class KeySlotStatusBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -314,7 +314,7 @@ public sealed class KeySlotStatusBrushConverter : IValueConverter
 /// <summary>
 /// Converts slot active flag to slot icon brush (active=green, inactive=secondary).
 /// </summary>
-public sealed class BoolToKeySlotIconBrushConverter : IValueConverter
+public sealed partial class BoolToKeySlotIconBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {

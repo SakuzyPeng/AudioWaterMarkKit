@@ -13,8 +13,6 @@ namespace AWMKit.Native;
 /// </summary>
 public static class AwmDatabaseBridge
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     public static (ulong tagCount, ulong evidenceCount, AwmError error) GetSummary()
     {
         var tagPtr = Marshal.AllocHGlobal(sizeof(ulong));
@@ -54,7 +52,10 @@ public static class AwmDatabaseBridge
 
         try
         {
-            var rows = JsonSerializer.Deserialize<List<TagMappingRow>>(json, JsonOptions) ?? [];
+            var rows = JsonSerializer.Deserialize(
+                json,
+                typeof(List<TagMappingRow>),
+                AwmJsonContext.Default) as List<TagMappingRow> ?? [];
             var mappings = rows.Select(row => new TagMapping
             {
                 Username = row.Username,
@@ -119,7 +120,7 @@ public static class AwmDatabaseBridge
             .Select(value => value.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var payload = JsonSerializer.Serialize(normalized, JsonOptions);
+        var payload = JsonSerializer.Serialize(normalized, typeof(string[]), AwmJsonContext.Default);
 
         return ExecuteDeleteJson(payload, AwmNative.awm_db_tag_remove_json);
     }
@@ -136,7 +137,10 @@ public static class AwmDatabaseBridge
 
         try
         {
-            var rows = JsonSerializer.Deserialize<List<EvidenceRow>>(json, JsonOptions) ?? [];
+            var rows = JsonSerializer.Deserialize(
+                json,
+                typeof(List<EvidenceRow>),
+                AwmJsonContext.Default) as List<EvidenceRow> ?? [];
             var evidence = rows.Select(row => new EvidenceRecord
             {
                 Id = row.Id,
@@ -167,7 +171,7 @@ public static class AwmDatabaseBridge
 
     public static (int deleted, AwmError error) RemoveEvidence(IEnumerable<long> ids)
     {
-        var payload = JsonSerializer.Serialize(ids.Distinct().ToArray(), JsonOptions);
+        var payload = JsonSerializer.Serialize(ids.Distinct().ToArray(), typeof(long[]), AwmJsonContext.Default);
         return ExecuteDeleteJson(payload, AwmNative.awm_db_evidence_remove_json);
     }
 
@@ -280,7 +284,7 @@ public static class AwmDatabaseBridge
         }
     }
 
-    private sealed class TagMappingRow
+    internal sealed class TagMappingRow
     {
         [JsonPropertyName("username")]
         public string Username { get; set; } = string.Empty;
@@ -292,7 +296,7 @@ public static class AwmDatabaseBridge
         public ulong CreatedAt { get; set; }
     }
 
-    private sealed class EvidenceRow
+    internal sealed class EvidenceRow
     {
         [JsonPropertyName("id")]
         public long Id { get; set; }
