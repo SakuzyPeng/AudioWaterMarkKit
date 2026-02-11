@@ -35,6 +35,14 @@ AWMKit 是一个围绕音频水印场景构建的跨平台工具集，包含 Rus
 - 协议与数据：[`docs/zh-CN/spec/message-and-key-slot.md`](./docs/zh-CN/spec/message-and-key-slot.md)、[`docs/zh-CN/spec/database-schema.md`](./docs/zh-CN/spec/database-schema.md)
 - 故障排查：[`docs/zh-CN/troubleshooting/common-issues.md`](./docs/zh-CN/troubleshooting/common-issues.md)
 
+## 上游引擎（audiowmark）
+
+- AWMKit 的音频嵌入/检测能力依赖上游项目 [`audiowmark`](https://github.com/swesterfeld/audiowmark)。
+- 运行时采用 bundled executable 方式（打包并解压可执行文件），而非库静/动态链接。
+- 构建与发布中使用的 `audiowmark` 二进制来源与 CI 流程见：[`docs/zh-CN/build/ci-artifacts.md`](./docs/zh-CN/build/ci-artifacts.md)。
+- 许可证关系：本仓库采用 GPLv3+，并遵循上游 `audiowmark` 的开源许可证要求。
+- 致谢：感谢 `audiowmark` 作者与社区提供的音频水印基础能力。
+
 ## 许可证
 
 本项目采用 [GNU GPLv3 or later](./LICENSE)。

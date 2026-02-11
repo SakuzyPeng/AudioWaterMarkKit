@@ -35,6 +35,14 @@ AWMKit is a cross-platform audio watermark toolkit built around a Rust core, wit
 - Protocol & data: [`docs/en-US/spec/message-and-key-slot.md`](./docs/en-US/spec/message-and-key-slot.md), [`docs/en-US/spec/database-schema.md`](./docs/en-US/spec/database-schema.md)
 - Troubleshooting: [`docs/en-US/troubleshooting/common-issues.md`](./docs/en-US/troubleshooting/common-issues.md)
 
+## Upstream Engine (audiowmark)
+
+- AWMKit relies on [`audiowmark`](https://github.com/swesterfeld/audiowmark) for audio embed/detect execution.
+- Runtime integration uses bundled executables (pack + extract), not static/dynamic library linking.
+- Binary source and CI integration details are documented at [`docs/en-US/build/ci-artifacts.md`](./docs/en-US/build/ci-artifacts.md).
+- License note: this repository is GPLv3+, and distribution follows upstream `audiowmark` open-source license requirements.
+- Attribution: thanks to the `audiowmark` author and contributors for the core watermarking engine.
+
 ## License
 
 This project is licensed under [GNU GPLv3 or later](./LICENSE).
