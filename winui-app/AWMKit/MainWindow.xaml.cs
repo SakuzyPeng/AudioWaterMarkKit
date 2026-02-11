@@ -197,7 +197,65 @@ public sealed partial class MainWindow : Window
         }
 
         item.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
-        item.Icon = active ? new SymbolIcon(Symbol.Accept) : null;
+        item.Icon = null;
+        item.Foreground = ResolveThemeItemBrush(active);
+        item.Background = ResolveThemeItemBackgroundBrush(active);
+        item.BorderBrush = ResolveThemeItemBorderBrush(active);
+        item.BorderThickness = new Thickness(1);
+    }
+
+    private static Brush ResolveThemeItemBrush(bool active)
+    {
+        var resources = Application.Current.Resources;
+        var key = active ? "SuccessBrush" : "TextFillColorSecondaryBrush";
+        var fallbackKey = active ? "AccentTextFillColorPrimaryBrush" : "NeutralBrush";
+        if (resources.TryGetValue(key, out var value) && value is Brush brush)
+        {
+            return brush;
+        }
+
+        if (resources.TryGetValue(fallbackKey, out var fallback) && fallback is Brush fallbackBrush)
+        {
+            return fallbackBrush;
+        }
+
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+    }
+
+    private static Brush ResolveThemeItemBackgroundBrush(bool active)
+    {
+        var resources = Application.Current.Resources;
+        var key = active ? "SelectionBackgroundBrush" : "ControlFillColorSecondaryBrush";
+        var fallbackKey = active ? "AccentFillColorSecondaryBrush" : "SubtleFillColorTransparentBrush";
+        if (resources.TryGetValue(key, out var value) && value is Brush brush)
+        {
+            return brush;
+        }
+
+        if (resources.TryGetValue(fallbackKey, out var fallback) && fallback is Brush fallbackBrush)
+        {
+            return fallbackBrush;
+        }
+
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+    }
+
+    private static Brush ResolveThemeItemBorderBrush(bool active)
+    {
+        var resources = Application.Current.Resources;
+        var key = active ? "SuccessBrush" : "CardStrokeColorDefaultBrush";
+        var fallbackKey = active ? "AccentFillColorDefaultBrush" : "TextFillColorSecondaryBrush";
+        if (resources.TryGetValue(key, out var value) && value is Brush brush)
+        {
+            return brush;
+        }
+
+        if (resources.TryGetValue(fallbackKey, out var fallback) && fallback is Brush fallbackBrush)
+        {
+            return fallbackBrush;
+        }
+
+        return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
