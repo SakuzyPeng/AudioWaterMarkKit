@@ -586,7 +586,7 @@ awmkit/
 
 ## License
 
-MIT License
+GNU General Public License v3.0 or later (GPL-3.0-or-later)
 
 ## TODO
 
