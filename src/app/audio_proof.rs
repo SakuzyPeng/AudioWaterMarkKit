@@ -19,10 +19,17 @@ pub fn build_audio_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {
     let sample_rate = audio.sample_rate();
     let channels = u32::try_from(audio.num_channels())
         .map_err(|_| AppError::Message("channel count overflow".to_string()))?;
+    let channels_usize = usize::try_from(channels)
+        .map_err(|_| AppError::Message("channel count overflow".to_string()))?;
     let sample_count = u64::try_from(audio.num_samples())
         .map_err(|_| AppError::Message("sample count overflow".to_string()))?;
     let sample_format = audio.sample_format();
     let interleaved = audio.interleaved_samples();
+    if channels_usize == 0 || interleaved.len() % channels_usize != 0 {
+        return Err(AppError::Message(
+            "interleaved sample length is not channel-aligned".to_string(),
+        ));
+    }
 
     let pcm_sha256 = pcm_sha256_for_interleaved(sample_rate, channels, sample_count, &interleaved);
     let samples_i16 = to_i16_samples(&interleaved, sample_format);
@@ -39,8 +46,12 @@ pub fn build_audio_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {
         .start(sample_rate, channels)
         .map_err(|e| AppError::Message(format!("chromaprint start failed: {e}")))?;
 
-    let chunk = 16_384;
-    for data in samples_i16.chunks(chunk) {
+    // Feed full frames only: chunk size must be divisible by channel count.
+    let chunk_frames = 4096usize;
+    let chunk_samples = chunk_frames
+        .saturating_mul(channels_usize)
+        .max(channels_usize);
+    for data in samples_i16.chunks(chunk_samples) {
         fingerprinter.consume(data);
     }
     fingerprinter.finish();

@@ -22,6 +22,8 @@ use crate::app::{
 use rusty_chromaprint::{match_fingerprints, Configuration};
 #[cfg(feature = "app")]
 use serde::Serialize;
+#[cfg(feature = "app")]
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 /// FFI 错误码
 #[repr(i32)]
@@ -610,7 +612,9 @@ fn evaluate_clone_check(
     };
 
     let evidence_store = EvidenceStore::load().map_err(|e| format!("evidence_store: {e}"))?;
-    let proof = build_audio_proof(input).map_err(|e| format!("proof_error: {e}"))?;
+    let proof = catch_unwind(AssertUnwindSafe(|| build_audio_proof(input)))
+        .map_err(|_| "proof_panic".to_string())?
+        .map_err(|e| format!("proof_error: {e}"))?;
 
     let candidates = evidence_store
         .list_candidates(identity, key_slot)
@@ -812,7 +816,16 @@ pub unsafe extern "C" fn awm_evidence_record_embed_file_ex(
     };
 
     #[cfg(feature = "app")]
-    let snr = analyze_snr(input_path_str_raw, output_path_str_raw);
+    let snr = match catch_unwind(AssertUnwindSafe(|| {
+        analyze_snr(input_path_str_raw, output_path_str_raw)
+    })) {
+        Ok(value) => value,
+        Err(_) => crate::app::SnrAnalysis {
+            snr_db: None,
+            status: FFI_SNR_STATUS_UNAVAILABLE.to_string(),
+            detail: Some("snr_panic".to_string()),
+        },
+    };
     #[cfg(feature = "app")]
     let snr_db = snr.snr_db;
     #[cfg(feature = "app")]
@@ -885,8 +898,10 @@ unsafe fn record_evidence_file_impl(
             Err(_) => return AWMError::InvalidTag as i32,
         };
 
-        let Ok(proof) = build_audio_proof(file_path_str) else {
-            return AWMError::AudiowmarkExec as i32;
+        let proof = match catch_unwind(AssertUnwindSafe(|| build_audio_proof(file_path_str))) {
+            Ok(Ok(proof)) => proof,
+            Ok(Err(_)) => return AWMError::AudiowmarkExec as i32,
+            Err(_) => return AWMError::AudiowmarkExec as i32,
         };
         let Ok(store) = EvidenceStore::load() else {
             return AWMError::AudiowmarkExec as i32;
