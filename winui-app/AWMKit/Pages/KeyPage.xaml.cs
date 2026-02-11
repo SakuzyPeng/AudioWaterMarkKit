@@ -17,7 +17,6 @@ public sealed partial class KeyPage : Page
     public KeyPage()
     {
         InitializeComponent();
-        DataContext = ViewModel;
         ViewModel.PropertyChanged += ViewModelOnPropertyChanged;
     }
 
