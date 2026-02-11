@@ -197,12 +197,7 @@ public sealed partial class MainWindow : Window
         }
 
         item.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
-        item.Icon = active
-            ? new SymbolIcon(Symbol.Accept)
-            {
-                FontSize = 12,
-            }
-            : null;
+        item.Icon = active ? new SymbolIcon(Symbol.Accept) : null;
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
