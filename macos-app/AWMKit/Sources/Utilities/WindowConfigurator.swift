@@ -86,7 +86,7 @@ private struct TitlebarStatusAccessoryView: View {
                 tone: appState.keyStatusTone,
                 isHovering: isHoveringKey,
                 isFlashing: keyTapFlash,
-                accessibilityLabel: "密钥状态"
+                accessibilityLabel: appState.tr("密钥状态", "Key status")
             ) {
                 flashTapFeedback(for: .key)
                 Task { await appState.handleKeyIndicatorTap() }
@@ -111,7 +111,7 @@ private struct TitlebarStatusAccessoryView: View {
                 tone: appState.audioStatusTone,
                 isHovering: isHoveringAudio,
                 isFlashing: audioTapFlash,
-                accessibilityLabel: "AudioWmark 状态"
+                accessibilityLabel: appState.tr("AudioWmark 状态", "AudioWmark status")
             ) {
                 flashTapFeedback(for: .audio)
                 appState.checkAudioStatus()
@@ -136,16 +136,13 @@ private struct TitlebarStatusAccessoryView: View {
                 tone: appState.databaseStatusTone,
                 isHovering: isHoveringDatabase,
                 isFlashing: databaseTapFlash,
-                accessibilityLabel: "数据库状态"
+                accessibilityLabel: appState.tr("数据库状态", "Database status")
             ) {
                 flashTapFeedback(for: .database)
                 appState.checkDatabaseStatus()
             }
             .popover(isPresented: $isHoveringDatabase, arrowEdge: .bottom) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("映射总数：\(appState.mappingCount)")
-                    Text("证据总数（SHA256+指纹）：\(appState.evidenceCount)")
-                }
+                Text(appState.databaseStatusHelp)
                 .font(.caption)
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 10)

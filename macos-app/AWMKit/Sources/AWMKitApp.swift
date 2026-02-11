@@ -55,14 +55,14 @@ class AppState: ObservableObject {
     @Published var selectedTab: Tab = .embed
     @Published var isProcessing = false
     @Published var keyLoaded = false
-    @Published private(set) var keySourceLabel: String = "未配置"
+    @Published private(set) var keySourceLabel: String = "-"
     @Published var activeKeySlot: Int = 0
     @Published private(set) var keyStatusTone: RuntimeStatusTone = .unknown
-    @Published private(set) var keyStatusHelp: String = "密钥状态检查中..."
+    @Published private(set) var keyStatusHelp: String = "-"
     @Published private(set) var audioStatusTone: RuntimeStatusTone = .unknown
-    @Published private(set) var audioStatusHelp: String = "AudioWmark 状态检查中..."
+    @Published private(set) var audioStatusHelp: String = "-"
     @Published private(set) var databaseStatusTone: RuntimeStatusTone = .unknown
-    @Published private(set) var databaseStatusHelp: String = "数据库状态检查中..."
+    @Published private(set) var databaseStatusHelp: String = "-"
     @Published private(set) var mappingCount: Int = 0
     @Published private(set) var evidenceCount: Int = 0
     @Published var uiLanguage: UILanguageOption = .zhCN
@@ -99,6 +99,7 @@ class AppState: ObservableObject {
             self.audio = nil
             self.audioInitError = error.localizedDescription
         }
+        resetLocalizedPlaceholders()
 
         checkAudioStatus()
         checkDatabaseStatus()
@@ -123,6 +124,10 @@ class AppState: ObservableObject {
         case .key:
             return l("密钥", "Keys")
         }
+    }
+
+    func tr(_ zh: String, _ en: String) -> String {
+        l(zh, en)
     }
 
     func setUILanguage(_ language: UILanguageOption) {
@@ -301,6 +306,13 @@ class AppState: ObservableObject {
 
     private func l(_ zh: String, _ en: String) -> String {
         uiLanguage == .enUS ? en : zh
+    }
+
+    private func resetLocalizedPlaceholders() {
+        keySourceLabel = l("未配置", "Not configured")
+        keyStatusHelp = l("密钥状态检查中...", "Checking key status...")
+        audioStatusHelp = l("AudioWmark 状态检查中...", "Checking AudioWmark status...")
+        databaseStatusHelp = l("数据库状态检查中...", "Checking database status...")
     }
 
     private func formatKeyStatusHelp(

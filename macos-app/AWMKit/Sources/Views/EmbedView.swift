@@ -43,6 +43,10 @@ struct EmbedView: View {
         }
     }
 
+    private func l(_ zh: String, _ en: String) -> String {
+        appState.tr(zh, en)
+    }
+
     // MARK: - 输入卡片（左上）
 
     private var inputCard: some View {
@@ -58,59 +62,59 @@ struct EmbedView: View {
                     Button(action: { viewModel.selectFiles() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "folder")
-                            Text("选择")
+                            Text(l("选择", "Select"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel("选择输入源")
+                    .accessibilityLabel(l("选择输入源", "Select input source"))
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.selectOutputDirectory() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "externaldrive")
-                            Text("选择")
+                            Text(l("选择", "Select"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel("选择输出目录")
+                    .accessibilityLabel(l("选择输出目录", "Select output directory"))
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.embedFiles(audio: appState.audio) }) {
                         HStack(spacing: 6) {
                             Image(systemName: viewModel.isProcessing ? "stop.fill" : "play.fill")
                                 .foregroundColor(viewModel.isProcessing ? .red : .accentColor)
-                            Text(viewModel.isProcessing ? "停止" : "嵌入")
+                            Text(viewModel.isProcessing ? l("停止", "Stop") : l("嵌入", "Embed"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(accentOn: !viewModel.isProcessing, size: .compact))
-                    .accessibilityLabel(viewModel.isProcessing ? "停止嵌入" : "开始嵌入")
+                    .accessibilityLabel(viewModel.isProcessing ? l("停止嵌入", "Stop embedding") : l("开始嵌入", "Start embedding"))
                     .disabled(viewModel.isCancelling || !appState.keyLoaded)
 
                     Button(action: { viewModel.clearQueue() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "xmark.circle")
                                 .foregroundColor(viewModel.isClearQueueSuccess ? .green : .primary)
-                            Text("清空")
+                            Text(l("清空", "Clear"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel("清空队列")
+                    .accessibilityLabel(l("清空队列", "Clear queue"))
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.clearLogs() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "line.3.horizontal.decrease.circle")
                                 .foregroundColor(viewModel.isClearLogsSuccess ? .green : .primary)
-                            Text("清空")
+                            Text(l("清空", "Clear"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel("清空日志")
+                    .accessibilityLabel(l("清空日志", "Clear logs"))
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
 
@@ -124,9 +128,9 @@ struct EmbedView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "waveform.and.person.filled")
                             .font(.title2)
-                        Text("拖拽音频文件到此处")
+                        Text(l("拖拽音频文件到此处", "Drop audio files here"))
                             .font(.headline)
-                        Text("支持 WAV / FLAC / M4A / ALAC 格式，可批量拖入")
+                        Text(l("支持 WAV / FLAC / M4A / ALAC 格式，可批量拖入", "Supports WAV / FLAC / M4A / ALAC, batch drop enabled"))
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     }
@@ -146,7 +150,7 @@ struct EmbedView: View {
     private var directorySummary: some View {
         VStack(spacing: 10) {
             directoryInfoRow(
-                title: "输入文件",
+                title: l("输入文件", "Input source"),
                 value: viewModel.inputSourceText,
                 systemImage: "tray.and.arrow.down",
                 onTap: { viewModel.selectFiles() }
@@ -154,7 +158,7 @@ struct EmbedView: View {
             Divider()
                 .background(Color.white.opacity(colorScheme == .dark ? 0.2 : 0.4))
             directoryInfoRow(
-                title: "输出目录",
+                title: l("输出目录", "Output directory"),
                 value: viewModel.outputDirectoryText,
                 systemImage: "externaldrive",
                 onTap: { viewModel.selectOutputDirectory() }
@@ -209,7 +213,7 @@ struct EmbedView: View {
     private var settingsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("嵌入设置")
+                Text(l("嵌入设置", "Embed settings"))
                     .font(.headline)
                 Spacer()
             }
@@ -230,7 +234,7 @@ struct EmbedView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("用户名")
+                    Text(l("用户名", "Username"))
                         .font(.subheadline)
                     Spacer()
                     HStack(spacing: 8) {
@@ -251,7 +255,7 @@ struct EmbedView: View {
                     }
                 }
                 GlassEffectContainer {
-                    TextField("例如: user_001", text: $viewModel.usernameInput)
+                    TextField(l("例如: user_001", "e.g. user_001"), text: $viewModel.usernameInput)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -280,7 +284,7 @@ struct EmbedView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "list.bullet")
-                            Text("已存储的映射")
+                            Text(l("已存储的映射", "Stored mappings"))
                                 .lineLimit(1)
                             Spacer()
                             Image(systemName: "chevron.down")
@@ -303,27 +307,27 @@ struct EmbedView: View {
                             )
                     )
                 }
-                Text("按用户名稳定生成 Tag；命中映射时优先使用已保存 Tag")
+                Text(l("按用户名稳定生成 Tag；命中映射时优先使用已保存 Tag", "Generate stable Tag from username; reuse saved mapping when matched"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("水印强度")
+                    Text(l("水印强度", "Watermark strength"))
                         .font(.subheadline)
                     Spacer()
                     Text("\(Int(viewModel.strength))")
                         .font(.system(.body, design: .monospaced))
                 }
                 Slider(value: $viewModel.strength, in: 1...30, step: 1)
-                Text("推荐 10，越高越稳但音质损失越大")
+                Text(l("推荐 10，越高越稳但音质损失越大", "Recommended 10; higher is more robust but degrades audio more"))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("输出后缀")
+                Text(l("输出后缀", "Output suffix"))
                     .font(.subheadline)
                 GlassEffectContainer {
                     TextField("_wm", text: $viewModel.customSuffix)
@@ -341,7 +345,7 @@ struct EmbedView: View {
                         )
                 )
                 let effective = viewModel.customSuffix.isEmpty ? "_wm" : viewModel.customSuffix
-                Text("示例: audio\(effective).wav")
+                Text("\(l("示例", "Example")): audio\(effective).wav")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -359,11 +363,13 @@ struct EmbedView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("待处理文件")
+                    Text(l("待处理文件", "Pending files"))
                         .font(.headline)
                     Spacer()
                     if !viewModel.selectedFiles.isEmpty {
-                        Text(viewModel.isProcessing ? "剩 \(viewModel.selectedFiles.count) 个" : "共 \(viewModel.selectedFiles.count) 个")
+                        Text(viewModel.isProcessing
+                             ? "\(l("剩", "Left")) \(viewModel.selectedFiles.count)\(l(" 个", ""))"
+                             : "\(l("共", "Total")) \(viewModel.selectedFiles.count)\(l(" 个", ""))")
                             .foregroundColor(.secondary)
                             .font(.subheadline)
                     }
@@ -390,7 +396,7 @@ struct EmbedView: View {
                 }
 
                 if viewModel.selectedFiles.isEmpty {
-                    Text("暂无文件")
+                    Text(l("暂无文件", "No files"))
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                         .transition(.opacity)
@@ -434,11 +440,11 @@ struct EmbedView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("事件 / 日志")
+                    Text(l("事件 / 日志", "Events / Logs"))
                         .font(.headline)
                     Spacer()
                     if !viewModel.logs.isEmpty {
-                        Text("共 \(viewModel.logs.count) 条")
+                        Text("\(l("共", "Total")) \(viewModel.logs.count)\(l(" 条", ""))")
                             .foregroundColor(.secondary)
                             .font(.subheadline)
                     }
@@ -459,7 +465,7 @@ struct EmbedView: View {
                 Divider().opacity(0.5)
 
                 if viewModel.logs.isEmpty {
-                    Text("暂无日志")
+                    Text(l("暂无日志", "No logs"))
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                         .transition(.opacity)
@@ -553,11 +559,11 @@ struct EmbedView: View {
         HStack(spacing: 10) {
             Image(systemName: "key.slash")
                 .foregroundStyle(DesignSystem.Colors.warning)
-            Text("未配置密钥，请前往密钥页完成生成。")
+            Text(l("未配置密钥，请前往密钥页完成生成。", "No key configured. Open the Key page to generate one."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
-            Button("前往密钥页") {
+            Button(l("前往密钥页", "Go to Key page")) {
                 appState.selectedTab = .key
             }
             .buttonStyle(GlassButtonStyle(size: .compact))

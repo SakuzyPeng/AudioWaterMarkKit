@@ -10,12 +10,16 @@ struct KeyView: View {
     @State private var showEditLabelSheet = false
     @State private var editLabelDraft = ""
 
+    private func l(_ zh: String, _ en: String) -> String {
+        appState.tr(zh, en)
+    }
+
     var body: some View {
         GeometryReader { proxy in
             HStack(alignment: .top, spacing: DesignSystem.Spacing.card) {
                 GlassCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        header("密钥管理")
+                        header(l("密钥管理", "Key Management"))
                         statusSection
                         slotSection
                         activeKeyCapsule
@@ -27,7 +31,7 @@ struct KeyView: View {
 
                 GlassCard {
                     VStack(alignment: .leading, spacing: 12) {
-                        header("槽位摘要", count: viewModel.configuredSlotCount)
+                        header(l("槽位摘要", "Slot Summary"), count: viewModel.configuredSlotCount)
                         slotSearchField
                         slotSummarySection
                     }
@@ -42,7 +46,7 @@ struct KeyView: View {
             viewModel.sync(from: appState)
             Task { await appState.refreshRuntimeStatus() }
         }
-        .alert("操作结果", isPresented: Binding(
+        .alert(l("操作结果", "Operation Result"), isPresented: Binding(
             get: { viewModel.errorMessage != nil || viewModel.successMessage != nil },
             set: { newValue in
                 if !newValue {
@@ -51,7 +55,7 @@ struct KeyView: View {
                 }
             })
         ) {
-            Button("确定", role: .cancel) {}
+            Button(l("确定", "OK"), role: .cancel) {}
         } message: {
             Text(viewModel.errorMessage ?? viewModel.successMessage ?? "")
         }
@@ -113,18 +117,18 @@ struct KeyView: View {
     private var statusSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             row(
-                label: "密钥状态",
-                value: appState.keyLoaded ? "已配置" : "未配置",
+                label: l("密钥状态", "Key status"),
+                value: appState.keyLoaded ? l("已配置", "Configured") : l("未配置", "Not configured"),
                 valueColor: appState.keyLoaded ? DesignSystem.Colors.success : DesignSystem.Colors.warning
             )
-            row(label: "密钥来源", value: appState.keySourceLabel)
+            row(label: l("密钥来源", "Key source"), value: appState.keySourceLabel)
         }
     }
 
     private var slotSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("激活槽位")
+                Text(l("激活槽位", "Active slot"))
                     .font(.subheadline)
                 Spacer()
                 Picker("", selection: $viewModel.selectedSlot) {
@@ -140,13 +144,13 @@ struct KeyView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "square.grid.2x2.fill")
                             .foregroundStyle(viewModel.isApplySuccess ? DesignSystem.Colors.success : .primary)
-                        Text("应用")
+                        Text(l("应用", "Apply"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle(size: .compact))
             }
 
-            Text("当前激活槽位：\(appState.activeKeySlot)")
+            Text("\(l("当前激活槽位", "Current active slot")): \(appState.activeKeySlot)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -172,7 +176,7 @@ struct KeyView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "key.fill")
                             .foregroundStyle(viewModel.isGenerateSuccess ? DesignSystem.Colors.success : .primary)
-                        Text("生成")
+                        Text(l("生成", "Generate"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle(accentOn: true))
@@ -185,7 +189,7 @@ struct KeyView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "tag.fill")
                             .foregroundStyle(viewModel.isEditSuccess ? DesignSystem.Colors.success : .primary)
-                        Text("编辑")
+                        Text(l("编辑", "Edit"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle(size: .compact))
@@ -198,7 +202,7 @@ struct KeyView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "trash")
                             .foregroundStyle(viewModel.isDeleteSuccess ? DesignSystem.Colors.success : .primary)
-                        Text("删除")
+                        Text(l("删除", "Delete"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle(size: .compact))
@@ -210,7 +214,7 @@ struct KeyView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.clockwise")
                             .foregroundStyle(viewModel.isRefreshSuccess ? DesignSystem.Colors.success : .primary)
-                        Text("刷新")
+                        Text(l("刷新", "Refresh"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle(size: .compact))
@@ -223,7 +227,7 @@ struct KeyView: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("搜索槽位 / Key ID / 标签 / 状态", text: $viewModel.slotSearchText)
+            TextField(l("搜索槽位 / Key ID / 标签 / 状态", "Search slot / Key ID / label / status"), text: $viewModel.slotSearchText)
                 .textFieldStyle(.plain)
         }
         .padding(.horizontal, 12)
@@ -241,11 +245,11 @@ struct KeyView: View {
 
     private var activeKeyCapsule: some View {
         let summary = viewModel.activeSlotSummary
-        let keyText = summary?.hasKey == true ? "Key ID: \(summary?.keyId ?? "-")" : "未配置"
+        let keyText = summary?.hasKey == true ? "Key ID: \(summary?.keyId ?? "-")" : l("未配置", "Not configured")
         let labelText = (summary?.label?.isEmpty == false) ? " · \(summary?.label ?? "")" : ""
-        let evidenceText = "证据: \(summary?.evidenceCount ?? 0)"
+        let evidenceText = "\(l("证据", "Evidence")): \(summary?.evidenceCount ?? 0)"
         return VStack(alignment: .leading, spacing: 6) {
-            Text("当前激活密钥")
+            Text(l("当前激活密钥", "Current active key"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -253,7 +257,7 @@ struct KeyView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "square.grid.2x2")
                         .foregroundStyle(summary?.isActive == true ? DesignSystem.Colors.success : .secondary)
-                    Text("槽位 \(appState.activeKeySlot)\(summary?.hasKey == true ? "（已配置）" : "（未配置）")")
+                    Text("\(l("槽位", "Slot")) \(appState.activeKeySlot)\(summary?.hasKey == true ? l("（已配置）", " (configured)") : l("（未配置）", " (not configured)"))")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(DesignSystem.Colors.success)
                 }
@@ -283,13 +287,15 @@ struct KeyView: View {
 
     @ViewBuilder
     private func slotSummaryRow(_ summary: AWMKeySlotSummary) -> some View {
-        let title = summary.isActive ? "槽位 \(summary.slot)（激活）" : "槽位 \(summary.slot)"
-        let keyText = summary.hasKey ? "Key ID: \(summary.keyId ?? "-")" : "未配置"
+        let title = summary.isActive
+            ? "\(l("槽位", "Slot")) \(summary.slot)\(l("（激活）", " (active)"))"
+            : "\(l("槽位", "Slot")) \(summary.slot)"
+        let keyText = summary.hasKey ? "Key ID: \(summary.keyId ?? "-")" : l("未配置", "Not configured")
         let labelText = summary.label?.isEmpty == false ? " · \(summary.label!)" : ""
-        let evidenceText = "证据: \(summary.evidenceCount)"
+        let evidenceText = "\(l("证据", "Evidence")): \(summary.evidenceCount)"
         let duplicateText = summary.duplicateOfSlots.isEmpty
             ? ""
-            : " · 重复: \(summary.duplicateOfSlots.map(String.init).joined(separator: ","))"
+            : " · \(l("重复", "Duplicate")): \(summary.duplicateOfSlots.map(String.init).joined(separator: ","))"
 
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
@@ -379,23 +385,27 @@ private struct KeyDeleteConfirmSheet: View {
         Int(trimmedInput) == slot
     }
 
+    private func l(_ zh: String, _ en: String) -> String {
+        ((try? AWMUILanguageStore.get()) ?? .zhCN) == .enUS ? en : zh
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.card) {
-            Text("确认删除密钥")
+            Text(l("确认删除密钥", "Confirm key deletion"))
                 .font(.title3.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("此操作不可恢复，删除后将无法执行嵌入/检测。")
+                Text(l("此操作不可恢复，删除后将无法执行嵌入/检测。", "This action is irreversible. Embedding/detection will be unavailable after deletion."))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                Text("请输入当前槽位号：\(slot)")
+                Text("\(l("请输入当前槽位号", "Enter current slot number")): \(slot)")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
             }
 
             GlassEffectContainer {
-                TextField("输入槽位号 \(slot)", text: $input)
+                TextField("\(l("输入槽位号", "Enter slot number")) \(slot)", text: $input)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -408,13 +418,13 @@ private struct KeyDeleteConfirmSheet: View {
             )
 
             HStack(spacing: DesignSystem.Spacing.item) {
-                Button("取消") {
+                Button(l("取消", "Cancel")) {
                     onCancel()
                     dismiss()
                 }
                 .buttonStyle(GlassButtonStyle())
 
-                Button("确认删除") {
+                Button(l("确认删除", "Confirm delete")) {
                     onConfirm()
                     dismiss()
                 }
@@ -436,28 +446,32 @@ private struct EditSlotLabelSheet: View {
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
+    private func l(_ zh: String, _ en: String) -> String {
+        ((try? AWMUILanguageStore.get()) ?? .zhCN) == .enUS ? en : zh
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("编辑槽位标签")
+            Text(l("编辑槽位标签", "Edit slot label"))
                 .font(.headline)
-            Text("当前激活槽位：\(slot)")
+            Text("\(l("当前激活槽位", "Current active slot")): \(slot)")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text("Key ID：\(keyId ?? "未配置")")
+            Text("Key ID: \(keyId ?? l("未配置", "Not configured"))")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text("当前标签：\((currentLabel?.isEmpty == false ? currentLabel! : "未设置"))")
+            Text("\(l("当前标签", "Current label")): \((currentLabel?.isEmpty == false ? currentLabel! : l("未设置", "Not set")))")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            TextField("输入新标签（留空表示清除）", text: $draftLabel)
+            TextField(l("输入新标签（留空表示清除）", "Enter new label (leave blank to clear)"), text: $draftLabel)
                 .textFieldStyle(.roundedBorder)
 
             HStack {
                 Spacer()
-                Button("取消", action: onCancel)
+                Button(l("取消", "Cancel"), action: onCancel)
                     .keyboardShortcut(.cancelAction)
-                Button("保存", action: onConfirm)
+                Button(l("保存", "Save"), action: onConfirm)
                     .keyboardShortcut(.defaultAction)
                     .disabled(isWorking)
             }

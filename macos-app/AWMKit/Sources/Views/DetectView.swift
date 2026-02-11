@@ -63,6 +63,10 @@ struct DetectView: View {
         }
     }
 
+    private func l(_ zh: String, _ en: String) -> String {
+        appState.tr(zh, en)
+    }
+
     // MARK: - 输入卡片（左上）
 
     private var inputCard: some View {
@@ -78,48 +82,48 @@ struct DetectView: View {
                     Button(action: { viewModel.selectFiles() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "folder")
-                            Text("选择")
+                            Text(l("选择", "Select"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel("选择输入源")
+                    .accessibilityLabel(l("选择输入源", "Select input source"))
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.detectFiles(audio: appState.audio) }) {
                         HStack(spacing: 6) {
                             Image(systemName: viewModel.isProcessing ? "stop.fill" : "play.fill")
                                 .foregroundColor(viewModel.isProcessing ? .red : .accentColor)
-                            Text(viewModel.isProcessing ? "停止" : "检测")
+                            Text(viewModel.isProcessing ? l("停止", "Stop") : l("检测", "Detect"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(accentOn: !viewModel.isProcessing, size: .compact))
-                    .accessibilityLabel(viewModel.isProcessing ? "停止检测" : "开始检测")
+                    .accessibilityLabel(viewModel.isProcessing ? l("停止检测", "Stop detection") : l("开始检测", "Start detection"))
                     .disabled(viewModel.selectedFiles.isEmpty || viewModel.isProcessing || !appState.keyLoaded)
 
                     Button(action: { viewModel.clearQueue() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "xmark.circle")
                                 .foregroundColor(viewModel.isClearQueueSuccess ? .green : .primary)
-                            Text("清空")
+                            Text(l("清空", "Clear"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel("清空队列")
+                    .accessibilityLabel(l("清空队列", "Clear queue"))
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.clearLogs() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "line.3.horizontal.decrease.circle")
                                 .foregroundColor(viewModel.isClearLogsSuccess ? .green : .primary)
-                            Text("清空")
+                            Text(l("清空", "Clear"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel("清空日志")
+                    .accessibilityLabel(l("清空日志", "Clear logs"))
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
 
@@ -133,9 +137,9 @@ struct DetectView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "waveform.badge.magnifyingglass")
                             .font(.title2)
-                        Text("拖拽音频文件到此处")
+                        Text(l("拖拽音频文件到此处", "Drop audio files here"))
                             .font(.headline)
-                        Text("检测文件中是否包含水印标签")
+                        Text(l("检测文件中是否包含水印标签", "Detect whether file contains watermark tag"))
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     }
@@ -155,7 +159,7 @@ struct DetectView: View {
     private var directorySummary: some View {
         VStack(spacing: 10) {
             directoryInfoRow(
-                title: "待检测文件",
+                title: l("待检测文件", "Input source"),
                 value: viewModel.inputSourceText,
                 systemImage: "tray.and.arrow.down",
                 onTap: { viewModel.selectFiles() }
@@ -210,11 +214,11 @@ struct DetectView: View {
     private var operationCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("检测信息")
+                Text(l("检测信息", "Detection Info"))
                     .font(.headline)
                 Spacer()
                 if viewModel.totalDetected > 0 {
-                    Text("\(viewModel.totalFound)（成功）/\(viewModel.totalDetected)（总）")
+                    Text("\(viewModel.totalFound)\(l("（成功）", " (success)"))/\(viewModel.totalDetected)\(l("（总）", " (total)"))")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(viewModel.totalFound > 0 ? DesignSystem.Colors.success : .secondary)
                         .monospacedDigit()
@@ -237,7 +241,7 @@ struct DetectView: View {
 
             VStack(spacing: 8) {
                 singleLineFieldRow(
-                    label: "文件",
+                    label: l("文件", "File"),
                     value: detailValue(from: displayedDetectRecord?.file),
                     valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
                     truncationMode: .middle
@@ -245,19 +249,19 @@ struct DetectView: View {
 
                 tripleFieldRow(
                     (
-                        label: "状态",
+                        label: l("状态", "Status"),
                         value: detailValue(from: displayedDetectRecord?.status),
                         valueColor: fieldValueColor(for: .status, record: displayedDetectRecord),
                         monospaced: true
                     ),
                     (
-                        label: "匹配标记",
+                        label: l("匹配标记", "Match found"),
                         value: detailValue(from: displayedDetectRecord?.matchFound.map { $0 ? "true" : "false" }),
                         valueColor: fieldValueColor(for: .matchFound, record: displayedDetectRecord),
                         monospaced: true
                     ),
                     (
-                        label: "检测模式",
+                        label: l("检测模式", "Pattern"),
                         value: detailValue(from: displayedDetectRecord?.pattern),
                         valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
                         monospaced: true
@@ -266,19 +270,19 @@ struct DetectView: View {
 
                 tripleFieldRow(
                     (
-                        label: "标签",
+                        label: l("标签", "Tag"),
                         value: detailValue(from: displayedDetectRecord?.tag),
                         valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
                         monospaced: true
                     ),
                     (
-                        label: "身份",
+                        label: l("身份", "Identity"),
                         value: detailValue(from: displayedDetectRecord?.identity),
                         valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
                         monospaced: true
                     ),
                     (
-                        label: "版本",
+                        label: l("版本", "Version"),
                         value: detailValue(from: displayedDetectRecord?.version.map { String($0) }),
                         valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
                         monospaced: true
@@ -287,21 +291,21 @@ struct DetectView: View {
 
                 tripleFieldRow(
                     (
-                        label: "检测时间",
+                        label: l("检测时间", "Detect time"),
                         value: localTimestampDisplay(from: displayedDetectRecord),
                         valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
                         monospaced: true,
                         helpText: localTimestampHelp(from: displayedDetectRecord)
                     ),
                     (
-                        label: "密钥槽位",
+                        label: l("密钥槽位", "Key slot"),
                         value: detailValue(from: displayedDetectRecord?.keySlot.map { String($0) }),
                         valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
                         monospaced: true,
                         helpText: nil
                     ),
                     (
-                        label: "位错误",
+                        label: l("位错误", "Bit errors"),
                         value: detailValue(from: displayedDetectRecord?.bitErrors.map { String($0) }),
                         valueColor: fieldValueColor(for: .bitErrors, record: displayedDetectRecord),
                         monospaced: true,
@@ -311,21 +315,21 @@ struct DetectView: View {
 
                 tripleFieldRow(
                     (
-                        label: "检测分数",
+                        label: l("检测分数", "Detect score"),
                         value: detectScoreDisplay(from: displayedDetectRecord),
                         valueColor: fieldValueColor(for: .detectScore, record: displayedDetectRecord),
                         monospaced: true,
                         helpText: detectScoreHelp(from: displayedDetectRecord)
                     ),
                     (
-                        label: "克隆校验",
+                        label: l("克隆校验", "Clone check"),
                         value: detailValue(from: displayedDetectRecord?.cloneCheck),
                         valueColor: fieldValueColor(for: .cloneCheck, record: displayedDetectRecord),
                         monospaced: true,
                         helpText: displayedDetectRecord?.cloneReason
                     ),
                     (
-                        label: "指纹分数",
+                        label: l("指纹分数", "Fingerprint score"),
                         value: fingerprintScoreDisplay(from: displayedDetectRecord),
                         valueColor: fieldValueColor(for: .fingerprintScore, record: displayedDetectRecord),
                         monospaced: true,
@@ -334,7 +338,7 @@ struct DetectView: View {
                 )
 
                 singleLineFieldRow(
-                    label: "错误信息",
+                    label: l("错误信息", "Error"),
                     value: errorDisplayValue(from: displayedDetectRecord),
                     valueColor: fieldValueColor(for: .error, record: displayedDetectRecord),
                     truncationMode: .middle
@@ -350,11 +354,11 @@ struct DetectView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("待检测文件")
+                    Text(l("待检测文件", "Pending files"))
                         .font(.headline)
                     Spacer()
                     if !viewModel.selectedFiles.isEmpty {
-                        Text("共 \(viewModel.selectedFiles.count) 个")
+                        Text("\(l("共", "Total")) \(viewModel.selectedFiles.count)\(l(" 个", ""))")
                             .foregroundColor(.secondary)
                             .font(.subheadline)
                     }
@@ -381,7 +385,7 @@ struct DetectView: View {
                 }
 
                 if viewModel.selectedFiles.isEmpty {
-                    Text("暂无文件")
+                    Text(l("暂无文件", "No files"))
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                         .transition(.opacity)
@@ -425,11 +429,11 @@ struct DetectView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("检测日志")
+                    Text(l("检测日志", "Detection logs"))
                         .font(.headline)
                     Spacer()
                     if !viewModel.logs.isEmpty {
-                        Text("共 \(viewModel.logs.count) 条")
+                        Text("\(l("共", "Total")) \(viewModel.logs.count)\(l(" 条", ""))")
                             .foregroundColor(.secondary)
                             .font(.subheadline)
                     }
@@ -450,7 +454,7 @@ struct DetectView: View {
                 Divider().opacity(0.5)
 
                 if viewModel.logs.isEmpty {
-                    Text("暂无日志")
+                    Text(l("暂无日志", "No logs"))
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                         .transition(.opacity)
@@ -458,7 +462,7 @@ struct DetectView: View {
                     logSearchField
 
                     if filteredLogs.isEmpty {
-                        Text("无匹配日志")
+                        Text(l("无匹配日志", "No matched logs"))
                             .foregroundColor(.secondary)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                             .transition(.opacity)
@@ -562,8 +566,8 @@ struct DetectView: View {
         .contentShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.row, style: .continuous))
         .accessibilityLabel(
             isSelectable
-                ? "结果日志，可选中查看详情"
-                : "流程日志"
+                ? l("结果日志，可选中查看详情", "Result log, selectable for details")
+                : l("流程日志", "Process log")
         )
     }
 
@@ -572,7 +576,7 @@ struct DetectView: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField("搜索日志（标题/详情）", text: $logSearchText)
+                TextField(l("搜索日志（标题/详情）", "Search logs (title/detail)"), text: $logSearchText)
                     .textFieldStyle(.plain)
             }
             .padding(.horizontal, 10)
@@ -866,7 +870,7 @@ struct DetectView: View {
 
     private func detectScoreHelp(from record: DetectRecord?) -> String {
         guard let score = record?.detectScore else { return "-" }
-        return "检测分数: \(String(format: "%.3f", score))"
+        return "\(l("检测分数", "Detect score")): \(String(format: "%.3f", score))"
     }
 
     private func fingerprintScoreDisplay(from record: DetectRecord?) -> String {
@@ -880,9 +884,9 @@ struct DetectView: View {
     private func fingerprintScoreHelp(from record: DetectRecord?) -> String {
         guard let score = record?.cloneScore else { return "-" }
         if let seconds = record?.cloneMatchSeconds {
-            return "指纹分数: \(String(format: "%.3f", score))\n匹配时长: \(String(format: "%.2f", seconds))s"
+            return "\(l("指纹分数", "Fingerprint score")): \(String(format: "%.3f", score))\n\(l("匹配时长", "Match duration")): \(String(format: "%.2f", seconds))s"
         }
-        return "指纹分数: \(String(format: "%.3f", score))"
+        return "\(l("指纹分数", "Fingerprint score")): \(String(format: "%.3f", score))"
     }
 
     private func errorDisplayValue(from record: DetectRecord?) -> String {
@@ -908,7 +912,7 @@ struct DetectView: View {
             return "-"
         }
         let local = localTimestampDisplay(from: record)
-        return "本地时间: \(local)\nUTC 分钟: \(components.utcMinutes)\nUTC 秒: \(components.utcSeconds)"
+        return "\(l("本地时间", "Local time")): \(local)\nUTC \(l("分钟", "minutes")): \(components.utcMinutes)\nUTC \(l("秒", "seconds")): \(components.utcSeconds)"
     }
 
     private func timestampComponents(from record: DetectRecord?) -> (utcMinutes: UInt32, utcSeconds: UInt64)? {
@@ -963,11 +967,11 @@ struct DetectView: View {
         HStack(spacing: 10) {
             Image(systemName: "key.slash")
                 .foregroundStyle(DesignSystem.Colors.warning)
-            Text("未配置密钥，请前往密钥页完成生成。")
+            Text(l("未配置密钥，请前往密钥页完成生成。", "No key configured. Open the Key page to generate one."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
-            Button("前往密钥页") {
+            Button(l("前往密钥页", "Go to Key page")) {
                 appState.selectedTab = .key
             }
             .buttonStyle(GlassButtonStyle(size: .compact))

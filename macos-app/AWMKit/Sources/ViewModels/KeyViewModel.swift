@@ -25,11 +25,11 @@ final class KeyViewModel: ObservableObject {
         let lowered = keyword.lowercased()
         return slotSummaries.filter { summary in
             let searchable = [
-                "槽位 \(summary.slot)",
+                "\(localized("槽位", "Slot")) \(summary.slot)",
                 summary.keyId ?? "",
                 summary.label ?? "",
                 summary.statusText,
-                "证据 \(summary.evidenceCount)"
+                "\(localized("证据", "Evidence")) \(summary.evidenceCount)"
             ].joined(separator: " ").lowercased()
             return searchable.contains(lowered)
         }
@@ -49,7 +49,7 @@ final class KeyViewModel: ObservableObject {
     func applySlot(appState: AppState) {
         appState.setActiveKeySlot(selectedSlot)
         sync(from: appState)
-        successMessage = "已切换激活槽位为 \(selectedSlot)"
+        successMessage = "\(localized("已切换激活槽位为", "Switched active slot to")) \(selectedSlot)"
         errorMessage = nil
         flash(\.isApplySuccess)
     }
@@ -57,7 +57,7 @@ final class KeyViewModel: ObservableObject {
     func generateKey(appState: AppState) async {
         guard !isWorking else { return }
         guard !selectedSlotHasKey else {
-            errorMessage = "槽位 \(selectedSlot) 已有密钥，请先删除后再生成。"
+            errorMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" 已有密钥，请先删除后再生成。", " already has a key. Delete it before generating a new one."))"
             successMessage = nil
             return
         }
@@ -67,11 +67,11 @@ final class KeyViewModel: ObservableObject {
         do {
             try await appState.generateKey(slot: selectedSlot)
             sync(from: appState)
-            successMessage = "槽位 \(selectedSlot) 密钥已生成"
+            successMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" 密钥已生成", " key generated"))"
             errorMessage = nil
             flash(\.isGenerateSuccess)
         } catch {
-            errorMessage = "生成密钥失败：\(error.localizedDescription)"
+            errorMessage = "\(localized("生成密钥失败", "Failed to generate key")): \(error.localizedDescription)"
             successMessage = nil
         }
     }
@@ -86,16 +86,16 @@ final class KeyViewModel: ObservableObject {
         do {
             if trimmed.isEmpty {
                 try await appState.clearSlotLabel(slot: active)
-                successMessage = "槽位 \(active) 标签已清除"
+                successMessage = "\(localized("槽位", "Slot")) \(active)\(localized(" 标签已清除", " label cleared"))"
             } else {
                 try await appState.setSlotLabel(slot: active, label: trimmed)
-                successMessage = "槽位 \(active) 标签已更新"
+                successMessage = "\(localized("槽位", "Slot")) \(active)\(localized(" 标签已更新", " label updated"))"
             }
             sync(from: appState)
             errorMessage = nil
             flash(\.isEditSuccess)
         } catch {
-            errorMessage = "编辑标签失败：\(error.localizedDescription)"
+            errorMessage = "\(localized("编辑标签失败", "Failed to edit label")): \(error.localizedDescription)"
             successMessage = nil
         }
     }
@@ -108,11 +108,11 @@ final class KeyViewModel: ObservableObject {
         do {
             try await appState.deleteKey(slot: selectedSlot)
             sync(from: appState)
-            successMessage = "密钥已删除"
+            successMessage = localized("密钥已删除", "Key deleted")
             errorMessage = nil
             flash(\.isDeleteSuccess)
         } catch {
-            errorMessage = "删除密钥失败：\(error.localizedDescription)"
+            errorMessage = "\(localized("删除密钥失败", "Failed to delete key")): \(error.localizedDescription)"
             successMessage = nil
         }
     }
@@ -140,5 +140,9 @@ final class KeyViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             self[keyPath: keyPath] = false
         }
+    }
+
+    private func localized(_ zh: String, _ en: String) -> String {
+        ((try? AWMUILanguageStore.get()) ?? .zhCN) == .enUS ? en : zh
     }
 }
