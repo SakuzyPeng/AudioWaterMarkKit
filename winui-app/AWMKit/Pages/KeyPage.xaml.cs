@@ -10,8 +10,10 @@ namespace AWMKit.Pages;
 /// <summary>
 /// Key management page.
 /// </summary>
-public sealed partial class KeyPage : Page
+public sealed partial class KeyPage : Page, INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+
     public KeyViewModel ViewModel { get; } = new();
 
     public bool IsNotBusy => !ViewModel.IsBusy;
@@ -160,6 +162,8 @@ public sealed partial class KeyPage : Page
     {
         _ = DispatcherQueue.TryEnqueue(() =>
         {
+            RaiseComputedStateChanged();
+
             if (e.PropertyName == nameof(KeyViewModel.IsBusy))
             {
                 Bindings.Update();
@@ -174,6 +178,15 @@ public sealed partial class KeyPage : Page
                 Bindings.Update();
             }
         });
+    }
+
+    private void RaiseComputedStateChanged()
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsNotBusy)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanGenerateKey)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(GenerateKeyTooltip)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(KeyStatusSeverity)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(KeyStatusMessage)));
     }
 
     private async Task ShowMessageDialogAsync(string title, string content)
