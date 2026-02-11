@@ -1,5 +1,6 @@
 using AWMKit.Pages;
 using AWMKit.ViewModels;
+using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -17,12 +18,23 @@ namespace AWMKit;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
+    private enum ThemeMode
+    {
+        System,
+        Light,
+        Dark,
+    }
+
     public AppViewModel ViewModel { get; } = AppViewModel.Instance;
 
     private NavigationViewItem? _lastPageItem;
+    private NavigationViewItem? _themeSystemItem;
+    private NavigationViewItem? _themeLightItem;
+    private NavigationViewItem? _themeDarkItem;
     private NavigationViewItem? _keyStatusItem;
     private NavigationViewItem? _engineStatusItem;
     private NavigationViewItem? _databaseStatusItem;
+    private ThemeMode _currentThemeMode = ThemeMode.System;
 
     public MainWindow()
     {
@@ -70,14 +82,21 @@ public sealed partial class MainWindow : Window
 
     private void InitializeStatusIndicators()
     {
+        _themeSystemItem = CreateThemeItem("theme:system", "系统");
+        _themeLightItem = CreateThemeItem("theme:light", "亮色");
+        _themeDarkItem = CreateThemeItem("theme:dark", "暗色");
         _keyStatusItem = CreateStatusItem("status:key", Symbol.Permissions, "密钥状态");
         _engineStatusItem = CreateStatusItem("status:engine", Symbol.Audio, "音频引擎状态");
         _databaseStatusItem = CreateStatusItem("status:database", Symbol.Library, "数据库状态");
 
         MainNavigation.FooterMenuItems.Clear();
+        MainNavigation.FooterMenuItems.Add(_themeSystemItem);
+        MainNavigation.FooterMenuItems.Add(_themeLightItem);
+        MainNavigation.FooterMenuItems.Add(_themeDarkItem);
         MainNavigation.FooterMenuItems.Add(_keyStatusItem);
         MainNavigation.FooterMenuItems.Add(_engineStatusItem);
         MainNavigation.FooterMenuItems.Add(_databaseStatusItem);
+        ApplyTheme(ThemeMode.System);
         UpdateStatusIndicators();
     }
 
@@ -108,6 +127,26 @@ public sealed partial class MainWindow : Window
         return item;
     }
 
+    private static NavigationViewItem CreateThemeItem(string tag, string label)
+    {
+        var item = new NavigationViewItem
+        {
+            Tag = tag,
+            Content = label,
+            Width = 60,
+            Height = 32,
+            MinWidth = 60,
+            Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 4, 0),
+        };
+        AutomationProperties.SetName(item, $"切换到{label}主题");
+        return item;
+    }
+
     private void UpdateStatusIndicators()
     {
         UpdateStatusItem(_keyStatusItem, ViewModel.KeyStatusBrush, ViewModel.KeyStatusTooltip);
@@ -128,6 +167,42 @@ public sealed partial class MainWindow : Window
         }
 
         ToolTipService.SetToolTip(item, tooltip);
+    }
+
+    private void ApplyTheme(ThemeMode mode)
+    {
+        _currentThemeMode = mode;
+        MainNavigation.RequestedTheme = mode switch
+        {
+            ThemeMode.Light => ElementTheme.Light,
+            ThemeMode.Dark => ElementTheme.Dark,
+            _ => ElementTheme.Default,
+        };
+
+        UpdateThemeItems();
+    }
+
+    private void UpdateThemeItems()
+    {
+        SetThemeItemActive(_themeSystemItem, _currentThemeMode == ThemeMode.System);
+        SetThemeItemActive(_themeLightItem, _currentThemeMode == ThemeMode.Light);
+        SetThemeItemActive(_themeDarkItem, _currentThemeMode == ThemeMode.Dark);
+    }
+
+    private static void SetThemeItemActive(NavigationViewItem? item, bool active)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        item.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
+        item.Icon = active
+            ? new SymbolIcon(Symbol.Accept)
+            {
+                FontSize = 12,
+            }
+            : null;
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -180,6 +255,27 @@ public sealed partial class MainWindow : Window
             case "status:engine":
             case "status:database":
                 _ = ViewModel.RefreshRuntimeStatusAsync();
+                if (_lastPageItem is not null)
+                {
+                    MainNavigation.SelectedItem = _lastPageItem;
+                }
+                break;
+            case "theme:system":
+                ApplyTheme(ThemeMode.System);
+                if (_lastPageItem is not null)
+                {
+                    MainNavigation.SelectedItem = _lastPageItem;
+                }
+                break;
+            case "theme:light":
+                ApplyTheme(ThemeMode.Light);
+                if (_lastPageItem is not null)
+                {
+                    MainNavigation.SelectedItem = _lastPageItem;
+                }
+                break;
+            case "theme:dark":
+                ApplyTheme(ThemeMode.Dark);
                 if (_lastPageItem is not null)
                 {
                     MainNavigation.SelectedItem = _lastPageItem;
