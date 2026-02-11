@@ -1,6 +1,7 @@
 using AWMKit.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Navigation;
 using System.ComponentModel;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -18,14 +19,17 @@ public sealed partial class EmbedPage : Page
 {
     public EmbedViewModel ViewModel { get; }
     public AppViewModel AppState { get; } = AppViewModel.Instance;
+    private int _lastForceReviewPromptVersion;
+    private bool _isForceReviewDialogOpen;
 
     public EmbedPage()
     {
         InitializeComponent();
+        NavigationCacheMode = NavigationCacheMode.Required;
         ViewModel = new EmbedViewModel();
         ViewModel.IsKeyAvailable = AppState.KeyAvailable;
         AppState.PropertyChanged += AppStateOnPropertyChanged;
-        Unloaded += EmbedPage_Unloaded;
+        ViewModel.PropertyChanged += ViewModelOnPropertyChanged;
     }
 
     private async void Page_Loaded(object sender, RoutedEventArgs e)
@@ -35,17 +39,76 @@ public sealed partial class EmbedPage : Page
         ViewModel.IsKeyAvailable = AppState.KeyAvailable;
     }
 
-    private void EmbedPage_Unloaded(object sender, RoutedEventArgs e)
-    {
-        AppState.PropertyChanged -= AppStateOnPropertyChanged;
-        Unloaded -= EmbedPage_Unloaded;
-    }
-
     private void AppStateOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(AppViewModel.KeyAvailable))
         {
             _ = DispatcherQueue.TryEnqueue(() => { ViewModel.IsKeyAvailable = AppState.KeyAvailable; });
+        }
+    }
+
+    private void ViewModelOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(EmbedViewModel.ForceReviewPromptVersion))
+        {
+            return;
+        }
+
+        var currentVersion = ViewModel.ForceReviewPromptVersion;
+        if (currentVersion == _lastForceReviewPromptVersion || currentVersion <= 0)
+        {
+            return;
+        }
+
+        var enqueued = DispatcherQueue.TryEnqueue(() => _ = ShowForceReviewDialogAsync(currentVersion));
+        if (!enqueued)
+        {
+            _ = ShowForceReviewDialogAsync(currentVersion);
+        }
+    }
+
+    private async Task ShowForceReviewDialogAsync(int promptVersion)
+    {
+        if (_isForceReviewDialogOpen
+            || ViewModel.PendingForceReviewCount == 0
+            || promptVersion <= _lastForceReviewPromptVersion
+            || XamlRoot is null)
+        {
+            return;
+        }
+
+        _isForceReviewDialogOpen = true;
+        _lastForceReviewPromptVersion = promptVersion;
+        try
+        {
+            var dialog = new ContentDialog
+            {
+                Title = ViewModel.ForceReviewDialogTitle,
+                Content = ViewModel.ForceReviewDialogMessage,
+                PrimaryButtonText = ViewModel.ForceReviewDialogPrimaryText,
+                SecondaryButtonText = ViewModel.ForceReviewDialogSecondaryText,
+                CloseButtonText = ViewModel.ForceReviewDialogCloseText,
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = XamlRoot,
+            };
+
+            var result = await dialog.ShowAsync();
+            switch (result)
+            {
+                case ContentDialogResult.Primary:
+                    await ViewModel.ForceEmbedPendingAsync();
+                    break;
+                case ContentDialogResult.Secondary:
+                    ViewModel.RemovePendingForceFromQueue();
+                    break;
+                default:
+                    ViewModel.KeepPendingForceInQueue();
+                    break;
+            }
+        }
+        finally
+        {
+            _isForceReviewDialogOpen = false;
         }
     }
 

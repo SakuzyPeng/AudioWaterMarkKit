@@ -451,7 +451,7 @@ public static class AwmBridge
     /// <summary>
     /// Records evidence for an embedded output file.
     /// </summary>
-    public static AwmError RecordEvidenceFile(string filePath, byte[] rawMessage, byte[] key)
+    public static AwmError RecordEvidenceFile(string filePath, byte[] rawMessage, byte[] key, bool isForcedEmbed = false)
     {
         if (rawMessage.Length != MessageLength || key.Length == 0)
         {
@@ -462,12 +462,26 @@ public static class AwmBridge
         var keyHandle = GCHandle.Alloc(key, GCHandleType.Pinned);
         try
         {
-            int code = AwmNative.awm_evidence_record_file(
-                filePath,
-                messageHandle.AddrOfPinnedObject(),
-                keyHandle.AddrOfPinnedObject(),
-                (nuint)key.Length);
-            return (AwmError)code;
+            try
+            {
+                int code = AwmNative.awm_evidence_record_file_ex(
+                    filePath,
+                    messageHandle.AddrOfPinnedObject(),
+                    keyHandle.AddrOfPinnedObject(),
+                    (nuint)key.Length,
+                    isForcedEmbed);
+                return (AwmError)code;
+            }
+            catch (EntryPointNotFoundException)
+            {
+                // Compatibility fallback for older native libraries without *_ex.
+                int code = AwmNative.awm_evidence_record_file(
+                    filePath,
+                    messageHandle.AddrOfPinnedObject(),
+                    keyHandle.AddrOfPinnedObject(),
+                    (nuint)key.Length);
+                return (AwmError)code;
+            }
         }
         finally
         {
