@@ -65,7 +65,7 @@ fn copy_str_to_c_buf(dst: &mut [c_char], text: &str) {
 
 #[cfg(target_os = "windows")]
 const fn u8_to_c_char(byte: u8) -> c_char {
-    byte
+    byte as c_char
 }
 
 #[cfg(not(target_os = "windows"))]
