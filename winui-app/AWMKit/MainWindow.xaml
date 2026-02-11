@@ -9,6 +9,8 @@
                     IsBackButtonVisible="Collapsed"
                     IsSettingsVisible="False"
                     PaneDisplayMode="Top"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    PaneBackground="{ThemeResource LayerFillColorDefaultBrush}"
                     SelectionChanged="MainNavigation_SelectionChanged">
         <NavigationView.MenuItems>
             <NavigationViewItem Content="嵌入" Tag="embed">

@@ -172,14 +172,25 @@ public sealed partial class MainWindow : Window
     private void ApplyTheme(ThemeMode mode)
     {
         _currentThemeMode = mode;
-        MainNavigation.RequestedTheme = mode switch
+        var elementTheme = mode switch
         {
             ThemeMode.Light => ElementTheme.Light,
             ThemeMode.Dark => ElementTheme.Dark,
             _ => ElementTheme.Default,
         };
 
+        MainNavigation.RequestedTheme = elementTheme;
+        ContentFrame.RequestedTheme = elementTheme;
+        ApplyThemeToCurrentPage(elementTheme);
         UpdateThemeItems();
+    }
+
+    private void ApplyThemeToCurrentPage(ElementTheme elementTheme)
+    {
+        if (ContentFrame.Content is FrameworkElement page)
+        {
+            page.RequestedTheme = elementTheme;
+        }
     }
 
     private void UpdateThemeItems()
@@ -276,6 +287,7 @@ public sealed partial class MainWindow : Window
             MainNavigation.SelectedItem = embedItem;
         }
         ContentFrame.Navigate(typeof(EmbedPage));
+        ApplyThemeToCurrentPage(ContentFrame.RequestedTheme);
     }
 
     private void MainNavigation_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -291,18 +303,22 @@ public sealed partial class MainWindow : Window
             case "embed":
                 _lastPageItem = item;
                 ContentFrame.Navigate(typeof(EmbedPage));
+                ApplyThemeToCurrentPage(ContentFrame.RequestedTheme);
                 break;
             case "detect":
                 _lastPageItem = item;
                 ContentFrame.Navigate(typeof(DetectPage));
+                ApplyThemeToCurrentPage(ContentFrame.RequestedTheme);
                 break;
             case "key":
                 _lastPageItem = item;
                 ContentFrame.Navigate(typeof(KeyPage));
+                ApplyThemeToCurrentPage(ContentFrame.RequestedTheme);
                 break;
             case "tags":
                 _lastPageItem = item;
                 ContentFrame.Navigate(typeof(TagsPage));
+                ApplyThemeToCurrentPage(ContentFrame.RequestedTheme);
                 break;
             case "status:key":
             case "status:engine":
