@@ -27,16 +27,16 @@
                     <Color x:Key="AWMWarningColor">#FFB34D</Color>
                     <Color x:Key="AWMErrorColor">#FF7B72</Color>
                     <Color x:Key="AWMInfoColor">#6CB8FF</Color>
-                    <Color x:Key="AWMNeutralColor">#C3C6CE</Color>
+                    <Color x:Key="AWMNeutralColor">#B9C2D4</Color>
                     <Color x:Key="AWMYellowColor">#EEDC82</Color>
-                    <Color x:Key="AWMPageBackdropColor">#FF070C16</Color>
-                    <Color x:Key="AWMSelectionBackgroundColor">#2B3B82F6</Color>
-                    <Color x:Key="AWMSelectionBorderColor">#8C3B82F6</Color>
-                    <Color x:Key="AWMListItemPointerOverColor">#18FFFFFF</Color>
-                    <Color x:Key="AWMListItemPressedColor">#2AFFFFFF</Color>
-                    <Color x:Key="AWMListItemSelectedColor">#2F3B82F6</Color>
-                    <Color x:Key="AWMCardBackgroundColor">#FF111A29</Color>
-                    <Color x:Key="AWMListItemBackgroundColor">#14FFFFFF</Color>
+                    <Color x:Key="AWMPageBackdropColor">#FF101826</Color>
+                    <Color x:Key="AWMSelectionBackgroundColor">#333B82F6</Color>
+                    <Color x:Key="AWMSelectionBorderColor">#9A3B82F6</Color>
+                    <Color x:Key="AWMListItemPointerOverColor">#1F3B82F6</Color>
+                    <Color x:Key="AWMListItemPressedColor">#2E3B82F6</Color>
+                    <Color x:Key="AWMListItemSelectedColor">#383B82F6</Color>
+                    <Color x:Key="AWMCardBackgroundColor">#FF1A2233</Color>
+                    <Color x:Key="AWMListItemBackgroundColor">#1A223349</Color>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
                     <Color x:Key="AWMSuccessColor">#00FF00</Color>
