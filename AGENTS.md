@@ -2,10 +2,9 @@
 
 ## Project Structure & Module Organization
 - `src/` holds the Rust core: `tag.rs`, `message.rs`, `audio.rs`, `multichannel.rs`, `ffi.rs`, `error.rs`, `charset.rs`, and `lib.rs`.
-- `src/bin/` contains Rust CLIs: `awm.rs`, `awm-detect.rs`, `awm-embed.rs`.
+- `src/bin/awmkit/` contains the current Rust CLI entry and command modules.
 - `include/awmkit.h` is the C header for FFI consumers.
 - `bindings/swift/` is the Swift Package; tests live in `bindings/swift/Tests/`.
-- `cli-swift/` is the Swift CLI with `build.sh` and `dist.sh`.
 - `vendor/` includes the `audiowmark` binary used for audio embed/detect (see README).
 
 ## Build, Test, and Development Commands
@@ -21,8 +20,6 @@ cargo clippy --all-features
 ```
 cd bindings/swift && swift build
 cd bindings/swift && swift test
-cd cli-swift && ./build.sh
-cd cli-swift && ./dist.sh /path/to/audiowmark
 ```
 `audiowmark` must be available on PATH, or use the packaged binary under `vendor/`.
 

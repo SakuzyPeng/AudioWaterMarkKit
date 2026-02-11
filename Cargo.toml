@@ -12,10 +12,6 @@ categories = ["multimedia::audio", "cryptography"]
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [[bin]]
-name = "awm"
-path = "src/bin/awm.rs"
-
-[[bin]]
 name = "awmkit"
 path = "src/bin/awmkit/main.rs"
 required-features = ["full-cli"]

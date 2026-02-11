@@ -28,6 +28,7 @@ Cargo.lock.bak
 # Release artifacts
 /.tmp-release/
 /dist/
+/cli-swift/
 
 # ============================================================================
 # Audio Files

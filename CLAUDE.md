@@ -51,16 +51,6 @@ cd bindings/swift && swift build
 cd bindings/swift && swift test
 ```
 
-### Swift CLI
-
-```bash
-# 构建 CLI
-cd cli-swift && ./build.sh
-
-# 创建分发包
-cd cli-swift && ./dist.sh
-```
-
 ## 架构
 
 ### 消息格式 (16 bytes)
@@ -96,7 +86,7 @@ cd cli-swift && ./dist.sh
 └──────────────────────────────────────────┘
                   ↓
 ┌─ 跨语言绑定 ─────────────────────────────┐
-│  C FFI → Swift/AWMKit → Swift CLI        │
+│  C FFI → Swift/AWMKit                     │
 │       → C 头文件 (include/awmkit.h)      │
 └──────────────────────────────────────────┘
 ```
@@ -131,7 +121,7 @@ Tauri 后端与 React 前端目录已移除；桌面 UI 全部通过原生工程
 
 使用 Fluent 格式（.ftl 文件），支持 en-US 和 zh-CN。UI 文本键以 `ui-` 前缀，CLI 文本以 `cli-` 前缀。
 
-Swift 绑定位于 `bindings/swift/`，CLI 位于 `cli-swift/`。
+Swift 绑定位于 `bindings/swift/`。
 
 ## 代码规范
 
@@ -144,19 +134,13 @@ HMAC 验证必须使用常量时间比较（防止时序攻击）。
 
 ### 二进制构建
 
-项目包含多个二进制命令：
+项目包含二进制命令：
 - `awmkit` - 完整 CLI（需要 `full-cli` feature）
-- `awm` - 默认二进制（基础库模式）
-- `FTSC-detect` / `FTSC-embed` - 简化版命令（需要 `simple-cli` feature）
 
 构建特定二进制：
 ```bash
 # 完整 CLI（推荐用于分发）
 cargo build --bin awmkit --features full-cli --release
-
-# 简化版命令
-cargo build --bin FTSC-detect --features simple-cli --release
-cargo build --bin FTSC-embed --features simple-cli --release
 
 # GUI 应用（原生）
 # macOS: xcodebuild -project macos-app/AWMKit.xcodeproj ...
