@@ -37,6 +37,7 @@
     <RustNativeDll>$(RustTargetDir)\$(RustConfigLower)\awmkit.dll</RustNativeDll>
     <RustNativeDllRelease>$(RustTargetDir)\release\awmkit.dll</RustNativeDllRelease>
     <NativeDllLocal>$(MSBuildProjectDirectory)\awmkit_native.dll</NativeDllLocal>
+    <FfmpegRuntimeDir>$(RepoRoot)\ffmpeg-prebuilt\bin</FfmpegRuntimeDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -57,8 +58,8 @@
     </None>
   </ItemGroup>
 
-  <ItemGroup Condition="Exists('$(RepoRoot)ffmpeg-prebuilt\\bin')">
-    <None Include="$(RepoRoot)ffmpeg-prebuilt\\bin\\*.dll"
+  <ItemGroup Condition="Exists('$(FfmpegRuntimeDir)')">
+    <None Include="$(FfmpegRuntimeDir)\*.dll"
           Link="%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="Always">
@@ -77,6 +78,17 @@
           Condition="!Exists('$(NativeDllLocal)') and Exists('$(RustNativeDll)')" />
     <Error Condition="!Exists('$(NativeDllLocal)')"
            Text="Missing awmkit native DLL. Build Rust first: cargo build --release --features ffi,app,bundled --target x86_64-pc-windows-msvc" />
+  </Target>
+
+  <Target Name="ValidateFfmpegRuntimeDlls" BeforeTargets="Build;Publish">
+    <Error Condition="!Exists('$(FfmpegRuntimeDir)\avcodec-62.dll')"
+           Text="Missing FFmpeg runtime DLLs. Expected in $(FfmpegRuntimeDir). Please prepare ffmpeg-prebuilt/bin first." />
+    <Error Condition="!Exists('$(FfmpegRuntimeDir)\avformat-62.dll')"
+           Text="Missing FFmpeg runtime DLLs. Expected in $(FfmpegRuntimeDir). Please prepare ffmpeg-prebuilt/bin first." />
+    <Error Condition="!Exists('$(FfmpegRuntimeDir)\avutil-60.dll')"
+           Text="Missing FFmpeg runtime DLLs. Expected in $(FfmpegRuntimeDir). Please prepare ffmpeg-prebuilt/bin first." />
+    <Error Condition="!Exists('$(FfmpegRuntimeDir)\swresample-6.dll')"
+           Text="Missing FFmpeg runtime DLLs. Expected in $(FfmpegRuntimeDir). Please prepare ffmpeg-prebuilt/bin first." />
   </Target>
 
 </Project>

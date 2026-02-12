@@ -300,6 +300,23 @@ public sealed partial class AppViewModel : ObservableObject
     [RelayCommand]
     public async Task RefreshRuntimeStatusAsync()
     {
+        if (!AwmNative.EnsureLoaded())
+        {
+            DatabaseAvailable = false;
+            KeyAvailable = false;
+            EngineAvailable = false;
+            KeySourceLabel = L("本机引擎加载失败", "Native engine load failed");
+            EnginePath = string.Empty;
+            EngineBackend = "-";
+            EngineEac3 = "unavailable";
+            EngineContainers = "-";
+            TotalTags = 0;
+            TotalEvidence = 0;
+            ActiveKeySlot = 0;
+            NotifyStatusPresentationChanged();
+            return;
+        }
+
         await RefreshDatabaseStatusAsync();
         RefreshEngineStatus();
         await RefreshKeyStatusAsync();
@@ -350,46 +367,65 @@ public sealed partial class AppViewModel : ObservableObject
     /// </summary>
     public Task RefreshKeyStatusAsync()
     {
-        var (summaries, summaryError) = AwmKeyBridge.GetSlotSummaries();
-        _keySlotSummaries = summaryError == AwmError.Ok ? summaries : [];
-
-        var exists = AwmKeyBridge.KeyExists();
-        KeyAvailable = exists;
-        if (!exists)
+        try
         {
-            KeySourceLabel = L("未配置", "Not configured");
-            return Task.CompletedTask;
-        }
+            var (summaries, summaryError) = AwmKeyBridge.GetSlotSummaries();
+            _keySlotSummaries = summaryError == AwmError.Ok ? summaries : [];
 
-        var (backend, error) = AwmKeyBridge.GetBackendLabel();
-        if (error == AwmError.Ok && !string.IsNullOrWhiteSpace(backend) && !string.Equals(backend, "none", StringComparison.OrdinalIgnoreCase))
-        {
-            KeySourceLabel = backend;
-        }
-        else
-        {
-            KeySourceLabel = L("已配置（来源未知）", "Configured (unknown backend)");
-        }
+            var exists = AwmKeyBridge.KeyExists();
+            KeyAvailable = exists;
+            if (!exists)
+            {
+                KeySourceLabel = L("未配置", "Not configured");
+                return Task.CompletedTask;
+            }
 
-        NotifyStatusPresentationChanged();
+            var (backend, error) = AwmKeyBridge.GetBackendLabel();
+            if (error == AwmError.Ok && !string.IsNullOrWhiteSpace(backend) && !string.Equals(backend, "none", StringComparison.OrdinalIgnoreCase))
+            {
+                KeySourceLabel = backend;
+            }
+            else
+            {
+                KeySourceLabel = L("已配置（来源未知）", "Configured (unknown backend)");
+            }
+
+            NotifyStatusPresentationChanged();
+        }
+        catch
+        {
+            _keySlotSummaries = [];
+            KeyAvailable = false;
+            KeySourceLabel = L("不可用", "Unavailable");
+            NotifyStatusPresentationChanged();
+        }
         return Task.CompletedTask;
     }
 
     private async Task RefreshDatabaseStatusAsync()
     {
         await Task.CompletedTask;
-        var (tagCount, evidenceCount, error) = AwmDatabaseBridge.GetSummary();
-        if (error != AwmError.Ok)
+        try
+        {
+            var (tagCount, evidenceCount, error) = AwmDatabaseBridge.GetSummary();
+            if (error != AwmError.Ok)
+            {
+                DatabaseAvailable = false;
+                TotalTags = 0;
+                TotalEvidence = 0;
+                return;
+            }
+
+            DatabaseAvailable = true;
+            TotalTags = (int)Math.Min(tagCount, int.MaxValue);
+            TotalEvidence = (int)Math.Min(evidenceCount, int.MaxValue);
+        }
+        catch
         {
             DatabaseAvailable = false;
             TotalTags = 0;
             TotalEvidence = 0;
-            return;
         }
-
-        DatabaseAvailable = true;
-        TotalTags = (int)Math.Min(tagCount, int.MaxValue);
-        TotalEvidence = (int)Math.Min(evidenceCount, int.MaxValue);
     }
 
     public async Task RefreshActiveKeySlotAsync()
