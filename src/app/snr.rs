@@ -1,4 +1,4 @@
-use crate::multichannel::{MultichannelAudio, SampleFormat};
+use crate::media::decode_media_to_pcm_i32;
 use std::path::Path;
 
 pub const SNR_STATUS_OK: &str = "ok";
@@ -39,27 +39,27 @@ impl SnrAnalysis {
 }
 
 pub fn analyze_snr<P: AsRef<Path>>(input: P, output: P) -> SnrAnalysis {
-    let input_audio = match MultichannelAudio::from_file(input.as_ref()) {
+    let input_audio = match decode_media_to_pcm_i32(input.as_ref()) {
         Ok(value) => value,
         Err(error) => return SnrAnalysis::unavailable(format!("input_decode_failed:{error}")),
     };
-    let output_audio = match MultichannelAudio::from_file(output.as_ref()) {
+    let output_audio = match decode_media_to_pcm_i32(output.as_ref()) {
         Ok(value) => value,
         Err(error) => return SnrAnalysis::unavailable(format!("output_decode_failed:{error}")),
     };
 
-    if input_audio.sample_rate() != output_audio.sample_rate() {
+    if input_audio.sample_rate != output_audio.sample_rate {
         return SnrAnalysis::unavailable("mismatch_sample_rate");
     }
-    if input_audio.num_channels() != output_audio.num_channels() {
+    if input_audio.channels != output_audio.channels {
         return SnrAnalysis::unavailable("mismatch_channels");
     }
-    if input_audio.num_samples() != output_audio.num_samples() {
+    if input_audio.samples.len() != output_audio.samples.len() {
         return SnrAnalysis::unavailable("mismatch_sample_count");
     }
 
-    let input_samples = input_audio.interleaved_samples();
-    let output_samples = output_audio.interleaved_samples();
+    let input_samples = &input_audio.samples;
+    let output_samples = &output_audio.samples;
     if input_samples.is_empty() || output_samples.is_empty() {
         return SnrAnalysis::unavailable("empty_audio");
     }
@@ -67,15 +67,13 @@ pub fn analyze_snr<P: AsRef<Path>>(input: P, output: P) -> SnrAnalysis {
         return SnrAnalysis::unavailable("mismatch_sample_count");
     }
 
-    let input_format = input_audio.sample_format();
-    let output_format = output_audio.sample_format();
     let mut signal_power = 0.0_f64;
     let mut noise_power = 0.0_f64;
     let mut count = 0_u64;
 
     for (input_sample, output_sample) in input_samples.iter().zip(output_samples.iter()) {
-        let signal = normalize_sample(*input_sample, input_format);
-        let output_value = normalize_sample(*output_sample, output_format);
+        let signal = normalize_sample(*input_sample, input_audio.bits_per_sample);
+        let output_value = normalize_sample(*output_sample, output_audio.bits_per_sample);
         let noise = signal - output_value;
         signal_power += signal * signal;
         noise_power += noise * noise;
@@ -110,13 +108,10 @@ pub fn analyze_snr<P: AsRef<Path>>(input: P, output: P) -> SnrAnalysis {
     SnrAnalysis::ok(snr_db.clamp(-60.0, 120.0))
 }
 
-fn normalize_sample(sample: i32, format: SampleFormat) -> f64 {
-    let denominator = match format {
-        SampleFormat::Int16 => 32_768.0_f64,
-        SampleFormat::Int24 => 8_388_608.0_f64,
-        SampleFormat::Int32 | SampleFormat::Float32 => 2_147_483_648.0_f64,
-    };
-
+fn normalize_sample(sample: i32, bits_per_sample: u16) -> f64 {
+    let clamped_bits = bits_per_sample.clamp(16, 32);
+    let shift = i64::from(clamped_bits.saturating_sub(1));
+    let denominator = (1_i64 << shift) as f64;
     f64::from(sample) / denominator
 }
 
@@ -124,11 +119,10 @@ fn normalize_sample(sample: i32, format: SampleFormat) -> f64 {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::multichannel::SampleFormat;
 
     #[test]
     fn normalize_sample_is_bounded() {
-        let value = normalize_sample(i32::MAX, SampleFormat::Int32);
+        let value = normalize_sample(i32::MAX, 32);
         assert!(value > 0.99 && value <= 1.0);
     }
 

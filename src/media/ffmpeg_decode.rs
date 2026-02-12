@@ -45,21 +45,15 @@ pub(crate) fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
         ));
     }
 
-    let src_layout = if decoder.channel_layout().bits() == 0 {
-        ffmpeg::ChannelLayout::default(i32::from(channels))
-    } else {
-        decoder.channel_layout()
-    };
-
-    let mut resampler = ffmpeg::software::resampling::Context::get(
+    let output_layout = normalize_layout(decoder.channel_layout(), channels);
+    let output_rate = sample_rate;
+    let mut resampler = create_resampler(
         decoder.format(),
-        src_layout,
+        output_layout,
         sample_rate,
-        ffmpeg::format::Sample::I16(ffmpeg::format::sample::Type::Packed),
-        src_layout,
-        sample_rate,
-    )
-    .map_err(|err| Error::FfmpegDecodeFailed(format!("failed to create audio resampler: {err}")))?;
+        output_layout,
+        output_rate,
+    )?;
 
     let mut decoded = ffmpeg::frame::Audio::empty();
     let mut samples = Vec::<i32>::new();
@@ -72,13 +66,27 @@ pub(crate) fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
         decoder.send_packet(&packet).map_err(|err| {
             Error::FfmpegDecodeFailed(format!("decoder send packet failed: {err}"))
         })?;
-        receive_decoded_frames(&mut decoder, &mut resampler, &mut decoded, &mut samples)?;
+        receive_decoded_frames(
+            &mut decoder,
+            &mut resampler,
+            &mut decoded,
+            &mut samples,
+            output_layout,
+            output_rate,
+        )?;
     }
 
     decoder
         .send_eof()
         .map_err(|err| Error::FfmpegDecodeFailed(format!("decoder send eof failed: {err}")))?;
-    receive_decoded_frames(&mut decoder, &mut resampler, &mut decoded, &mut samples)?;
+    receive_decoded_frames(
+        &mut decoder,
+        &mut resampler,
+        &mut decoded,
+        &mut samples,
+        output_layout,
+        output_rate,
+    )?;
     flush_resampler(&mut resampler, &mut samples)?;
 
     if samples.is_empty() {
@@ -147,15 +155,75 @@ fn receive_decoded_frames(
     resampler: &mut ffmpeg::software::resampling::Context,
     decoded: &mut ffmpeg::frame::Audio,
     samples: &mut Vec<i32>,
+    output_layout: ffmpeg::ChannelLayout,
+    output_rate: u32,
 ) -> Result<()> {
     while decoder.receive_frame(decoded).is_ok() {
-        let mut output = ffmpeg::frame::Audio::empty();
-        resampler
-            .run(decoded, &mut output)
-            .map_err(|err| Error::FfmpegDecodeFailed(format!("resample failed: {err}")))?;
-        append_packed_i16_frame(&output, samples)?;
+        resample_frame(resampler, decoded, samples, output_layout, output_rate)?;
     }
     Ok(())
+}
+
+fn resample_frame(
+    resampler: &mut ffmpeg::software::resampling::Context,
+    decoded: &ffmpeg::frame::Audio,
+    samples: &mut Vec<i32>,
+    output_layout: ffmpeg::ChannelLayout,
+    output_rate: u32,
+) -> Result<()> {
+    let mut output = ffmpeg::frame::Audio::empty();
+    match resampler.run(decoded, &mut output) {
+        Ok(_) => append_packed_i16_frame(&output, samples),
+        Err(ffmpeg::Error::InputChanged | ffmpeg::Error::OutputChanged) => {
+            let input_layout = normalize_layout(decoded.channel_layout(), decoded.channels());
+            let input_rate = decoded.rate();
+            if input_rate == 0 {
+                return Err(Error::FfmpegDecodeFailed(
+                    "resample failed: input sample rate changed to 0".to_string(),
+                ));
+            }
+            *resampler = create_resampler(
+                decoded.format(),
+                input_layout,
+                input_rate,
+                output_layout,
+                output_rate,
+            )?;
+
+            let mut retry_output = ffmpeg::frame::Audio::empty();
+            resampler
+                .run(decoded, &mut retry_output)
+                .map_err(|err| Error::FfmpegDecodeFailed(format!("resample failed: {err}")))?;
+            append_packed_i16_frame(&retry_output, samples)
+        }
+        Err(err) => Err(Error::FfmpegDecodeFailed(format!("resample failed: {err}"))),
+    }
+}
+
+fn create_resampler(
+    src_format: ffmpeg::format::Sample,
+    src_layout: ffmpeg::ChannelLayout,
+    src_rate: u32,
+    dst_layout: ffmpeg::ChannelLayout,
+    dst_rate: u32,
+) -> Result<ffmpeg::software::resampling::Context> {
+    ffmpeg::software::resampling::Context::get(
+        src_format,
+        src_layout,
+        src_rate,
+        ffmpeg::format::Sample::I16(ffmpeg::format::sample::Type::Packed),
+        dst_layout,
+        dst_rate,
+    )
+    .map_err(|err| Error::FfmpegDecodeFailed(format!("failed to create audio resampler: {err}")))
+}
+
+fn normalize_layout(layout: ffmpeg::ChannelLayout, channels: u16) -> ffmpeg::ChannelLayout {
+    if layout.bits() == 0 {
+        ffmpeg::ChannelLayout::default(i32::from(channels))
+    } else {
+        layout
+    }
 }
 
 fn flush_resampler(
