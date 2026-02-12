@@ -20,10 +20,10 @@ permissions:
   contents: write
 
 env:
-  FFMPEG_MACOS_RELEASE: ffmpeg-macos-arm64-minimal-2026-02-12
-  FFMPEG_MACOS_ASSET: ffmpeg-macos-arm64-minimal.tar.zst
-  FFMPEG_WINDOWS_RELEASE: ffmpeg-windows-x86_64-minimal-2026-02-12
-  FFMPEG_WINDOWS_ASSET: ffmpeg-windows-x86_64-minimal.zip
+  FFMPEG_MACOS_RELEASE: ffmpeg-runtime-8.0.1
+  FFMPEG_MACOS_ASSET: ffmpeg-macos-arm64-gpl-slim-runtime-8.0.1.zip
+  FFMPEG_WINDOWS_RELEASE: ffmpeg-runtime-8.0.1
+  FFMPEG_WINDOWS_ASSET: ffmpeg-win64-gpl-slim-runtime-8.0.1.zip
 
 jobs:
   build:
@@ -35,8 +35,8 @@ jobs:
             target: aarch64-apple-darwin
             audiowmark_asset: audiowmark-macos-arm64.tar.gz
             audiowmark_release: audiowmark-macos-arm64-2026-02-03
-            ffmpeg_asset: ffmpeg-macos-arm64-minimal.tar.zst
-            ffmpeg_release: ffmpeg-macos-arm64-minimal-2026-02-12
+            ffmpeg_asset: ffmpeg-macos-arm64-gpl-slim-runtime-8.0.1.zip
+            ffmpeg_release: ffmpeg-runtime-8.0.1
             output_name: awmkit-macos-arm64
             output_ext: tar.gz
 
@@ -44,8 +44,8 @@ jobs:
             target: x86_64-pc-windows-msvc
             audiowmark_asset: audiowmark-windows-x86_64.zip
             audiowmark_release: audiowmark-win-2026-02-03
-            ffmpeg_asset: ffmpeg-windows-x86_64-minimal.zip
-            ffmpeg_release: ffmpeg-windows-x86_64-minimal-2026-02-12
+            ffmpeg_asset: ffmpeg-win64-gpl-slim-runtime-8.0.1.zip
+            ffmpeg_release: ffmpeg-runtime-8.0.1
             output_name: awmkit-windows-x86_64
             output_ext: zip
 
@@ -102,7 +102,18 @@ jobs:
         run: |
           ASSET="${{ matrix.ffmpeg_asset }}"
           mkdir -p ffmpeg-dist
-          tar --zstd -xf "$ASSET" -C ffmpeg-dist
+          unzip -q "$ASSET" -d ffmpeg-dist
+          ROOT="$(find ffmpeg-dist -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$ROOT"
+          if [ -d "$ROOT/lib" ]; then
+            cp -a "$ROOT/lib" ffmpeg-dist/
+          elif [ -d "$ROOT/bin" ]; then
+            mkdir -p ffmpeg-dist/lib
+            cp -a "$ROOT/bin/"*.dylib ffmpeg-dist/lib/
+          else
+            echo "Invalid ffmpeg package: missing lib/bin directory" >&2
+            exit 1
+          fi
           test -d ffmpeg-dist/lib
           FF_ASSET="$ASSET" python3 - <<'PY'
           import json, pathlib, hashlib
@@ -133,8 +144,17 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path ffmpeg-dist | Out-Null
           Expand-Archive -Path "${{ matrix.ffmpeg_asset }}" -DestinationPath ffmpeg-dist -Force
-          if (!(Test-Path "ffmpeg-dist/lib")) {
-            throw "Invalid ffmpeg package: missing lib directory."
+          $root = Get-ChildItem -Path ffmpeg-dist -Directory | Select-Object -First 1
+          if ($null -eq $root) {
+            throw "Invalid ffmpeg package: missing root directory."
+          }
+          if (Test-Path (Join-Path $root.FullName "lib")) {
+            Copy-Item (Join-Path $root.FullName "lib") ffmpeg-dist -Recurse -Force
+          } elseif (Test-Path (Join-Path $root.FullName "bin")) {
+            New-Item -ItemType Directory -Force -Path ffmpeg-dist\lib | Out-Null
+            Copy-Item (Join-Path $root.FullName "bin\\*.dll") ffmpeg-dist\lib -Force
+          } else {
+            throw "Invalid ffmpeg package: missing lib/bin directory."
           }
           $manifest = Get-Content tools/ffmpeg/manifest.json -Raw | ConvertFrom-Json
           $expected = "$($manifest.assets.windows_x86_64.sha256)".Trim()

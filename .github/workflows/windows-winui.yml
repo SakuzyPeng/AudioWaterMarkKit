@@ -22,10 +22,10 @@ env:
   AUDIOWMARK_WINDOWS_ASSET: audiowmark-windows-x86_64.zip
   AUDIOWMARK_MACOS_RELEASE: audiowmark-macos-arm64-2026-02-03
   AUDIOWMARK_MACOS_ASSET: audiowmark-macos-arm64.tar.gz
-  FFMPEG_WINDOWS_RELEASE: ffmpeg-windows-x86_64-minimal-2026-02-12
-  FFMPEG_WINDOWS_ASSET: ffmpeg-windows-x86_64-minimal.zip
-  FFMPEG_MACOS_RELEASE: ffmpeg-macos-arm64-minimal-2026-02-12
-  FFMPEG_MACOS_ASSET: ffmpeg-macos-arm64-minimal.tar.zst
+  FFMPEG_WINDOWS_RELEASE: ffmpeg-runtime-8.0.1
+  FFMPEG_WINDOWS_ASSET: ffmpeg-win64-gpl-slim-runtime-8.0.1.zip
+  FFMPEG_MACOS_RELEASE: ffmpeg-runtime-8.0.1
+  FFMPEG_MACOS_ASSET: ffmpeg-macos-arm64-gpl-slim-runtime-8.0.1.zip
 
 jobs:
   macos-build-and-package:
@@ -88,7 +88,18 @@ jobs:
           fi
           rm -rf ffmpeg-dist
           mkdir -p ffmpeg-dist
-          tar --zstd -xf "$ASSET_PATH" -C ffmpeg-dist
+          unzip -q "$ASSET_PATH" -d ffmpeg-dist
+          ROOT="$(find ffmpeg-dist -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$ROOT"
+          if [ -d "$ROOT/lib" ]; then
+            cp -a "$ROOT/lib" ffmpeg-dist/
+          elif [ -d "$ROOT/bin" ]; then
+            mkdir -p ffmpeg-dist/lib
+            cp -a "$ROOT/bin/"*.dylib ffmpeg-dist/lib/
+          else
+            echo "Invalid ffmpeg package: missing lib/bin directory" >&2
+            exit 1
+          fi
           test -d ffmpeg-dist/lib
           FF_ASSET="$ASSET_PATH" python3 - <<'PY'
           import hashlib, json, os, pathlib
@@ -221,8 +232,17 @@ jobs:
           }
           Remove-Item -Recurse -Force ffmpeg-dist -ErrorAction SilentlyContinue
           Expand-Archive -Path $zipPath -DestinationPath ffmpeg-dist -Force
-          if (-not (Test-Path "ffmpeg-dist/lib")) {
-            throw "Invalid ffmpeg zip: missing ffmpeg-dist/lib"
+          $root = Get-ChildItem -Path ffmpeg-dist -Directory | Select-Object -First 1
+          if ($null -eq $root) {
+            throw "Invalid ffmpeg zip: missing package root directory."
+          }
+          if (Test-Path (Join-Path $root.FullName "lib")) {
+            Copy-Item (Join-Path $root.FullName "lib") ffmpeg-dist -Recurse -Force
+          } elseif (Test-Path (Join-Path $root.FullName "bin")) {
+            New-Item -ItemType Directory -Force -Path ffmpeg-dist\lib | Out-Null
+            Copy-Item (Join-Path $root.FullName "bin\\*.dll") ffmpeg-dist\lib -Force
+          } else {
+            throw "Invalid ffmpeg zip: missing lib/bin directory"
           }
           $manifest = Get-Content tools/ffmpeg/manifest.json -Raw | ConvertFrom-Json
           $expected = "$($manifest.assets.windows_x86_64.sha256)".Trim()

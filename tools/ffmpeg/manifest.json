@@ -2,12 +2,12 @@
   "version": "8.0.1",
   "assets": {
     "macos_arm64": {
-      "name": "ffmpeg-macos-arm64-minimal.tar.zst",
-      "sha256": ""
+      "name": "ffmpeg-macos-arm64-gpl-slim-runtime-8.0.1.zip",
+      "sha256": "2292699bdb9d0e634ad99739e46adf608b39bf03bd6ed954b87d2068b076d0a1"
     },
     "windows_x86_64": {
-      "name": "ffmpeg-windows-x86_64-minimal.zip",
-      "sha256": ""
+      "name": "ffmpeg-win64-gpl-slim-runtime-8.0.1.zip",
+      "sha256": "99b0dc43497d9d1ff5dd79b6fd967586f25728fc929762a5fbf67884fe67779d"
     }
   },
   "shared_libraries": [
