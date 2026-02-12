@@ -325,11 +325,18 @@ public sealed partial class AppViewModel : ObservableObject
 
     public Task RefreshUiLanguageAsync()
     {
-        var (value, error) = AwmBridge.GetUiLanguage();
-        if (error == AwmError.Ok && !string.IsNullOrWhiteSpace(value))
+        try
         {
-            UiLanguageCode = NormalizeLanguageCode(value!);
-            return Task.CompletedTask;
+            var (value, error) = AwmBridge.GetUiLanguage();
+            if (error == AwmError.Ok && !string.IsNullOrWhiteSpace(value))
+            {
+                UiLanguageCode = NormalizeLanguageCode(value!);
+                return Task.CompletedTask;
+            }
+        }
+        catch
+        {
+            // Native layer unavailable: fall back to system UI culture.
         }
 
         var defaultCode = CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
@@ -342,11 +349,18 @@ public sealed partial class AppViewModel : ObservableObject
     public Task SetUiLanguageAsync(string code)
     {
         var normalized = NormalizeLanguageCode(code);
-        var error = AwmBridge.SetUiLanguage(normalized);
-        if (error == AwmError.Ok)
+        try
         {
-            UiLanguageCode = normalized;
-            return Task.CompletedTask;
+            var error = AwmBridge.SetUiLanguage(normalized);
+            if (error == AwmError.Ok)
+            {
+                UiLanguageCode = normalized;
+                return Task.CompletedTask;
+            }
+        }
+        catch
+        {
+            return RefreshUiLanguageAsync();
         }
 
         return RefreshUiLanguageAsync();
