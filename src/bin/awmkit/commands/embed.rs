@@ -36,10 +36,6 @@ pub struct EmbedArgs {
     /// Input files (supports glob)
     #[arg(value_name = "INPUT")]
     pub inputs: Vec<String>,
-
-    /// Force embed and mark evidence row as forced
-    #[arg(long, default_value_t = false)]
-    pub force_embed: bool,
 }
 
 pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
@@ -93,43 +89,20 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
             None => default_output_path(&input)?,
         };
 
-        let mut is_forced_embed = false;
         match audio.detect_multichannel(&input, layout) {
             Ok(detect) => {
                 if detect.best.is_some() {
-                    if args.force_embed {
-                        is_forced_embed = true;
-                        if ctx.out.verbose() && !ctx.out.quiet() {
-                            if let Some(ref bar) = progress {
-                                bar.println(format!(
-                                    "[FORCE] {}: already watermarked, continue due to --force-embed",
-                                    input.display()
-                                ));
-                            } else {
-                                ctx.out.warn(format!(
-                                    "[FORCE] {}: already watermarked, continue due to --force-embed",
-                                    input.display()
-                                ));
-                            }
-                        }
-                    } else {
-                        skipped += 1;
-                        if let Some(ref bar) = progress {
-                            bar.println(format!(
-                                "[SKIP] {}: already watermarked (use --force-embed to override)",
-                                input.display()
-                            ));
-                        } else if !ctx.out.quiet() {
-                            ctx.out.warn(format!(
-                                "[SKIP] {}: already watermarked (use --force-embed to override)",
-                                input.display()
-                            ));
-                        }
-                        if let Some(ref bar) = progress {
-                            bar.inc(1);
-                        }
-                        continue;
+                    skipped += 1;
+                    if let Some(ref bar) = progress {
+                        bar.println(format!("[SKIP] {}: already watermarked", input.display()));
+                    } else if !ctx.out.quiet() {
+                        ctx.out
+                            .warn(format!("[SKIP] {}: already watermarked", input.display()));
                     }
+                    if let Some(ref bar) = progress {
+                        bar.inc(1);
+                    }
+                    continue;
                 }
             }
             Err(err) => {
@@ -168,7 +141,7 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
                                 sample_count: proof.sample_count,
                                 pcm_sha256: proof.pcm_sha256,
                                 key_id: key_id_from_key_material(&key),
-                                is_forced_embed,
+                                is_forced_embed: false,
                                 snr_db: snr.snr_db,
                                 snr_status: snr.status.clone(),
                                 chromaprint: proof.chromaprint,
@@ -233,9 +206,7 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
         args.set("failed", failed.to_string());
         ctx.out.info(i18n::tr_args("cli-embed-done", &args));
         if skipped > 0 {
-            ctx.out.warn(format!(
-                "已跳过 {skipped} 个已含水印文件（如需覆盖请使用 --force-embed）"
-            ));
+            ctx.out.warn(format!("已跳过 {skipped} 个已含水印文件"));
         }
         if !failure_details.is_empty() {
             ctx.out.warn("失败详情：");

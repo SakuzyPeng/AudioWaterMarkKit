@@ -816,14 +816,14 @@ pub unsafe extern "C" fn awm_evidence_record_file_ex(
     raw_message: *const u8,
     key: *const u8,
     key_len: usize,
-    is_forced_embed: bool,
+    _is_forced_embed: bool,
 ) -> i32 {
     record_evidence_file_impl(
         file_path,
         raw_message,
         key,
         key_len,
-        is_forced_embed,
+        false,
         None,
         FFI_SNR_STATUS_UNAVAILABLE,
     )
@@ -843,7 +843,7 @@ pub unsafe extern "C" fn awm_evidence_record_embed_file_ex(
     raw_message: *const u8,
     key: *const u8,
     key_len: usize,
-    is_forced_embed: bool,
+    _is_forced_embed: bool,
     result: *mut AWMEmbedEvidenceResult,
 ) -> i32 {
     if input_path.is_null() || output_path.is_null() || result.is_null() {
@@ -892,7 +892,7 @@ pub unsafe extern "C" fn awm_evidence_record_embed_file_ex(
         raw_message,
         key,
         key_len,
-        is_forced_embed,
+        false,
         snr_db,
         &snr_status,
     );
@@ -917,7 +917,7 @@ unsafe fn record_evidence_file_impl(
     raw_message: *const u8,
     key: *const u8,
     key_len: usize,
-    is_forced_embed: bool,
+    _is_forced_embed: bool,
     snr_db: Option<f64>,
     snr_status: &str,
 ) -> i32 {
@@ -964,7 +964,7 @@ unsafe fn record_evidence_file_impl(
             sample_count: proof.sample_count,
             pcm_sha256: proof.pcm_sha256,
             key_id: key_id_from_key_material(key_slice),
-            is_forced_embed,
+            is_forced_embed: false,
             snr_db,
             snr_status: snr_status.to_string(),
             chromaprint: proof.chromaprint,
@@ -982,7 +982,7 @@ unsafe fn record_evidence_file_impl(
         let _ = file_path_str;
         let _ = raw;
         let _ = key_slice;
-        let _ = is_forced_embed;
+        let _ = _is_forced_embed;
         let _ = snr_db;
         let _ = snr_status;
         AWMError::AudiowmarkExec as i32
@@ -1010,7 +1010,6 @@ struct FfiAudioEvidence {
     sample_count: u64,
     pcm_sha256: String,
     key_id: Option<String>,
-    is_forced_embed: bool,
     snr_db: Option<f64>,
     snr_status: String,
     chromaprint_blob: String,
@@ -1347,7 +1346,6 @@ pub unsafe extern "C" fn awm_db_evidence_list_json(
                 sample_count: row.sample_count,
                 pcm_sha256: row.pcm_sha256,
                 key_id: row.key_id,
-                is_forced_embed: row.is_forced_embed,
                 snr_db: row.snr_db,
                 snr_status: row.snr_status,
                 chromaprint_blob: encode_chromaprint_blob_hex(&row.chromaprint),

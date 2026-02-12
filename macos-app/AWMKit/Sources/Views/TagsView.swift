@@ -674,9 +674,6 @@ private struct EvidenceEntryRow: View {
     let onToggleSelected: () -> Void
 
     var body: some View {
-        let forcedText = entry.isForcedEmbed
-            ? " · \(localizedTagsText("强行嵌入", "Forced embed"))"
-            : ""
         let snrText: String = {
             guard entry.snrStatus == "ok", let value = entry.snrDb else { return "" }
             return String(format: " · SNR %.2f dB", value)
@@ -693,7 +690,7 @@ private struct EvidenceEntryRow: View {
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
 
-                Text("Tag \(entry.tag) · \(localizedTagsText("槽位", "Slot")) \(entry.keySlot) · Key ID \(entry.keyId ?? "-")\(forcedText)\(snrText)")
+                Text("Tag \(entry.tag) · \(localizedTagsText("槽位", "Slot")) \(entry.keySlot) · Key ID \(entry.keyId ?? "-")\(snrText)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

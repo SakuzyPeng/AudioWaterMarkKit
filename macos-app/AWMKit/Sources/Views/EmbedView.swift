@@ -6,7 +6,7 @@ struct EmbedView: View {
     @ObservedObject var viewModel: EmbedViewModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var isDropTargeted = false
-    @State private var showForceReviewAlert = false
+    @State private var showSkipSummaryAlert = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -42,25 +42,17 @@ struct EmbedView: View {
                 Task { await appState.refreshRuntimeStatus() }
             }
         }
-        .onChange(of: viewModel.forceReviewPromptVersion) { _, _ in
-            guard viewModel.pendingForceReviewCount > 0 else { return }
-            showForceReviewAlert = true
+        .onChange(of: viewModel.skipSummaryPromptVersion) { _, _ in
+            guard viewModel.skipSummaryCount > 0 else { return }
+            showSkipSummaryAlert = true
         }
         .alert(
-            l("检测到已有水印", "Existing watermark detected"),
-            isPresented: $showForceReviewAlert
+            l("已跳过含水印文件", "Skipped watermarked files"),
+            isPresented: $showSkipSummaryAlert
         ) {
-            Button(l("强行嵌入", "Force embed")) {
-                viewModel.forceEmbedPending(audio: appState.audio)
-            }
-            Button(l("移出队列", "Remove from queue"), role: .destructive) {
-                viewModel.removePendingForceFromQueue()
-            }
-            Button(l("稍后处理", "Later"), role: .cancel) {
-                viewModel.keepPendingForceInQueue()
-            }
+            Button(l("我知道了", "OK"), role: .cancel) {}
         } message: {
-            Text(viewModel.pendingForceReviewMessage)
+            Text(viewModel.skipSummaryMessage + "\n" + l("该类文件已自动跳过。", "These files were skipped automatically."))
         }
     }
 

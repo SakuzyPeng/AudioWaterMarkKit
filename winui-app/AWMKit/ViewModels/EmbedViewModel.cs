@@ -244,17 +244,17 @@ public sealed partial class EmbedViewModel : ObservableObject
     public ObservableCollection<LogEntry> Logs { get; } = new();
     public ObservableCollection<EmbedMappingOption> AllMappings { get; } = new();
     public ObservableCollection<EmbedMappingOption> MappingSuggestions { get; } = new();
-    public ObservableCollection<string> PendingForceReviewFiles { get; } = new();
+    public ObservableCollection<string> SkippedWatermarkedFiles { get; } = new();
 
-    private int _forceReviewPromptVersion;
-    public int ForceReviewPromptVersion
+    private int _skipSummaryPromptVersion;
+    public int SkipSummaryPromptVersion
     {
-        get => _forceReviewPromptVersion;
-        private set => SetProperty(ref _forceReviewPromptVersion, value);
+        get => _skipSummaryPromptVersion;
+        private set => SetProperty(ref _skipSummaryPromptVersion, value);
     }
 
-    public int PendingForceReviewCount => PendingForceReviewFiles.Count;
-    public bool HasPendingForceReview => PendingForceReviewCount > 0;
+    public int SkipSummaryCount => SkippedWatermarkedFiles.Count;
+    public bool HasSkippedWatermarkedFiles => SkipSummaryCount > 0;
 
     public int QueueCount => SelectedFiles.Count;
     public bool HasQueueCount => QueueCount > 0;
@@ -315,31 +315,29 @@ public sealed partial class EmbedViewModel : ObservableObject
     public string? MatchedMappingHintText => MatchedMappingForInput is null ? null : L("已存在映射，自动复用", "Existing mapping found, auto reused");
     public string ReuseHintText => MatchedMappingForInput is null ? string.Empty : L("复用 ", "Reusing ");
     public string MappingPlaceholderText => HasMappings ? L("选择已存储映射", "Select stored mapping") : L("暂无已存储映射", "No stored mappings");
-    public string ForceReviewDialogTitle => L("检测到已有水印", "Existing watermark detected");
-    public string ForceReviewDialogPrimaryText => L("强行嵌入", "Force embed");
-    public string ForceReviewDialogSecondaryText => L("移出队列", "Remove from queue");
-    public string ForceReviewDialogCloseText => L("稍后处理", "Later");
-    public string ForceReviewDialogMessage
+    public string SkipSummaryDialogTitle => L("已跳过含水印文件", "Skipped watermarked files");
+    public string SkipSummaryDialogCloseText => L("我知道了", "OK");
+    public string SkipSummaryDialogMessage
     {
         get
         {
-            if (PendingForceReviewFiles.Count == 0)
+            if (SkipSummaryCount == 0)
             {
-                return L("当前没有待确认文件。", "No pending files.");
+                return L("未检测到已含水印文件。", "No already-watermarked files were detected.");
             }
 
-            var preview = string.Join("、", PendingForceReviewFiles.Take(3).Select(Path.GetFileName));
-            if (PendingForceReviewFiles.Count <= 3)
+            var preview = string.Join("、", SkippedWatermarkedFiles.Take(3).Select(Path.GetFileName));
+            if (SkipSummaryCount <= 3)
             {
                 return L(
-                    $"检测到 {PendingForceReviewFiles.Count} 个已含水印文件：{preview}",
-                    $"Detected {PendingForceReviewFiles.Count} already-watermarked files: {preview}");
+                    $"已跳过 {SkipSummaryCount} 个已含水印文件：{preview}\n该类文件已自动跳过。",
+                    $"Skipped {SkipSummaryCount} already-watermarked files: {preview}\nThese files were skipped automatically.");
             }
 
-            var remain = PendingForceReviewFiles.Count - 3;
+            var remain = SkipSummaryCount - 3;
             return L(
-                $"检测到 {PendingForceReviewFiles.Count} 个已含水印文件：{preview} 等 {remain} 个",
-                $"Detected {PendingForceReviewFiles.Count} already-watermarked files: {preview} and {remain} more");
+                $"已跳过 {SkipSummaryCount} 个已含水印文件：{preview} 等 {remain} 个\n该类文件已自动跳过。",
+                $"Skipped {SkipSummaryCount} already-watermarked files: {preview} and {remain} more\nThese files were skipped automatically.");
         }
     }
 
@@ -364,7 +362,7 @@ public sealed partial class EmbedViewModel : ObservableObject
         SelectedFiles.CollectionChanged += OnSelectedFilesChanged;
         Logs.CollectionChanged += OnLogsChanged;
         AllMappings.CollectionChanged += OnMappingsChanged;
-        PendingForceReviewFiles.CollectionChanged += OnPendingForceReviewFilesChanged;
+        SkippedWatermarkedFiles.CollectionChanged += OnSkippedWatermarkedFilesChanged;
         _appState.PropertyChanged += OnAppStatePropertyChanged;
         _ = RefreshTagMappingsAsync();
     }
@@ -384,11 +382,9 @@ public sealed partial class EmbedViewModel : ObservableObject
         OnPropertyChanged(nameof(MatchedMappingHintText));
         OnPropertyChanged(nameof(ReuseHintText));
         OnPropertyChanged(nameof(MappingPlaceholderText));
-        OnPropertyChanged(nameof(ForceReviewDialogTitle));
-        OnPropertyChanged(nameof(ForceReviewDialogPrimaryText));
-        OnPropertyChanged(nameof(ForceReviewDialogSecondaryText));
-        OnPropertyChanged(nameof(ForceReviewDialogCloseText));
-        OnPropertyChanged(nameof(ForceReviewDialogMessage));
+        OnPropertyChanged(nameof(SkipSummaryDialogTitle));
+        OnPropertyChanged(nameof(SkipSummaryDialogCloseText));
+        OnPropertyChanged(nameof(SkipSummaryDialogMessage));
         NotifyLocalizedTextChanged();
         RebuildLayoutOptions();
     }
@@ -470,7 +466,6 @@ public sealed partial class EmbedViewModel : ObservableObject
             return;
         }
 
-        RemovePendingFileByKey(NormalizedPathKey(filePath));
         SelectedFiles.Remove(filePath);
     }
 
@@ -485,7 +480,7 @@ public sealed partial class EmbedViewModel : ObservableObject
 
         var count = SelectedFiles.Count;
         SelectedFiles.Clear();
-        PendingForceReviewFiles.Clear();
+        SkippedWatermarkedFiles.Clear();
         AddLog(L("已清空队列", "Queue cleared"), L($"移除了 {count} 个文件", $"Removed {count} files"), true, false, LogIconTone.Success, LogKind.QueueCleared);
         await FlashClearQueueAsync();
     }
@@ -505,63 +500,9 @@ public sealed partial class EmbedViewModel : ObservableObject
         await FlashClearLogsAsync();
     }
 
-    public void KeepPendingForceInQueue()
+    private void RequestSkipSummaryPrompt()
     {
-        if (!PendingForceReviewFiles.Any())
-        {
-            return;
-        }
-
-        AddLog(
-            L("已保留待确认文件", "Pending files kept"),
-            L("待确认文件仍保留在队列中，可稍后决定是否强行嵌入", "Pending files remain in queue; you can decide force embed later"),
-            false,
-            true,
-            LogIconTone.Warning);
-    }
-
-    public void RemovePendingForceFromQueue()
-    {
-        if (!PendingForceReviewFiles.Any())
-        {
-            return;
-        }
-
-        var pendingKeys = new HashSet<string>(PendingForceReviewFiles.Select(NormalizedPathKey), StringComparer.OrdinalIgnoreCase);
-        var before = SelectedFiles.Count;
-        for (var i = SelectedFiles.Count - 1; i >= 0; i--)
-        {
-            if (pendingKeys.Contains(NormalizedPathKey(SelectedFiles[i])))
-            {
-                SelectedFiles.RemoveAt(i);
-            }
-        }
-
-        var removed = before - SelectedFiles.Count;
-        var reviewed = PendingForceReviewFiles.Count;
-        PendingForceReviewFiles.Clear();
-        AddLog(
-            L("已移出待确认文件", "Pending files removed"),
-            L($"已移出 {removed} 个文件（待确认 {reviewed} 个）", $"Removed {removed} files ({reviewed} pending reviewed)"),
-            true,
-            false,
-            LogIconTone.Success,
-            LogKind.QueueCleared);
-    }
-
-    public async Task ForceEmbedPendingAsync()
-    {
-        if (!PendingForceReviewFiles.Any())
-        {
-            return;
-        }
-
-        await EmbedAsync(forceTargets: PendingForceReviewFiles.ToList());
-    }
-
-    private void RequestForceReviewPrompt()
-    {
-        ForceReviewPromptVersion += 1;
+        SkipSummaryPromptVersion += 1;
     }
 
     [RelayCommand]
@@ -578,17 +519,10 @@ public sealed partial class EmbedViewModel : ObservableObject
         await EmbedAsync();
     }
 
-    private async Task EmbedAsync(IReadOnlyList<string>? forceTargets = null)
+    private async Task EmbedAsync()
     {
         if (IsProcessing)
         {
-            return;
-        }
-
-        var isForcedPass = forceTargets is not null;
-        if (!isForcedPass && PendingForceReviewFiles.Any())
-        {
-            RequestForceReviewPrompt();
             return;
         }
 
@@ -634,36 +568,22 @@ public sealed partial class EmbedViewModel : ObservableObject
         IsCancelling = false;
         Progress = 0;
         CurrentProcessingIndex = 0;
+        SkippedWatermarkedFiles.Clear();
 
         var layout = SelectedChannelLayout?.Layout ?? AwmChannelLayout.Auto;
         var layoutText = SelectedChannelLayout?.DisplayText ?? L("自动", "Auto");
-        if (isForcedPass)
-        {
-            AddLog(
-                L("开始强行嵌入", "Force embed started"),
-                L($"准备处理 {forceTargets!.Count} 个待确认文件", $"Preparing {forceTargets.Count} reviewed files for force embed"),
-                false,
-                false,
-                LogIconTone.Warning);
-        }
-        else
-        {
-            AddLog(
-                L("开始处理", "Processing started"),
-                L($"准备处理 {SelectedFiles.Count} 个文件（{layoutText}）", $"Preparing to process {SelectedFiles.Count} files ({layoutText})"),
-                true,
-                false,
-                LogIconTone.Info);
-        }
+        AddLog(
+            L("开始处理", "Processing started"),
+            L($"准备处理 {SelectedFiles.Count} 个文件（{layoutText}）", $"Preparing to process {SelectedFiles.Count} files ({layoutText})"),
+            true,
+            false,
+            LogIconTone.Info);
 
-        var forceTargetKeys = forceTargets is null
-            ? null
-            : new HashSet<string>(forceTargets.Select(NormalizedPathKey), StringComparer.OrdinalIgnoreCase);
-        var initialTotal = Math.Max(forceTargetKeys?.Count ?? SelectedFiles.Count, 1);
+        var initialTotal = Math.Max(SelectedFiles.Count, 1);
         var successCount = 0;
         var failureCount = 0;
-        var deferredFiles = new List<string>();
-        var deferredKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var skippedFiles = new List<string>();
+        var skippedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var legacyFfiWarned = false;
 
         for (var processed = 0; processed < initialTotal; processed++)
@@ -673,7 +593,7 @@ public sealed partial class EmbedViewModel : ObservableObject
                 break;
             }
 
-            var queueIndex = FindNextQueueIndex(forceTargetKeys);
+            var queueIndex = SelectedFiles.Count == 0 ? -1 : 0;
             if (queueIndex < 0 || queueIndex >= SelectedFiles.Count)
             {
                 break;
@@ -684,93 +604,89 @@ public sealed partial class EmbedViewModel : ObservableObject
             CurrentProcessingFile = Path.GetFileName(inputPath);
             CurrentProcessingIndex = queueIndex;
 
-            if (!isForcedPass)
+            (bool detected, AwmError error) precheckResult;
+            try
             {
-                (bool detected, AwmError error) precheckResult;
-                try
+                precheckResult = await RunCancelableNativeCallAsync(() =>
                 {
-                    precheckResult = await RunCancelableNativeCallAsync(() =>
+                    var detect = AwmBridge.DetectAudioMultichannelDetailed(inputPath, layout);
+                    if (detect.error == AwmError.Ok && detect.result is not null)
                     {
-                        var detect = AwmBridge.DetectAudioMultichannelDetailed(inputPath, layout);
-                        if (detect.error == AwmError.Ok && detect.result is not null)
-                        {
-                            return (true, AwmError.Ok);
-                        }
-
-                        if (detect.error == AwmError.NoWatermarkFound)
-                        {
-                            return (false, AwmError.Ok);
-                        }
-
-                        return (false, detect.error);
-                    }, token);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    AddLog(
-                        $"{L("失败", "Failed")}: {Path.GetFileName(inputPath)}",
-                        $"{L("预检异常", "Precheck exception")}: {ex.Message}",
-                        false,
-                        false,
-                        LogIconTone.Error,
-                        LogKind.ResultError);
-                    failureCount += 1;
-                    if (queueIndex < SelectedFiles.Count)
-                    {
-                        SelectedFiles.RemoveAt(queueIndex);
-                    }
-                    Progress = (processed + 1) / (double)initialTotal;
-                    await Task.Yield();
-                    continue;
-                }
-
-                if (precheckResult.error != AwmError.Ok)
-                {
-                    AddLog(
-                        $"{L("失败", "Failed")}: {Path.GetFileName(inputPath)}",
-                        $"{L("预检失败", "Precheck failed")}: {precheckResult.error}",
-                        false,
-                        false,
-                        LogIconTone.Error,
-                        LogKind.ResultError);
-                    failureCount += 1;
-                    if (queueIndex < SelectedFiles.Count)
-                    {
-                        SelectedFiles.RemoveAt(queueIndex);
-                    }
-                    Progress = (processed + 1) / (double)initialTotal;
-                    await Task.Yield();
-                    continue;
-                }
-
-                if (precheckResult.detected)
-                {
-                    if (queueIndex < SelectedFiles.Count)
-                    {
-                        var deferred = SelectedFiles[queueIndex];
-                        SelectedFiles.RemoveAt(queueIndex);
-                        SelectedFiles.Add(deferred);
-                        if (deferredKeys.Add(inputKey))
-                        {
-                            deferredFiles.Add(deferred);
-                        }
+                        return (true, AwmError.Ok);
                     }
 
-                    AddLog(
-                        L("检测到已有水印", "Existing watermark detected"),
-                        L($"{Path.GetFileName(inputPath)} 已移至队尾，等待汇总确认", $"{Path.GetFileName(inputPath)} moved to queue tail, awaiting review"),
-                        false,
-                        false,
-                        LogIconTone.Warning,
-                        LogKind.ResultNotFound);
-                    Progress = (processed + 1) / (double)initialTotal;
-                    await Task.Yield();
-                    continue;
+                    if (detect.error == AwmError.NoWatermarkFound)
+                    {
+                        return (false, AwmError.Ok);
+                    }
+
+                    return (false, detect.error);
+                }, token);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                AddLog(
+                    $"{L("失败", "Failed")}: {Path.GetFileName(inputPath)}",
+                    $"{L("预检异常", "Precheck exception")}: {ex.Message}",
+                    false,
+                    false,
+                    LogIconTone.Error,
+                    LogKind.ResultError);
+                failureCount += 1;
+                if (queueIndex < SelectedFiles.Count)
+                {
+                    SelectedFiles.RemoveAt(queueIndex);
                 }
+                Progress = (processed + 1) / (double)initialTotal;
+                await Task.Yield();
+                continue;
+            }
+
+            if (precheckResult.error != AwmError.Ok)
+            {
+                AddLog(
+                    $"{L("失败", "Failed")}: {Path.GetFileName(inputPath)}",
+                    $"{L("预检失败", "Precheck failed")}: {precheckResult.error}",
+                    false,
+                    false,
+                    LogIconTone.Error,
+                    LogKind.ResultError);
+                failureCount += 1;
+                if (queueIndex < SelectedFiles.Count)
+                {
+                    SelectedFiles.RemoveAt(queueIndex);
+                }
+                Progress = (processed + 1) / (double)initialTotal;
+                await Task.Yield();
+                continue;
+            }
+
+            if (precheckResult.detected)
+            {
+                if (queueIndex < SelectedFiles.Count)
+                {
+                    var skipped = SelectedFiles[queueIndex];
+                    SelectedFiles.RemoveAt(queueIndex);
+                    if (skippedKeys.Add(inputKey))
+                    {
+                        skippedFiles.Add(skipped);
+                    }
+                }
+
+                AddLog(
+                    L("检测到已有水印", "Existing watermark detected"),
+                    L($"{Path.GetFileName(inputPath)} 已跳过", $"{Path.GetFileName(inputPath)} skipped"),
+                    false,
+                    false,
+                    LogIconTone.Warning,
+                    LogKind.ResultNotFound);
+                Progress = (processed + 1) / (double)initialTotal;
+                await Task.Yield();
+                continue;
             }
 
             string outputPath;
@@ -812,7 +728,7 @@ public sealed partial class EmbedViewModel : ObservableObject
                             outputPath,
                             message,
                             key,
-                            isForcedPass);
+                            false);
                         evidence = record.error;
                         snrResult = record.result;
                     }
@@ -842,11 +758,6 @@ public sealed partial class EmbedViewModel : ObservableObject
                 if (removeOnException.HasValue)
                 {
                     SelectedFiles.RemoveAt(removeOnException.Value);
-                }
-
-                if (isForcedPass)
-                {
-                    RemovePendingFileByKey(inputKey);
                 }
 
                 Progress = (processed + 1) / (double)initialTotal;
@@ -907,11 +818,6 @@ public sealed partial class EmbedViewModel : ObservableObject
                 SelectedFiles.RemoveAt(removeIndex.Value);
             }
 
-            if (isForcedPass)
-            {
-                RemovePendingFileByKey(inputKey);
-            }
-
             Progress = (processed + 1) / (double)initialTotal;
             await Task.Yield();
         }
@@ -923,7 +829,7 @@ public sealed partial class EmbedViewModel : ObservableObject
         else
         {
             AddLog(
-                isForcedPass ? L("强行嵌入完成", "Force embed finished") : L("处理完成", "Processing finished"),
+                L("处理完成", "Processing finished"),
                 L($"成功: {successCount}, 失败: {failureCount}", $"Success: {successCount}, Failed: {failureCount}"),
                 true,
                 false,
@@ -959,22 +865,22 @@ public sealed partial class EmbedViewModel : ObservableObject
         IsCancelling = false;
         ScheduleProgressResetIfNeeded();
 
-        if (!isForcedPass && !token.IsCancellationRequested && deferredFiles.Count > 0)
+        if (!token.IsCancellationRequested && skippedFiles.Count > 0)
         {
-            PendingForceReviewFiles.Clear();
-            foreach (var deferred in deferredFiles)
+            SkippedWatermarkedFiles.Clear();
+            foreach (var skipped in skippedFiles)
             {
-                PendingForceReviewFiles.Add(deferred);
+                SkippedWatermarkedFiles.Add(skipped);
             }
 
             AddLog(
-                L("发现已含水印文件", "Watermarked files found"),
-                L($"共 {deferredFiles.Count} 个文件待确认：可强行嵌入或移出队列", $"{deferredFiles.Count} files require review: force embed or remove from queue"),
+                L("已跳过含水印文件", "Skipped watermarked files"),
+                L($"共跳过 {skippedFiles.Count} 个已含水印文件", $"Skipped {skippedFiles.Count} already-watermarked files"),
                 false,
                 false,
                 LogIconTone.Warning,
                 LogKind.ResultNotFound);
-            RequestForceReviewPrompt();
+            RequestSkipSummaryPrompt();
         }
 
         try
@@ -984,38 +890,6 @@ public sealed partial class EmbedViewModel : ObservableObject
         catch
         {
             // Ignore runtime stats refresh failure.
-        }
-    }
-
-    private int FindNextQueueIndex(HashSet<string>? targetKeys)
-    {
-        if (targetKeys is null)
-        {
-            return SelectedFiles.Count == 0 ? -1 : 0;
-        }
-
-        for (var index = 0; index < SelectedFiles.Count; index++)
-        {
-            if (targetKeys.Contains(NormalizedPathKey(SelectedFiles[index])))
-            {
-                return index;
-            }
-        }
-
-        return -1;
-    }
-
-    private void RemovePendingFileByKey(string normalizedPathKey)
-    {
-        for (var index = PendingForceReviewFiles.Count - 1; index >= 0; index--)
-        {
-            if (string.Equals(
-                    NormalizedPathKey(PendingForceReviewFiles[index]),
-                    normalizedPathKey,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                PendingForceReviewFiles.RemoveAt(index);
-            }
         }
     }
 
@@ -1358,11 +1232,11 @@ public sealed partial class EmbedViewModel : ObservableObject
         OnPropertyChanged(nameof(MappingPlaceholderText));
     }
 
-    private void OnPendingForceReviewFilesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnSkippedWatermarkedFilesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        OnPropertyChanged(nameof(PendingForceReviewCount));
-        OnPropertyChanged(nameof(HasPendingForceReview));
-        OnPropertyChanged(nameof(ForceReviewDialogMessage));
+        OnPropertyChanged(nameof(SkipSummaryCount));
+        OnPropertyChanged(nameof(HasSkippedWatermarkedFiles));
+        OnPropertyChanged(nameof(SkipSummaryDialogMessage));
     }
 
     private static ObservableCollection<ChannelLayoutOption> BuildChannelLayoutOptions()
@@ -1474,11 +1348,9 @@ public sealed partial class EmbedViewModel : ObservableObject
         OnPropertyChanged(nameof(EmbedActionAccessibility));
         OnPropertyChanged(nameof(ClearQueueAccessibility));
         OnPropertyChanged(nameof(ClearLogsAccessibility));
-        OnPropertyChanged(nameof(ForceReviewDialogTitle));
-        OnPropertyChanged(nameof(ForceReviewDialogPrimaryText));
-        OnPropertyChanged(nameof(ForceReviewDialogSecondaryText));
-        OnPropertyChanged(nameof(ForceReviewDialogCloseText));
-        OnPropertyChanged(nameof(ForceReviewDialogMessage));
+        OnPropertyChanged(nameof(SkipSummaryDialogTitle));
+        OnPropertyChanged(nameof(SkipSummaryDialogCloseText));
+        OnPropertyChanged(nameof(SkipSummaryDialogMessage));
     }
 
     private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;

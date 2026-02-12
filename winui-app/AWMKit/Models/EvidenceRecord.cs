@@ -22,7 +22,6 @@ public sealed class EvidenceRecord
     public long SampleCount { get; init; }
     public required string PcmSha256 { get; init; }
     public string? KeyId { get; init; }
-    public bool IsForcedEmbed { get; init; }
     public double? SnrDb { get; init; }
     public string SnrStatus { get; init; } = "unavailable";
     public required byte[] ChromaprintBlob { get; init; }
@@ -41,13 +40,12 @@ public sealed class EvidenceRecord
     {
         get
         {
-            var forced = IsForcedEmbed ? L(" · 强行嵌入", " · Forced embed") : string.Empty;
             var snr = string.Equals(SnrStatus, "ok", StringComparison.OrdinalIgnoreCase) && SnrDb.HasValue
                 ? $" · SNR {SnrDb.Value:F2} dB"
                 : string.Empty;
             return L(
-                $"Tag {Tag} · 槽位 {KeySlot} · Key ID {KeyIdDisplayText}{forced}{snr}",
-                $"Tag {Tag} · Slot {KeySlot} · Key ID {KeyIdDisplayText}{forced}{snr}");
+                $"Tag {Tag} · 槽位 {KeySlot} · Key ID {KeyIdDisplayText}{snr}",
+                $"Tag {Tag} · Slot {KeySlot} · Key ID {KeyIdDisplayText}{snr}");
         }
     }
 

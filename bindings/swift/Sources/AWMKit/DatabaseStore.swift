@@ -28,7 +28,6 @@ public struct AWMDatabaseEvidenceEntry: Codable, Hashable {
     public let sampleCount: UInt64
     public let pcmSha256: String
     public let keyId: String?
-    public let isForcedEmbed: Bool
     public let snrDb: Double?
     public let snrStatus: String
     public let chromaprintBlob: String
@@ -50,7 +49,6 @@ public struct AWMDatabaseEvidenceEntry: Codable, Hashable {
         case sampleCount = "sample_count"
         case pcmSha256 = "pcm_sha256"
         case keyId = "key_id"
-        case isForcedEmbed = "is_forced_embed"
         case snrDb = "snr_db"
         case snrStatus = "snr_status"
         case chromaprintBlob = "chromaprint_blob"

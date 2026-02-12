@@ -19,8 +19,8 @@ public sealed partial class EmbedPage : Page
 {
     public EmbedViewModel ViewModel { get; }
     public AppViewModel AppState { get; } = AppViewModel.Instance;
-    private int _lastForceReviewPromptVersion;
-    private bool _isForceReviewDialogOpen;
+    private int _lastSkipSummaryPromptVersion;
+    private bool _isSkipSummaryDialogOpen;
 
     public EmbedPage()
     {
@@ -49,66 +49,51 @@ public sealed partial class EmbedPage : Page
 
     private void ViewModelOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(EmbedViewModel.ForceReviewPromptVersion))
+        if (e.PropertyName != nameof(EmbedViewModel.SkipSummaryPromptVersion))
         {
             return;
         }
 
-        var currentVersion = ViewModel.ForceReviewPromptVersion;
-        if (currentVersion == _lastForceReviewPromptVersion || currentVersion <= 0)
+        var currentVersion = ViewModel.SkipSummaryPromptVersion;
+        if (currentVersion == _lastSkipSummaryPromptVersion || currentVersion <= 0)
         {
             return;
         }
 
-        var enqueued = DispatcherQueue.TryEnqueue(() => _ = ShowForceReviewDialogAsync(currentVersion));
+        var enqueued = DispatcherQueue.TryEnqueue(() => _ = ShowSkipSummaryDialogAsync(currentVersion));
         if (!enqueued)
         {
-            _ = ShowForceReviewDialogAsync(currentVersion);
+            _ = ShowSkipSummaryDialogAsync(currentVersion);
         }
     }
 
-    private async Task ShowForceReviewDialogAsync(int promptVersion)
+    private async Task ShowSkipSummaryDialogAsync(int promptVersion)
     {
-        if (_isForceReviewDialogOpen
-            || ViewModel.PendingForceReviewCount == 0
-            || promptVersion <= _lastForceReviewPromptVersion
+        if (_isSkipSummaryDialogOpen
+            || ViewModel.SkipSummaryCount == 0
+            || promptVersion <= _lastSkipSummaryPromptVersion
             || XamlRoot is null)
         {
             return;
         }
 
-        _isForceReviewDialogOpen = true;
-        _lastForceReviewPromptVersion = promptVersion;
+        _isSkipSummaryDialogOpen = true;
+        _lastSkipSummaryPromptVersion = promptVersion;
         try
         {
             var dialog = new ContentDialog
             {
-                Title = ViewModel.ForceReviewDialogTitle,
-                Content = ViewModel.ForceReviewDialogMessage,
-                PrimaryButtonText = ViewModel.ForceReviewDialogPrimaryText,
-                SecondaryButtonText = ViewModel.ForceReviewDialogSecondaryText,
-                CloseButtonText = ViewModel.ForceReviewDialogCloseText,
-                DefaultButton = ContentDialogButton.Primary,
+                Title = ViewModel.SkipSummaryDialogTitle,
+                Content = ViewModel.SkipSummaryDialogMessage,
+                CloseButtonText = ViewModel.SkipSummaryDialogCloseText,
+                DefaultButton = ContentDialogButton.Close,
                 XamlRoot = XamlRoot,
             };
-
-            var result = await dialog.ShowAsync();
-            switch (result)
-            {
-                case ContentDialogResult.Primary:
-                    await ViewModel.ForceEmbedPendingAsync();
-                    break;
-                case ContentDialogResult.Secondary:
-                    ViewModel.RemovePendingForceFromQueue();
-                    break;
-                default:
-                    ViewModel.KeepPendingForceInQueue();
-                    break;
-            }
+            await dialog.ShowAsync();
         }
         finally
         {
-            _isForceReviewDialogOpen = false;
+            _isSkipSummaryDialogOpen = false;
         }
     }
 

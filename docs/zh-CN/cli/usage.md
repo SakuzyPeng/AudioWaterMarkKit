@@ -44,9 +44,6 @@ awmkit encode --tag SAKUZY
 # 3) 嵌入（当前仅输出 wav）
 awmkit embed --tag SAKUZY input.wav --output output_wm.wav
 
-# 风险场景下强制嵌入（证据会标记为强行嵌入）
-awmkit embed --tag SAKUZY input.wav --output output_wm.wav --force-embed
-
 # 4) 检测
 awmkit detect output_wm.wav
 
@@ -102,8 +99,8 @@ awmkit evidence clear --identity SAKUZY --key-slot 0 --yes
 ```
 
 说明：
-- `evidence list/show` 仅在强行嵌入记录上显示 `FORCED` / `is_forced_embed=true`。
-- `evidence --json` 始终包含 `is_forced_embed` 布尔字段。
+- 命中已含水印的输入文件会自动跳过，并在批处理结束后汇总告警。
+- `evidence list/show` 与 `evidence --json` 不展示历史强制标记字段。
 
 ## 8. 检测 JSON 关键字段
 

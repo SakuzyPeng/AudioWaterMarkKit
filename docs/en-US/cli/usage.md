@@ -44,9 +44,6 @@ awmkit encode --tag SAKUZY
 # 3) Embed (WAV-only output)
 awmkit embed --tag SAKUZY input.wav --output output_wm.wav
 
-# Force embed in risk scenarios (evidence row will be marked as forced)
-awmkit embed --tag SAKUZY input.wav --output output_wm.wav --force-embed
-
 # 4) Detect
 awmkit detect output_wm.wav
 
@@ -102,8 +99,8 @@ awmkit evidence clear --identity SAKUZY --key-slot 0 --yes
 ```
 
 Notes:
-- `evidence list/show` only surfaces `FORCED` / `is_forced_embed=true` on forced rows.
-- `evidence --json` always includes the boolean `is_forced_embed`.
+- Inputs that already contain watermarks are skipped automatically, with a batch summary warning at the end.
+- `evidence list/show` and `evidence --json` do not surface the legacy forced marker field.
 
 ## 8. Detect JSON Fields
 

@@ -408,13 +408,13 @@ int32_t awm_evidence_record_file(
 );
 
 /**
- * Record evidence for embedded output file with forced flag.
+ * Record evidence for embedded output file with legacy forced flag.
  *
  * @param file_path        Embedded output audio file path
  * @param raw_message      16-byte encoded message
  * @param key              HMAC key bytes
  * @param key_len          Key length
- * @param is_forced_embed  Whether this record comes from forced embed
+ * @param is_forced_embed  Legacy argument (ignored, retained for ABI compatibility)
  * @return                 AWM_SUCCESS or error code
  */
 int32_t awm_evidence_record_file_ex(
@@ -433,7 +433,7 @@ int32_t awm_evidence_record_file_ex(
  * @param raw_message       16-byte encoded message
  * @param key               HMAC key bytes
  * @param key_len           Key length
- * @param is_forced_embed   Whether this record comes from forced embed
+ * @param is_forced_embed   Legacy argument (ignored, retained for ABI compatibility)
  * @param result            Output SNR result payload
  * @return                  AWM_SUCCESS or error code
  */
@@ -710,7 +710,6 @@ int32_t awm_db_tag_remove_json(const char* usernames_json, uint32_t* out_deleted
 /**
  * List evidence rows as JSON.
  * Two-step usage is same as awm_db_tag_list_json.
- * JSON includes `is_forced_embed` (0/1 as boolean).
  *
  * @param limit             Max row count (>=1)
  * @param out               Output buffer for JSON UTF-8
