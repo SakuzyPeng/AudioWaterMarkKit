@@ -90,6 +90,8 @@
            Text="Missing FFmpeg runtime DLLs. Expected in $(FfmpegRuntimeDir). Please prepare ffmpeg-prebuilt/bin first." />
     <Error Condition="!Exists('$(FfmpegRuntimeDir)\swresample-6.dll')"
            Text="Missing FFmpeg runtime DLLs. Expected in $(FfmpegRuntimeDir). Please prepare ffmpeg-prebuilt/bin first." />
+    <Error Condition="!Exists('$(FfmpegRuntimeDir)\swscale-9.dll')"
+           Text="Missing FFmpeg runtime DLLs. Expected in $(FfmpegRuntimeDir). Please prepare ffmpeg-prebuilt/bin first." />
   </Target>
 
 </Project>

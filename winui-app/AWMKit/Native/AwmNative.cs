@@ -13,14 +13,27 @@ namespace AWMKit.Native;
 internal static class AwmNative
 {
     private const string Lib = "awmkit_native.dll";
+    private static readonly string[] FfmpegDependencyOrder =
+    [
+        "avutil-60.dll",
+        "swresample-6.dll",
+        "swscale-9.dll",
+        "avcodec-62.dll",
+        "avformat-62.dll",
+        "avfilter-11.dll",
+    ];
     private const uint LoadLibrarySearchDefaultDirs = 0x00001000;
     private const uint LoadLibrarySearchUserDirs = 0x00000400;
     private static IntPtr _preloadedHandle = IntPtr.Zero;
     private static readonly List<nint> AddedDllDirectoryCookies = [];
+    private static readonly List<nint> PreloadedDependencyHandles = [];
+    private static readonly object DependencyLoadLock = new();
+    private static bool DependenciesPreloaded;
 
     static AwmNative()
     {
         ConfigureNativeSearchDirectories();
+        PreloadNativeDependencies();
         NativeLibrary.SetDllImportResolver(
             typeof(AwmNative).Assembly,
             static (libraryName, assembly, searchPath) => ResolveLibrary(libraryName, assembly));
@@ -84,6 +97,56 @@ internal static class AwmNative
         }
 
         return IntPtr.Zero;
+    }
+
+    private static void PreloadNativeDependencies()
+    {
+        lock (DependencyLoadLock)
+        {
+            if (DependenciesPreloaded)
+            {
+                return;
+            }
+
+            var ffmpegDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var dir in EnumerateNativeSearchDirs())
+            {
+                if (IsFfmpegDirectory(dir))
+                {
+                    ffmpegDirs.Add(dir);
+                }
+
+                var subDir = Path.Combine(dir, "lib", "ffmpeg");
+                if (Directory.Exists(subDir))
+                {
+                    ffmpegDirs.Add(subDir);
+                }
+            }
+
+            foreach (var ffmpegDir in ffmpegDirs)
+            {
+                foreach (var name in FfmpegDependencyOrder)
+                {
+                    var candidate = Path.Combine(ffmpegDir, name);
+                    if (!File.Exists(candidate))
+                    {
+                        continue;
+                    }
+
+                    if (NativeLibrary.TryLoad(candidate, out var handle))
+                    {
+                        PreloadedDependencyHandles.Add(handle);
+                    }
+                }
+            }
+
+            DependenciesPreloaded = true;
+        }
+    }
+
+    private static bool IsFfmpegDirectory(string dir)
+    {
+        return string.Equals(Path.GetFileName(dir), "ffmpeg", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsAwmkitLibraryName(string libraryName)

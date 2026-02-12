@@ -12,9 +12,9 @@ function Fail([string]$Message) {
 
 Set-Location $RepoRoot
 
-$dirty = git status --porcelain
+$dirty = git status --porcelain --untracked-files=no
 if (-not [string]::IsNullOrWhiteSpace($dirty)) {
-  Fail "Repository is dirty. Commit/stash changes before local release."
+  Fail "Repository has tracked modifications. Commit/stash tracked changes before local release."
 }
 
 $shortSha = (git rev-parse --short HEAD).Trim()
@@ -62,6 +62,20 @@ if (-not (Test-Path (Join-Path $ffmpegRuntimeDir "avcodec-62.dll"))) {
     Copy-Item (Join-Path $root.FullName "lib\*.dll") $ffmpegRuntimeDir -Force
   } else {
     Fail "Invalid FFmpeg zip: missing bin/lib directory."
+  }
+}
+
+$requiredFfmpegDlls = @(
+  "avcodec-62.dll",
+  "avformat-62.dll",
+  "avutil-60.dll",
+  "avfilter-11.dll",
+  "swresample-6.dll",
+  "swscale-9.dll"
+)
+foreach ($dll in $requiredFfmpegDlls) {
+  if (-not (Test-Path (Join-Path $ffmpegRuntimeDir $dll))) {
+    Fail "Missing FFmpeg runtime DLL: $dll under $ffmpegRuntimeDir"
   }
 }
 

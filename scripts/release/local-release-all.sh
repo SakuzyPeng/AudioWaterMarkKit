@@ -18,7 +18,7 @@ echo "[INFO] Building macOS local release..."
 "${SCRIPT_DIR}/local-release-macos.sh"
 
 echo "[INFO] Validating win-pc worktree clean..."
-ssh "${WIN_HOST}" "powershell -NoProfile -Command \"Set-Location '${WIN_REPO}'; \$dirty = git status --porcelain; if (-not [string]::IsNullOrWhiteSpace(\$dirty)) { Write-Host \$dirty; exit 1 }\""
+ssh "${WIN_HOST}" "powershell -NoProfile -Command \"Set-Location '${WIN_REPO}'; \$dirty = git status --porcelain --untracked-files=no; if (-not [string]::IsNullOrWhiteSpace(\$dirty)) { Write-Host \$dirty; exit 1 }\""
 
 echo "[INFO] Building Windows local release on ${WIN_HOST}..."
 ssh "${WIN_HOST}" "powershell -NoProfile -ExecutionPolicy Bypass -File '${WIN_REPO}\\scripts\\release\\local-release-win.ps1'"
