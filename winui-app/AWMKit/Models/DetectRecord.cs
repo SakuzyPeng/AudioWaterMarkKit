@@ -25,5 +25,6 @@ public sealed class DetectRecord
     public float? CloneMatchSeconds { get; init; }
     public string? CloneReason { get; init; }
     public string? Error { get; init; }
+    public string? Verification { get; init; }
     public DateTime Timestamp { get; init; } = DateTime.Now;
 }

@@ -58,6 +58,7 @@ cli-embed-failed = 有文件处理失败
 
 cli-detect-done = 完成：{ $ok } 成功，{ $miss } 未发现，{ $invalid } 无效
 cli-detect-failed = 有文件处理失败
+cli-detect-forensic-warning = 不可用于归属/取证
 
 cli-decode-version = 版本：{ $version }
 cli-decode-timestamp_minutes = 时间戳（分钟）：{ $minutes }

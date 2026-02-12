@@ -144,31 +144,22 @@ pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
         return Err(Error::HmacMismatch);
     }
 
-    // 解析字段
-    let version = data[0];
+    parse_message_fields(data)
+}
 
-    // SAFETY: 已验证 data.len() == 16，切片长度固定为 4
-    let packed_timestamp_bytes: [u8; 4] = data[1..5]
-        .try_into()
-        .map_err(|_| Error::InvalidMessageLength(data.len()))?;
-    let packed_timestamp = u32::from_be_bytes(packed_timestamp_bytes);
-    let (timestamp_minutes, key_slot) = match version {
-        VERSION_V1 => (packed_timestamp, DEFAULT_KEY_SLOT),
-        VERSION_V2 => unpack_timestamp_v2(packed_timestamp),
-        _ => return Err(Error::UnsupportedVersion(version)),
-    };
+/// 解码消息（不验证 HMAC）
+///
+/// # Arguments
+/// - `data`: 16 bytes 消息
+///
+/// # Returns
+/// 解码结果；仅解析明文字段，不做 HMAC 校验
+pub fn decode_unverified(data: &[u8]) -> Result<MessageResult> {
+    if data.len() != MESSAGE_LEN {
+        return Err(Error::InvalidMessageLength(data.len()));
+    }
 
-    let mut tag_packed = [0u8; 5];
-    tag_packed.copy_from_slice(&data[5..10]);
-    let tag = Tag::from_packed(&tag_packed)?;
-
-    Ok(MessageResult {
-        version,
-        timestamp_utc: u64::from(timestamp_minutes) * 60,
-        timestamp_minutes,
-        key_slot,
-        tag,
-    })
+    parse_message_fields(data)
 }
 
 /// 仅验证 HMAC（不解析内容）
@@ -198,6 +189,34 @@ pub fn peek_version_and_slot(data: &[u8]) -> Result<(u8, u8)> {
         _ => return Err(Error::UnsupportedVersion(version)),
     };
     Ok((version, key_slot))
+}
+
+fn parse_message_fields(data: &[u8]) -> Result<MessageResult> {
+    // 解析字段
+    let version = data[0];
+
+    // SAFETY: 已验证 data.len() == 16，切片长度固定为 4
+    let packed_timestamp_bytes: [u8; 4] = data[1..5]
+        .try_into()
+        .map_err(|_| Error::InvalidMessageLength(data.len()))?;
+    let packed_timestamp = u32::from_be_bytes(packed_timestamp_bytes);
+    let (timestamp_minutes, key_slot) = match version {
+        VERSION_V1 => (packed_timestamp, DEFAULT_KEY_SLOT),
+        VERSION_V2 => unpack_timestamp_v2(packed_timestamp),
+        _ => return Err(Error::UnsupportedVersion(version)),
+    };
+
+    let mut tag_packed = [0u8; 5];
+    tag_packed.copy_from_slice(&data[5..10]);
+    let tag = Tag::from_packed(&tag_packed)?;
+
+    Ok(MessageResult {
+        version,
+        timestamp_utc: u64::from(timestamp_minutes) * 60,
+        timestamp_minutes,
+        key_slot,
+        tag,
+    })
 }
 
 /// 计算 HMAC-SHA256 并截取前 6 字节
@@ -302,6 +321,17 @@ mod tests {
         let result = decode(&msg, wrong_key);
 
         assert!(matches!(result, Err(Error::HmacMismatch)));
+    }
+
+    #[test]
+    fn test_decode_unverified_with_wrong_key_message() {
+        let tag = Tag::new("SAKUZY").unwrap();
+        let msg = encode(CURRENT_VERSION, &tag, TEST_KEY).unwrap();
+
+        let result = decode_unverified(&msg).unwrap();
+        assert_eq!(result.version, CURRENT_VERSION);
+        assert_eq!(result.identity(), "SAKUZY");
+        assert_eq!(result.key_slot, 0);
     }
 
     #[test]

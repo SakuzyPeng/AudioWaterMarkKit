@@ -47,6 +47,9 @@ internal static class AwmNative
     [DllImport(Lib, EntryPoint = "awm_message_decode", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_message_decode(IntPtr data, IntPtr key, nuint keyLen, IntPtr result);
 
+    [DllImport(Lib, EntryPoint = "awm_message_decode_unverified", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_message_decode_unverified(IntPtr data, IntPtr result);
+
     [DllImport(Lib, EntryPoint = "awm_message_verify", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.U1)]
     internal static extern bool awm_message_verify(IntPtr data, IntPtr key, nuint keyLen);

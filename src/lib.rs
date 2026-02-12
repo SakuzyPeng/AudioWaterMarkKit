@@ -109,6 +109,11 @@ impl Message {
         message::decode(data, key)
     }
 
+    /// 解码消息（不校验 HMAC）
+    pub fn decode_unverified(data: &[u8]) -> Result<MessageResult> {
+        message::decode_unverified(data)
+    }
+
     /// 读取消息中的版本与槽位（不校验 HMAC）
     pub fn peek_version_and_slot(data: &[u8]) -> Result<(u8, u8)> {
         message::peek_version_and_slot(data)

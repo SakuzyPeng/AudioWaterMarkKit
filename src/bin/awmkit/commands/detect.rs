@@ -33,6 +33,8 @@ pub struct DetectArgs {
 struct DetectJson {
     file: String,
     status: String,
+    verification: Option<String>,
+    forensic_warning: Option<String>,
     tag: Option<String>,
     identity: Option<String>,
     version: Option<u8>,
@@ -159,6 +161,7 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
             }
             Ok(DetectOutcome::Invalid {
                 error,
+                unverified,
                 detect_score,
                 decode_slot_hint,
                 decode_slot_used,
@@ -169,6 +172,18 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
                 let score_text = detect_score
                     .map(|score| format!(" (score: {score:.3})"))
                     .unwrap_or_default();
+                let decoded_text = unverified.as_ref().map_or_else(
+                    || " (tag=- id=- time=- slot=-)".to_string(),
+                    |decoded| {
+                        format!(
+                            " (tag={} id={} time={} slot={})",
+                            decoded.tag,
+                            decoded.identity(),
+                            decoded.timestamp_utc,
+                            decoded.key_slot
+                        )
+                    },
+                );
                 let slot_text = format!(
                     " (slot: hint={} used={} status={} scan={})",
                     decode_slot_hint.map_or_else(|| "-".to_string(), |value| value.to_string()),
@@ -178,19 +193,23 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
                 );
                 if let Some(ref bar) = progress {
                     bar.println(format!(
-                        "[INVALID] {}: {}{}{}",
+                        "[INVALID] {}: {}{}{}{} [UNVERIFIED] {}",
                         input.display(),
                         error,
                         score_text,
-                        slot_text
+                        decoded_text,
+                        slot_text,
+                        i18n::tr("cli-detect-forensic-warning")
                     ));
                 } else {
                     crate::output::Output::error(format!(
-                        "[INVALID] {}: {}{}{}",
+                        "[INVALID] {}: {}{}{}{} [UNVERIFIED] {}",
                         input.display(),
                         error,
                         score_text,
-                        slot_text
+                        decoded_text,
+                        slot_text,
+                        i18n::tr("cli-detect-forensic-warning")
                     ));
                 }
             }
@@ -242,6 +261,7 @@ enum DetectOutcome {
     NotFound,
     Invalid {
         error: String,
+        unverified: Option<awmkit::MessageResult>,
         detect_score: Option<f32>,
         decode_slot_hint: Option<u8>,
         decode_slot_used: Option<u8>,
@@ -358,6 +378,7 @@ fn detect_one(
                 }
                 SlotResolution::Invalid(invalid) => Ok(DetectOutcome::Invalid {
                     error: invalid.error,
+                    unverified: Message::decode_unverified(&result.raw_message).ok(),
                     detect_score: result.detect_score,
                     decode_slot_hint: Some(invalid.slot_hint),
                     decode_slot_used: invalid.slot_used,
@@ -380,6 +401,8 @@ fn detect_one_json(
         Ok(None) => DetectJson {
             file: input.display().to_string(),
             status: "not_found".to_string(),
+            verification: None,
+            forensic_warning: None,
             tag: None,
             identity: None,
             version: None,
@@ -407,6 +430,8 @@ fn detect_one_json(
                 DetectJson {
                     file: input.display().to_string(),
                     status: "ok".to_string(),
+                    verification: Some("verified".to_string()),
+                    forensic_warning: None,
                     tag: Some(decoded.message.tag.to_string()),
                     identity: Some(decoded.message.identity().to_string()),
                     version: Some(decoded.message.version),
@@ -429,34 +454,43 @@ fn detect_one_json(
                     slot_scan_count: Some(decoded.scan_count),
                 }
             }
-            SlotResolution::Invalid(invalid) => DetectJson {
-                file: input.display().to_string(),
-                status: "invalid_hmac".to_string(),
-                tag: None,
-                identity: None,
-                version: None,
-                key_slot: None,
-                timestamp_minutes: None,
-                timestamp_utc: None,
-                pattern: Some(result.pattern),
-                detect_score: result.detect_score,
-                bit_errors: Some(result.bit_errors),
-                match_found: Some(result.match_found),
-                error: Some(invalid.error),
-                clone_check: None,
-                clone_score: None,
-                clone_match_seconds: None,
-                clone_matched_evidence_id: None,
-                clone_reason: None,
-                decode_slot_hint: Some(invalid.slot_hint),
-                decode_slot_used: invalid.slot_used,
-                slot_status: Some(invalid.status),
-                slot_scan_count: Some(invalid.scan_count),
-            },
+            SlotResolution::Invalid(invalid) => {
+                let unverified = Message::decode_unverified(&result.raw_message).ok();
+                DetectJson {
+                    file: input.display().to_string(),
+                    status: "invalid_hmac".to_string(),
+                    verification: Some("unverified".to_string()),
+                    forensic_warning: Some(i18n::tr("cli-detect-forensic-warning")),
+                    tag: unverified.as_ref().map(|message| message.tag.to_string()),
+                    identity: unverified
+                        .as_ref()
+                        .map(|message| message.identity().to_string()),
+                    version: unverified.as_ref().map(|message| message.version),
+                    key_slot: unverified.as_ref().map(|message| message.key_slot),
+                    timestamp_minutes: unverified.as_ref().map(|message| message.timestamp_minutes),
+                    timestamp_utc: unverified.as_ref().map(|message| message.timestamp_utc),
+                    pattern: Some(result.pattern),
+                    detect_score: result.detect_score,
+                    bit_errors: Some(result.bit_errors),
+                    match_found: Some(result.match_found),
+                    error: Some(invalid.error),
+                    clone_check: None,
+                    clone_score: None,
+                    clone_match_seconds: None,
+                    clone_matched_evidence_id: None,
+                    clone_reason: None,
+                    decode_slot_hint: Some(invalid.slot_hint),
+                    decode_slot_used: invalid.slot_used,
+                    slot_status: Some(invalid.status),
+                    slot_scan_count: Some(invalid.scan_count),
+                }
+            }
         },
         Err(err) => DetectJson {
             file: input.display().to_string(),
             status: "error".to_string(),
+            verification: None,
+            forensic_warning: None,
             tag: None,
             identity: None,
             version: None,

@@ -279,7 +279,7 @@ public sealed partial class DetectViewModel : ObservableObject
         }
     }
 
-    public bool CanDetectOrStop => IsKeyAvailable && (IsProcessing || SelectedFiles.Count > 0);
+    public bool CanDetectOrStop => IsProcessing || SelectedFiles.Count > 0;
 
     public string DetectButtonText => IsProcessing ? L("停止", "Stop") : L("检测", "Detect");
     public bool ShowDetectStopIcon => IsProcessing;
@@ -545,11 +545,24 @@ public sealed partial class DetectViewModel : ObservableObject
 
         try
         {
-            var (key, keyError) = AwmKeyBridge.LoadKey();
-            if (keyError != AwmError.Ok || key is null)
+            byte[]? key = null;
+            var (loadedKey, keyError) = AwmKeyBridge.LoadKey();
+            if (keyError == AwmError.Ok && loadedKey is not null)
             {
-                AddLog(L("检测失败", "Detection failed"), L("密钥未配置", "Key not configured"), false, false, null, LogIconTone.Error);
-                return;
+                key = loadedKey;
+            }
+            else
+            {
+                AddLog(
+                    L("未配置密钥", "Key not configured"),
+                    L(
+                        "将仅显示未校验结果，且不可用于归属/取证",
+                        "Only unverified fields will be shown. Do not use for attribution/forensics"
+                    ),
+                    false,
+                    true,
+                    null,
+                    LogIconTone.Warning);
             }
 
             _detectCts = new CancellationTokenSource();
@@ -659,7 +672,7 @@ public sealed partial class DetectViewModel : ObservableObject
         }
     }
 
-    private DetectRecord DetectSingleFile(string filePath, byte[] key, AwmChannelLayout layout)
+    private DetectRecord DetectSingleFile(string filePath, byte[]? key, AwmChannelLayout layout)
     {
         var (mcDetected, detectError) = AwmBridge.DetectAudioMultichannelDetailed(filePath, layout);
         if (detectError == AwmError.Ok && mcDetected is AwmBridge.MultichannelDetectAudioResult mcResult)
@@ -670,63 +683,76 @@ public sealed partial class DetectViewModel : ObservableObject
                 : null;
             var pattern = DetectPatternText(layout, mcResult.PairCount, singleDetected);
 
-            var (decoded, decodeError) = AwmBridge.DecodeMessage(mcResult.RawMessage, key);
-            if (decodeError == AwmError.Ok && decoded.HasValue)
+            var (unverifiedDecoded, unverifiedError) = AwmBridge.DecodeMessageUnverified(mcResult.RawMessage);
+            if (key is not null)
             {
-                var decodedValue = decoded.Value;
-
-                string cloneCheck = "unavailable";
-                double? cloneScore = null;
-                float? cloneMatchSeconds = null;
-                string? cloneReason = null;
-
-                var identity = decodedValue.GetIdentity();
-                var keySlot = decodedValue.KeySlot;
-
-                var (clone, cloneError) = AwmBridge.CloneCheckForFile(filePath, identity, keySlot);
-                if (cloneError == AwmError.Ok && clone.HasValue)
+                var (decoded, decodeError) = AwmBridge.DecodeMessage(mcResult.RawMessage, key);
+                if (decodeError == AwmError.Ok && decoded.HasValue)
                 {
-                    cloneCheck = CloneKindToString(clone.Value.Kind);
-                    cloneScore = clone.Value.Score;
-                    cloneMatchSeconds = clone.Value.MatchSeconds;
-                    cloneReason = clone.Value.Reason;
+                    var decodedValue = decoded.Value;
+
+                    string cloneCheck = "unavailable";
+                    double? cloneScore = null;
+                    float? cloneMatchSeconds = null;
+                    string? cloneReason = null;
+
+                    var identity = decodedValue.GetIdentity();
+                    var keySlot = decodedValue.KeySlot;
+
+                    var (clone, cloneError) = AwmBridge.CloneCheckForFile(filePath, identity, keySlot);
+                    if (cloneError == AwmError.Ok && clone.HasValue)
+                    {
+                        cloneCheck = CloneKindToString(clone.Value.Kind);
+                        cloneScore = clone.Value.Score;
+                        cloneMatchSeconds = clone.Value.MatchSeconds;
+                        cloneReason = clone.Value.Reason;
+                    }
+                    else
+                    {
+                        cloneCheck = "unavailable";
+                        cloneReason = cloneError.ToString();
+                    }
+
+                    return new DetectRecord
+                    {
+                        FilePath = filePath,
+                        Status = "ok",
+                        Verification = "verified",
+                        Tag = decodedValue.GetTag(),
+                        Identity = identity,
+                        Version = decodedValue.Version,
+                        TimestampMinutes = decodedValue.TimestampMinutes,
+                        TimestampUtc = decodedValue.TimestampUtc,
+                        KeySlot = decodedValue.KeySlot,
+                        Pattern = pattern,
+                        DetectScore = detectScore,
+                        BitErrors = mcResult.BitErrors,
+                        MatchFound = true,
+                        CloneCheck = cloneCheck,
+                        CloneScore = cloneScore,
+                        CloneMatchSeconds = cloneMatchSeconds,
+                        CloneReason = cloneReason,
+                    };
                 }
-                else
-                {
-                    cloneCheck = "unavailable";
-                    cloneReason = cloneError.ToString();
-                }
-
-                return new DetectRecord
-                {
-                    FilePath = filePath,
-                    Status = "ok",
-                    Tag = decodedValue.GetTag(),
-                    Identity = identity,
-                    Version = decodedValue.Version,
-                    TimestampMinutes = decodedValue.TimestampMinutes,
-                    TimestampUtc = decodedValue.TimestampUtc,
-                    KeySlot = decodedValue.KeySlot,
-                    Pattern = pattern,
-                    DetectScore = detectScore,
-                    BitErrors = mcResult.BitErrors,
-                    MatchFound = true,
-                    CloneCheck = cloneCheck,
-                    CloneScore = cloneScore,
-                    CloneMatchSeconds = cloneMatchSeconds,
-                    CloneReason = cloneReason,
-                };
             }
 
+            var invalidReason = key is null ? "key_not_configured" : "hmac_verification_failed";
             return new DetectRecord
             {
                 FilePath = filePath,
                 Status = "invalid_hmac",
+                Verification = "unverified",
+                Tag = unverifiedDecoded?.GetTag(),
+                Identity = unverifiedDecoded?.GetIdentity(),
+                Version = unverifiedDecoded?.Version,
+                TimestampMinutes = unverifiedDecoded?.TimestampMinutes,
+                TimestampUtc = unverifiedDecoded?.TimestampUtc,
+                KeySlot = unverifiedDecoded?.KeySlot,
                 Pattern = pattern,
                 DetectScore = detectScore,
                 BitErrors = mcResult.BitErrors,
                 MatchFound = true,
-                Error = decodeError.ToString(),
+                Error = unverifiedError == AwmError.Ok ? invalidReason : $"{invalidReason};{unverifiedError}",
             };
         }
 
@@ -768,9 +794,15 @@ public sealed partial class DetectViewModel : ObservableObject
                 AddLog($"{L("无标记", "Not found")}: {fileName}", L("未检测到水印", "No watermark detected"), false, false, record.Id, LogIconTone.Warning, LogKind.ResultNotFound);
                 break;
             case "invalid_hmac":
+                var warningText = L(
+                    "UNVERIFIED · 不可用于归属/取证",
+                    "UNVERIFIED · Do not use for attribution/forensics");
                 AddLog(
                     $"{L("失败", "Failed")}: {fileName}",
-                    L($"HMAC 校验失败: {record.Error ?? "unknown"}", $"HMAC verification failed: {record.Error ?? "unknown"}"),
+                    L(
+                        $"HMAC 校验失败: {record.Error ?? "unknown"} · {warningText}",
+                        $"HMAC verification failed: {record.Error ?? "unknown"} · {warningText}"
+                    ),
                     false,
                     false,
                     record.Id,
@@ -1184,6 +1216,19 @@ public sealed partial class DetectViewModel : ObservableObject
 
     private string ErrorDisplayValue(DetectRecord? record)
     {
+        if (record?.Verification == "unverified")
+        {
+            var warning = L(
+                "UNVERIFIED · 不可用于归属/取证",
+                "UNVERIFIED · Do not use for attribution/forensics");
+            if (!string.IsNullOrWhiteSpace(record.Error))
+            {
+                return $"{warning} · {record.Error}";
+            }
+
+            return warning;
+        }
+
         if (!string.IsNullOrWhiteSpace(record?.Error))
         {
             return record.Error;

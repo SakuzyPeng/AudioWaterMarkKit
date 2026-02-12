@@ -58,6 +58,7 @@ cli-embed-failed = one or more files failed
 
 cli-detect-done = Done: { $ok } ok, { $miss } missing, { $invalid } invalid
 cli-detect-failed = one or more files failed
+cli-detect-forensic-warning = Do not use for attribution/forensics
 
 cli-decode-version = Version: { $version }
 cli-decode-timestamp_minutes = Timestamp (minutes): { $minutes }

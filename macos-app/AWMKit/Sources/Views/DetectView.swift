@@ -100,7 +100,7 @@ struct DetectView: View {
                     }
                     .buttonStyle(GlassButtonStyle(accentOn: !viewModel.isProcessing, size: .compact))
                     .accessibilityLabel(viewModel.isProcessing ? l("停止检测", "Stop detection") : l("开始检测", "Start detection"))
-                    .disabled(viewModel.selectedFiles.isEmpty || viewModel.isProcessing || !appState.keyLoaded)
+                    .disabled(viewModel.selectedFiles.isEmpty || viewModel.isProcessing)
 
                     Button(action: { viewModel.clearQueue() }) {
                         HStack(spacing: 6) {
@@ -890,6 +890,16 @@ struct DetectView: View {
     }
 
     private func errorDisplayValue(from record: DetectRecord?) -> String {
+        if record?.verification == "unverified" {
+            let warning = l(
+                "UNVERIFIED · 不可用于归属/取证",
+                "UNVERIFIED · Do not use for attribution/forensics"
+            )
+            if let error = record?.error, !error.isEmpty {
+                return "\(warning) · \(error)"
+            }
+            return warning
+        }
         if let error = record?.error, !error.isEmpty {
             return error
         }

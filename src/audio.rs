@@ -21,6 +21,42 @@ const DEFAULT_SEARCH_PATHS: &[&str] = &[
 /// audiowmark 0.6.x 候选分数阈值（低于此值通常为伪命中）
 const MIN_PATTERN_SCORE: f32 = 1.0;
 
+/// 媒体解码能力摘要（用于 doctor/UI 状态）
+#[derive(Debug, Clone, Copy)]
+pub struct AudioMediaCapabilities {
+    /// 当前媒体后端名称
+    pub backend: &'static str,
+    /// 是否支持 E-AC-3 解码
+    pub eac3_decode: bool,
+    /// 是否支持 MP4/M4A 容器解封装
+    pub container_mp4: bool,
+    /// 是否支持 MKV 容器解封装
+    pub container_mkv: bool,
+    /// 是否支持 MPEG-TS 容器解封装
+    pub container_ts: bool,
+}
+
+impl AudioMediaCapabilities {
+    /// 以逗号分隔形式返回当前可用容器摘要。
+    #[must_use]
+    pub fn supported_containers_csv(&self) -> String {
+        let mut containers = Vec::new();
+        if self.container_mp4 {
+            containers.push("mp4");
+        }
+        if self.container_mkv {
+            containers.push("mkv");
+        }
+        if self.container_ts {
+            containers.push("ts");
+        }
+        if containers.is_empty() {
+            return "none".to_string();
+        }
+        containers.join(",")
+    }
+}
+
 /// 水印嵌入/检测结果
 #[derive(Debug, Clone)]
 pub struct DetectResult {
@@ -61,8 +97,13 @@ pub struct Audio {
 enum InputAudioFormat {
     Wav,
     Flac,
+    Mp3,
+    Ogg,
     M4a,
     Alac,
+    Mp4,
+    Mkv,
+    Ts,
 }
 
 struct TempDirGuard {
@@ -140,6 +181,12 @@ impl Audio {
     #[must_use]
     pub fn binary_path(&self) -> &Path {
         &self.binary_path
+    }
+
+    /// 返回当前媒体解码能力摘要。
+    #[must_use]
+    pub fn media_capabilities(&self) -> AudioMediaCapabilities {
+        media_capabilities()
     }
 
     /// 嵌入水印消息到音频
@@ -601,13 +648,19 @@ fn parse_input_audio_format(path: &Path) -> Result<InputAudioFormat> {
     match ext.as_deref() {
         Some("wav") => Ok(InputAudioFormat::Wav),
         Some("flac") => Ok(InputAudioFormat::Flac),
+        Some("mp3") => Ok(InputAudioFormat::Mp3),
+        Some("ogg") | Some("opus") => Ok(InputAudioFormat::Ogg),
         Some("m4a") => Ok(InputAudioFormat::M4a),
         Some("alac") => Ok(InputAudioFormat::Alac),
+        Some("mp4") => Ok(InputAudioFormat::Mp4),
+        Some("mkv") | Some("mka") => Ok(InputAudioFormat::Mkv),
+        Some("ts") | Some("m2ts") | Some("m2t") => Ok(InputAudioFormat::Ts),
         Some(ext) => Err(Error::InvalidInput(format!(
-            "unsupported audio format: .{ext} (supported: wav, flac, m4a, alac)"
+            "unsupported audio format: .{ext} (supported: wav, flac, mp3, ogg, m4a, alac, mp4, mkv, ts)"
         ))),
         None => Err(Error::InvalidInput(
-            "input file has no extension (supported: wav, flac, m4a, alac)".to_string(),
+            "input file has no extension (supported: wav, flac, mp3, ogg, m4a, alac, mp4, mkv, ts)"
+                .to_string(),
         )),
     }
 }
@@ -636,7 +689,13 @@ fn prepare_input_for_audiowmark(input: &Path, purpose: &str) -> Result<PreparedI
             path: input.to_path_buf(),
             _guard: None,
         }),
-        InputAudioFormat::M4a | InputAudioFormat::Alac => {
+        InputAudioFormat::Mp3
+        | InputAudioFormat::Ogg
+        | InputAudioFormat::M4a
+        | InputAudioFormat::Alac
+        | InputAudioFormat::Mp4
+        | InputAudioFormat::Mkv
+        | InputAudioFormat::Ts => {
             let temp_dir = create_temp_dir(purpose)?;
             let temp_wav = temp_dir.join("input.wav");
             decode_to_wav(input, &temp_wav)?;
@@ -710,7 +769,7 @@ struct DecodedPcm {
 
 fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
     use symphonia::core::audio::SampleBuffer;
-    use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+    use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_EAC3, CODEC_TYPE_NULL};
     use symphonia::core::errors::Error as SymphoniaError;
     use symphonia::core::formats::FormatOptions;
     use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
@@ -725,6 +784,11 @@ fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
         hint.with_extension(ext);
     }
 
+    let ext_lc = input
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(str::to_ascii_lowercase);
+
     let probed = symphonia::default::get_probe()
         .format(
             &hint,
@@ -732,7 +796,17 @@ fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
             &FormatOptions::default(),
             &MetadataOptions::default(),
         )
-        .map_err(|err| Error::InvalidInput(format!("unsupported audio format: {err}")))?;
+        .map_err(|err| {
+            if ext_lc
+                .as_deref()
+                .is_some_and(|ext| matches!(ext, "ts" | "m2ts" | "m2t"))
+            {
+                return Error::InvalidInput(format!(
+                    "container not supported for E-AC-3 track read: mpegts ({err})"
+                ));
+            }
+            Error::InvalidInput(format!("unsupported audio format: {err}"))
+        })?;
 
     let mut format = probed.format;
     let track = format
@@ -755,6 +829,12 @@ fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
         .bits_per_sample
         .unwrap_or(24)
         .clamp(16, 32) as u16;
+
+    if track.codec_params.codec == CODEC_TYPE_EAC3 {
+        return Err(Error::InvalidInput(
+            "missing eac3 decoder in current media backend".to_string(),
+        ));
+    }
 
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
@@ -817,6 +897,18 @@ fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
         bits_per_sample,
         samples,
     })
+}
+
+/// 当前构建可用的媒体能力摘要。
+#[must_use]
+pub fn media_capabilities() -> AudioMediaCapabilities {
+    AudioMediaCapabilities {
+        backend: "symphonia",
+        eac3_decode: false,
+        container_mp4: true,
+        container_mkv: true,
+        container_ts: false,
+    }
 }
 
 fn clamp_sample_to_bits(sample: i32, bits_per_sample: u16) -> i32 {
@@ -943,9 +1035,23 @@ mod tests {
     fn test_validate_input_format_exts() {
         assert!(parse_input_audio_format(Path::new("demo.wav")).is_ok());
         assert!(parse_input_audio_format(Path::new("demo.flac")).is_ok());
+        assert!(parse_input_audio_format(Path::new("demo.mp3")).is_ok());
+        assert!(parse_input_audio_format(Path::new("demo.ogg")).is_ok());
         assert!(parse_input_audio_format(Path::new("demo.m4a")).is_ok());
         assert!(parse_input_audio_format(Path::new("demo.alac")).is_ok());
-        assert!(parse_input_audio_format(Path::new("demo.mp3")).is_err());
+        assert!(parse_input_audio_format(Path::new("demo.mp4")).is_ok());
+        assert!(parse_input_audio_format(Path::new("demo.mkv")).is_ok());
+        assert!(parse_input_audio_format(Path::new("demo.ts")).is_ok());
+    }
+
+    #[test]
+    fn test_media_capabilities_snapshot() {
+        let caps = media_capabilities();
+        assert_eq!(caps.backend, "symphonia");
+        assert!(!caps.eac3_decode);
+        assert!(caps.container_mp4);
+        assert!(caps.container_mkv);
+        assert!(!caps.container_ts);
     }
 
     #[cfg(feature = "multichannel")]

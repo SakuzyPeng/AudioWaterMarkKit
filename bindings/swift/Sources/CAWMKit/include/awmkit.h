@@ -147,6 +147,18 @@ int32_t awm_message_decode(
 );
 
 /**
+ * Decode watermark message fields without HMAC verification.
+ *
+ * @param data     16-byte message
+ * @param result   Output result structure
+ * @return         AWM_SUCCESS or error code
+ */
+int32_t awm_message_decode_unverified(
+    const uint8_t* data,
+    AWMResult* result
+);
+
+/**
  * Verify message HMAC only (without full decoding)
  *
  * @param data     16-byte message

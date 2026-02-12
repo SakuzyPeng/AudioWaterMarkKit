@@ -156,6 +156,45 @@ public enum AWMMessage {
         )
     }
 
+    /// Decode a watermark message without HMAC verification.
+    ///
+    /// - Parameter data: 16-byte message
+    /// - Returns: Decoded result from cleartext fields
+    public static func decodeUnverified(_ data: Data) throws -> AWMMessageResult {
+        guard data.count == 16 else {
+            throw AWMError.invalidMessageLength(data.count)
+        }
+
+        var cResult = AWMResult()
+
+        let result = data.withUnsafeBytes { dataPtr in
+            awm_message_decode_unverified(
+                dataPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                &cResult
+            )
+        }
+
+        if result != AWM_SUCCESS.rawValue {
+            throw AWMError(code: result)
+        }
+
+        let tagStr = withUnsafePointer(to: cResult.tag) { ptr in
+            ptr.withMemoryRebound(to: CChar.self, capacity: 9) { charPtr in
+                String(cString: charPtr)
+            }
+        }
+
+        let tag = try AWMTag(tag: tagStr)
+
+        return AWMMessageResult(
+            version: cResult.version,
+            timestampUTC: cResult.timestamp_utc,
+            timestampMinutes: cResult.timestamp_minutes,
+            keySlot: cResult.key_slot,
+            tag: tag
+        )
+    }
+
     /// Verify message HMAC only (without full decoding)
     ///
     /// - Parameters:

@@ -21,6 +21,7 @@ struct DetectRecord: Identifiable, Equatable, Sendable {
     let cloneMatchSeconds: Float?
     let cloneReason: String?
     let error: String?
+    let verification: String?
     let timestamp: Date
 
     init(
@@ -42,6 +43,7 @@ struct DetectRecord: Identifiable, Equatable, Sendable {
         cloneMatchSeconds: Float? = nil,
         cloneReason: String? = nil,
         error: String? = nil,
+        verification: String? = nil,
         timestamp: Date = Date()
     ) {
         self.id = id
@@ -62,6 +64,7 @@ struct DetectRecord: Identifiable, Equatable, Sendable {
         self.cloneMatchSeconds = cloneMatchSeconds
         self.cloneReason = cloneReason
         self.error = error
+        self.verification = verification
         self.timestamp = timestamp
     }
 }
@@ -354,15 +357,18 @@ class DetectViewModel: ObservableObject {
                 isProcessing = false
                 return
             }
-            guard let key = try? AWMKeyStore.loadActiveKey() else {
+            let key = try? AWMKeyStore.loadActiveKey()
+            if key == nil {
                 log(
-                    localized("检测失败", "Detection failed"),
-                    detail: localized("密钥未配置", "Key not configured"),
+                    localized("未配置密钥", "Key not configured"),
+                    detail: localized(
+                        "将仅显示未校验结果，且不可用于归属/取证",
+                        "Only unverified fields will be shown. Do not use for attribution/forensics"
+                    ),
                     isSuccess: false,
-                    kind: .detectFailed
+                    kind: .detectFailed,
+                    isEphemeral: true
                 )
-                isProcessing = false
-                return
             }
             let audioBox = UnsafeAudioBox(audio: audio)
 
@@ -426,11 +432,16 @@ class DetectViewModel: ObservableObject {
                 relatedRecordId: record.id
             )
         case "invalid_hmac":
+            let warning = localized(
+                "UNVERIFIED · 不可用于归属/取证",
+                "UNVERIFIED · Do not use for attribution/forensics"
+            )
+            let reason = record.error ?? "unknown"
             log(
                 "\(localized("失败", "Failed")): \(fileName)",
                 detail: localized(
-                    "HMAC 校验失败: \(record.error ?? "unknown")",
-                    "HMAC verification failed: \(record.error ?? "unknown")"
+                    "HMAC 校验失败: \(reason) · \(warning)",
+                    "HMAC verification failed: \(reason) · \(warning)"
                 ),
                 isSuccess: false,
                 kind: .resultInvalidHmac,
@@ -509,7 +520,7 @@ private extension DetectViewModel {
     nonisolated static func performDetectStep(
         audio: UnsafeAudioBox,
         fileURL: URL,
-        key: Data
+        key: Data?
     ) async -> DetectRecord {
         await Task.detached(priority: .userInitiated) {
             let filePath = fileURL.path(percentEncoded: false)
@@ -523,8 +534,8 @@ private extension DetectViewModel {
                     )
                 }
 
-                do {
-                    let decoded = try AWMMessage.decode(detectResult.rawMessage, key: key)
+                let unverifiedDecoded = try? AWMMessage.decodeUnverified(detectResult.rawMessage)
+                if let key, let decoded = try? AWMMessage.decode(detectResult.rawMessage, key: key) {
                     var cloneKind = "unavailable"
                     var cloneScore: Double?
                     var cloneMatchSeconds: Float?
@@ -562,17 +573,31 @@ private extension DetectViewModel {
                         cloneMatchSeconds: cloneMatchSeconds,
                         cloneReason: cloneReason
                     )
-                } catch {
-                    return DetectRecord(
-                        file: filePath,
-                        status: "invalid_hmac",
-                        pattern: detectResult.pattern,
-                        detectScore: detectResult.detectScore,
-                        bitErrors: detectResult.bitErrors,
-                        matchFound: detectResult.found,
-                        error: error.localizedDescription
-                    )
                 }
+
+                let failureDetail: String
+                if key == nil {
+                    failureDetail = "key_not_configured"
+                } else {
+                    failureDetail = "hmac_verification_failed"
+                }
+
+                return DetectRecord(
+                    file: filePath,
+                    status: "invalid_hmac",
+                    tag: unverifiedDecoded?.tag.value,
+                    identity: unverifiedDecoded?.identity,
+                    version: unverifiedDecoded?.version,
+                    timestampMinutes: unverifiedDecoded?.timestampMinutes,
+                    timestampUTC: unverifiedDecoded?.timestampUTC,
+                    keySlot: unverifiedDecoded?.keySlot,
+                    pattern: detectResult.pattern,
+                    detectScore: detectResult.detectScore,
+                    bitErrors: detectResult.bitErrors,
+                    matchFound: detectResult.found,
+                    error: failureDetail,
+                    verification: "unverified"
+                )
             } catch AWMError.noWatermarkFound {
                 return DetectRecord(
                     file: filePath,

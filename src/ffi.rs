@@ -273,28 +273,36 @@ pub unsafe extern "C" fn awm_message_decode(
 
     match message::decode(data_slice, key_slice) {
         Ok(r) => {
-            (*result).version = r.version;
-            (*result).timestamp_utc = r.timestamp_utc;
-            (*result).timestamp_minutes = r.timestamp_minutes;
-            (*result).key_slot = r.key_slot;
-
-            // Copy tag (8 chars + null)
-            let tag_bytes = r.tag.as_bytes();
-            for (i, &b) in tag_bytes.iter().enumerate() {
-                (*result).tag[i] = u8_to_c_char(b);
-            }
-            (*result).tag[8] = 0;
-
-            // Copy identity (up to 7 chars + null)
-            let identity = r.tag.identity();
-            for (i, b) in identity.bytes().enumerate() {
-                (*result).identity[i] = u8_to_c_char(b);
-            }
-            (*result).identity[identity.len()] = 0;
-
+            fill_awm_result(result, &r);
             AWMError::Success as i32
         }
         Err(crate::Error::HmacMismatch) => AWMError::HmacMismatch as i32,
+        Err(crate::Error::ChecksumMismatch { .. }) => AWMError::ChecksumMismatch as i32,
+        Err(_) => AWMError::InvalidTag as i32,
+    }
+}
+
+/// 解码消息（不验证 HMAC）
+///
+/// # Safety
+/// - `data` 必须指向 16 字节
+/// - `result` 必须是有效指针
+#[no_mangle]
+pub unsafe extern "C" fn awm_message_decode_unverified(
+    data: *const u8,
+    result: *mut AWMResult,
+) -> i32 {
+    if data.is_null() || result.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    let data_slice = slice::from_raw_parts(data, MESSAGE_LEN);
+
+    match message::decode_unverified(data_slice) {
+        Ok(r) => {
+            fill_awm_result(result, &r);
+            AWMError::Success as i32
+        }
         Err(crate::Error::ChecksumMismatch { .. }) => AWMError::ChecksumMismatch as i32,
         Err(_) => AWMError::InvalidTag as i32,
     }
@@ -325,6 +333,27 @@ pub unsafe extern "C" fn awm_message_verify(
 #[no_mangle]
 pub const extern "C" fn awm_current_version() -> u8 {
     CURRENT_VERSION
+}
+
+unsafe fn fill_awm_result(result: *mut AWMResult, r: &crate::message::MessageResult) {
+    (*result).version = r.version;
+    (*result).timestamp_utc = r.timestamp_utc;
+    (*result).timestamp_minutes = r.timestamp_minutes;
+    (*result).key_slot = r.key_slot;
+
+    // Copy tag (8 chars + null)
+    let tag_bytes = r.tag.as_bytes();
+    for (i, &b) in tag_bytes.iter().enumerate() {
+        (*result).tag[i] = u8_to_c_char(b);
+    }
+    (*result).tag[8] = 0;
+
+    // Copy identity (up to 7 chars + null)
+    let identity = r.tag.identity();
+    for (i, b) in identity.bytes().enumerate() {
+        (*result).identity[i] = u8_to_c_char(b);
+    }
+    (*result).identity[identity.len()] = 0;
 }
 
 /// 获取消息长度

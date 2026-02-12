@@ -201,6 +201,38 @@ public static class AwmBridge
     }
 
     /// <summary>
+    /// Decodes a watermark message without HMAC verification.
+    /// </summary>
+    public static (AWMResult? result, AwmError error) DecodeMessageUnverified(byte[] message)
+    {
+        if (message.Length != MessageLength)
+        {
+            return (null, AwmError.InvalidMessageLength);
+        }
+
+        var messageHandle = GCHandle.Alloc(message, GCHandleType.Pinned);
+        var resultPtr = Marshal.AllocHGlobal(Marshal.SizeOf<AWMResult>());
+        try
+        {
+            int code = AwmNative.awm_message_decode_unverified(
+                messageHandle.AddrOfPinnedObject(),
+                resultPtr);
+
+            if (code == 0)
+            {
+                var result = Marshal.PtrToStructure<AWMResult>(resultPtr);
+                return (result, AwmError.Ok);
+            }
+            return (null, (AwmError)code);
+        }
+        finally
+        {
+            messageHandle.Free();
+            Marshal.FreeHGlobal(resultPtr);
+        }
+    }
+
+    /// <summary>
     /// Embeds a watermark into an audio file.
     /// </summary>
     public static AwmError EmbedAudio(string inputPath, string outputPath, byte[] message, int strength = 10)
