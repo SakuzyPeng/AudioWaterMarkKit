@@ -13,10 +13,14 @@ namespace AWMKit.Native;
 internal static class AwmNative
 {
     private const string Lib = "awmkit_native.dll";
+    private const uint LoadLibrarySearchDefaultDirs = 0x00001000;
+    private const uint LoadLibrarySearchUserDirs = 0x00000400;
     private static IntPtr _preloadedHandle = IntPtr.Zero;
+    private static readonly List<nint> AddedDllDirectoryCookies = [];
 
     static AwmNative()
     {
+        ConfigureNativeSearchDirectories();
         NativeLibrary.SetDllImportResolver(
             typeof(AwmNative).Assembly,
             static (libraryName, assembly, searchPath) => ResolveLibrary(libraryName, assembly));
@@ -26,11 +30,43 @@ internal static class AwmNative
 
     internal static bool EnsureLoaded() => _preloadedHandle != IntPtr.Zero;
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetDefaultDllDirectories(uint directoryFlags);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern nint AddDllDirectory(string newDirectory);
+
+    private static void ConfigureNativeSearchDirectories()
+    {
+        try
+        {
+            SetDefaultDllDirectories(LoadLibrarySearchDefaultDirs | LoadLibrarySearchUserDirs);
+            foreach (var dir in EnumerateNativeSearchDirs())
+            {
+                var cookie = AddDllDirectory(dir);
+                if (cookie != nint.Zero)
+                {
+                    AddedDllDirectoryCookies.Add(cookie);
+                }
+            }
+        }
+        catch
+        {
+            // Fallback to explicit path probing in ResolveLibrary.
+        }
+    }
+
     private static IntPtr ResolveLibrary(string libraryName, Assembly assembly)
     {
         if (!IsAwmkitLibraryName(libraryName))
         {
             return IntPtr.Zero;
+        }
+
+        // Try runtime default resolver first (respects runtime-specific probing rules).
+        if (NativeLibrary.TryLoad(libraryName, assembly, DllImportSearchPath.SafeDirectories, out var runtimeResolved))
+        {
+            return runtimeResolved;
         }
 
         foreach (var dir in EnumerateNativeSearchDirs())
@@ -58,22 +94,49 @@ internal static class AwmNative
 
     private static IEnumerable<string> EnumerateNativeSearchDirs()
     {
-        // Single-file publish: .NET sets this to extraction directories.
-        if (AppContext.GetData("NATIVE_DLL_SEARCH_DIRECTORIES") is string raw
-            && !string.IsNullOrWhiteSpace(raw))
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        static bool TryAdd(HashSet<string> cache, string? dir)
         {
-            foreach (var dir in raw.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            if (string.IsNullOrWhiteSpace(dir))
             {
-                if (!string.IsNullOrWhiteSpace(dir))
-                {
-                    yield return dir.Trim();
-                }
+                return false;
             }
-            yield break;
+
+            var normalized = dir.Trim();
+            if (!Directory.Exists(normalized))
+            {
+                return false;
+            }
+
+            return cache.Add(normalized);
         }
 
-        // Debug/dev fallback.
-        yield return AppContext.BaseDirectory;
+        var baseDir = AppContext.BaseDirectory;
+        if (TryAdd(seen, baseDir))
+        {
+            yield return baseDir;
+        }
+
+        if (TryAdd(seen, Path.Combine(baseDir, "lib", "ffmpeg")))
+        {
+            yield return Path.Combine(baseDir, "lib", "ffmpeg");
+        }
+
+        var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        if (TryAdd(seen, assemblyDir))
+        {
+            yield return assemblyDir!;
+        }
+
+        if (TryAdd(seen, assemblyDir is null ? null : Path.Combine(assemblyDir, "lib", "ffmpeg")))
+        {
+            yield return Path.Combine(assemblyDir!, "lib", "ffmpeg");
+        }
+
+        if (TryAdd(seen, Environment.CurrentDirectory))
+        {
+            yield return Environment.CurrentDirectory;
+        }
     }
 
     // ── Tag Operations ──

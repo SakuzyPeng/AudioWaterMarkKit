@@ -29,6 +29,13 @@ AWMKit 是一个围绕音频水印场景构建的跨平台工具集，包含 Rus
 - CLI 使用指南：[`docs/zh-CN/cli/usage.md`](./docs/zh-CN/cli/usage.md)
 - 构建矩阵：[`docs/zh-CN/build/build-matrix.md`](./docs/zh-CN/build/build-matrix.md)
 
+## 本地发布（当前主流程）
+
+- macOS（App + CLI）：`./scripts/release/local-release-macos.sh`
+- Windows（Inno 安装包，需在 `win-pc` 执行）：`powershell -File scripts/release/local-release-win.ps1`
+- 一键双端（mac 发起，调用 `win-pc`）：`./scripts/release/local-release-all.sh`
+- 说明：当前以“本地发布流水线”为主，CI 工作流仅作参考/备份。
+
 ## 文档导航
 
 - CLI：[`docs/zh-CN/cli/usage.md`](./docs/zh-CN/cli/usage.md)

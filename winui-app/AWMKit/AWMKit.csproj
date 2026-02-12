@@ -18,13 +18,9 @@
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <EnableMsixTooling>true</EnableMsixTooling>
-    <PublishSingleFile>true</PublishSingleFile>
+    <PublishSingleFile>false</PublishSingleFile>
     <SelfContained>true</SelfContained>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
-    <PublishTrimmed>true</PublishTrimmed>
-    <TrimMode>partial</TrimMode>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
     <PublishAot>false</PublishAot>
     <DebugType>None</DebugType>
     <DebugSymbols>false</DebugSymbols>
@@ -38,6 +34,7 @@
     <RustNativeDllRelease>$(RustTargetDir)\release\awmkit.dll</RustNativeDllRelease>
     <NativeDllLocal>$(MSBuildProjectDirectory)\awmkit_native.dll</NativeDllLocal>
     <FfmpegRuntimeDir>$(RepoRoot)\ffmpeg-prebuilt\bin</FfmpegRuntimeDir>
+    <FfmpegRuntimeZip>$(RepoRoot)\ffmpeg-win64-gpl-slim-runtime-8.0.2.zip</FfmpegRuntimeZip>
   </PropertyGroup>
 
   <ItemGroup>
@@ -53,18 +50,19 @@
           CopyToPublishDirectory="PreserveNewest" />
     <None Include="awmkit_native.dll"
           CopyToOutputDirectory="Always"
-          CopyToPublishDirectory="Always">
-      <IncludeInSingleFile>true</IncludeInSingleFile>
-    </None>
+          CopyToPublishDirectory="Always" />
+    <None Include="$(RepoRoot)\bundled\audiowmark-windows-x86_64.zip"
+          Link="bundled\audiowmark-windows-x86_64.zip"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="Always"
+          Condition="Exists('$(RepoRoot)\bundled\audiowmark-windows-x86_64.zip')" />
   </ItemGroup>
 
   <ItemGroup Condition="Exists('$(FfmpegRuntimeDir)')">
     <None Include="$(FfmpegRuntimeDir)\*.dll"
-          Link="%(Filename)%(Extension)"
+          Link="lib\ffmpeg\%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest"
-          CopyToPublishDirectory="Always">
-      <IncludeInSingleFile>true</IncludeInSingleFile>
-    </None>
+          CopyToPublishDirectory="Always" />
   </ItemGroup>
 
   <Target Name="PrepareAwmkitNativeDll" BeforeTargets="Build;Publish">
@@ -76,7 +74,12 @@
            Text="Missing awmkit native DLL. Build Rust first: cargo build --release --features ffi,app,bundled --target x86_64-pc-windows-msvc" />
   </Target>
 
-  <Target Name="ValidateFfmpegRuntimeDlls" BeforeTargets="Build;Publish">
+  <Target Name="PrepareFfmpegRuntimeDlls" BeforeTargets="Build;Publish">
+    <Exec Condition="!Exists('$(FfmpegRuntimeDir)\avcodec-62.dll') AND Exists('$(FfmpegRuntimeZip)')"
+          Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$ErrorActionPreference='Stop'; $repo='$(RepoRoot)'; $zip='$(FfmpegRuntimeZip)'; $runtime='$(FfmpegRuntimeDir)'; $tmp=Join-Path $repo 'ffmpeg-prebuilt\_unpack'; if(Test-Path $tmp){Remove-Item $tmp -Recurse -Force}; New-Item -ItemType Directory -Force -Path $tmp | Out-Null; Expand-Archive -Path $zip -DestinationPath $tmp -Force; $root = Get-ChildItem -Path $tmp -Directory | Select-Object -First 1; if($null -eq $root){ throw 'Invalid ffmpeg runtime zip: missing root directory.' }; New-Item -ItemType Directory -Force -Path $runtime | Out-Null; if(Test-Path (Join-Path $root.FullName 'bin')){ Copy-Item (Join-Path $root.FullName 'bin\*.dll') $runtime -Force } elseif (Test-Path (Join-Path $root.FullName 'lib')) { Copy-Item (Join-Path $root.FullName 'lib\*.dll') $runtime -Force } else { throw 'Invalid ffmpeg runtime zip: missing bin/lib directory.' }; Remove-Item $tmp -Recurse -Force&quot;" />
+  </Target>
+
+  <Target Name="ValidateFfmpegRuntimeDlls" BeforeTargets="Build;Publish" DependsOnTargets="PrepareFfmpegRuntimeDlls">
     <Error Condition="!Exists('$(FfmpegRuntimeDir)\avcodec-62.dll')"
            Text="Missing FFmpeg runtime DLLs. Expected in $(FfmpegRuntimeDir). Please prepare ffmpeg-prebuilt/bin first." />
     <Error Condition="!Exists('$(FfmpegRuntimeDir)\avformat-62.dll')"

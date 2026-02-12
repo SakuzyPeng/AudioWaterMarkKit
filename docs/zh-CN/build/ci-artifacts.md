@@ -2,6 +2,8 @@
 
 [English](../../en-US/build/ci-artifacts.md)
 
+> 注：当前阶段发布以本地脚本为主（见 `/scripts/release/`），CI workflow 作为参考与备份流程。
+
 ## 主要 Workflow
 
 - `.github/workflows/build-awmkit.yml`
@@ -52,3 +54,6 @@ CI 会从 GitHub Release 下载并准备：
 1. 先验证 `cargo test --features app`。
 2. 校验 CLI 帮助与文档一致（`awmkit --help`）。
 3. 确认 Release Notes：`docs/AWMKIT_RELEASE_NOTES.md`。
+4. 本地发布优先执行：
+   - `./scripts/release/local-release-macos.sh`
+   - `powershell -File scripts/release/local-release-win.ps1`（在 `win-pc`）

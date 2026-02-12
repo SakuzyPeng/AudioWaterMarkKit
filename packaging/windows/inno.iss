@@ -1,6 +1,6 @@
-; AWMKit Windows Installer (Inno Setup) - Draft for WinUI phase
+; AWMKit Windows Installer (Inno Setup)
 ; Build example:
-; iscc /DAppVersion=0.1.3 /DAppSourceDir="C:\\path\\to\\app" /DRustCliSource="C:\\path\\to\\awmkit.exe" /DOutputDir="C:\\path\\to\\dist" packaging\\windows\\inno.iss
+; iscc /DAppVersion=0.1.3 /DAppPackageVersion=0.1.3 /DAppCommit=abc1234 /DAppSourceDir="C:\\path\\to\\staging\\app" /DOutputDir="C:\\path\\to\\dist" packaging\\windows\\inno.iss
 
 #ifndef AppName
   #define AppName "AWMKit"
@@ -8,6 +8,14 @@
 
 #ifndef AppVersion
   #define AppVersion "0.1.3"
+#endif
+
+#ifndef AppPackageVersion
+  #define AppPackageVersion "0.1.3"
+#endif
+
+#ifndef AppCommit
+  #define AppCommit "unknown"
 #endif
 
 #ifndef AppPublisher
@@ -20,10 +28,6 @@
 
 #ifndef AppSourceDir
   #define AppSourceDir "staging\\app"
-#endif
-
-#ifndef RustCliSource
-  #define RustCliSource "staging\\app\\bin\\awmkit.exe"
 #endif
 
 #ifndef OutputDir
@@ -39,7 +43,7 @@ DefaultDirName={autopf}\\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 OutputDir={#OutputDir}
-OutputBaseFilename=AWMKit-Setup-{#AppVersion}
+OutputBaseFilename=AWMKit-win-x64-setup-{#AppPackageVersion}-{#AppCommit}
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -52,7 +56,6 @@ Name: "english"; MessagesFile: "compiler:Languages\\English.isl"
 
 [Files]
 Source: "{#AppSourceDir}\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#RustCliSource}"; DestDir: "{app}\\bin"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{autoprograms}\\{#AppName}"; Filename: "{app}\\{#AppExeName}"

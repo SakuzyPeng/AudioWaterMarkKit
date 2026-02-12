@@ -2,6 +2,8 @@
 
 [中文](../../zh-CN/build/ci-artifacts.md)
 
+> Note: at the current stage, release is driven by local scripts (see `/scripts/release/`). CI workflows are maintained as reference/backup.
+
 ## Primary Workflows
 
 - `.github/workflows/build-awmkit.yml`
@@ -52,3 +54,6 @@ Runtime bundled zips:
 1. Validate `cargo test --features app`.
 2. Ensure CLI help matches docs (`awmkit --help`).
 3. Update release notes at `docs/AWMKIT_RELEASE_NOTES.md`.
+4. Prefer local release scripts first:
+   - `./scripts/release/local-release-macos.sh`
+   - `powershell -File scripts/release/local-release-win.ps1` (on `win-pc`)

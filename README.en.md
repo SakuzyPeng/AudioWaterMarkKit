@@ -29,6 +29,13 @@ AWMKit is a cross-platform audio watermark toolkit built around a Rust core, wit
 - CLI usage: [`docs/en-US/cli/usage.md`](./docs/en-US/cli/usage.md)
 - Build matrix: [`docs/en-US/build/build-matrix.md`](./docs/en-US/build/build-matrix.md)
 
+## Local Release (Current Primary Flow)
+
+- macOS (App + CLI): `./scripts/release/local-release-macos.sh`
+- Windows (Inno installer, run on `win-pc`): `powershell -File scripts/release/local-release-win.ps1`
+- One-shot dual-platform release (from mac, invokes `win-pc`): `./scripts/release/local-release-all.sh`
+- Note: local release is the primary path for now; CI workflows are reference/backup.
+
 ## Docs Navigation
 
 - CLI: [`docs/en-US/cli/usage.md`](./docs/en-US/cli/usage.md)

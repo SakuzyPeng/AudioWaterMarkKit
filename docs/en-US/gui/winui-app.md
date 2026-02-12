@@ -14,34 +14,34 @@ Its page semantics are aligned with macOS: embed, detect, database management, a
 # 1) Build Rust FFI library
 cargo build --lib --features ffi,app,bundled --release --target x86_64-pc-windows-msvc
 
-# 2) Copy dll (before local WinUI debug)
-Copy-Item target/x86_64-pc-windows-msvc/release/awmkit.dll winui-app/AWMKit/awmkit_native.dll -Force
-
-# 3) Build WinUI
+# 2) Build WinUI (project auto-prepares awmkit_native.dll and FFmpeg runtime)
 cd winui-app/AWMKit
 dotnet build -c Debug -p:Platform=x64
 ```
 
-## 3. Single-file Publish (recommended)
+## 3. Release (local-first)
+
+Recommended: use local script to produce an Inno installer (multi-file install layout, avoids single-file extraction path issues):
+
+```powershell
+powershell -File scripts/release/local-release-win.ps1
+```
+
+Manual publish (multi-file) if needed:
 
 ```powershell
 dotnet publish winui-app/AWMKit/AWMKit.csproj \
   -c Release -r win-x64 \
   -p:Platform=x64 \
-  -p:PublishSingleFile=true \
   -p:SelfContained=true \
-  -p:IncludeNativeLibrariesForSelfExtract=true \
-  -p:IncludeAllContentForSelfExtract=true \
-  -p:PublishTrimmed=true \
-  -p:TrimMode=partial \
-  -p:EnableCompressionInSingleFile=true \
+  -p:PublishSingleFile=false \
+  -p:PublishTrimmed=false \
   -p:PublishAot=false
 ```
-
-See size benchmark notes: [`docs/winui-publish-size-experiments.md`](../../winui-publish-size-experiments.md)
 
 ## 4. Runtime Dependencies
 
 - Bundled mode expects `bundled/audiowmark-windows-x86_64.zip`
 - Database path: `%LOCALAPPDATA%\\awmkit\\awmkit.db`
 - Key/mapping/evidence operations are routed through Rust FFI
+- Release layout includes: `AWMKit.exe`, `awmkit_native.dll`, `lib\\ffmpeg\\*.dll`, `bundled\\...`, `cli\\awmkit.exe`
