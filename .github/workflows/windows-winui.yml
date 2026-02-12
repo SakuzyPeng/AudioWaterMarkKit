@@ -134,7 +134,7 @@ jobs:
         run: cargo build --bin awmkit --features full-cli --release --target aarch64-apple-darwin
 
       - name: Build Rust FFI dylib (release)
-        run: cargo build --lib --features ffi,app,bundled --release --target aarch64-apple-darwin
+        run: cargo build --lib --features ffi,app,bundled --release
 
       - name: Generate Xcode project
         run: |
