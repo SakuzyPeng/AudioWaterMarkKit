@@ -6,7 +6,7 @@ on:
       release_tag:
         description: "Release tag (e.g. ffmpeg-runtime-8.0.2)"
         required: true
-        default: "ffmpeg-runtime-8.0.2"
+        default: "ffmpeg-runtime-8.0.1"
       ffmpeg_ref:
         description: "FFmpeg git ref/tag (e.g. n8.0.2)"
         required: true
@@ -15,6 +15,14 @@ on:
         description: "Asset version suffix (e.g. 8.0.2)"
         required: true
         default: "8.0.1"
+      btbn_windows_release:
+        description: "BtbN release tag for prebuilt Windows package"
+        required: true
+        default: "latest"
+      btbn_windows_asset:
+        description: "BtbN Windows shared package asset name"
+        required: true
+        default: "ffmpeg-n8.0-latest-win64-gpl-shared-8.0.zip"
       prerelease:
         description: "Mark release as prerelease"
         type: boolean
@@ -53,9 +61,6 @@ jobs:
 
       - name: Build slim runtime
         run: |
-          pwd
-          ls -la
-          ls -la "$GITHUB_WORKSPACE/tools/ffmpeg"
           VERSION_TAG="${{ inputs.version_tag }}" \
           bash "$GITHUB_WORKSPACE/tools/ffmpeg/build-macos-arm64.sh" "$RUNNER_TEMP/ffmpeg-src"
 
@@ -68,47 +73,87 @@ jobs:
             dist/ffmpeg-macos-arm64-gpl-slim-runtime/*.zip.sha256
 
   build-windows-x64:
-    name: Build FFmpeg Windows x64 runtime
+    name: Repackage FFmpeg Windows x64 runtime (BtbN prebuilt)
     runs-on: windows-latest
-    timeout-minutes: 120
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup MSYS2 toolchain
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            git
-            make
-            diffutils
-            pkgconf
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-nasm
-            mingw-w64-x86_64-yasm
-
-      - name: Clone FFmpeg source (shallow)
+      - name: Download BtbN FFmpeg package
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $src = "$env:RUNNER_TEMP\\ffmpeg-src"
-          Remove-Item -Recurse -Force $src -ErrorAction SilentlyContinue
-          git clone --depth 1 --branch "${{ inputs.ffmpeg_ref }}" https://github.com/FFmpeg/FFmpeg.git $src
-          if ($LASTEXITCODE -ne 0) {
-            throw "Invalid ffmpeg_ref: ${{ inputs.ffmpeg_ref }}. Try n8.0.1 or n8.0."
+          gh release download "${{ inputs.btbn_windows_release }}" `
+            --repo "BtbN/FFmpeg-Builds" `
+            -p "${{ inputs.btbn_windows_asset }}" `
+            --clobber
+          if (!(Test-Path "${{ inputs.btbn_windows_asset }}")) {
+            throw "Failed to download BtbN asset: ${{ inputs.btbn_windows_asset }}"
           }
-          git -C $src rev-parse HEAD
 
-      - name: Build slim runtime
+      - name: Repackage slim runtime asset
         shell: pwsh
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass `
-            -File tools/ffmpeg/build-windows-x64.ps1 `
-            -FfmpegSrc "$env:RUNNER_TEMP\\ffmpeg-src" `
-            -MsysBash "C:\\msys64\\usr\\bin\\bash.exe" `
-            -VersionTag "${{ inputs.version_tag }}"
+          $ErrorActionPreference = "Stop"
+          $asset = "${{ inputs.btbn_windows_asset }}"
+          $extractDir = Join-Path $env:RUNNER_TEMP "ffmpeg-btbn"
+          Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue
+          Expand-Archive -Path $asset -DestinationPath $extractDir -Force
+
+          $root = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
+          if ($null -eq $root) {
+            throw "Invalid BtbN package: missing root directory"
+          }
+
+          $binDir = Join-Path $root.FullName "bin"
+          if (!(Test-Path $binDir)) {
+            throw "Invalid BtbN package: missing bin directory"
+          }
+
+          foreach ($required in @("avcodec-*.dll","avformat-*.dll","avutil-*.dll","avfilter-*.dll","swresample-*.dll")) {
+            if (!(Get-ChildItem -Path $binDir -Filter $required -ErrorAction SilentlyContinue)) {
+              throw "Missing required runtime library pattern: $required"
+            }
+          }
+
+          $outDir = "dist/ffmpeg-win64-gpl-slim-runtime"
+          $pkgName = "ffmpeg-win64-gpl-slim-runtime-${{ inputs.version_tag }}"
+          $pkgRoot = Join-Path $outDir $pkgName
+          $pkgBin = Join-Path $pkgRoot "bin"
+
+          Remove-Item -Recurse -Force $outDir -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $pkgBin | Out-Null
+
+          Copy-Item (Join-Path $binDir "avcodec-*.dll") $pkgBin -Force
+          Copy-Item (Join-Path $binDir "avformat-*.dll") $pkgBin -Force
+          Copy-Item (Join-Path $binDir "avutil-*.dll") $pkgBin -Force
+          Copy-Item (Join-Path $binDir "avfilter-*.dll") $pkgBin -Force
+          Copy-Item (Join-Path $binDir "swresample-*.dll") $pkgBin -Force
+
+          $licenseCandidates = Get-ChildItem -Path $root.FullName -File -Include "LICENSE*","COPYING*" -ErrorAction SilentlyContinue
+          if ($licenseCandidates.Count -gt 0) {
+            Copy-Item $licenseCandidates[0].FullName (Join-Path $pkgRoot "LICENSE.GPL.txt") -Force
+          } else {
+            "FFmpeg license text not found in source package." | Set-Content (Join-Path $pkgRoot "LICENSE.GPL.txt") -Encoding UTF8
+          }
+
+          @"
+AWMKit FFmpeg runtime (Windows x64)
+Version: ${{ inputs.version_tag }}
+Source: BtbN/FFmpeg-Builds (${{ inputs.btbn_windows_asset }})
+This package contains slim shared libraries required by AWMKit runtime.
+Included libraries: avcodec, avformat, avutil, avfilter, swresample.
+"@ | Set-Content (Join-Path $pkgRoot "README.txt") -Encoding UTF8
+
+          $zipPath = Join-Path $outDir "$pkgName.zip"
+          Compress-Archive -Path "$pkgRoot\\*" -DestinationPath $zipPath -Force
+          $hash = (Get-FileHash -Algorithm SHA256 $zipPath).Hash.ToLowerInvariant()
+          "$hash  $pkgName.zip" | Set-Content (Join-Path $outDir "$pkgName.zip.sha256") -Encoding UTF8
+          Get-Item $zipPath
+          Get-Item (Join-Path $outDir "$pkgName.zip.sha256")
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
