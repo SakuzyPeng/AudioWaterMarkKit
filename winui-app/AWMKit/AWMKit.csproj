@@ -67,14 +67,14 @@
   </ItemGroup>
 
   <Target Name="PrepareAwmkitNativeDll" BeforeTargets="Build;Publish">
-    <Copy SourceFiles="$(RustNativeDll)"
-          DestinationFiles="$(NativeDllLocal)"
-          SkipUnchangedFiles="true"
-          Condition="Exists('$(RustNativeDll)')" />
     <Copy SourceFiles="$(RustNativeDllRelease)"
           DestinationFiles="$(NativeDllLocal)"
           SkipUnchangedFiles="true"
-          Condition="!Exists('$(RustNativeDll)') and Exists('$(RustNativeDllRelease)')" />
+          Condition="Exists('$(RustNativeDllRelease)')" />
+    <Copy SourceFiles="$(RustNativeDll)"
+          DestinationFiles="$(NativeDllLocal)"
+          SkipUnchangedFiles="true"
+          Condition="!Exists('$(NativeDllLocal)') and Exists('$(RustNativeDll)')" />
     <Error Condition="!Exists('$(NativeDllLocal)')"
            Text="Missing awmkit native DLL. Build Rust first: cargo build --release --features ffi,app,bundled --target x86_64-pc-windows-msvc" />
   </Target>

@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace AWMKit.Native;
@@ -9,6 +13,68 @@ namespace AWMKit.Native;
 internal static class AwmNative
 {
     private const string Lib = "awmkit_native.dll";
+    private static IntPtr _preloadedHandle = IntPtr.Zero;
+
+    static AwmNative()
+    {
+        NativeLibrary.SetDllImportResolver(
+            typeof(AwmNative).Assembly,
+            static (libraryName, assembly, searchPath) => ResolveLibrary(libraryName, assembly));
+
+        _preloadedHandle = ResolveLibrary(Lib, typeof(AwmNative).Assembly);
+    }
+
+    internal static bool EnsureLoaded() => _preloadedHandle != IntPtr.Zero;
+
+    private static IntPtr ResolveLibrary(string libraryName, Assembly assembly)
+    {
+        if (!IsAwmkitLibraryName(libraryName))
+        {
+            return IntPtr.Zero;
+        }
+
+        foreach (var dir in EnumerateNativeSearchDirs())
+        {
+            var candidate = Path.Combine(dir, Lib);
+            if (!File.Exists(candidate))
+            {
+                continue;
+            }
+
+            if (NativeLibrary.TryLoad(candidate, out var handle))
+            {
+                return handle;
+            }
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private static bool IsAwmkitLibraryName(string libraryName)
+    {
+        return string.Equals(libraryName, Lib, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(libraryName, "awmkit_native", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<string> EnumerateNativeSearchDirs()
+    {
+        // Single-file publish: .NET sets this to extraction directories.
+        if (AppContext.GetData("NATIVE_DLL_SEARCH_DIRECTORIES") is string raw
+            && !string.IsNullOrWhiteSpace(raw))
+        {
+            foreach (var dir in raw.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!string.IsNullOrWhiteSpace(dir))
+                {
+                    yield return dir.Trim();
+                }
+            }
+            yield break;
+        }
+
+        // Debug/dev fallback.
+        yield return AppContext.BaseDirectory;
+    }
 
     // ── Tag Operations ──
 
