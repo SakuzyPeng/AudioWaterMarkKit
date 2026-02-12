@@ -355,7 +355,9 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup --no-progress -y
-          iscc /? | Out-Null
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
+            throw "iscc not found after Inno Setup installation"
+          }
 
       - name: Build Windows installer (Release)
         shell: pwsh
