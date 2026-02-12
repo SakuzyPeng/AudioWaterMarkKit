@@ -306,6 +306,8 @@ public sealed partial class EmbedViewModel : ObservableObject
     public string LogsEmptyText => L("暂无日志", "No logs");
     public string SelectInputSourceAccessibility => L("选择输入源", "Select input source");
     public string SelectOutputDirectoryAccessibility => L("选择输出目录", "Select output directory");
+    public string ClearInputSourceAccessibility => L("清空输入源地址", "Clear input source path");
+    public string ClearOutputDirectoryAccessibility => L("清空输出目录地址", "Clear output directory path");
     public string EmbedActionAccessibility => L("开始或停止嵌入", "Start or stop embedding");
     public string ClearQueueAccessibility => L("清空队列", "Clear queue");
     public string ClearLogsAccessibility => L("清空日志", "Clear logs");
@@ -467,6 +469,52 @@ public sealed partial class EmbedViewModel : ObservableObject
         }
 
         SelectedFiles.Remove(filePath);
+    }
+
+    [RelayCommand]
+    private void ClearInputSource()
+    {
+        if (string.IsNullOrWhiteSpace(InputSource))
+        {
+            AddLog(
+                L("输入源为空", "Input source is empty"),
+                L("没有可清空的输入源地址", "No input source path to clear"),
+                true,
+                true,
+                LogIconTone.Info);
+            return;
+        }
+
+        InputSource = null;
+        AddLog(
+            L("已清空输入源", "Input source cleared"),
+            L("仅清空输入源地址，不影响待处理队列", "Cleared input source path only; queue unchanged"),
+            true,
+            true,
+            LogIconTone.Info);
+    }
+
+    [RelayCommand]
+    private void ClearOutputDirectory()
+    {
+        if (string.IsNullOrWhiteSpace(OutputDirectory))
+        {
+            AddLog(
+                L("输出目录为空", "Output directory is empty"),
+                L("没有可清空的输出目录地址", "No output directory path to clear"),
+                true,
+                true,
+                LogIconTone.Info);
+            return;
+        }
+
+        OutputDirectory = null;
+        AddLog(
+            L("已清空输出目录", "Output directory cleared"),
+            L("已恢复为写回源文件目录", "Reset to write-back source directory"),
+            true,
+            true,
+            LogIconTone.Info);
     }
 
     [RelayCommand]
@@ -1345,6 +1393,8 @@ public sealed partial class EmbedViewModel : ObservableObject
         OnPropertyChanged(nameof(LogsEmptyText));
         OnPropertyChanged(nameof(SelectInputSourceAccessibility));
         OnPropertyChanged(nameof(SelectOutputDirectoryAccessibility));
+        OnPropertyChanged(nameof(ClearInputSourceAccessibility));
+        OnPropertyChanged(nameof(ClearOutputDirectoryAccessibility));
         OnPropertyChanged(nameof(EmbedActionAccessibility));
         OnPropertyChanged(nameof(ClearQueueAccessibility));
         OnPropertyChanged(nameof(ClearLogsAccessibility));

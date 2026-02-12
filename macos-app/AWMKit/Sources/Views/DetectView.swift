@@ -79,15 +79,15 @@ struct DetectView: View {
                 }
 
                 HStack(spacing: 12) {
-                    Button(action: { viewModel.selectFiles() }) {
+                    Button(action: { viewModel.clearInputSource() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "folder")
-                            Text(l("选择", "Select"))
+                            Text(l("清空", "Clear"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel(l("选择输入源", "Select input source"))
+                    .accessibilityLabel(l("清空输入源地址", "Clear input source path"))
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.detectFiles(audio: appState.audio) }) {

@@ -134,6 +134,11 @@ public sealed partial class EmbedPage : Page
         }
     }
 
+    private void InputSummaryButton_Click(object sender, RoutedEventArgs e)
+    {
+        SelectInputSourceButton_Click(sender, e);
+    }
+
     private async void SelectOutputDirectoryButton_Click(object sender, RoutedEventArgs e)
     {
         var path = await PickFolderAsync();
@@ -142,6 +147,11 @@ public sealed partial class EmbedPage : Page
             ViewModel.OutputDirectory = path;
             await ViewModel.FlashOutputSelectAsync();
         }
+    }
+
+    private void OutputSummaryButton_Click(object sender, RoutedEventArgs e)
+    {
+        SelectOutputDirectoryButton_Click(sender, e);
     }
 
     private void GoToKeyPageButton_Click(object sender, RoutedEventArgs e)
@@ -220,11 +230,7 @@ public sealed partial class EmbedPage : Page
             }
             else if (item is StorageFolder folder)
             {
-                var files = await folder.GetFilesAsync();
-                foreach (var childFile in files)
-                {
-                    dropped.Add(childFile.Path);
-                }
+                dropped.Add(folder.Path);
             }
         }
 

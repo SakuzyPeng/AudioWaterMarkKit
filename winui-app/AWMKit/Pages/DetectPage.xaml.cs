@@ -91,6 +91,11 @@ public sealed partial class DetectPage : Page
         }
     }
 
+    private void InputSummaryButton_Click(object sender, RoutedEventArgs e)
+    {
+        SelectInputSourceButton_Click(sender, e);
+    }
+
     private async Task<string?> PickSingleAudioFileAsync()
     {
         var picker = new FileOpenPicker();
@@ -175,8 +180,7 @@ public sealed partial class DetectPage : Page
             }
             else if (item is StorageFolder folder)
             {
-                var files = await folder.GetFilesAsync();
-                droppedFiles.AddRange(files.Select(x => x.Path));
+                droppedFiles.Add(folder.Path);
             }
         }
 

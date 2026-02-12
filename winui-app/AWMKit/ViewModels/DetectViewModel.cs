@@ -314,6 +314,7 @@ public sealed partial class DetectViewModel : ObservableObject
     public string LogSearchPlaceholder => L("搜索日志（标题/详情）", "Search logs (title/detail)");
     public string NoFilteredLogsText => L("暂无或无匹配日志", "No logs or no matches");
     public string SelectInputSourceAccessibility => L("选择输入源", "Select input source");
+    public string ClearInputSourceAccessibility => L("清空输入源地址", "Clear input source path");
     public string DetectActionAccessibility => L("开始或停止检测", "Start or stop detection");
     public string ClearQueueAccessibility => L("清空队列", "Clear queue");
     public string ClearLogsAccessibility => L("清空日志", "Clear logs");
@@ -436,9 +437,18 @@ public sealed partial class DetectViewModel : ObservableObject
 
     public void AddDroppedFiles(IEnumerable<string> filePaths)
     {
-        var files = filePaths
-            .Where(IsSupportedAudioFile)
-            .ToList();
+        var files = new List<string>();
+        foreach (var path in filePaths)
+        {
+            if (Directory.Exists(path))
+            {
+                files.AddRange(ResolveAudioFiles(path));
+            }
+            else if (IsSupportedAudioFile(path))
+            {
+                files.Add(path);
+            }
+        }
 
         AppendFilesWithDedup(files);
     }
@@ -452,6 +462,31 @@ public sealed partial class DetectViewModel : ObservableObject
         }
 
         SelectedFiles.Remove(filePath);
+    }
+
+    [RelayCommand]
+    private void ClearInputSource()
+    {
+        if (string.IsNullOrWhiteSpace(InputSource))
+        {
+            AddLog(
+                L("输入源为空", "Input source is empty"),
+                L("没有可清空的输入源地址", "No input source path to clear"),
+                true,
+                true,
+                null,
+                LogIconTone.Info);
+            return;
+        }
+
+        InputSource = null;
+        AddLog(
+            L("已清空输入源", "Input source cleared"),
+            L("仅清空输入源地址，不影响待处理队列", "Cleared input source path only; queue unchanged"),
+            true,
+            true,
+            null,
+            LogIconTone.Info);
     }
 
     [RelayCommand]
@@ -1443,6 +1478,7 @@ public sealed partial class DetectViewModel : ObservableObject
         OnPropertyChanged(nameof(LogSearchPlaceholder));
         OnPropertyChanged(nameof(NoFilteredLogsText));
         OnPropertyChanged(nameof(SelectInputSourceAccessibility));
+        OnPropertyChanged(nameof(ClearInputSourceAccessibility));
         OnPropertyChanged(nameof(DetectActionAccessibility));
         OnPropertyChanged(nameof(ClearQueueAccessibility));
         OnPropertyChanged(nameof(ClearLogsAccessibility));

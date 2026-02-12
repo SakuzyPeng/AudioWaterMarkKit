@@ -59,13 +59,22 @@
                         CornerRadius="8"
                         Padding="12"
                         Margin="2,2,2,0">
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="{x:Bind ViewModel.InputSectionTitle, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Text="{x:Bind ViewModel.InputSourceText, Mode=OneWay}"
-                                   TextWrapping="Wrap"
-                                   MaxLines="2"
-                                   TextTrimming="CharacterEllipsis"/>
-                    </StackPanel>
+                    <Button Click="InputSummaryButton_Click"
+                            AutomationProperties.Name="{x:Bind ViewModel.SelectInputSourceAccessibility, Mode=OneWay}"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="{x:Bind ViewModel.InputSectionTitle, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="{x:Bind ViewModel.InputSourceText, Mode=OneWay}"
+                                       TextWrapping="Wrap"
+                                       MaxLines="2"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </Button>
                 </Border>
 
                 <InfoBar Grid.Row="1"
@@ -86,16 +95,12 @@
                               PlaceholderText="{x:Bind ViewModel.LayoutLabel, Mode=OneWay}"
                               AutomationProperties.Name="{x:Bind ViewModel.LayoutLabel, Mode=OneWay}"
                               Visibility="Collapsed"/>
-                    <Button Click="SelectInputSourceButton_Click"
+                    <Button Command="{x:Bind ViewModel.ClearInputSourceCommand}"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            AutomationProperties.Name="{x:Bind ViewModel.SelectInputSourceAccessibility, Mode=OneWay}">
+                            AutomationProperties.Name="{x:Bind ViewModel.ClearInputSourceAccessibility, Mode=OneWay}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <SymbolIcon Symbol="OpenFile"
-                                        Visibility="{x:Bind ViewModel.IsInputSelectSuccess, Mode=OneWay, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
-                            <SymbolIcon Symbol="OpenFile"
-                                        Foreground="{StaticResource SuccessBrush}"
-                                        Visibility="{x:Bind ViewModel.IsInputSelectSuccess, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                            <TextBlock Text="{x:Bind ViewModel.SelectActionText, Mode=OneWay}"/>
+                            <SymbolIcon Symbol="OpenFile"/>
+                            <TextBlock Text="{x:Bind ViewModel.ClearActionText, Mode=OneWay}"/>
                         </StackPanel>
                     </Button>
                     <Button Command="{x:Bind ViewModel.DetectOrStopCommand}"

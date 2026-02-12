@@ -104,25 +104,70 @@ class EmbedViewModel: ObservableObject {
         }
     }
 
+    func clearInputSource() {
+        guard inputSource != nil else {
+            log(
+                localized("输入源为空", "Input source is empty"),
+                detail: localized("没有可清空的输入源地址", "No input source path to clear"),
+                kind: .generic,
+                isEphemeral: true
+            )
+            return
+        }
+        inputSource = nil
+        log(
+            localized("已清空输入源", "Input source cleared"),
+            detail: localized("仅清空输入源地址，不影响待处理队列", "Cleared input source path only; queue unchanged"),
+            kind: .generic,
+            isEphemeral: true
+        )
+    }
+
+    func clearOutputDirectory() {
+        guard outputDirectory != nil else {
+            log(
+                localized("输出目录为空", "Output directory is empty"),
+                detail: localized("没有可清空的输出目录地址", "No output directory path to clear"),
+                kind: .generic,
+                isEphemeral: true
+            )
+            return
+        }
+        outputDirectory = nil
+        log(
+            localized("已清空输出目录", "Output directory cleared"),
+            detail: localized("已恢复为写回源文件目录", "Reset to write-back source directory"),
+            kind: .generic,
+            isEphemeral: true
+        )
+    }
+
     func processDropProviders(_ providers: [NSItemProvider]) {
         var urls: [URL] = []
-        let supportedExtensions = supportedAudioExtensions
+        let lock = NSLock()
         let group = DispatchGroup()
         for provider in providers where provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
             group.enter()
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
                 defer { group.leave() }
                 if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
-                    let ext = url.pathExtension.lowercased()
-                    if supportedExtensions.contains(ext) {
-                        urls.append(url)
-                    }
+                    lock.lock()
+                    urls.append(url)
+                    lock.unlock()
                 }
             }
         }
         group.notify(queue: .main) { [weak self] in
             guard let self else { return }
-            self.appendFilesWithDedup(urls)
+            var resolved: [URL] = []
+            for url in urls {
+                if self.isDirectory(url) {
+                    resolved.append(contentsOf: self.resolveAudioFiles(from: url))
+                } else if self.isSupportedAudioFile(url) {
+                    resolved.append(url)
+                }
+            }
+            self.appendFilesWithDedup(resolved)
         }
     }
 
