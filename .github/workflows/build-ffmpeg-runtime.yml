@@ -1,0 +1,147 @@
+name: Build FFmpeg Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag (e.g. ffmpeg-runtime-8.0.2)"
+        required: true
+        default: "ffmpeg-runtime-8.0.2"
+      ffmpeg_ref:
+        description: "FFmpeg git ref/tag (e.g. n8.0.2)"
+        required: true
+        default: "n8.0.2"
+      version_tag:
+        description: "Asset version suffix (e.g. 8.0.2)"
+        required: true
+        default: "8.0.2"
+      prerelease:
+        description: "Mark release as prerelease"
+        type: boolean
+        required: false
+        default: true
+      publish_release:
+        description: "Publish assets to GitHub Release"
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos-arm64:
+    name: Build FFmpeg macOS arm64 runtime
+    runs-on: macos-14
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          brew update
+          brew install pkg-config nasm yasm
+
+      - name: Clone FFmpeg source (shallow)
+        run: |
+          rm -rf "$RUNNER_TEMP/ffmpeg-src"
+          git clone --depth 1 --branch "${{ inputs.ffmpeg_ref }}" https://github.com/FFmpeg/FFmpeg.git "$RUNNER_TEMP/ffmpeg-src"
+          git -C "$RUNNER_TEMP/ffmpeg-src" rev-parse HEAD
+
+      - name: Build slim runtime
+        run: |
+          VERSION_TAG="${{ inputs.version_tag }}" \
+          ./tools/ffmpeg/build-macos-arm64.sh "$RUNNER_TEMP/ffmpeg-src"
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-macos-arm64-runtime
+          path: |
+            dist/ffmpeg-macos-arm64-gpl-slim-runtime/*.zip
+            dist/ffmpeg-macos-arm64-gpl-slim-runtime/*.zip.sha256
+
+  build-windows-x64:
+    name: Build FFmpeg Windows x64 runtime
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2 toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            make
+            diffutils
+            pkgconf
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-nasm
+            mingw-w64-x86_64-yasm
+
+      - name: Clone FFmpeg source (shallow)
+        shell: pwsh
+        run: |
+          $src = "$env:RUNNER_TEMP\\ffmpeg-src"
+          Remove-Item -Recurse -Force $src -ErrorAction SilentlyContinue
+          git clone --depth 1 --branch "${{ inputs.ffmpeg_ref }}" https://github.com/FFmpeg/FFmpeg.git $src
+          git -C $src rev-parse HEAD
+
+      - name: Build slim runtime
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass `
+            -File tools/ffmpeg/build-windows-x64.ps1 `
+            -FfmpegSrc "$env:RUNNER_TEMP\\ffmpeg-src" `
+            -VersionTag "${{ inputs.version_tag }}"
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-windows-x64-runtime
+          path: |
+            dist/ffmpeg-win64-gpl-slim-runtime/*.zip
+            dist/ffmpeg-win64-gpl-slim-runtime/*.zip.sha256
+
+  release:
+    name: Publish FFmpeg Runtime Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-macos-arm64
+      - build-windows-x64
+    if: ${{ inputs.publish_release }}
+
+    steps:
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-macos-arm64-runtime
+          path: dist-release
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-windows-x64-runtime
+          path: dist-release
+
+      - name: List release payload
+        run: |
+          ls -lh dist-release
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: ${{ inputs.release_tag }}
+          prerelease: ${{ inputs.prerelease }}
+          files: |
+            dist-release/*.zip
+            dist-release/*.zip.sha256
+
