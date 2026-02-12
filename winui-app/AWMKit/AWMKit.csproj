@@ -52,7 +52,18 @@
           CopyToPublishDirectory="PreserveNewest" />
     <None Include="awmkit_native.dll"
           CopyToOutputDirectory="Always"
-          CopyToPublishDirectory="Always" />
+          CopyToPublishDirectory="Always">
+      <IncludeInSingleFile>true</IncludeInSingleFile>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('$(RepoRoot)ffmpeg-prebuilt\\bin')">
+    <None Include="$(RepoRoot)ffmpeg-prebuilt\\bin\\*.dll"
+          Link="%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="Always">
+      <IncludeInSingleFile>true</IncludeInSingleFile>
+    </None>
   </ItemGroup>
 
   <Target Name="PrepareAwmkitNativeDll" BeforeTargets="Build;Publish">
