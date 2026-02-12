@@ -1,19 +1,20 @@
 {
-  "version": "8.0.1",
+  "version": "8.0.2",
   "assets": {
     "macos_arm64": {
-      "name": "ffmpeg-macos-arm64-gpl-slim-runtime-8.0.1.zip",
-      "sha256": "2292699bdb9d0e634ad99739e46adf608b39bf03bd6ed954b87d2068b076d0a1"
+      "name": "ffmpeg-macos-arm64-gpl-slim-runtime-8.0.2.zip",
+      "sha256": "24513a22b9ddf5f106b7e7b34dc092e322cd012f70c4e91134e19e26d83e6ef5"
     },
     "windows_x86_64": {
-      "name": "ffmpeg-win64-gpl-slim-runtime-8.0.1.zip",
-      "sha256": "99b0dc43497d9d1ff5dd79b6fd967586f25728fc929762a5fbf67884fe67779d"
+      "name": "ffmpeg-win64-gpl-slim-runtime-8.0.2.zip",
+      "sha256": "f64b9041a911ccf1876c58216a3dee2641cd260aadb8d5eae6a34c296b5fbd96"
     }
   },
   "shared_libraries": [
     "avcodec",
     "avformat",
     "avutil",
+    "avfilter",
     "swresample"
   ],
   "protocols": [

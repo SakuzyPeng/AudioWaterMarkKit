@@ -83,6 +83,8 @@
            Text="Missing FFmpeg runtime DLLs. Expected in $(FfmpegRuntimeDir). Please prepare ffmpeg-prebuilt/bin first." />
     <Error Condition="!Exists('$(FfmpegRuntimeDir)\avutil-60.dll')"
            Text="Missing FFmpeg runtime DLLs. Expected in $(FfmpegRuntimeDir). Please prepare ffmpeg-prebuilt/bin first." />
+    <Error Condition="!Exists('$(FfmpegRuntimeDir)\avfilter-11.dll')"
+           Text="Missing FFmpeg runtime DLLs. Expected in $(FfmpegRuntimeDir). Please prepare ffmpeg-prebuilt/bin first." />
     <Error Condition="!Exists('$(FfmpegRuntimeDir)\swresample-6.dll')"
            Text="Missing FFmpeg runtime DLLs. Expected in $(FfmpegRuntimeDir). Please prepare ffmpeg-prebuilt/bin first." />
   </Target>

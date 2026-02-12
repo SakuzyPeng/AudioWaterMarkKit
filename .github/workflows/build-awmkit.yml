@@ -20,10 +20,10 @@ permissions:
   contents: write
 
 env:
-  FFMPEG_MACOS_RELEASE: ffmpeg-runtime-8.0.1
-  FFMPEG_MACOS_ASSET: ffmpeg-macos-arm64-gpl-slim-runtime-8.0.1.zip
-  FFMPEG_WINDOWS_RELEASE: ffmpeg-runtime-8.0.1
-  FFMPEG_WINDOWS_ASSET: ffmpeg-win64-gpl-slim-runtime-8.0.1.zip
+  FFMPEG_MACOS_RELEASE: ffmpeg-runtime-8.0.2
+  FFMPEG_MACOS_ASSET: ffmpeg-macos-arm64-gpl-slim-runtime-8.0.2.zip
+  FFMPEG_WINDOWS_RELEASE: ffmpeg-runtime-8.0.2
+  FFMPEG_WINDOWS_ASSET: ffmpeg-win64-gpl-slim-runtime-8.0.2.zip
 
 jobs:
   build:
@@ -35,8 +35,8 @@ jobs:
             target: aarch64-apple-darwin
             audiowmark_asset: audiowmark-macos-arm64.tar.gz
             audiowmark_release: audiowmark-macos-arm64-2026-02-03
-            ffmpeg_asset: ffmpeg-macos-arm64-gpl-slim-runtime-8.0.1.zip
-            ffmpeg_release: ffmpeg-runtime-8.0.1
+            ffmpeg_asset: ffmpeg-macos-arm64-gpl-slim-runtime-8.0.2.zip
+            ffmpeg_release: ffmpeg-runtime-8.0.2
             output_name: awmkit-macos-arm64
             output_ext: tar.gz
 
@@ -44,8 +44,8 @@ jobs:
             target: x86_64-pc-windows-msvc
             audiowmark_asset: audiowmark-windows-x86_64.zip
             audiowmark_release: audiowmark-win-2026-02-03
-            ffmpeg_asset: ffmpeg-win64-gpl-slim-runtime-8.0.1.zip
-            ffmpeg_release: ffmpeg-runtime-8.0.1
+            ffmpeg_asset: ffmpeg-win64-gpl-slim-runtime-8.0.2.zip
+            ffmpeg_release: ffmpeg-runtime-8.0.2
             output_name: awmkit-windows-x86_64
             output_ext: zip
 

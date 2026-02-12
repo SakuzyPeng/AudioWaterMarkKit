@@ -1,7 +1,8 @@
 param(
     [string]$FfmpegSrc = "E:\ffmpeg",
-    [string]$OutDir = "$PSScriptRoot\..\..\dist\ffmpeg-windows-x86_64-minimal",
-    [string]$MsysBash = "C:\msys64\usr\bin\bash.exe"
+    [string]$OutDir = "$PSScriptRoot\..\..\dist\ffmpeg-win64-gpl-slim-runtime",
+    [string]$MsysBash = "C:\msys64\usr\bin\bash.exe",
+    [string]$VersionTag = "8.0.2"
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,7 +17,8 @@ if (!(Test-Path $MsysBash)) {
 
 $OutDir = [System.IO.Path]::GetFullPath($OutDir)
 $Prefix = Join-Path $OutDir "root"
-$AssetName = "ffmpeg-windows-x86_64-minimal.zip"
+$PackageName = "ffmpeg-win64-gpl-slim-runtime-$VersionTag"
+$AssetName = "$PackageName.zip"
 
 if (Test-Path $OutDir) {
     Remove-Item -Recurse -Force $OutDir
@@ -46,6 +48,7 @@ make distclean >/dev/null 2>&1 || true
   --enable-avcodec \
   --enable-avformat \
   --enable-avutil \
+  --enable-avfilter \
   --enable-swresample \
   --enable-demuxer=mov,matroska,mpegts,wav,flac,mp3,ogg,aiff \
   --enable-decoder=eac3,ac3,aac,alac,flac,mp3,opus,vorbis,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le \
@@ -62,11 +65,28 @@ New-Item -ItemType Directory -Path $LibDir | Out-Null
 Copy-Item "$Prefix\bin\avcodec-*.dll" $LibDir -Force
 Copy-Item "$Prefix\bin\avformat-*.dll" $LibDir -Force
 Copy-Item "$Prefix\bin\avutil-*.dll" $LibDir -Force
+Copy-Item "$Prefix\bin\avfilter-*.dll" $LibDir -Force
 Copy-Item "$Prefix\bin\swresample-*.dll" $LibDir -Force
-Copy-Item "$Prefix\include" (Join-Path $OutDir "include") -Recurse -Force
+
+Copy-Item "$FfmpegSrc\COPYING.GPLv3" (Join-Path $OutDir "LICENSE.GPL.txt") -Force
+@"
+AWMKit FFmpeg runtime (Windows x64)
+Version: $VersionTag
+This package contains slim shared libraries required by AWMKit runtime.
+Included libraries: avcodec, avformat, avutil, avfilter, swresample.
+"@ | Set-Content (Join-Path $OutDir "README.txt") -Encoding UTF8
+
+$PackageRoot = Join-Path $OutDir $PackageName
+if (Test-Path $PackageRoot) {
+    Remove-Item -Recurse -Force $PackageRoot
+}
+New-Item -ItemType Directory -Path "$PackageRoot\bin" -Force | Out-Null
+Copy-Item "$LibDir\*.dll" "$PackageRoot\bin" -Force
+Copy-Item (Join-Path $OutDir "LICENSE.GPL.txt") "$PackageRoot\" -Force
+Copy-Item (Join-Path $OutDir "README.txt") "$PackageRoot\" -Force
 
 $zipPath = Join-Path $OutDir $AssetName
-Compress-Archive -Path "$LibDir\*", (Join-Path $OutDir "include\*") -DestinationPath $zipPath -Force
+Compress-Archive -Path "$PackageRoot\*" -DestinationPath $zipPath -Force
 $hash = Get-FileHash -Algorithm SHA256 $zipPath
 "$($hash.Hash.ToLower())  $AssetName" | Set-Content (Join-Path $OutDir "$AssetName.sha256") -Encoding UTF8
 Get-Item $zipPath
