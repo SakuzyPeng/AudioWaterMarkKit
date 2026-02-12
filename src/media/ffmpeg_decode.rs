@@ -171,6 +171,12 @@ fn flush_resampler(
                 }
                 append_packed_i16_frame(&flushed, samples)?;
             }
+            // 某些容器/轨道在 flush 阶段会返回参数切换信号；这里按“无更多可刷数据”处理。
+            Err(
+                ffmpeg::Error::OutputChanged | ffmpeg::Error::InputChanged | ffmpeg::Error::Eof,
+            ) => {
+                break;
+            }
             Err(err) => {
                 return Err(Error::FfmpegDecodeFailed(format!(
                     "resampler flush failed: {err}"
