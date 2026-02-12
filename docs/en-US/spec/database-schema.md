@@ -37,7 +37,7 @@ Index: `idx_tag_mappings_created_at(created_at DESC)`
 | `sample_count` | `INTEGER NOT NULL` | Sample count |
 | `pcm_sha256` | `TEXT NOT NULL` | PCM hash |
 | `key_id` | `TEXT NOT NULL` | Key fingerprint id |
-| `is_forced_embed` | `INTEGER NOT NULL DEFAULT 0` | Legacy internal field (0/1, hidden from public outputs) |
+| `is_forced_embed` | `INTEGER NOT NULL DEFAULT 0` | Compatibility-retained field (0/1, currently always written as 0) |
 | `chromaprint_blob` | `BLOB NOT NULL` | Raw chromaprint bytes |
 | `fingerprint_len` | `INTEGER NOT NULL` | Chromaprint length |
 | `fp_config_id` | `INTEGER NOT NULL` | Chromaprint config id |

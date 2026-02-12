@@ -10,6 +10,7 @@
 
 ## GUI
 
+- UI first-run guide: [`gui/first-run.md`](./gui/first-run.md)
 - Native macOS app: [`gui/macos-app.md`](./gui/macos-app.md)
 - WinUI app: [`gui/winui-app.md`](./gui/winui-app.md)
 

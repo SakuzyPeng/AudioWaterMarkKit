@@ -100,7 +100,7 @@ awmkit evidence clear --identity SAKUZY --key-slot 0 --yes
 
 Notes:
 - Inputs that already contain watermarks are skipped automatically, with a batch summary warning at the end.
-- `evidence list/show` and `evidence --json` do not surface the legacy forced marker field.
+- `evidence list/show` and `evidence --json` focus on active evidence fields (mapping, fingerprint, and stats).
 
 ## 8. Detect JSON Fields
 

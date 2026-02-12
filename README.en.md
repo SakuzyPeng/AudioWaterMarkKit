@@ -11,7 +11,7 @@ AWMKit is a cross-platform audio watermark toolkit built around a Rust core, wit
 - Native macOS / Windows apps sharing the same Rust FFI core
 - SQLite persistence for mappings, evidence, and app settings
 - Current output limitation: embed output is `WAV` only (`FLAC` output is temporarily disabled)
-- Safety policy: inputs with existing watermarks are auto-skipped; force-embed has been removed
+- Safety policy: inputs with existing watermarks are auto-skipped, with a batch summary warning at the end
 
 ## Platform Matrix
 
@@ -25,12 +25,14 @@ AWMKit is a cross-platform audio watermark toolkit built around a Rust core, wit
 ## Quick Start
 
 - Documentation index (English): [`docs/en-US/INDEX.md`](./docs/en-US/INDEX.md)
+- UI first-run guide: [`docs/en-US/gui/first-run.md`](./docs/en-US/gui/first-run.md)
 - CLI usage: [`docs/en-US/cli/usage.md`](./docs/en-US/cli/usage.md)
 - Build matrix: [`docs/en-US/build/build-matrix.md`](./docs/en-US/build/build-matrix.md)
 
 ## Docs Navigation
 
 - CLI: [`docs/en-US/cli/usage.md`](./docs/en-US/cli/usage.md)
+- UI first-run: [`docs/en-US/gui/first-run.md`](./docs/en-US/gui/first-run.md)
 - GUI (macOS): [`docs/en-US/gui/macos-app.md`](./docs/en-US/gui/macos-app.md)
 - GUI (WinUI): [`docs/en-US/gui/winui-app.md`](./docs/en-US/gui/winui-app.md)
 - Build & release: [`docs/en-US/build/build-matrix.md`](./docs/en-US/build/build-matrix.md), [`docs/en-US/build/ci-artifacts.md`](./docs/en-US/build/ci-artifacts.md)

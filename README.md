@@ -11,7 +11,7 @@ AWMKit 是一个围绕音频水印场景构建的跨平台工具集，包含 Rus
 - macOS / Windows 原生 GUI（共享 Rust FFI 核心）
 - SQLite 持久化：映射、证据、应用设置
 - 当前输出限制：嵌入结果统一输出为 `WAV`（`FLAC` 输出暂时下线）
-- 安全策略：命中已含水印输入会自动跳过，`强制嵌入` 已下线
+- 安全策略：命中已含水印输入会自动跳过，并在批处理结束后汇总告警
 
 ## 平台矩阵
 
@@ -25,12 +25,14 @@ AWMKit 是一个围绕音频水印场景构建的跨平台工具集，包含 Rus
 ## 快速开始
 
 - 文档总览（中文）：[`docs/zh-CN/INDEX.md`](./docs/zh-CN/INDEX.md)
+- UI 首次使用教程：[`docs/zh-CN/gui/first-run.md`](./docs/zh-CN/gui/first-run.md)
 - CLI 使用指南：[`docs/zh-CN/cli/usage.md`](./docs/zh-CN/cli/usage.md)
 - 构建矩阵：[`docs/zh-CN/build/build-matrix.md`](./docs/zh-CN/build/build-matrix.md)
 
 ## 文档导航
 
 - CLI：[`docs/zh-CN/cli/usage.md`](./docs/zh-CN/cli/usage.md)
+- UI 首次使用：[`docs/zh-CN/gui/first-run.md`](./docs/zh-CN/gui/first-run.md)
 - GUI（macOS）：[`docs/zh-CN/gui/macos-app.md`](./docs/zh-CN/gui/macos-app.md)
 - GUI（WinUI）：[`docs/zh-CN/gui/winui-app.md`](./docs/zh-CN/gui/winui-app.md)
 - 构建与发布：[`docs/zh-CN/build/build-matrix.md`](./docs/zh-CN/build/build-matrix.md)、[`docs/zh-CN/build/ci-artifacts.md`](./docs/zh-CN/build/ci-artifacts.md)

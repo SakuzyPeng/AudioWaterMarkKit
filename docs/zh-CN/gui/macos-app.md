@@ -35,9 +35,11 @@ xcodebuild \
 - bundled 模式依赖仓库内 `bundled/audiowmark-macos-arm64.zip`
 - 数据库路径：`~/.awmkit/awmkit.db`
 - 密钥存储与槽位管理由 Rust 层统一处理（UI 通过 FFI 调用）
+- 预发布/本地构建通常未签名，若提示“已损坏”可执行：
+  - `xattr -dr com.apple.quarantine /path/to/AWMKit.app`
 
 ## 4. 常见验证点
 
-- 无密钥时，嵌入/检测主按钮禁用并提示跳转密钥页
+- 无密钥时，嵌入按钮禁用；检测允许执行但会产生未校验结果警告
 - 切换槽位后，状态图标悬浮摘要立即更新
 - 嵌入成功后自动写入证据，检测页 clone-check 可读取证据比对

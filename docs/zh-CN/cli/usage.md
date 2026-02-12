@@ -100,7 +100,7 @@ awmkit evidence clear --identity SAKUZY --key-slot 0 --yes
 
 说明：
 - 命中已含水印的输入文件会自动跳过，并在批处理结束后汇总告警。
-- `evidence list/show` 与 `evidence --json` 不展示历史强制标记字段。
+- `evidence list/show` 与 `evidence --json` 聚焦当前可用证据字段（映射、指纹与统计信息）。
 
 ## 8. 检测 JSON 关键字段
 

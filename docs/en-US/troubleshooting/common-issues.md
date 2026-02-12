@@ -42,3 +42,13 @@ Check:
 1. Database path is accessible.
 2. File is not locked by another process.
 3. Backup first, then recover/recreate DB if needed (`~/.awmkit/awmkit.db` / `%LOCALAPPDATA%\\awmkit\\awmkit.db`).
+
+## 6. macOS says “App is damaged and can’t be opened”
+
+Note: unsigned/non-notarized local builds or pre-release bundles may be blocked by Gatekeeper and shown as “damaged”.  
+Fix:
+
+1. Make sure the package source is trusted.
+2. Remove quarantine attribute, then launch again:
+   - `xattr -dr com.apple.quarantine /path/to/AWMKit.app`
+3. If still blocked, allow the app in “System Settings -> Privacy & Security”, then retry.

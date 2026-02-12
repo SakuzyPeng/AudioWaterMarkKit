@@ -37,7 +37,7 @@
 | `sample_count` | `INTEGER NOT NULL` | 样本数 |
 | `pcm_sha256` | `TEXT NOT NULL` | PCM 指纹哈希 |
 | `key_id` | `TEXT NOT NULL` | 密钥指纹短串 |
-| `is_forced_embed` | `INTEGER NOT NULL DEFAULT 0` | 历史内部字段（0/1，对外输出不展示） |
+| `is_forced_embed` | `INTEGER NOT NULL DEFAULT 0` | 兼容保留字段（0/1，当前流程固定写 0） |
 | `chromaprint_blob` | `BLOB NOT NULL` | Chromaprint 原始数据 |
 | `fingerprint_len` | `INTEGER NOT NULL` | Chromaprint 长度 |
 | `fp_config_id` | `INTEGER NOT NULL` | Chromaprint 配置 ID |

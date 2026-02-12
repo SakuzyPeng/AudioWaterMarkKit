@@ -35,9 +35,11 @@ xcodebuild \
 - Bundled mode requires `bundled/audiowmark-macos-arm64.zip`
 - Database path: `~/.awmkit/awmkit.db`
 - Key and slot operations are centralized in Rust (UI via FFI only)
+- Pre-release/local builds are usually unsigned; if macOS reports “damaged”, run:
+  - `xattr -dr com.apple.quarantine /path/to/AWMKit.app`
 
 ## 4. Common Validation Points
 
-- Without key, embed/detect actions are disabled and guidance points to Key page
+- Without key, embed is disabled; detect is still allowed with unverified-result warning
 - Switching slot refreshes status tooltip immediately
 - Successful embed writes evidence; detect clone-check can match against evidence rows
