@@ -29,7 +29,8 @@ hex = "0.4"
 default = ["multichannel"]
 ffi = []
 cli = ["dep:clap", "dep:hex"]
-multichannel = ["dep:hound", "dep:claxon", "dep:symphonia", "dep:flacenc"]
+multichannel = ["dep:hound", "dep:claxon", "dep:flacenc"]
+ffmpeg-decode = ["dep:ffmpeg-next", "dep:ffmpeg-sys-next"]
 app = [
   "dep:dirs",
   "dep:hex",
@@ -47,11 +48,13 @@ app = [
   "dep:serde",
   "dep:serde_json",
   "multichannel",
+  "ffmpeg-decode",
 ]
 full-cli = [
   "app",
   "bundled",
   "ffi",
+  "ffmpeg-decode",
   "dep:clap",
   "dep:glob",
   "dep:indicatif",
@@ -66,10 +69,16 @@ optional = true
 version = "0.4"
 optional = true
 
-[dependencies.symphonia]
-version = "0.5.5"
+[dependencies.ffmpeg-next]
+version = "8"
 default-features = false
-features = ["aac", "alac", "isomp4", "mkv", "ogg", "mp3", "pcm", "wav", "flac"]
+features = ["codec", "format", "software-resampling"]
+optional = true
+
+[dependencies.ffmpeg-sys-next]
+version = "8"
+default-features = false
+features = ["avcodec", "avformat", "swresample"]
 optional = true
 
 [dependencies.flacenc]

@@ -94,6 +94,45 @@ public sealed partial class AppViewModel : ObservableObject
         }
     }
 
+    private string _engineBackend = "-";
+    public string EngineBackend
+    {
+        get => _engineBackend;
+        set
+        {
+            if (SetProperty(ref _engineBackend, value))
+            {
+                NotifyStatusPresentationChanged();
+            }
+        }
+    }
+
+    private string _engineContainers = "-";
+    public string EngineContainers
+    {
+        get => _engineContainers;
+        set
+        {
+            if (SetProperty(ref _engineContainers, value))
+            {
+                NotifyStatusPresentationChanged();
+            }
+        }
+    }
+
+    private string _engineEac3 = "unavailable";
+    public string EngineEac3
+    {
+        get => _engineEac3;
+        set
+        {
+            if (SetProperty(ref _engineEac3, value))
+            {
+                NotifyStatusPresentationChanged();
+            }
+        }
+    }
+
     private int _totalTags;
     public int TotalTags
     {
@@ -129,7 +168,7 @@ public sealed partial class AppViewModel : ObservableObject
     public string KeyStatusTooltip => BuildKeyStatusTooltip();
 
     public string EngineStatusTooltip => EngineAvailable
-        ? $"{L("音频引擎", "Audio engine")}：{L("可用", "Available")}\n{L("路径", "Path")}：{EnginePath}\n{L("点击刷新状态", "Click to refresh status")}"
+        ? $"{L("音频引擎", "Audio engine")}：{L("可用", "Available")}\n{L("路径", "Path")}：{EnginePath}\n{L("媒体后端", "Media backend")}：{EngineBackend}\nEAC3：{EngineEac3}\n{L("容器", "Containers")}：{EngineContainers}\n{L("点击刷新状态", "Click to refresh status")}"
         : $"{L("音频引擎", "Audio engine")}：{L("不可用", "Unavailable")}\n{L("请检查 bundled 或 PATH", "Check bundled binary or PATH")}\n{L("点击刷新状态", "Click to refresh status")}";
 
     public string DatabaseStatusTooltip => DatabaseAvailable
@@ -383,11 +422,31 @@ public sealed partial class AppViewModel : ObservableObject
             var (path, error) = AwmBridge.GetAudioBinaryPath();
             EnginePath = path ?? string.Empty;
             EngineAvailable = error == AwmError.Ok && !string.IsNullOrEmpty(path);
+            var (caps, capsError) = AwmBridge.GetAudioMediaCapabilities();
+            if (capsError == AwmError.Ok && caps is not null)
+            {
+                EngineBackend = caps.Value.Backend;
+                EngineEac3 = caps.Value.Eac3Decode ? "available" : "unavailable";
+                var containers = new List<string>();
+                if (caps.Value.ContainerMp4) containers.Add("mp4");
+                if (caps.Value.ContainerMkv) containers.Add("mkv");
+                if (caps.Value.ContainerTs) containers.Add("ts");
+                EngineContainers = containers.Count == 0 ? "-" : string.Join(",", containers);
+            }
+            else
+            {
+                EngineBackend = "-";
+                EngineEac3 = "unavailable";
+                EngineContainers = "-";
+            }
         }
         catch
         {
             EngineAvailable = false;
             EnginePath = string.Empty;
+            EngineBackend = "-";
+            EngineEac3 = "unavailable";
+            EngineContainers = "-";
         }
     }
 

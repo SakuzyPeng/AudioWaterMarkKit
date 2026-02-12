@@ -71,6 +71,27 @@ pub fn run(ctx: &Context, args: &StatusArgs) -> Result<()> {
                 ctx.out
                     .info(i18n::tr_args("cli-status-audiowmark_path", &fmt_args));
 
+                let caps = audio.media_capabilities();
+                let mut fmt_args = FluentArgs::new();
+                fmt_args.set("backend", caps.backend);
+                ctx.out
+                    .info(i18n::tr_args("cli-status-media_backend", &fmt_args));
+                let mut fmt_args = FluentArgs::new();
+                fmt_args.set(
+                    "available",
+                    if caps.eac3_decode {
+                        "available"
+                    } else {
+                        "unavailable"
+                    },
+                );
+                ctx.out
+                    .info(i18n::tr_args("cli-status-media-eac3", &fmt_args));
+                let mut fmt_args = FluentArgs::new();
+                fmt_args.set("containers", caps.supported_containers_csv());
+                ctx.out
+                    .info(i18n::tr_args("cli-status-media-containers", &fmt_args));
+
                 match TagStore::load() {
                     Ok(tags) => {
                         ctx.out.info(format!("db.mappings={}", tags.list().len()));

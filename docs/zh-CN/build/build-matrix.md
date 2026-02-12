@@ -7,9 +7,9 @@
 | 目标 | 命令 | 说明 |
 | --- | --- | --- |
 | 核心库（默认含 multichannel） | `cargo build --release` | 仅 Rust 库 |
-| CLI（推荐发布） | `cargo build --bin awmkit --features full-cli --release` | 自包含运行策略（bundled 优先） |
-| FFI（macOS App） | `cargo build --lib --features ffi,app,bundled --release` | 供 Swift/GUI 调用 |
-| FFI（Windows） | `cargo build --lib --features ffi,app,bundled --release --target x86_64-pc-windows-msvc` | 供 WinUI 调用 |
+| CLI（推荐发布） | `cargo build --bin awmkit --features full-cli --release` | 自包含运行策略（bundled 优先，FFmpeg 解码） |
+| FFI（macOS App） | `cargo build --lib --features ffi,app,bundled --release` | 供 Swift/GUI 调用（含 FFmpeg 解码） |
+| FFI（Windows） | `cargo build --lib --features ffi,app,bundled --release --target x86_64-pc-windows-msvc` | 供 WinUI 调用（含 FFmpeg 解码） |
 
 ## 验证命令
 
@@ -28,7 +28,8 @@ cargo clippy --all-features
 - 默认 feature：`multichannel`
 - `app`：配置、i18n、数据库、证据、密钥管理
 - `bundled`：启用 bundled audiowmark 解压与优先解析
-- `full-cli`：CLI 发布组合（`app + bundled + ffi` 等）
+- `ffmpeg-decode`：启用 FFmpeg 动态库解码后端
+- `full-cli`：CLI 发布组合（`app + bundled + ffi + ffmpeg-decode` 与 CLI 依赖）
 
 ## 产物说明
 

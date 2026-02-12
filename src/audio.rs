@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::error::{Error, Result};
+#[cfg(feature = "ffmpeg-decode")]
+use crate::media;
 use crate::message::{self, MESSAGE_LEN};
 use crate::tag::Tag;
 
@@ -760,154 +762,42 @@ fn decode_to_wav(input: &Path, output_wav: &Path) -> Result<()> {
     Ok(())
 }
 
-struct DecodedPcm {
-    sample_rate: u32,
-    channels: u16,
-    bits_per_sample: u16,
-    samples: Vec<i32>,
+pub(crate) struct DecodedPcm {
+    pub(crate) sample_rate: u32,
+    pub(crate) channels: u16,
+    pub(crate) bits_per_sample: u16,
+    pub(crate) samples: Vec<i32>,
 }
 
+#[cfg(feature = "ffmpeg-decode")]
 fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
-    use symphonia::core::audio::SampleBuffer;
-    use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_EAC3, CODEC_TYPE_NULL};
-    use symphonia::core::errors::Error as SymphoniaError;
-    use symphonia::core::formats::FormatOptions;
-    use symphonia::core::io::{MediaSourceStream, MediaSourceStreamOptions};
-    use symphonia::core::meta::MetadataOptions;
-    use symphonia::core::probe::Hint;
+    media::decode_media_to_pcm_i32(input)
+}
 
-    let file = std::fs::File::open(input)?;
-    let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
-
-    let mut hint = Hint::new();
-    if let Some(ext) = input.extension().and_then(|value| value.to_str()) {
-        hint.with_extension(ext);
-    }
-
-    let ext_lc = input
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(str::to_ascii_lowercase);
-
-    let probed = symphonia::default::get_probe()
-        .format(
-            &hint,
-            mss,
-            &FormatOptions::default(),
-            &MetadataOptions::default(),
-        )
-        .map_err(|err| {
-            if ext_lc
-                .as_deref()
-                .is_some_and(|ext| matches!(ext, "ts" | "m2ts" | "m2t"))
-            {
-                return Error::InvalidInput(format!(
-                    "container not supported for E-AC-3 track read: mpegts ({err})"
-                ));
-            }
-            Error::InvalidInput(format!("unsupported audio format: {err}"))
-        })?;
-
-    let mut format = probed.format;
-    let track = format
-        .tracks()
-        .iter()
-        .find(|track| track.codec_params.codec != CODEC_TYPE_NULL)
-        .ok_or_else(|| Error::InvalidInput("no decodable audio track found".to_string()))?;
-    let track_id = track.id;
-    let sample_rate = track
-        .codec_params
-        .sample_rate
-        .ok_or_else(|| Error::InvalidInput("audio sample rate is unknown".to_string()))?;
-    let channels = track
-        .codec_params
-        .channels
-        .and_then(|value| u16::try_from(value.count()).ok())
-        .ok_or_else(|| Error::InvalidInput("audio channel count is unknown".to_string()))?;
-    let bits_per_sample = track
-        .codec_params
-        .bits_per_sample
-        .unwrap_or(24)
-        .clamp(16, 32) as u16;
-
-    if track.codec_params.codec == CODEC_TYPE_EAC3 {
-        return Err(Error::InvalidInput(
-            "missing eac3 decoder in current media backend".to_string(),
-        ));
-    }
-
-    let mut decoder = symphonia::default::get_codecs()
-        .make(&track.codec_params, &DecoderOptions::default())
-        .map_err(|err| Error::InvalidInput(format!("unsupported audio codec: {err}")))?;
-
-    let mut sample_buf: Option<SampleBuffer<i32>> = None;
-    let mut samples = Vec::<i32>::new();
-
-    loop {
-        let packet = match format.next_packet() {
-            Ok(packet) => packet,
-            Err(SymphoniaError::IoError(_)) => break,
-            Err(SymphoniaError::ResetRequired) => {
-                return Err(Error::InvalidInput(
-                    "chained audio streams are not supported".to_string(),
-                ));
-            }
-            Err(err) => {
-                return Err(Error::InvalidInput(format!(
-                    "failed to read audio packet: {err}"
-                )))
-            }
-        };
-
-        if packet.track_id() != track_id {
-            continue;
-        }
-
-        match decoder.decode(&packet) {
-            Ok(audio_buf) => {
-                if sample_buf.is_none() {
-                    sample_buf = Some(SampleBuffer::<i32>::new(
-                        audio_buf.capacity() as u64,
-                        *audio_buf.spec(),
-                    ));
-                }
-                if let Some(buffer) = sample_buf.as_mut() {
-                    buffer.copy_interleaved_ref(audio_buf);
-                    samples.extend_from_slice(buffer.samples());
-                }
-            }
-            Err(SymphoniaError::DecodeError(_) | SymphoniaError::IoError(_)) => {}
-            Err(err) => {
-                return Err(Error::InvalidInput(format!(
-                    "failed to decode audio packet: {err}"
-                )))
-            }
-        }
-    }
-
-    if samples.is_empty() {
-        return Err(Error::InvalidInput(
-            "no decodable audio samples found".to_string(),
-        ));
-    }
-
-    Ok(DecodedPcm {
-        sample_rate,
-        channels,
-        bits_per_sample,
-        samples,
-    })
+#[cfg(not(feature = "ffmpeg-decode"))]
+fn decode_media_to_pcm_i32(_input: &Path) -> Result<DecodedPcm> {
+    Err(Error::FfmpegLibraryNotFound(
+        "ffmpeg-decode feature is disabled".to_string(),
+    ))
 }
 
 /// 当前构建可用的媒体能力摘要。
 #[must_use]
 pub fn media_capabilities() -> AudioMediaCapabilities {
-    AudioMediaCapabilities {
-        backend: "symphonia",
-        eac3_decode: false,
-        container_mp4: true,
-        container_mkv: true,
-        container_ts: false,
+    #[cfg(feature = "ffmpeg-decode")]
+    {
+        return media::media_capabilities();
+    }
+
+    #[cfg(not(feature = "ffmpeg-decode"))]
+    {
+        AudioMediaCapabilities {
+            backend: "ffmpeg",
+            eac3_decode: false,
+            container_mp4: false,
+            container_mkv: false,
+            container_ts: false,
+        }
     }
 }
 
@@ -1047,11 +937,14 @@ mod tests {
     #[test]
     fn test_media_capabilities_snapshot() {
         let caps = media_capabilities();
-        assert_eq!(caps.backend, "symphonia");
-        assert!(!caps.eac3_decode);
-        assert!(caps.container_mp4);
-        assert!(caps.container_mkv);
-        assert!(!caps.container_ts);
+        assert_eq!(caps.backend, "ffmpeg");
+        if cfg!(feature = "ffmpeg-decode") {
+            assert!(caps.container_mp4);
+            assert!(caps.container_mkv);
+        } else {
+            assert!(!caps.container_mp4);
+            assert!(!caps.container_mkv);
+        }
     }
 
     #[cfg(feature = "multichannel")]

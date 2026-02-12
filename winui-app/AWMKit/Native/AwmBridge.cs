@@ -43,6 +43,14 @@ public static class AwmBridge
         string? SnrDetail
     );
 
+    public readonly record struct AudioMediaCapabilitiesResult(
+        string Backend,
+        bool Eac3Decode,
+        bool ContainerMp4,
+        bool ContainerMkv,
+        bool ContainerTs
+    );
+
     /// <summary>
     /// Gets the current message format version.
     /// </summary>
@@ -629,6 +637,43 @@ public static class AwmBridge
         finally
         {
             Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Gets FFmpeg media decode capabilities.
+    /// </summary>
+    public static (AudioMediaCapabilitiesResult? caps, AwmError error) GetAudioMediaCapabilities()
+    {
+        using var handle = AwmAudioHandle.CreateNew();
+        if (handle.IsInvalid)
+        {
+            return (null, AwmError.AudiowmarkNotFound);
+        }
+
+        var resultPtr = Marshal.AllocHGlobal(Marshal.SizeOf<AWMAudioMediaCapabilities>());
+        try
+        {
+            int code = AwmNative.awm_audio_media_capabilities(handle.DangerousGetHandle(), resultPtr);
+            var error = (AwmError)code;
+            if (error != AwmError.Ok)
+            {
+                return (null, error);
+            }
+
+            var native = Marshal.PtrToStructure<AWMAudioMediaCapabilities>(resultPtr);
+            var caps = new AudioMediaCapabilitiesResult(
+                native.GetBackend(),
+                native.Eac3Decode,
+                native.ContainerMp4,
+                native.ContainerMkv,
+                native.ContainerTs
+            );
+            return (caps, AwmError.Ok);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(resultPtr);
         }
     }
 

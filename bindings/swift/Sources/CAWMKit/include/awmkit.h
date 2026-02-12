@@ -207,6 +207,14 @@ typedef struct {
     uint32_t bit_errors;       // Number of bit errors
 } AWMDetectResult;
 
+typedef struct {
+    char backend[16];          // media backend name
+    bool eac3_decode;          // eac3 decoder available
+    bool container_mp4;        // supports mp4/m4a container
+    bool container_mkv;        // supports mkv/mka container
+    bool container_ts;         // supports mpegts container
+} AWMAudioMediaCapabilities;
+
 /**
  * Multichannel layout
  */
@@ -459,6 +467,18 @@ int32_t awm_audio_binary_path(
     const AWMAudioHandle* handle,
     char* out,
     size_t out_len
+);
+
+/**
+ * Query media decode capabilities.
+ *
+ * @param handle  Audio handle
+ * @param result  Output capability struct
+ * @return        AWM_SUCCESS or error code
+ */
+int32_t awm_audio_media_capabilities(
+    const AWMAudioHandle* handle,
+    AWMAudioMediaCapabilities* result
 );
 
 // ============================================================================

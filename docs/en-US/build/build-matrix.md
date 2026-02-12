@@ -7,9 +7,9 @@
 | Target | Command | Notes |
 | --- | --- | --- |
 | Core library (multichannel by default) | `cargo build --release` | Rust library only |
-| CLI (recommended for release) | `cargo build --bin awmkit --features full-cli --release` | Self-contained runtime strategy (bundled-first) |
-| FFI (macOS app) | `cargo build --lib --features ffi,app,bundled --release` | Used by Swift/GUI |
-| FFI (Windows) | `cargo build --lib --features ffi,app,bundled --release --target x86_64-pc-windows-msvc` | Used by WinUI |
+| CLI (recommended for release) | `cargo build --bin awmkit --features full-cli --release` | Self-contained runtime strategy (bundled-first, FFmpeg decode enabled) |
+| FFI (macOS app) | `cargo build --lib --features ffi,app,bundled --release` | Used by Swift/GUI (FFmpeg decode enabled) |
+| FFI (Windows) | `cargo build --lib --features ffi,app,bundled --release --target x86_64-pc-windows-msvc` | Used by WinUI (FFmpeg decode enabled) |
 
 ## Validation Commands
 
@@ -28,7 +28,8 @@ cargo clippy --all-features
 - Default feature: `multichannel`
 - `app`: config, i18n, database, evidence, key management
 - `bundled`: bundled audiowmark extraction and bundled-first resolution
-- `full-cli`: release-grade CLI bundle (`app + bundled + ffi` + CLI deps)
+- `ffmpeg-decode`: FFmpeg dynamic-library decode backend
+- `full-cli`: release-grade CLI bundle (`app + bundled + ffi + ffmpeg-decode` + CLI deps)
 
 ## Build Outputs
 

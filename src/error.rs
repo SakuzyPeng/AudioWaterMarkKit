@@ -31,6 +31,18 @@ pub enum Error {
     #[error("audiowmark execution failed: {0}")]
     AudiowmarkExec(String),
 
+    #[error("FFmpeg dynamic libraries are unavailable: {0}")]
+    FfmpegLibraryNotFound(String),
+
+    #[error("FFmpeg decoder unavailable: {0}")]
+    FfmpegDecoderUnavailable(String),
+
+    #[error("FFmpeg container unsupported: {0}")]
+    FfmpegContainerUnsupported(String),
+
+    #[error("FFmpeg decode failed: {0}")]
+    FfmpegDecodeFailed(String),
+
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 

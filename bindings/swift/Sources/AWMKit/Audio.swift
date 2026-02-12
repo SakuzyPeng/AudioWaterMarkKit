@@ -72,6 +72,14 @@ public struct AWMEmbedEvidenceResultSwift {
     public let snrDetail: String?
 }
 
+public struct AWMAudioMediaCapabilitiesSwift {
+    public let backend: String
+    public let eac3Decode: Bool
+    public let containerMp4: Bool
+    public let containerMkv: Bool
+    public let containerTs: Bool
+}
+
 /// Single channel pair detection result
 public struct AWMPairResultSwift {
     /// Channel pair index (0-based)
@@ -149,6 +157,33 @@ public class AWMAudio {
     public var isAvailable: Bool {
         guard let handle = handle else { return false }
         return awm_audio_is_available(handle)
+    }
+
+    /// Query media decode capabilities.
+    public func mediaCapabilities() throws -> AWMAudioMediaCapabilitiesSwift {
+        guard let handle = handle else {
+            throw AWMError.audiowmarkNotFound
+        }
+
+        var cCaps = AWMAudioMediaCapabilities()
+        let code = awm_audio_media_capabilities(handle, &cCaps)
+        guard code == AWM_SUCCESS.rawValue else {
+            throw AWMError(code: code)
+        }
+
+        let backend = withUnsafePointer(to: cCaps.backend) { ptr in
+            ptr.withMemoryRebound(to: CChar.self, capacity: 16) { cPtr in
+                String(cString: cPtr)
+            }
+        }
+
+        return AWMAudioMediaCapabilitiesSwift(
+            backend: backend,
+            eac3Decode: cCaps.eac3_decode,
+            containerMp4: cCaps.container_mp4,
+            containerMkv: cCaps.container_mkv,
+            containerTs: cCaps.container_ts
+        )
     }
 
     /// Embed watermark into audio file

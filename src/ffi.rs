@@ -390,6 +390,21 @@ pub struct AWMDetectResult {
     pub bit_errors: u32,
 }
 
+/// 媒体能力结果
+#[repr(C)]
+pub struct AWMAudioMediaCapabilities {
+    /// 后端名称
+    pub backend: [c_char; 16],
+    /// 是否支持 E-AC-3 解码
+    pub eac3_decode: bool,
+    /// 是否支持 MP4/M4A 容器
+    pub container_mp4: bool,
+    /// 是否支持 MKV 容器
+    pub container_mkv: bool,
+    /// 是否支持 MPEG-TS 容器
+    pub container_ts: bool,
+}
+
 /// 克隆校验结果类型
 #[repr(i32)]
 #[derive(Clone, Copy)]
@@ -1434,6 +1449,30 @@ pub unsafe extern "C" fn awm_audio_binary_path(
     let copy_len = bytes.len().min(max);
     ptr::copy_nonoverlapping(bytes.as_ptr(), out.cast::<u8>(), copy_len);
     *out.add(copy_len) = 0;
+    AWMError::Success as i32
+}
+
+/// 获取媒体能力摘要（FFmpeg 解码能力）
+///
+/// # Safety
+/// - `handle` 必须是有效的 Audio 句柄
+/// - `result` 必须是有效可写指针
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_media_capabilities(
+    handle: *const AWMAudioHandle,
+    result: *mut AWMAudioMediaCapabilities,
+) -> i32 {
+    if handle.is_null() || result.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    let caps = (*handle).inner.media_capabilities();
+    (*result).backend.fill(0);
+    copy_str_to_c_buf(&mut (*result).backend, caps.backend);
+    (*result).eac3_decode = caps.eac3_decode;
+    (*result).container_mp4 = caps.container_mp4;
+    (*result).container_mkv = caps.container_mkv;
+    (*result).container_ts = caps.container_ts;
     AWMError::Success as i32
 }
 

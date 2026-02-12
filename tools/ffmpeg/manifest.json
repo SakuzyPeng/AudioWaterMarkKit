@@ -1,0 +1,53 @@
+{
+  "version": "8.0.1",
+  "assets": {
+    "macos_arm64": {
+      "name": "ffmpeg-macos-arm64-minimal.tar.zst",
+      "sha256": ""
+    },
+    "windows_x86_64": {
+      "name": "ffmpeg-windows-x86_64-minimal.zip",
+      "sha256": ""
+    }
+  },
+  "shared_libraries": [
+    "avcodec",
+    "avformat",
+    "avutil",
+    "swresample"
+  ],
+  "protocols": [
+    "file",
+    "pipe"
+  ],
+  "demuxers": [
+    "mov",
+    "matroska",
+    "mpegts",
+    "wav",
+    "flac",
+    "mp3",
+    "ogg",
+    "aiff"
+  ],
+  "decoders": [
+    "eac3",
+    "ac3",
+    "aac",
+    "alac",
+    "flac",
+    "mp3",
+    "opus",
+    "vorbis",
+    "pcm_*"
+  ],
+  "encoders": [
+    "pcm_*",
+    "flac",
+    "aac",
+    "alac",
+    "libmp3lame",
+    "libopus",
+    "libvorbis"
+  ]
+}

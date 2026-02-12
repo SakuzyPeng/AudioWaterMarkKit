@@ -51,6 +51,9 @@ cli-status-audiowmark_version_error = audiowmark 版本错误：{ $error }
 cli-status-audiowmark_path = audiowmark 路径：{ $path }
 cli-status-audiowmark_found = audiowmark：已找到
 cli-status-audiowmark_not_found = audiowmark：未找到
+cli-status-media_backend = 媒体后端：{ $backend }
+cli-status-media-eac3 = eac3 解码：{ $available }
+cli-status-media-containers = 支持容器：{ $containers }
 
 cli-embed-output_single = --output 仅支持单个输入文件
 cli-embed-done = 完成：{ $success } 成功，{ $failed } 失败

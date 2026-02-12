@@ -22,6 +22,10 @@ env:
   AUDIOWMARK_WINDOWS_ASSET: audiowmark-windows-x86_64.zip
   AUDIOWMARK_MACOS_RELEASE: audiowmark-macos-arm64-2026-02-03
   AUDIOWMARK_MACOS_ASSET: audiowmark-macos-arm64.tar.gz
+  FFMPEG_WINDOWS_RELEASE: ffmpeg-windows-x86_64-minimal-2026-02-12
+  FFMPEG_WINDOWS_ASSET: ffmpeg-windows-x86_64-minimal.zip
+  FFMPEG_MACOS_RELEASE: ffmpeg-macos-arm64-minimal-2026-02-12
+  FFMPEG_MACOS_ASSET: ffmpeg-macos-arm64-minimal.tar.zst
 
 jobs:
   macos-build-and-package:
@@ -70,6 +74,35 @@ jobs:
           test -f tmp-bundled/bin/audiowmark
           echo "Bundled zip validated: $ZIP_PATH"
 
+      - name: Ensure and prepare FFmpeg runtime (macOS)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ASSET_PATH="${FFMPEG_MACOS_ASSET}"
+          if [ ! -f "$ASSET_PATH" ]; then
+            gh release download "${FFMPEG_MACOS_RELEASE}" \
+              --repo "${{ github.repository }}" \
+              -p "${FFMPEG_MACOS_ASSET}" \
+              --clobber
+          fi
+          rm -rf ffmpeg-dist
+          mkdir -p ffmpeg-dist
+          tar --zstd -xf "$ASSET_PATH" -C ffmpeg-dist
+          test -d ffmpeg-dist/lib
+          FF_ASSET="$ASSET_PATH" python3 - <<'PY'
+          import hashlib, json, os, pathlib
+          manifest = json.loads(pathlib.Path("tools/ffmpeg/manifest.json").read_text())
+          expected = manifest["assets"]["macos_arm64"]["sha256"].strip()
+          if expected:
+              actual = hashlib.sha256(pathlib.Path(os.environ["FF_ASSET"]).read_bytes()).hexdigest()
+              if actual.lower() != expected.lower():
+                  raise SystemExit(f"sha256 mismatch: {actual} != {expected}")
+          print("ffmpeg asset sha256 check passed (or skipped when empty).")
+          PY
+          echo "FFMPEG_DIR=$GITHUB_WORKSPACE/ffmpeg-dist" >> "$GITHUB_ENV"
+          echo "DYLD_FALLBACK_LIBRARY_PATH=$GITHUB_WORKSPACE/ffmpeg-dist/lib" >> "$GITHUB_ENV"
+
       - name: Rust test (app feature)
         run: cargo test --features app
 
@@ -103,9 +136,13 @@ jobs:
           set -euo pipefail
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release/AWMKit.app"
           test -d "$APP_PATH"
+          mkdir -p "$APP_PATH/Contents/Frameworks/ffmpeg"
+          cp ffmpeg-dist/lib/*.dylib "$APP_PATH/Contents/Frameworks/ffmpeg/"
           mkdir -p dist/macos
           ditto -c -k --keepParent "$APP_PATH" "dist/macos/AWMKit-macos-arm64.app.zip"
           cp "target/aarch64-apple-darwin/release/awmkit" "dist/macos/awmkit-macos-arm64"
+          mkdir -p "dist/macos/lib/ffmpeg"
+          cp ffmpeg-dist/lib/*.dylib "dist/macos/lib/ffmpeg/"
           chmod +x "dist/macos/awmkit-macos-arm64"
           ls -lh dist/macos
 
@@ -170,6 +207,34 @@ jobs:
           }
           Write-Host "Bundled zip validated: $zipPath"
 
+      - name: Ensure and validate FFmpeg runtime zip
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zipPath = "$env:FFMPEG_WINDOWS_ASSET"
+          if (-not (Test-Path $zipPath)) {
+            gh release download "$env:FFMPEG_WINDOWS_RELEASE" `
+              --repo "${{ github.repository }}" `
+              -p "$env:FFMPEG_WINDOWS_ASSET" `
+              --clobber
+          }
+          Remove-Item -Recurse -Force ffmpeg-dist -ErrorAction SilentlyContinue
+          Expand-Archive -Path $zipPath -DestinationPath ffmpeg-dist -Force
+          if (-not (Test-Path "ffmpeg-dist/lib")) {
+            throw "Invalid ffmpeg zip: missing ffmpeg-dist/lib"
+          }
+          $manifest = Get-Content tools/ffmpeg/manifest.json -Raw | ConvertFrom-Json
+          $expected = "$($manifest.assets.windows_x86_64.sha256)".Trim()
+          if ($expected.Length -gt 0) {
+            $actual = (Get-FileHash -Algorithm SHA256 $zipPath).Hash.ToLowerInvariant()
+            if ($actual -ne $expected.ToLowerInvariant()) {
+              throw "sha256 mismatch: $actual != $expected"
+            }
+          }
+          "FFMPEG_DIR=$env:GITHUB_WORKSPACE\\ffmpeg-dist" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "$env:GITHUB_WORKSPACE\\ffmpeg-dist\\lib" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Rust test (app feature)
         run: cargo test --features app
 
@@ -221,6 +286,8 @@ jobs:
           Get-ChildItem $exePath | Format-List FullName,Length
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE/dist/windows" | Out-Null
           Copy-Item $exePath "$env:GITHUB_WORKSPACE/dist/windows/AWMKit-win-x64-single.exe" -Force
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE/dist/windows/lib/ffmpeg" | Out-Null
+          Copy-Item ffmpeg-dist\lib\*.dll "$env:GITHUB_WORKSPACE/dist/windows/lib/ffmpeg/" -Force
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -228,6 +295,7 @@ jobs:
           name: windows-winui-${{ github.run_id }}
           path: |
             dist/windows/AWMKit-win-x64-single.exe
+            dist/windows/lib/ffmpeg/*.dll
             target/x86_64-pc-windows-msvc/release/awmkit.exe
             target/x86_64-pc-windows-msvc/release/awmkit.dll
             docs/winui-equivalence-spec.md

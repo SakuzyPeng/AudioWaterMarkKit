@@ -214,7 +214,25 @@ class AppState: ObservableObject {
             return
         }
 
-        audioStatusTone = .ready
+        if let capabilities = try? audio.mediaCapabilities() {
+            let containers: [String] = [
+                capabilities.containerMp4 ? "mp4" : nil,
+                capabilities.containerMkv ? "mkv" : nil,
+                capabilities.containerTs ? "ts" : nil,
+            ].compactMap { $0 }
+            let containerText = containers.isEmpty ? "-" : containers.joined(separator: ",")
+
+            audioStatusTone = .ready
+            audioStatusHelp = """
+            \(l("AudioWmark 可用", "AudioWmark available"))
+            \(l("媒体后端", "Media backend")): \(capabilities.backend)
+            eac3: \(capabilities.eac3Decode ? "available" : "unavailable")
+            \(l("容器", "Containers")): \(containerText)
+            """
+            return
+        }
+
+        audioStatusTone = .warning
         audioStatusHelp = "\(l("AudioWmark 可用", "AudioWmark available")) (\(inferredAudioBackend()))"
     }
 

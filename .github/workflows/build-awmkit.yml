@@ -19,6 +19,12 @@ on:
 permissions:
   contents: write
 
+env:
+  FFMPEG_MACOS_RELEASE: ffmpeg-macos-arm64-minimal-2026-02-12
+  FFMPEG_MACOS_ASSET: ffmpeg-macos-arm64-minimal.tar.zst
+  FFMPEG_WINDOWS_RELEASE: ffmpeg-windows-x86_64-minimal-2026-02-12
+  FFMPEG_WINDOWS_ASSET: ffmpeg-windows-x86_64-minimal.zip
+
 jobs:
   build:
     strategy:
@@ -29,6 +35,8 @@ jobs:
             target: aarch64-apple-darwin
             audiowmark_asset: audiowmark-macos-arm64.tar.gz
             audiowmark_release: audiowmark-macos-arm64-2026-02-03
+            ffmpeg_asset: ffmpeg-macos-arm64-minimal.tar.zst
+            ffmpeg_release: ffmpeg-macos-arm64-minimal-2026-02-12
             output_name: awmkit-macos-arm64
             output_ext: tar.gz
 
@@ -36,6 +44,8 @@ jobs:
             target: x86_64-pc-windows-msvc
             audiowmark_asset: audiowmark-windows-x86_64.zip
             audiowmark_release: audiowmark-win-2026-02-03
+            ffmpeg_asset: ffmpeg-windows-x86_64-minimal.zip
+            ffmpeg_release: ffmpeg-windows-x86_64-minimal-2026-02-12
             output_name: awmkit-windows-x86_64
             output_ext: zip
 
@@ -68,6 +78,13 @@ jobs:
         run: |
           gh release download "${{ matrix.audiowmark_release }}" --repo "${{ github.repository }}" -p "${{ matrix.audiowmark_asset }}"
 
+      - name: Download FFmpeg release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release download "${{ matrix.ffmpeg_release }}" --repo "${{ github.repository }}" -p "${{ matrix.ffmpeg_asset }}"
+
       - name: Prepare bundled audiowmark (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -79,6 +96,29 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           ls -lh bundled/audiowmark-macos-arm64.zip
 
+      - name: Prepare FFmpeg runtime (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          ASSET="${{ matrix.ffmpeg_asset }}"
+          mkdir -p ffmpeg-dist
+          tar --zstd -xf "$ASSET" -C ffmpeg-dist
+          test -d ffmpeg-dist/lib
+          FF_ASSET="$ASSET" python3 - <<'PY'
+          import json, pathlib, hashlib
+          import os
+          manifest = json.loads(pathlib.Path("tools/ffmpeg/manifest.json").read_text())
+          expected = manifest["assets"]["macos_arm64"]["sha256"].strip()
+          if expected:
+              data = pathlib.Path(os.environ["FF_ASSET"]).read_bytes()
+              actual = hashlib.sha256(data).hexdigest()
+              if actual.lower() != expected.lower():
+                  raise SystemExit(f"sha256 mismatch: {actual} != {expected}")
+          print("ffmpeg asset sha256 check passed (or skipped when empty).")
+          PY
+          echo "FFMPEG_DIR=$GITHUB_WORKSPACE/ffmpeg-dist" >> "$GITHUB_ENV"
+          echo "DYLD_FALLBACK_LIBRARY_PATH=$GITHUB_WORKSPACE/ffmpeg-dist/lib" >> "$GITHUB_ENV"
+
       - name: Prepare bundled audiowmark (Windows)
         if: runner.os == 'Windows'
         shell: bash
@@ -86,6 +126,26 @@ jobs:
           mkdir -p bundled
           cp "${{ matrix.audiowmark_asset }}" bundled/audiowmark-windows-x86_64.zip
           ls -lh bundled/audiowmark-windows-x86_64.zip
+
+      - name: Prepare FFmpeg runtime (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ffmpeg-dist | Out-Null
+          Expand-Archive -Path "${{ matrix.ffmpeg_asset }}" -DestinationPath ffmpeg-dist -Force
+          if (!(Test-Path "ffmpeg-dist/lib")) {
+            throw "Invalid ffmpeg package: missing lib directory."
+          }
+          $manifest = Get-Content tools/ffmpeg/manifest.json -Raw | ConvertFrom-Json
+          $expected = "$($manifest.assets.windows_x86_64.sha256)".Trim()
+          if ($expected.Length -gt 0) {
+            $actual = (Get-FileHash -Algorithm SHA256 "${{ matrix.ffmpeg_asset }}").Hash.ToLowerInvariant()
+            if ($actual -ne $expected.ToLowerInvariant()) {
+              throw "sha256 mismatch: $actual != $expected"
+            }
+          }
+          "FFMPEG_DIR=$env:GITHUB_WORKSPACE\\ffmpeg-dist" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "$env:GITHUB_WORKSPACE\\ffmpeg-dist\\lib" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build awmkit
         run: cargo build --bin awmkit --features full-cli,bundled --release --target ${{ matrix.target }}
@@ -107,7 +167,10 @@ jobs:
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
-          tar -czf ${{ matrix.output_name }}.tar.gz -C target/${{ matrix.target }}/release awmkit
+          mkdir -p pkg/lib/ffmpeg
+          cp target/${{ matrix.target }}/release/awmkit pkg/
+          cp ffmpeg-dist/lib/*.dylib pkg/lib/ffmpeg/
+          tar -czf ${{ matrix.output_name }}.tar.gz -C pkg .
           ls -lh ${{ matrix.output_name }}.tar.gz
           shasum -a 256 ${{ matrix.output_name }}.tar.gz
 
@@ -115,7 +178,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path target/${{ matrix.target }}/release/awmkit.exe -DestinationPath ${{ matrix.output_name }}.zip -Force
+          New-Item -ItemType Directory -Force -Path pkg\lib\ffmpeg | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/awmkit.exe pkg\ -Force
+          Copy-Item ffmpeg-dist\lib\*.dll pkg\lib\ffmpeg\ -Force
+          Compress-Archive -Path pkg\* -DestinationPath ${{ matrix.output_name }}.zip -Force
           Get-ChildItem ${{ matrix.output_name }}.zip
           Get-FileHash -Algorithm SHA256 ${{ matrix.output_name }}.zip
 

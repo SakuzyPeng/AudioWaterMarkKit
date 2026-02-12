@@ -84,6 +84,32 @@ public struct AWMDetectResult
     }
 }
 
+[StructLayout(LayoutKind.Sequential)]
+public struct AWMAudioMediaCapabilities
+{
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
+    public byte[] Backend;
+
+    [MarshalAs(UnmanagedType.U1)]
+    public bool Eac3Decode;
+
+    [MarshalAs(UnmanagedType.U1)]
+    public bool ContainerMp4;
+
+    [MarshalAs(UnmanagedType.U1)]
+    public bool ContainerMkv;
+
+    [MarshalAs(UnmanagedType.U1)]
+    public bool ContainerTs;
+
+    public string GetBackend()
+    {
+        int len = Array.IndexOf(Backend, (byte)0);
+        if (len < 0) len = Backend.Length;
+        return System.Text.Encoding.UTF8.GetString(Backend, 0, len);
+    }
+}
+
 /// <summary>Single multichannel pair detection result.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct AWMPairResult

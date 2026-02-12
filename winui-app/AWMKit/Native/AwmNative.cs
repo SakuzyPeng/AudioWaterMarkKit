@@ -147,6 +147,9 @@ internal static class AwmNative
     [DllImport(Lib, EntryPoint = "awm_audio_binary_path", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_audio_binary_path(IntPtr handle, IntPtr outBuf, nuint outLen);
 
+    [DllImport(Lib, EntryPoint = "awm_audio_media_capabilities", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_audio_media_capabilities(IntPtr handle, IntPtr result);
+
     // ── UI Settings (app feature) ──
 
     [DllImport(Lib, EntryPoint = "awm_ui_language_get", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
