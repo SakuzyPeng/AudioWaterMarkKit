@@ -132,8 +132,13 @@ jobs:
                   raise SystemExit(f"sha256 mismatch: {actual} != {expected}")
           print("ffmpeg asset sha256 check passed (or skipped when empty).")
           PY
-          echo "FFMPEG_DIR=$GITHUB_WORKSPACE/ffmpeg-dist" >> "$GITHUB_ENV"
-          echo "DYLD_FALLBACK_LIBRARY_PATH=$GITHUB_WORKSPACE/ffmpeg-dist/lib" >> "$GITHUB_ENV"
+
+      - name: Install FFmpeg dev headers/libs for build (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew list pkg-config >/dev/null 2>&1 || brew install pkg-config
+          brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
 
       - name: Prepare bundled audiowmark (Windows)
         if: runner.os == 'Windows'
@@ -174,8 +179,22 @@ jobs:
               throw "sha256 mismatch: $actual != $expected"
             }
           }
-          "FFMPEG_DIR=$env:GITHUB_WORKSPACE\\ffmpeg-dist" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "$env:GITHUB_WORKSPACE\\ffmpeg-dist\\lib" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install FFmpeg dev headers/libs for build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vcpkgExe = "C:\\vcpkg\\vcpkg.exe"
+          if (!(Test-Path $vcpkgExe)) {
+            throw "vcpkg executable not found: $vcpkgExe"
+          }
+          if (!(Test-Path "C:\\vcpkg\\installed\\x64-windows\\include\\libavutil\\avutil.h")) {
+            & $vcpkgExe install ffmpeg[avcodec,avformat,avfilter,swresample]:x64-windows --recurse
+            if ($LASTEXITCODE -ne 0) {
+              throw "vcpkg ffmpeg install failed with exit code $LASTEXITCODE"
+            }
+          }
+          "VCPKG_ROOT=C:\\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build awmkit
         run: cargo build --bin awmkit --features full-cli,bundled --release --target ${{ matrix.target }}
