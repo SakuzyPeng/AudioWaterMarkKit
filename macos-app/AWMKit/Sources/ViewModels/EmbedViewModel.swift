@@ -395,6 +395,7 @@ class EmbedViewModel: ObservableObject {
                 isProcessing = false
                 return
             }
+            let activeKeySlot = (try? AWMKeyStore.activeSlot()) ?? 0
             let audioBox = UnsafeAudioBox(audio: audio)
 
             let initialTotal = max(selectedFiles.count, 1)
@@ -464,6 +465,7 @@ class EmbedViewModel: ObservableObject {
                         outputURL: outputURL,
                         tagValue: resolvedTag,
                         key: key,
+                        keySlot: activeKeySlot,
                         strength: UInt8(strength)
                     )
                     if let evidenceError = step.evidenceErrorDescription {
@@ -744,12 +746,14 @@ private extension EmbedViewModel {
         outputURL: URL,
         tagValue: String,
         key: Data,
+        keySlot: UInt8,
         strength: UInt8
     ) async throws -> EmbedStepOutput {
         try await Task.detached(priority: .userInitiated) {
             let tag = try AWMTag(tag: tagValue)
             audio.audio.setStrength(strength)
-            let rawMessage = try audio.audio.embedMultichannel(input: fileURL, output: outputURL, tag: tag, key: key, layout: nil)
+            let rawMessage = try AWMMessage.encode(tag: tag, key: key, keySlot: keySlot)
+            try audio.audio.embedMultichannel(input: fileURL, output: outputURL, message: rawMessage, layout: nil)
             do {
                 let snr = try audio.audio.recordEmbedEvidence(
                     input: fileURL,

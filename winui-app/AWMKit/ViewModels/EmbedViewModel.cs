@@ -601,7 +601,7 @@ public sealed partial class EmbedViewModel : ObservableObject
             return;
         }
 
-        var (message, encodeError) = AwmBridge.EncodeMessage(resolvedTag, key);
+        var (message, encodeError) = AwmBridge.EncodeMessage(resolvedTag, key, _appState.ActiveKeySlot);
         if (message is null || encodeError != AwmError.Ok)
         {
             AddLog(L("嵌入失败", "Embed failed"), $"{L("消息编码失败", "Message encode failed")}: {encodeError}", false, false, LogIconTone.Error);

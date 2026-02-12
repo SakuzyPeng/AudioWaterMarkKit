@@ -70,6 +70,42 @@ public enum AWMMessage {
         return Data(output)
     }
 
+    /// Encode a watermark message with specific key slot
+    ///
+    /// - Parameters:
+    ///   - version: Protocol version
+    ///   - tag: 8-character tag
+    ///   - key: HMAC key
+    ///   - keySlot: Key slot (0-31 for v2, 0 for v1)
+    /// - Returns: 16-byte message
+    public static func encode(
+        version: UInt8 = currentVersion,
+        tag: AWMTag,
+        key: Data,
+        keySlot: UInt8
+    ) throws -> Data {
+        var output = [UInt8](repeating: 0, count: 16)
+
+        let result = tag.value.withCString { tagPtr in
+            key.withUnsafeBytes { keyPtr in
+                awm_message_encode_with_slot(
+                    version,
+                    tagPtr,
+                    keyPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                    keyPtr.count,
+                    keySlot,
+                    &output
+                )
+            }
+        }
+
+        if result != AWM_SUCCESS.rawValue {
+            throw AWMError(code: result)
+        }
+
+        return Data(output)
+    }
+
     /// Encode a watermark message with specific timestamp
     ///
     /// - Parameters:

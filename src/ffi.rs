@@ -213,6 +213,44 @@ pub unsafe extern "C" fn awm_message_encode(
     }
 }
 
+/// 编码消息（指定槽位）
+///
+/// # Safety
+/// - `tag` 必须是有效的 8 字符 C 字符串
+/// - `key` 必须指向 `key_len` 字节的有效内存
+/// - `out` 必须指向至少 16 字节的缓冲区
+#[no_mangle]
+pub unsafe extern "C" fn awm_message_encode_with_slot(
+    version: u8,
+    tag: *const c_char,
+    key: *const u8,
+    key_len: usize,
+    key_slot: u8,
+    out: *mut u8,
+) -> i32 {
+    if tag.is_null() || key.is_null() || out.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    let Ok(tag_str) = CStr::from_ptr(tag).to_str() else {
+        return AWMError::InvalidUtf8 as i32;
+    };
+
+    let Ok(tag_obj) = Tag::parse(tag_str) else {
+        return AWMError::InvalidTag as i32;
+    };
+
+    let key_slice = slice::from_raw_parts(key, key_len);
+
+    match message::encode_with_slot(version, &tag_obj, key_slice, key_slot) {
+        Ok(msg) => {
+            ptr::copy_nonoverlapping(msg.as_ptr(), out, MESSAGE_LEN);
+            AWMError::Success as i32
+        }
+        Err(_) => AWMError::InvalidTag as i32,
+    }
+}
+
 /// 编码消息（指定时间戳）
 ///
 /// # Safety

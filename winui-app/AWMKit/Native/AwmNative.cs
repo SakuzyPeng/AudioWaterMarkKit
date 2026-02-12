@@ -101,6 +101,15 @@ internal static class AwmNative
         nuint keyLen,
         IntPtr outMsg);
 
+    [DllImport(Lib, EntryPoint = "awm_message_encode_with_slot", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_message_encode_with_slot(
+        byte version,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string tag,
+        IntPtr key,
+        nuint keyLen,
+        byte keySlot,
+        IntPtr outMsg);
+
     [DllImport(Lib, EntryPoint = "awm_message_encode_with_timestamp", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_message_encode_with_timestamp(
         byte version,

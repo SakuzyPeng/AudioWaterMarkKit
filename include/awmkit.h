@@ -111,6 +111,26 @@ int32_t awm_message_encode(
 );
 
 /**
+ * Encode a watermark message with specific key slot.
+ *
+ * @param version   Protocol version
+ * @param tag       8-character tag string
+ * @param key       HMAC key bytes
+ * @param key_len   Key length
+ * @param key_slot  Key slot (0-31 for v2, 0 for v1)
+ * @param out       Output buffer (at least 16 bytes)
+ * @return          AWM_SUCCESS or error code
+ */
+int32_t awm_message_encode_with_slot(
+    uint8_t version,
+    const char* tag,
+    const uint8_t* key,
+    size_t key_len,
+    uint8_t key_slot,
+    uint8_t* out
+);
+
+/**
  * Encode a watermark message with specific timestamp
  *
  * @param version           Protocol version

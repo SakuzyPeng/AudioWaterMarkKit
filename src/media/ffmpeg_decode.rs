@@ -171,32 +171,62 @@ fn resample_frame(
     output_layout: ffmpeg::ChannelLayout,
     output_rate: u32,
 ) -> Result<()> {
-    let mut output = ffmpeg::frame::Audio::empty();
-    match resampler.run(decoded, &mut output) {
-        Ok(_) => append_packed_i16_frame(&output, samples),
-        Err(ffmpeg::Error::InputChanged | ffmpeg::Error::OutputChanged) => {
-            let input_layout = normalize_layout(decoded.channel_layout(), decoded.channels());
-            let input_rate = decoded.rate();
-            if input_rate == 0 {
-                return Err(Error::FfmpegDecodeFailed(
-                    "resample failed: input sample rate changed to 0".to_string(),
-                ));
-            }
-            *resampler = create_resampler(
-                decoded.format(),
-                input_layout,
-                input_rate,
-                output_layout,
-                output_rate,
-            )?;
+    let input_layout = normalize_layout(decoded.channel_layout(), decoded.channels());
+    let input_rate = decoded.rate();
 
-            let mut retry_output = ffmpeg::frame::Audio::empty();
-            resampler
-                .run(decoded, &mut retry_output)
-                .map_err(|err| Error::FfmpegDecodeFailed(format!("resample failed: {err}")))?;
-            append_packed_i16_frame(&retry_output, samples)
+    // Fast path: decoded frame already matches our target PCM format.
+    if decoded.format() == ffmpeg::format::Sample::I16(ffmpeg::format::sample::Type::Packed)
+        && input_layout == output_layout
+        && input_rate == output_rate
+    {
+        return append_packed_i16_frame(decoded, samples);
+    }
+
+    // Some real-world streams (especially containerized/transcoded assets) can
+    // trigger repeated InputChanged/OutputChanged notifications while decoder
+    // parameters settle. Rebuild and retry a few times before failing hard.
+    for _attempt in 0..3 {
+        let mut output = ffmpeg::frame::Audio::empty();
+        match resampler.run(decoded, &mut output) {
+            Ok(_) => return append_packed_i16_frame(&output, samples),
+            Err(ffmpeg::Error::InputChanged | ffmpeg::Error::OutputChanged) => {
+                // Some frames report rate=0 after parameter switch; fall back to
+                // target output rate to keep resampler reconfiguration valid.
+                let safe_input_rate = input_rate.max(output_rate);
+                *resampler = create_resampler(
+                    decoded.format(),
+                    input_layout,
+                    safe_input_rate,
+                    output_layout,
+                    output_rate,
+                )?;
+            }
+            Err(err) => return Err(Error::FfmpegDecodeFailed(format!("resample failed: {err}"))),
         }
-        Err(err) => Err(Error::FfmpegDecodeFailed(format!("resample failed: {err}"))),
+    }
+
+    // Last resort: build a one-shot resampler from the current frame params.
+    let safe_input_rate = input_rate.max(output_rate);
+    let mut one_shot = create_resampler(
+        decoded.format(),
+        input_layout,
+        safe_input_rate,
+        output_layout,
+        output_rate,
+    )?;
+    let mut output = ffmpeg::frame::Audio::empty();
+    match one_shot.run(decoded, &mut output) {
+        Ok(_) => append_packed_i16_frame(&output, samples),
+        Err(ffmpeg::Error::InputChanged | ffmpeg::Error::OutputChanged)
+            if decoded.format()
+                == ffmpeg::format::Sample::I16(ffmpeg::format::sample::Type::Packed)
+                && input_layout == output_layout =>
+        {
+            append_packed_i16_frame(decoded, samples)
+        }
+        Err(err) => Err(Error::FfmpegDecodeFailed(format!(
+            "resample failed after fallback: {err}"
+        ))),
     }
 }
 

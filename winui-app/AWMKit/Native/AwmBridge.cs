@@ -140,6 +140,14 @@ public static class AwmBridge
     /// </summary>
     public static (byte[]? message, AwmError error) EncodeMessage(string tag, byte[] key)
     {
+        return EncodeMessage(tag, key, null);
+    }
+
+    /// <summary>
+    /// Encodes a watermark message from tag and key with optional key slot.
+    /// </summary>
+    public static (byte[]? message, AwmError error) EncodeMessage(string tag, byte[] key, int? keySlot)
+    {
         if (key.Length != 32)
         {
             return (null, AwmError.InvalidMessageLength);
@@ -150,12 +158,20 @@ public static class AwmBridge
         try
         {
             byte version = GetCurrentVersion();
-            int code = AwmNative.awm_message_encode(
-                version,
-                tag,
-                keyHandle.AddrOfPinnedObject(),
-                (nuint)key.Length,
-                messageBuffer);
+            int code = keySlot.HasValue
+                ? AwmNative.awm_message_encode_with_slot(
+                    version,
+                    tag,
+                    keyHandle.AddrOfPinnedObject(),
+                    (nuint)key.Length,
+                    (byte)Math.Clamp(keySlot.Value, 0, 31),
+                    messageBuffer)
+                : AwmNative.awm_message_encode(
+                    version,
+                    tag,
+                    keyHandle.AddrOfPinnedObject(),
+                    (nuint)key.Length,
+                    messageBuffer);
 
             if (code == 0)
             {
