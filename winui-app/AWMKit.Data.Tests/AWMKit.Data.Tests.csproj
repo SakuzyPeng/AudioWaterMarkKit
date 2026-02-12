@@ -15,9 +15,5 @@
 
   <ItemGroup>
     <Compile Include="../AWMKit/Data/AppDatabase.cs" Link="Data/AppDatabase.cs" />
-    <Compile Include="../AWMKit/Data/TagMappingStore.cs" Link="Data/TagMappingStore.cs" />
-    <Compile Include="../AWMKit/Data/EvidenceStore.cs" Link="Data/EvidenceStore.cs" />
-    <Compile Include="../AWMKit/Models/TagMapping.cs" Link="Models/TagMapping.cs" />
-    <Compile Include="../AWMKit/Models/EvidenceRecord.cs" Link="Models/EvidenceRecord.cs" />
   </ItemGroup>
 </Project>
