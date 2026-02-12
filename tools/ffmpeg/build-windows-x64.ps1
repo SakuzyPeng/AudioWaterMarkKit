@@ -31,12 +31,25 @@ $UnixPrefix = $Prefix -replace "\\", "/"
 
 $configure = @"
 set -euo pipefail
+export MSYSTEM=MINGW64
+export CHERE_INVOKING=1
+export PATH=/mingw64/bin:/usr/bin:\$PATH
+echo "=== Toolchain probe ==="
+which gcc || true
+which x86_64-w64-mingw32-gcc || true
+gcc --version || true
+x86_64-w64-mingw32-gcc --version || true
 cd '$UnixSrc'
 make distclean >/dev/null 2>&1 || true
 ./configure \
   --prefix='$UnixPrefix' \
   --arch=x86_64 \
   --target-os=mingw32 \
+  --cc=x86_64-w64-mingw32-gcc \
+  --cxx=x86_64-w64-mingw32-g++ \
+  --ar=x86_64-w64-mingw32-ar \
+  --ranlib=x86_64-w64-mingw32-ranlib \
+  --nm=x86_64-w64-mingw32-nm \
   --enable-shared \
   --disable-static \
   --disable-programs \

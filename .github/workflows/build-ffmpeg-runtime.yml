@@ -53,8 +53,11 @@ jobs:
 
       - name: Build slim runtime
         run: |
+          pwd
+          ls -la
+          ls -la "$GITHUB_WORKSPACE/tools/ffmpeg"
           VERSION_TAG="${{ inputs.version_tag }}" \
-          ./tools/ffmpeg/build-macos-arm64.sh "$RUNNER_TEMP/ffmpeg-src"
+          bash "$GITHUB_WORKSPACE/tools/ffmpeg/build-macos-arm64.sh" "$RUNNER_TEMP/ffmpeg-src"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -104,6 +107,7 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass `
             -File tools/ffmpeg/build-windows-x64.ps1 `
             -FfmpegSrc "$env:RUNNER_TEMP\\ffmpeg-src" `
+            -MsysBash "C:\\msys64\\usr\\bin\\bash.exe" `
             -VersionTag "${{ inputs.version_tag }}"
 
       - name: Upload Windows artifacts
