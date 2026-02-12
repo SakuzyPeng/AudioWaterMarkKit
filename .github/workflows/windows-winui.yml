@@ -143,15 +143,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          xcodes=(/Applications/Xcode*.app)
-          if [ "${#xcodes[@]}" -eq 0 ]; then
-            echo "No Xcode app found under /Applications" >&2
+          xcodes="$(find /Applications -maxdepth 1 -type d -name 'Xcode_26*.app' | sort -V)"
+          if [ -z "$xcodes" ]; then
+            echo "No Xcode 26 found under /Applications (required by project)." >&2
             exit 1
           fi
-          printf '%s\n' "${xcodes[@]##*/}"
-          mapfile -t sorted < <(printf '%s\n' "${xcodes[@]}" | sort -V)
-          LATEST_XCODE="${sorted[$((${#sorted[@]} - 1))]}"
+          printf '%s\n' "$xcodes"
+          LATEST_XCODE="$(printf '%s\n' "$xcodes" | tail -n 1)"
+          echo "Using Xcode: $LATEST_XCODE"
           sudo xcode-select -s "$LATEST_XCODE/Contents/Developer"
           xcodebuild -version
 

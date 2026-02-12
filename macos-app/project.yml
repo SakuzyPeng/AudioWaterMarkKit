@@ -2,7 +2,7 @@ name: AWMKit
 
 options:
   bundleIdPrefix: com.awmkit
-  xcodeVersion: "15.4"
+  xcodeVersion: "26.0"
   deploymentTarget:
     macOS: "26.0"
   developmentLanguage: zh-Hans
