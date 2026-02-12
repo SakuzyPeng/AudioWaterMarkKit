@@ -10,11 +10,11 @@ on:
       ffmpeg_ref:
         description: "FFmpeg git ref/tag (e.g. n8.0.2)"
         required: true
-        default: "n8.0.2"
+        default: "n8.0.1"
       version_tag:
         description: "Asset version suffix (e.g. 8.0.2)"
         required: true
-        default: "8.0.2"
+        default: "8.0.1"
       prerelease:
         description: "Mark release as prerelease"
         type: boolean
@@ -47,7 +47,8 @@ jobs:
       - name: Clone FFmpeg source (shallow)
         run: |
           rm -rf "$RUNNER_TEMP/ffmpeg-src"
-          git clone --depth 1 --branch "${{ inputs.ffmpeg_ref }}" https://github.com/FFmpeg/FFmpeg.git "$RUNNER_TEMP/ffmpeg-src"
+          git clone --depth 1 --branch "${{ inputs.ffmpeg_ref }}" https://github.com/FFmpeg/FFmpeg.git "$RUNNER_TEMP/ffmpeg-src" || \
+            (echo "Invalid ffmpeg_ref: ${{ inputs.ffmpeg_ref }}. Try n8.0.1 or n8.0." >&2; exit 1)
           git -C "$RUNNER_TEMP/ffmpeg-src" rev-parse HEAD
 
       - name: Build slim runtime
@@ -92,6 +93,9 @@ jobs:
           $src = "$env:RUNNER_TEMP\\ffmpeg-src"
           Remove-Item -Recurse -Force $src -ErrorAction SilentlyContinue
           git clone --depth 1 --branch "${{ inputs.ffmpeg_ref }}" https://github.com/FFmpeg/FFmpeg.git $src
+          if ($LASTEXITCODE -ne 0) {
+            throw "Invalid ffmpeg_ref: ${{ inputs.ffmpeg_ref }}. Try n8.0.1 or n8.0."
+          }
           git -C $src rev-parse HEAD
 
       - name: Build slim runtime
@@ -144,4 +148,3 @@ jobs:
           files: |
             dist-release/*.zip
             dist-release/*.zip.sha256
-
