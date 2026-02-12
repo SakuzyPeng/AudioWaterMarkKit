@@ -14,6 +14,10 @@ on:
       - 'macos-app/**'
       - 'winui-app/**'
 
+concurrency:
+  group: windows-winui-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
