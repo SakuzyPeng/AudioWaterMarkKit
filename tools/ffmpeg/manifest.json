@@ -3,7 +3,7 @@
   "assets": {
     "macos_arm64": {
       "name": "ffmpeg-macos-arm64-gpl-slim-runtime-8.0.2.zip",
-      "sha256": "24513a22b9ddf5f106b7e7b34dc092e322cd012f70c4e91134e19e26d83e6ef5"
+      "sha256": "283b795dbe84bb378e69521aef8d0bde121ce3247b0f75ef7a3e0b554c026be5"
     },
     "windows_x86_64": {
       "name": "ffmpeg-win64-gpl-slim-runtime-8.0.2.zip",

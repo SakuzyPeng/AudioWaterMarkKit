@@ -50,6 +50,8 @@ make distclean >/dev/null 2>&1 || true
   --enable-avutil \
   --enable-avfilter \
   --enable-swresample \
+  --enable-filter=aformat \
+  --enable-filter=aresample \
   --enable-demuxer=mov,matroska,mpegts,wav,flac,mp3,ogg,aiff \
   --enable-decoder=eac3,ac3,aac,alac,flac,mp3,opus,vorbis,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le \
   --enable-encoder=pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_f64le,flac,aac,alac,libmp3lame,libopus,libvorbis \

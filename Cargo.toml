@@ -72,13 +72,13 @@ optional = true
 [dependencies.ffmpeg-next]
 version = "8"
 default-features = false
-features = ["codec", "format", "software-resampling"]
+features = ["codec", "format", "filter", "software-resampling"]
 optional = true
 
 [dependencies.ffmpeg-sys-next]
 version = "8"
 default-features = false
-features = ["avcodec", "avformat", "swresample"]
+features = ["avcodec", "avformat", "avfilter", "swresample"]
 optional = true
 
 [dependencies.flacenc]

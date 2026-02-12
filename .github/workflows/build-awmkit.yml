@@ -115,6 +115,11 @@ jobs:
             exit 1
           fi
           test -d ffmpeg-dist/lib
+          ls ffmpeg-dist/lib/libavcodec*.dylib >/dev/null
+          ls ffmpeg-dist/lib/libavformat*.dylib >/dev/null
+          ls ffmpeg-dist/lib/libavutil*.dylib >/dev/null
+          ls ffmpeg-dist/lib/libavfilter*.dylib >/dev/null
+          ls ffmpeg-dist/lib/libswresample*.dylib >/dev/null
           FF_ASSET="$ASSET" python3 - <<'PY'
           import json, pathlib, hashlib
           import os
@@ -156,6 +161,11 @@ jobs:
           } else {
             throw "Invalid ffmpeg package: missing lib/bin directory."
           }
+          if (!(Test-Path "ffmpeg-dist/lib/avcodec-62.dll")) { throw "Missing avcodec-62.dll in ffmpeg package." }
+          if (!(Test-Path "ffmpeg-dist/lib/avformat-62.dll")) { throw "Missing avformat-62.dll in ffmpeg package." }
+          if (!(Test-Path "ffmpeg-dist/lib/avutil-60.dll")) { throw "Missing avutil-60.dll in ffmpeg package." }
+          if (!(Test-Path "ffmpeg-dist/lib/avfilter-11.dll")) { throw "Missing avfilter-11.dll in ffmpeg package." }
+          if (!(Test-Path "ffmpeg-dist/lib/swresample-6.dll")) { throw "Missing swresample-6.dll in ffmpeg package." }
           $manifest = Get-Content tools/ffmpeg/manifest.json -Raw | ConvertFrom-Json
           $expected = "$($manifest.assets.windows_x86_64.sha256)".Trim()
           if ($expected.Length -gt 0) {
