@@ -140,13 +140,14 @@ jobs:
             "FFmpeg license text not found in source package." | Set-Content (Join-Path $pkgRoot "LICENSE.GPL.txt") -Encoding UTF8
           }
 
-          @"
-AWMKit FFmpeg runtime (Windows x64)
-Version: ${{ inputs.version_tag }}
-Source: BtbN/FFmpeg-Builds (${{ inputs.btbn_windows_asset }})
-This package contains slim shared libraries required by AWMKit runtime.
-Included libraries: avcodec, avformat, avutil, avfilter, swresample.
-"@ | Set-Content (Join-Path $pkgRoot "README.txt") -Encoding UTF8
+          $readmeLines = @(
+            "AWMKit FFmpeg runtime (Windows x64)"
+            "Version: ${{ inputs.version_tag }}"
+            "Source: BtbN/FFmpeg-Builds (${{ inputs.btbn_windows_asset }})"
+            "This package contains slim shared libraries required by AWMKit runtime."
+            "Included libraries: avcodec, avformat, avutil, avfilter, swresample."
+          )
+          $readmeLines | Set-Content (Join-Path $pkgRoot "README.txt") -Encoding UTF8
 
           $zipPath = Join-Path $outDir "$pkgName.zip"
           Compress-Archive -Path "$pkgRoot\\*" -DestinationPath $zipPath -Force
