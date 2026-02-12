@@ -18,6 +18,11 @@ if (-not [string]::IsNullOrWhiteSpace($dirty)) {
 }
 
 $shortSha = (git rev-parse --short HEAD).Trim()
+$buildCommit = $shortSha
+if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_RUN_ID)) {
+  $runAttempt = if ([string]::IsNullOrWhiteSpace($env:GITHUB_RUN_ATTEMPT)) { "1" } else { $env:GITHUB_RUN_ATTEMPT.Trim() }
+  $buildCommit = "$shortSha-r$($env:GITHUB_RUN_ID.Trim())a$runAttempt"
+}
 $headTag = (git tag --points-at HEAD | Select-Object -First 1)
 $headTag = if ($null -eq $headTag) { "" } else { $headTag.Trim() }
 $baseVersionMatch = Select-String -Path (Join-Path $RepoRoot "Cargo.toml") -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1
@@ -131,14 +136,14 @@ Write-Host "[INFO] Building Inno installer..."
 iscc `
   "/DAppVersion=$version" `
   "/DAppPackageVersion=$packageVersion" `
-  "/DAppCommit=$shortSha" `
+  "/DAppCommit=$buildCommit" `
   "/DAppSourceDir=$appStage" `
   "/DOutputDir=$distRoot" `
   "$RepoRoot\packaging\windows\inno.iss" | Out-Host
 
-$installer = Join-Path $distRoot "AWMKit-win-x64-setup-$packageVersion-$shortSha.exe"
+$installer = Join-Path $distRoot "AWMKit-win-x64-ui-installer-$packageVersion-$buildCommit.exe"
 if (-not (Test-Path $installer)) {
-  $latest = Get-ChildItem -Path $distRoot -Filter "AWMKit-win-x64-setup-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  $latest = Get-ChildItem -Path $distRoot -Filter "AWMKit-win-x64-ui-installer-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   if ($null -eq $latest) {
     Fail "Installer not produced."
   }

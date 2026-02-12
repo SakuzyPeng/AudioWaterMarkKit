@@ -210,10 +210,32 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path pkg\lib\ffmpeg | Out-Null
           Copy-Item target/${{ matrix.target }}/release/awmkit.exe pkg\ -Force
+          # Keep ffmpeg dll beside exe to avoid relying on external PATH.
+          Copy-Item ffmpeg-dist\lib\*.dll pkg\ -Force
+          # Keep historical subdir layout for compatibility.
           Copy-Item ffmpeg-dist\lib\*.dll pkg\lib\ffmpeg\ -Force
           Compress-Archive -Path pkg\* -DestinationPath ${{ matrix.output_name }}.zip -Force
           Get-ChildItem ${{ matrix.output_name }}.zip
           Get-FileHash -Algorithm SHA256 ${{ matrix.output_name }}.zip
+
+      - name: Smoke test packaged CLI (Windows, clean PATH)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $smoke = Join-Path $env:RUNNER_TEMP "awmkit-cli-smoke"
+          Remove-Item -Recurse -Force $smoke -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $smoke | Out-Null
+          Expand-Archive -Path "${{ matrix.output_name }}.zip" -DestinationPath $smoke -Force
+          $cli = Join-Path $smoke "awmkit.exe"
+          if (-not (Test-Path $cli)) { throw "Missing awmkit.exe in packaged zip" }
+          $oldPath = $env:PATH
+          $env:PATH = "$env:SystemRoot\\System32;$env:SystemRoot"
+          try {
+            & $cli status --doctor
+            if ($LASTEXITCODE -ne 0) { throw "Packaged CLI smoke failed: exit $LASTEXITCODE" }
+          } finally {
+            $env:PATH = $oldPath
+          }
 
       - name: Determine release tag
         id: tag

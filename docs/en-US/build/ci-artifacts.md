@@ -9,7 +9,7 @@
 - `.github/workflows/build-awmkit.yml`
   - Builds and releases CLI (macOS arm64 + Windows x64)
 - `.github/workflows/windows-winui.yml`
-  - Builds macOS app package and WinUI single-file artifact
+  - Builds macOS app package and WinUI installer (Inno Setup)
 - `.github/workflows/build-audiowmark-macos-arm.yml`
   - Publishes `audiowmark-macos-arm64.tar.gz`
 - `.github/workflows/build-audiowmark-windows-release.yml`
@@ -33,7 +33,7 @@ Artifacts uploaded by `windows-winui.yml`:
 
 - `dist/macos/AWMKit-macos-arm64.app.zip`
 - `dist/macos/awmkit-macos-arm64`
-- `dist/windows/AWMKit-win-x64-single.exe`
+- `dist/local/AWMKit-win-x64-ui-installer-*.exe`
 - `target/x86_64-pc-windows-msvc/release/awmkit.exe`
 - `target/x86_64-pc-windows-msvc/release/awmkit.dll`
 

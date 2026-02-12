@@ -29,19 +29,33 @@ internal static class AwmNative
     private static readonly List<nint> PreloadedDependencyHandles = [];
     private static readonly object DependencyLoadLock = new();
     private static bool DependenciesPreloaded;
+    private static string? NativeLoadError;
 
     static AwmNative()
     {
-        ConfigureNativeSearchDirectories();
-        PreloadNativeDependencies();
-        NativeLibrary.SetDllImportResolver(
-            typeof(AwmNative).Assembly,
-            static (libraryName, assembly, searchPath) => ResolveLibrary(libraryName, assembly));
+        try
+        {
+            ConfigureNativeSearchDirectories();
+            PreloadNativeDependencies();
+            NativeLibrary.SetDllImportResolver(
+                typeof(AwmNative).Assembly,
+                static (libraryName, assembly, searchPath) => ResolveLibrary(libraryName, assembly));
 
-        _preloadedHandle = ResolveLibrary(Lib, typeof(AwmNative).Assembly);
+            _preloadedHandle = ResolveLibrary(Lib, typeof(AwmNative).Assembly);
+            if (_preloadedHandle == IntPtr.Zero)
+            {
+                NativeLoadError = "failed to load awmkit_native.dll from allowed directories";
+            }
+        }
+        catch (Exception ex)
+        {
+            NativeLoadError = ex.Message;
+        }
     }
 
-    internal static bool EnsureLoaded() => _preloadedHandle != IntPtr.Zero;
+    internal static bool EnsureLoaded() => _preloadedHandle != IntPtr.Zero && string.IsNullOrWhiteSpace(NativeLoadError);
+
+    internal static string? GetLoadError() => NativeLoadError;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool SetDefaultDllDirectories(uint directoryFlags);
@@ -53,7 +67,10 @@ internal static class AwmNative
     {
         try
         {
-            SetDefaultDllDirectories(LoadLibrarySearchDefaultDirs | LoadLibrarySearchUserDirs);
+            if (!SetDefaultDllDirectories(LoadLibrarySearchDefaultDirs | LoadLibrarySearchUserDirs))
+            {
+                throw new InvalidOperationException($"SetDefaultDllDirectories failed with Win32Error={Marshal.GetLastWin32Error()}");
+            }
             foreach (var dir in EnumerateNativeSearchDirs())
             {
                 var cookie = AddDllDirectory(dir);
@@ -63,9 +80,9 @@ internal static class AwmNative
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Fallback to explicit path probing in ResolveLibrary.
+            throw new DllNotFoundException($"failed to configure native dll search directories: {ex.Message}", ex);
         }
     }
 
@@ -109,6 +126,7 @@ internal static class AwmNative
             }
 
             var ffmpegDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var loadedDependencies = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var dir in EnumerateNativeSearchDirs())
             {
                 if (IsFfmpegDirectory(dir))
@@ -128,7 +146,7 @@ internal static class AwmNative
                 foreach (var name in FfmpegDependencyOrder)
                 {
                     var candidate = Path.Combine(ffmpegDir, name);
-                    if (!File.Exists(candidate))
+                    if (!File.Exists(candidate) || loadedDependencies.Contains(name))
                     {
                         continue;
                     }
@@ -136,8 +154,24 @@ internal static class AwmNative
                     if (NativeLibrary.TryLoad(candidate, out var handle))
                     {
                         PreloadedDependencyHandles.Add(handle);
+                        loadedDependencies.Add(name);
                     }
                 }
+            }
+
+            var missingDependencies = new List<string>();
+            foreach (var dependency in FfmpegDependencyOrder)
+            {
+                if (!loadedDependencies.Contains(dependency))
+                {
+                    missingDependencies.Add(dependency);
+                }
+            }
+
+            if (missingDependencies.Count > 0)
+            {
+                throw new DllNotFoundException(
+                    $"missing ffmpeg runtime dependencies in allowed directories: {string.Join(", ", missingDependencies)}");
             }
 
             DependenciesPreloaded = true;
@@ -185,6 +219,11 @@ internal static class AwmNative
             yield return Path.Combine(baseDir, "lib", "ffmpeg");
         }
 
+        if (TryAdd(seen, Path.Combine(baseDir, "lib")))
+        {
+            yield return Path.Combine(baseDir, "lib");
+        }
+
         var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
         if (TryAdd(seen, assemblyDir))
         {
@@ -196,9 +235,9 @@ internal static class AwmNative
             yield return Path.Combine(assemblyDir!, "lib", "ffmpeg");
         }
 
-        if (TryAdd(seen, Environment.CurrentDirectory))
+        if (TryAdd(seen, assemblyDir is null ? null : Path.Combine(assemblyDir, "lib")))
         {
-            yield return Environment.CurrentDirectory;
+            yield return Path.Combine(assemblyDir!, "lib");
         }
     }
 

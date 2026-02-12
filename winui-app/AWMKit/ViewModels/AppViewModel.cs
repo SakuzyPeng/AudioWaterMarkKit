@@ -302,10 +302,13 @@ public sealed partial class AppViewModel : ObservableObject
     {
         if (!AwmNative.EnsureLoaded())
         {
+            var nativeError = AwmNative.GetLoadError();
             DatabaseAvailable = false;
             KeyAvailable = false;
             EngineAvailable = false;
-            KeySourceLabel = L("本机引擎加载失败", "Native engine load failed");
+            KeySourceLabel = string.IsNullOrWhiteSpace(nativeError)
+                ? L("本机引擎加载失败", "Native engine load failed")
+                : $"{L("本机引擎加载失败", "Native engine load failed")}: {nativeError}";
             EnginePath = string.Empty;
             EngineBackend = "-";
             EngineEac3 = "unavailable";

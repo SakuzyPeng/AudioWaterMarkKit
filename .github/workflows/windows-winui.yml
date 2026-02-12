@@ -279,53 +279,62 @@ jobs:
         run: |
           dotnet test winui-app/AWMKit.Data.Tests/AWMKit.Data.Tests.csproj -c Debug
 
-      - name: Copy awmkit.dll to WinUI project
+      - name: Install Inno Setup
         shell: pwsh
         run: |
-          Copy-Item target/x86_64-pc-windows-msvc/release/awmkit.dll winui-app/AWMKit/awmkit_native.dll -Force
+          choco install innosetup --no-progress -y
+          iscc /? | Out-Null
 
-      - name: Build WinUI App (Release)
+      - name: Build Windows installer (Release)
+        shell: pwsh
+        env:
+          FFMPEG_WINDOWS_RUNTIME_ZIP: ${{ github.workspace }}\${{ env.FFMPEG_WINDOWS_ASSET }}
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release/local-release-win.ps1
+
+      - name: Smoke test installer (clean PATH)
         shell: pwsh
         run: |
-          cd winui-app/AWMKit
-          dotnet publish `
-            -c Release `
-            -r win-x64 `
-            -p:Platform=x64 `
-            -p:PublishSingleFile=true `
-            -p:SelfContained=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:IncludeAllContentForSelfExtract=true `
-            -p:PublishTrimmed=true `
-            -p:TrimMode=partial `
-            -p:EnableCompressionInSingleFile=true `
-            -p:PublishAot=false `
-            -p:DebugType=None `
-            -p:DebugSymbols=false
-          $publishDir = Get-ChildItem -Path "bin" -Directory -Recurse |
-            Where-Object { $_.Name -eq "publish" } |
+          $installer = Get-ChildItem -Path dist/local -Filter "AWMKit-win-x64-ui-installer-*.exe" |
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
-          if ($null -eq $publishDir) {
-            throw "Publish directory not found under winui-app/AWMKit/bin"
+          if ($null -eq $installer) {
+            throw "Installer not found under dist/local."
           }
-          $exePath = Join-Path $publishDir.FullName "AWMKit.exe"
-          if (-not (Test-Path $exePath)) {
-            throw "AWMKit.exe not found in publish directory"
+
+          $installDir = Join-Path $env:RUNNER_TEMP "awmkit-install-smoke"
+          Remove-Item -Recurse -Force $installDir -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+
+          $proc = Start-Process -FilePath $installer.FullName `
+            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$installDir" `
+            -PassThru -Wait
+          if ($proc.ExitCode -ne 0) {
+            throw "Installer failed with exit code $($proc.ExitCode)"
           }
-          Get-ChildItem $exePath | Format-List FullName,Length
-          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE/dist/windows" | Out-Null
-          Copy-Item $exePath "$env:GITHUB_WORKSPACE/dist/windows/AWMKit-win-x64-single.exe" -Force
-          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE/dist/windows/lib/ffmpeg" | Out-Null
-          Copy-Item ffmpeg-dist\lib\*.dll "$env:GITHUB_WORKSPACE/dist/windows/lib/ffmpeg/" -Force
+
+          $cliPath = Join-Path $installDir "cli\\awmkit.exe"
+          if (-not (Test-Path $cliPath)) {
+            throw "Installed CLI not found: $cliPath"
+          }
+
+          $oldPath = $env:PATH
+          $env:PATH = "$env:SystemRoot\\System32;$env:SystemRoot"
+          try {
+            & $cliPath status --doctor
+            if ($LASTEXITCODE -ne 0) {
+              throw "Installed CLI smoke test failed with exit code $LASTEXITCODE"
+            }
+          } finally {
+            $env:PATH = $oldPath
+          }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-winui-${{ github.run_id }}
           path: |
-            dist/windows/AWMKit-win-x64-single.exe
-            dist/windows/lib/ffmpeg/*.dll
+            dist/local/AWMKit-win-x64-ui-installer-*.exe
             target/x86_64-pc-windows-msvc/release/awmkit.exe
             target/x86_64-pc-windows-msvc/release/awmkit.dll
             docs/winui-equivalence-spec.md
