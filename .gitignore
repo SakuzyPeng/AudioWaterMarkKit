@@ -29,6 +29,7 @@ Cargo.lock.bak
 /.tmp-release/
 /dist/
 /cli-swift/
+/ffmpeg-prebuilt/
 
 # ============================================================================
 # Audio Files
