@@ -29,6 +29,7 @@ internal static class AwmNative
     private static readonly object DependencyLoadLock = new();
     private static bool DependenciesPreloaded;
     private static string? NativeLoadError;
+    private static string? NativeLoadWarning;
 
     static AwmNative()
     {
@@ -54,7 +55,18 @@ internal static class AwmNative
 
     internal static bool EnsureLoaded() => _preloadedHandle != IntPtr.Zero && string.IsNullOrWhiteSpace(NativeLoadError);
 
-    internal static string? GetLoadError() => NativeLoadError;
+    internal static string? GetLoadError()
+    {
+        if (string.IsNullOrWhiteSpace(NativeLoadError))
+        {
+            return NativeLoadWarning;
+        }
+        if (string.IsNullOrWhiteSpace(NativeLoadWarning))
+        {
+            return NativeLoadError;
+        }
+        return $"{NativeLoadError}; warning: {NativeLoadWarning}";
+    }
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool SetDefaultDllDirectories(uint directoryFlags);
@@ -64,24 +76,20 @@ internal static class AwmNative
 
     private static void ConfigureNativeSearchDirectories()
     {
-        try
+        if (!SetDefaultDllDirectories(LoadLibrarySearchDefaultDirs | LoadLibrarySearchUserDirs))
         {
-            if (!SetDefaultDllDirectories(LoadLibrarySearchDefaultDirs | LoadLibrarySearchUserDirs))
-            {
-                throw new InvalidOperationException($"SetDefaultDllDirectories failed with Win32Error={Marshal.GetLastWin32Error()}");
-            }
-            foreach (var dir in EnumerateNativeSearchDirs())
-            {
-                var cookie = AddDllDirectory(dir);
-                if (cookie != nint.Zero)
-                {
-                    AddedDllDirectoryCookies.Add(cookie);
-                }
-            }
+            // Some restricted Windows environments may reject this API call.
+            // Continue with explicit full-path loading instead of hard-failing native init.
+            NativeLoadWarning = $"SetDefaultDllDirectories failed with Win32Error={Marshal.GetLastWin32Error()}";
         }
-        catch (Exception ex)
+
+        foreach (var dir in EnumerateNativeSearchDirs())
         {
-            throw new DllNotFoundException($"failed to configure native dll search directories: {ex.Message}", ex);
+            var cookie = AddDllDirectory(dir);
+            if (cookie != nint.Zero)
+            {
+                AddedDllDirectoryCookies.Add(cookie);
+            }
         }
     }
 
