@@ -178,13 +178,14 @@ fn load_prepared_runtime(runtime_dir: &Path) -> Result<PreparedRuntime, String> 
 
 fn read_manifest(runtime_dir: &Path) -> Result<PayloadManifest, String> {
     let manifest_path = runtime_dir.join(MANIFEST_FILE);
-    let data = fs::read_to_string(&manifest_path).map_err(|e| {
+    let data = fs::read(&manifest_path).map_err(|e| {
         format!(
             "failed to read payload manifest {}: {e}",
             manifest_path.display()
         )
     })?;
-    serde_json::from_str::<PayloadManifest>(&data).map_err(|e| {
+    let data = data.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(&data);
+    serde_json::from_slice::<PayloadManifest>(data).map_err(|e| {
         format!(
             "failed to parse payload manifest {}: {e}",
             manifest_path.display()
@@ -247,4 +248,24 @@ fn ensure_executable(path: &Path) -> Result<(), String> {
             path.display()
         )
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PayloadManifest;
+
+    #[test]
+    fn manifest_with_utf8_bom_is_accepted() {
+        let raw = b"\xEF\xBB\xBF{\"core_binary\":\"awmkit-core.exe\"}";
+        let stripped = raw.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(raw);
+        let parsed: Result<PayloadManifest, _> = serde_json::from_slice(stripped);
+        assert!(
+            parsed.is_ok(),
+            "manifest parse failed: {}",
+            parsed.err().map(|e| e.to_string()).unwrap_or_default()
+        );
+        if let Ok(manifest) = parsed {
+            assert_eq!(manifest.core_binary, "awmkit-core.exe");
+        }
+    }
 }

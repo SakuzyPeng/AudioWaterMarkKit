@@ -163,9 +163,12 @@ Remove-Item $launcherPayloadZip -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $launcherPayloadDir | Out-Null
 Copy-Item "$RepoRoot\target\x86_64-pc-windows-msvc\release\awmkit-core.exe" (Join-Path $launcherPayloadDir "awmkit-core.exe") -Force
 Copy-Item (Join-Path $appStage "lib\ffmpeg\*.dll") $launcherPayloadDir -Force
-@'
-{"core_binary":"awmkit-core.exe"}
-'@ | Set-Content -Path (Join-Path $launcherPayloadDir "manifest.json") -Encoding UTF8
+$manifestPath = Join-Path $launcherPayloadDir "manifest.json"
+[System.IO.File]::WriteAllText(
+  $manifestPath,
+  '{"core_binary":"awmkit-core.exe"}',
+  [System.Text.UTF8Encoding]::new($false)
+)
 Compress-Archive -Path "$launcherPayloadDir\*" -DestinationPath $launcherPayloadZip -Force
 
 $env:AWMKIT_LAUNCHER_PAYLOAD = $launcherPayloadZip

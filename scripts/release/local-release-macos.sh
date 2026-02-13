@@ -91,6 +91,22 @@ cp "${MAC_BUNDLED_ZIP}" "${APP_STAGE}/Contents/Resources/bundled/"
 PAYLOAD_DIR="${CLI_STAGE}/payload"
 cp "${REPO_ROOT}/target/aarch64-apple-darwin/release/awmkit-core" "${PAYLOAD_DIR}/awmkit-core"
 cp -a "${FFMPEG_LIB}/"*.dylib "${PAYLOAD_DIR}/"
+for dylib in "${PAYLOAD_DIR}"/lib*.dylib; do
+  base="$(basename "${dylib}")"
+  install_name_tool -id "@loader_path/${base}" "${dylib}"
+done
+for bin in "${PAYLOAD_DIR}/awmkit-core" "${PAYLOAD_DIR}"/lib*.dylib; do
+  while IFS= read -r dep; do
+    dep_base="$(basename "${dep}")"
+    if [[ -f "${PAYLOAD_DIR}/${dep_base}" && "${dep}" != "@loader_path/${dep_base}" ]]; then
+      install_name_tool -change "${dep}" "@loader_path/${dep_base}" "${bin}"
+    fi
+  done < <(otool -L "${bin}" | awk 'NR>1 {print $1}')
+done
+if otool -L "${PAYLOAD_DIR}/awmkit-core" | grep -Eq '/(opt/homebrew|usr/local)/opt/ffmpeg'; then
+  echo "[ERROR] awmkit-core still linked to Homebrew ffmpeg path."
+  exit 1
+fi
 cat > "${PAYLOAD_DIR}/manifest.json" <<'JSON'
 {"core_binary":"awmkit-core"}
 JSON

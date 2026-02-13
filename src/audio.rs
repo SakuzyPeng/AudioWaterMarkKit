@@ -555,7 +555,19 @@ impl Audio {
         None
     }
 
+    fn strict_runtime_enabled() -> bool {
+        std::env::var("AWMKIT_RUNTIME_STRICT")
+            .ok()
+            .map(|value| {
+                let normalized = value.trim().to_ascii_lowercase();
+                matches!(normalized.as_str(), "1" | "true" | "yes" | "on")
+            })
+            .unwrap_or(false)
+    }
+
     fn resolve_binary(fallback_path: Option<&Path>) -> Result<PathBuf> {
+        let strict_runtime = Self::strict_runtime_enabled();
+
         #[cfg(feature = "bundled")]
         {
             if let Ok(path) = crate::bundled::ensure_extracted() {
@@ -567,6 +579,10 @@ impl Audio {
             if let Ok(audio) = Self::with_binary(path) {
                 return Ok(audio.binary_path);
             }
+        }
+
+        if strict_runtime {
+            return Err(Error::AudiowmarkNotFound);
         }
 
         Self::find_binary().ok_or(Error::AudiowmarkNotFound)

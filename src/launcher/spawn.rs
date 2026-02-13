@@ -35,18 +35,13 @@ fn apply_runtime_env(command: &mut Command, runtime: &PreparedRuntime) -> Result
     path_value.push(";");
     path_value.push(system_root);
     command.env("PATH", path_value);
+    command.env("AWMKIT_RUNTIME_STRICT", "1");
     Ok(())
 }
 
 #[cfg(not(target_os = "windows"))]
 fn apply_runtime_env(command: &mut Command, runtime: &PreparedRuntime) -> Result<(), String> {
-    let mut dyld = runtime.runtime_dir.as_os_str().to_os_string();
-    if let Some(current) = std::env::var_os("DYLD_LIBRARY_PATH") {
-        if !current.is_empty() {
-            dyld.push(":");
-            dyld.push(current);
-        }
-    }
-    command.env("DYLD_LIBRARY_PATH", dyld);
+    command.env("DYLD_LIBRARY_PATH", runtime.runtime_dir.as_os_str());
+    command.env("AWMKIT_RUNTIME_STRICT", "1");
     Ok(())
 }
