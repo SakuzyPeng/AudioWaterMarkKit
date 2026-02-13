@@ -83,6 +83,12 @@ foreach ($dll in $requiredFfmpegDlls) {
   }
 }
 
+$ffmpegBundleDirs = @($ffmpegRuntimeDir)
+$ciPreparedFfmpegDir = Join-Path $RepoRoot "ffmpeg-dist\lib"
+if (Test-Path $ciPreparedFfmpegDir) {
+  $ffmpegBundleDirs += $ciPreparedFfmpegDir
+}
+
 if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
   Fail "Inno Setup compiler (iscc) not found in PATH."
 }
@@ -139,14 +145,31 @@ if (-not (Test-Path $nativeDll)) {
 }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $appStage "lib\ffmpeg") | Out-Null
-Copy-Item "$ffmpegRuntimeDir\*.dll" (Join-Path $appStage "lib\ffmpeg\") -Force
+New-Item -ItemType Directory -Force -Path (Join-Path $appStage "cli") | Out-Null
+foreach ($dir in $ffmpegBundleDirs) {
+  $dlls = Get-ChildItem -Path $dir -Filter "*.dll" -File -ErrorAction SilentlyContinue
+  if ($null -eq $dlls -or $dlls.Count -eq 0) {
+    continue
+  }
+  Copy-Item $dlls.FullName (Join-Path $appStage "lib\ffmpeg\") -Force
+  # CLI in clean PATH needs runtime DLLs colocated with awmkit.exe.
+  Copy-Item $dlls.FullName (Join-Path $appStage "cli\") -Force
+}
 New-Item -ItemType Directory -Force -Path (Join-Path $appStage "bundled") | Out-Null
 Copy-Item $bundledZip (Join-Path $appStage "bundled\") -Force
-New-Item -ItemType Directory -Force -Path (Join-Path $appStage "cli") | Out-Null
 Copy-Item "$RepoRoot\target\x86_64-pc-windows-msvc\release\awmkit.exe" (Join-Path $appStage "cli\awmkit.exe") -Force
 
-Write-Host "[INFO] Smoke test: CLI version"
-& (Join-Path $appStage "cli\awmkit.exe") --version
+Write-Host "[INFO] Smoke test: installed CLI mode (clean PATH)"
+$oldPath = $env:PATH
+$env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+try {
+  & (Join-Path $appStage "cli\awmkit.exe") status --doctor
+  if ($LASTEXITCODE -ne 0) {
+    Fail "CLI smoke test failed with exit code $LASTEXITCODE"
+  }
+} finally {
+  $env:PATH = $oldPath
+}
 
 New-Item -ItemType Directory -Force -Path $distRoot | Out-Null
 Write-Host "[INFO] Building Inno installer..."
