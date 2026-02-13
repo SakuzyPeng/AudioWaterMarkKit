@@ -5,7 +5,9 @@ on:
   push:
     paths:
       - '.github/workflows/windows-winui.yml'
+      - '.cargo/**'
       - 'packaging/windows/**'
+      - 'scripts/release/**'
       - 'docs/winui-*.md'
       - 'Cargo.toml'
       - 'Cargo.lock'
