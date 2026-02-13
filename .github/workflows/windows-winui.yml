@@ -181,8 +181,45 @@ jobs:
           set -euo pipefail
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release/AWMKit.app"
           test -d "$APP_PATH"
+          RUST_FFI_LIB="target/release/libawmkit.dylib"
+          test -f "$RUST_FFI_LIB"
+
+          mkdir -p "$APP_PATH/Contents/Frameworks"
+          cp "$RUST_FFI_LIB" "$APP_PATH/Contents/Frameworks/libawmkit.dylib"
+          install_name_tool -id "@rpath/libawmkit.dylib" "$APP_PATH/Contents/Frameworks/libawmkit.dylib"
+
           mkdir -p "$APP_PATH/Contents/Frameworks/ffmpeg"
           cp ffmpeg-dist/lib/*.dylib "$APP_PATH/Contents/Frameworks/ffmpeg/"
+          for dylib in "$APP_PATH/Contents/Frameworks/ffmpeg"/lib*.dylib; do
+            base="$(basename "$dylib")"
+            install_name_tool -id "@loader_path/$base" "$dylib"
+          done
+          for bin in "$APP_PATH/Contents/Frameworks/libawmkit.dylib" "$APP_PATH/Contents/Frameworks/ffmpeg"/lib*.dylib "$APP_PATH/Contents/MacOS/AWMKit.debug.dylib"; do
+            while IFS= read -r dep; do
+              dep_base="$(basename "$dep")"
+              if [[ -f "$APP_PATH/Contents/Frameworks/ffmpeg/$dep_base" ]]; then
+                if [[ "$bin" == "$APP_PATH/Contents/Frameworks/libawmkit.dylib" ]]; then
+                  target_dep="@loader_path/ffmpeg/$dep_base"
+                else
+                  target_dep="@loader_path/$dep_base"
+                fi
+                if [[ "$dep" != "$target_dep" ]]; then
+                  install_name_tool -change "$dep" "$target_dep" "$bin"
+                fi
+              elif [[ "$dep_base" == "libawmkit.dylib" && "$dep" != "@rpath/libawmkit.dylib" ]]; then
+                install_name_tool -change "$dep" "@rpath/libawmkit.dylib" "$bin"
+              fi
+            done < <(otool -L "$bin" | awk 'NR>1 {print $1}')
+          done
+          if otool -L "$APP_PATH/Contents/MacOS/AWMKit.debug.dylib" | awk 'NR>1 {print $1}' | grep -Eq '^/.*/libawmkit\.dylib$'; then
+            echo "AWMKit.debug.dylib still linked to absolute libawmkit path" >&2
+            exit 1
+          fi
+          if otool -L "$APP_PATH/Contents/Frameworks/libawmkit.dylib" | grep -Eq '/(opt/homebrew|usr/local)/opt/ffmpeg'; then
+            echo "libawmkit.dylib still linked to Homebrew ffmpeg path" >&2
+            exit 1
+          fi
+          codesign --force --deep --sign - "$APP_PATH"
           mkdir -p dist/macos
           ditto -c -k --keepParent "$APP_PATH" "dist/macos/AWMKit-macos-arm64.app.zip"
 

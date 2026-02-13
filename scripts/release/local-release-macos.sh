@@ -84,9 +84,46 @@ APP_STAGE="${TMP_ROOT}/app-stage/AWMKit.app"
 CLI_STAGE="${TMP_ROOT}/cli-stage"
 mkdir -p "${TMP_ROOT}/app-stage" "${CLI_STAGE}" "${CLI_STAGE}/payload"
 cp -a "${APP_SRC}" "${APP_STAGE}"
+RUST_FFI_LIB="${REPO_ROOT}/target/aarch64-apple-darwin/release/libawmkit.dylib"
+if [[ ! -f "${RUST_FFI_LIB}" ]]; then
+  echo "[ERROR] Missing Rust FFI dylib: ${RUST_FFI_LIB}"
+  exit 1
+fi
 mkdir -p "${APP_STAGE}/Contents/Frameworks/ffmpeg" "${APP_STAGE}/Contents/Resources/bundled"
+cp "${RUST_FFI_LIB}" "${APP_STAGE}/Contents/Frameworks/libawmkit.dylib"
+install_name_tool -id "@rpath/libawmkit.dylib" "${APP_STAGE}/Contents/Frameworks/libawmkit.dylib"
 cp -a "${FFMPEG_LIB}/"*.dylib "${APP_STAGE}/Contents/Frameworks/ffmpeg/"
+for dylib in "${APP_STAGE}/Contents/Frameworks/ffmpeg"/lib*.dylib; do
+  base="$(basename "${dylib}")"
+  install_name_tool -id "@loader_path/${base}" "${dylib}"
+done
+for bin in "${APP_STAGE}/Contents/Frameworks/libawmkit.dylib" "${APP_STAGE}/Contents/Frameworks/ffmpeg"/lib*.dylib "${APP_STAGE}/Contents/MacOS/AWMKit.debug.dylib"; do
+  while IFS= read -r dep; do
+    dep_base="$(basename "${dep}")"
+    if [[ -f "${APP_STAGE}/Contents/Frameworks/ffmpeg/${dep_base}" ]]; then
+      if [[ "${bin}" == "${APP_STAGE}/Contents/Frameworks/libawmkit.dylib" ]]; then
+        target_dep="@loader_path/ffmpeg/${dep_base}"
+      else
+        target_dep="@loader_path/${dep_base}"
+      fi
+      if [[ "${dep}" != "${target_dep}" ]]; then
+        install_name_tool -change "${dep}" "${target_dep}" "${bin}"
+      fi
+    elif [[ "${dep_base}" == "libawmkit.dylib" && "${dep}" != "@rpath/libawmkit.dylib" ]]; then
+      install_name_tool -change "${dep}" "@rpath/libawmkit.dylib" "${bin}"
+    fi
+  done < <(otool -L "${bin}" | awk 'NR>1 {print $1}')
+done
+if otool -L "${APP_STAGE}/Contents/MacOS/AWMKit.debug.dylib" | awk 'NR>1 {print $1}' | grep -Eq '^/.*/libawmkit\.dylib$'; then
+  echo "[ERROR] AWMKit.debug.dylib still linked to absolute libawmkit path."
+  exit 1
+fi
+if otool -L "${APP_STAGE}/Contents/Frameworks/libawmkit.dylib" | grep -Eq '/(opt/homebrew|usr/local)/opt/ffmpeg'; then
+  echo "[ERROR] libawmkit.dylib still linked to Homebrew ffmpeg path."
+  exit 1
+fi
 cp "${MAC_BUNDLED_ZIP}" "${APP_STAGE}/Contents/Resources/bundled/"
+codesign --force --deep --sign - "${APP_STAGE}"
 
 PAYLOAD_DIR="${CLI_STAGE}/payload"
 cp "${REPO_ROOT}/target/aarch64-apple-darwin/release/awmkit-core" "${PAYLOAD_DIR}/awmkit-core"

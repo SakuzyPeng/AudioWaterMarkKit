@@ -41,6 +41,9 @@ use std::path::PathBuf;
 #[command(name = "awmkit")]
 #[command(about = "Audio Watermark Kit CLI", version)]
 #[command(arg_required_else_help = true)]
+#[command(
+    after_help = "Launcher-only command (via `awmkit` wrapper):\n  cache clean [--db] --yes    Clean extracted runtime; add --db to also remove database and config"
+)]
 struct Cli {
     /// Verbose output
     #[arg(short, long, global = true)]
