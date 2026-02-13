@@ -75,8 +75,7 @@ $requiredFfmpegDlls = @(
   "avformat-62.dll",
   "avutil-60.dll",
   "avfilter-11.dll",
-  "swresample-6.dll",
-  "swscale-9.dll"
+  "swresample-6.dll"
 )
 foreach ($dll in $requiredFfmpegDlls) {
   if (-not (Test-Path (Join-Path $ffmpegRuntimeDir $dll))) {

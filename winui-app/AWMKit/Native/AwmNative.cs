@@ -17,7 +17,6 @@ internal static class AwmNative
     [
         "avutil-60.dll",
         "swresample-6.dll",
-        "swscale-9.dll",
         "avcodec-62.dll",
         "avformat-62.dll",
         "avfilter-11.dll",
