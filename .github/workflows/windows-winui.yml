@@ -187,6 +187,23 @@ jobs:
           mkdir -p "dist/macos/lib/ffmpeg"
           cp ffmpeg-dist/lib/*.dylib "dist/macos/lib/ffmpeg/"
           chmod +x "dist/macos/awmkit-macos-arm64"
+
+          CLI_BUNDLE_ROOT="dist/macos/awmkit-macos-arm64-cli-self-contained"
+          rm -rf "$CLI_BUNDLE_ROOT"
+          mkdir -p "$CLI_BUNDLE_ROOT/bin" "$CLI_BUNDLE_ROOT/lib/ffmpeg"
+          cp "target/aarch64-apple-darwin/release/awmkit" "$CLI_BUNDLE_ROOT/bin/awmkit"
+          cp ffmpeg-dist/lib/*.dylib "$CLI_BUNDLE_ROOT/lib/ffmpeg/"
+          cat > "$CLI_BUNDLE_ROOT/bin/awmkit-self-contained" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+          export DYLD_LIBRARY_PATH="$ROOT_DIR/lib/ffmpeg${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+          exec "$ROOT_DIR/bin/awmkit" "$@"
+          SH
+          chmod +x "$CLI_BUNDLE_ROOT/bin/awmkit" "$CLI_BUNDLE_ROOT/bin/awmkit-self-contained"
+          env -i HOME="$HOME" PATH="/usr/bin:/bin:/usr/sbin:/sbin" "$CLI_BUNDLE_ROOT/bin/awmkit-self-contained" status --doctor
+          ditto -c -k --keepParent "$CLI_BUNDLE_ROOT" "dist/macos/awmkit-macos-arm64-cli-self-contained.zip"
           ls -lh dist/macos
 
       - name: Upload artifacts
@@ -196,6 +213,7 @@ jobs:
           path: |
             dist/macos/AWMKit-macos-arm64.app.zip
             dist/macos/awmkit-macos-arm64
+            dist/macos/awmkit-macos-arm64-cli-self-contained.zip
 
   windows-build-and-package:
     runs-on: windows-latest
@@ -346,6 +364,45 @@ jobs:
       - name: Build FFI cdylib (release)
         run: cargo build --lib --features ffi,app,bundled --release --target x86_64-pc-windows-msvc
 
+      - name: Package self-contained Windows CLI
+        shell: pwsh
+        run: |
+          $bundleDir = "dist/windows/awmkit-windows-x64-cli-self-contained"
+          Remove-Item -Recurse -Force $bundleDir -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $bundleDir | Out-Null
+
+          $cliExe = "target/x86_64-pc-windows-msvc/release/awmkit.exe"
+          if (-not (Test-Path $cliExe)) {
+            throw "CLI binary not found: $cliExe"
+          }
+          Copy-Item $cliExe (Join-Path $bundleDir "awmkit.exe") -Force
+
+          $ffmpegDir = "ffmpeg-dist/lib"
+          if (-not (Test-Path $ffmpegDir)) {
+            throw "FFmpeg runtime dir not found: $ffmpegDir"
+          }
+          Copy-Item "$ffmpegDir/*.dll" $bundleDir -Force
+
+          foreach ($dll in @("avcodec-62.dll", "avformat-62.dll", "avutil-60.dll", "avfilter-11.dll", "swresample-6.dll")) {
+            if (-not (Test-Path (Join-Path $bundleDir $dll))) {
+              throw "Missing required runtime DLL in self-contained CLI bundle: $dll"
+            }
+          }
+
+          $oldPath = $env:PATH
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          try {
+            & (Join-Path $bundleDir "awmkit.exe") status --doctor
+            if ($LASTEXITCODE -ne 0) {
+              throw "Self-contained CLI smoke test failed with exit code $LASTEXITCODE"
+            }
+          } finally {
+            $env:PATH = $oldPath
+          }
+
+          New-Item -ItemType Directory -Force -Path "dist/windows" | Out-Null
+          Compress-Archive -Path "$bundleDir/*" -DestinationPath "dist/windows/awmkit-windows-x64-cli-self-contained.zip" -Force
+
       - name: Run WinUI data-layer tests
         shell: pwsh
         run: |
@@ -409,6 +466,7 @@ jobs:
           name: windows-winui-${{ github.run_id }}
           path: |
             dist/local/AWMKit-win-x64-ui-installer-*.exe
+            dist/windows/awmkit-windows-x64-cli-self-contained.zip
             target/x86_64-pc-windows-msvc/release/awmkit.exe
             target/x86_64-pc-windows-msvc/release/awmkit.dll
             docs/winui-equivalence-spec.md
