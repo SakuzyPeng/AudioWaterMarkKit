@@ -15,6 +15,15 @@
 - `.github/workflows/build-audiowmark-windows-release.yml`
   - Publishes `audiowmark-windows-x86_64.zip`
 
+## Deprecated And Removed Workflows
+
+- `.github/workflows/build-audiowmark-windows.yml`
+  - Legacy Windows audiowmark build flow, replaced by `build-audiowmark-windows-release.yml`.
+- `.github/workflows/build-windows-deps.yml`
+  - Legacy dependency prebuild flow, no longer used in the current release pipeline.
+- `.github/workflows/build-audiowmark-windows.yml.cygwin.bak`
+  - Historical backup file; removed to avoid confusion with active workflows.
+
 ## CLI Release Artifacts
 
 Artifacts from `build-awmkit.yml`:

@@ -15,6 +15,15 @@
 - `.github/workflows/build-audiowmark-windows-release.yml`
   - 发布 `audiowmark-windows-x86_64.zip`
 
+## 已废弃并移除的 Workflow
+
+- `.github/workflows/build-audiowmark-windows.yml`
+  - 旧版 Windows audiowmark 构建流程，已由 `build-audiowmark-windows-release.yml` 替代。
+- `.github/workflows/build-windows-deps.yml`
+  - 旧版依赖预构建流程，当前发布链路不再使用。
+- `.github/workflows/build-audiowmark-windows.yml.cygwin.bak`
+  - 历史备份文件，避免与有效 workflow 混淆已移除。
+
 ## CLI 发布产物
 
 `build-awmkit.yml` 产物：
