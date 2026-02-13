@@ -13,6 +13,7 @@ namespace AWMKit.Native;
 internal static class AwmNative
 {
     private const string Lib = "awmkit_native.dll";
+    private const string NativeLoadLogFileName = "native-load.log";
     private static readonly string[] FfmpegDependencyOrder =
     [
         "avutil-60.dll",
@@ -35,6 +36,9 @@ internal static class AwmNative
     {
         try
         {
+            WriteNativeLoadLog("bootstrap start");
+            WriteNativeLoadLog($"base_dir={AppContext.BaseDirectory}");
+            WriteNativeLoadLog($"search_dirs={string.Join(" | ", EnumerateNativeSearchDirs())}");
             ConfigureNativeSearchDirectories();
             PreloadNativeDependencies();
             NativeLibrary.SetDllImportResolver(
@@ -49,6 +53,7 @@ internal static class AwmNative
                     var handle = ResolveLibrary(libraryName, assembly);
                     if (handle != IntPtr.Zero)
                     {
+                        WriteNativeLoadLog($"resolver loaded {libraryName}");
                         return handle;
                     }
 
@@ -60,11 +65,17 @@ internal static class AwmNative
             if (_preloadedHandle == IntPtr.Zero)
             {
                 NativeLoadError = "failed to load awmkit_native.dll from allowed directories";
+                WriteNativeLoadLog(NativeLoadError);
+            }
+            else
+            {
+                WriteNativeLoadLog("bootstrap ok");
             }
         }
         catch (Exception ex)
         {
             NativeLoadError = ex.Message;
+            WriteNativeLoadLog($"bootstrap exception: {ex}");
         }
     }
 
@@ -78,9 +89,9 @@ internal static class AwmNative
         }
         if (string.IsNullOrWhiteSpace(NativeLoadWarning))
         {
-            return NativeLoadError;
+            return $"{NativeLoadError}; see {GetNativeLoadLogPath()}";
         }
-        return $"{NativeLoadError}; warning: {NativeLoadWarning}";
+        return $"{NativeLoadError}; warning: {NativeLoadWarning}; see {GetNativeLoadLogPath()}";
     }
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -96,6 +107,7 @@ internal static class AwmNative
             // Some restricted Windows environments may reject this API call.
             // Continue with explicit full-path loading instead of hard-failing native init.
             NativeLoadWarning = $"SetDefaultDllDirectories failed with Win32Error={Marshal.GetLastWin32Error()}";
+            WriteNativeLoadLog(NativeLoadWarning);
         }
 
         foreach (var dir in EnumerateNativeSearchDirs())
@@ -104,6 +116,11 @@ internal static class AwmNative
             if (cookie != nint.Zero)
             {
                 AddedDllDirectoryCookies.Add(cookie);
+                WriteNativeLoadLog($"AddDllDirectory ok: {dir}");
+            }
+            else
+            {
+                WriteNativeLoadLog($"AddDllDirectory failed: {dir} (Win32Error={Marshal.GetLastWin32Error()})");
             }
         }
     }
@@ -115,6 +132,7 @@ internal static class AwmNative
             return IntPtr.Zero;
         }
         _ = assembly;
+        var tried = new List<string>();
 
         foreach (var dir in EnumerateNativeSearchDirs())
         {
@@ -123,12 +141,18 @@ internal static class AwmNative
             {
                 continue;
             }
+            tried.Add(candidate);
 
             if (NativeLibrary.TryLoad(candidate, out var handle))
             {
+                WriteNativeLoadLog($"loaded {Lib}: {candidate}");
                 return handle;
             }
+
+            WriteNativeLoadLog($"failed loading {Lib}: {candidate}");
         }
+
+        WriteNativeLoadLog($"unable to resolve {libraryName}; tried={string.Join(" | ", tried)}");
 
         return IntPtr.Zero;
     }
@@ -157,6 +181,7 @@ internal static class AwmNative
                     ffmpegDirs.Add(subDir);
                 }
             }
+            WriteNativeLoadLog($"ffmpeg_dirs={string.Join(" | ", ffmpegDirs)}");
 
             var coreSet = new HashSet<string>(FfmpegDependencyOrder, StringComparer.OrdinalIgnoreCase);
             foreach (var ffmpegDir in ffmpegDirs)
@@ -196,6 +221,11 @@ internal static class AwmNative
                     {
                         PreloadedDependencyHandles.Add(handle);
                         loadedDependencies.Add(name);
+                        WriteNativeLoadLog($"preload ok: {candidate}");
+                    }
+                    else
+                    {
+                        WriteNativeLoadLog($"preload failed: {candidate}");
                     }
                 }
             }
@@ -211,11 +241,43 @@ internal static class AwmNative
 
             if (missingDependencies.Count > 0)
             {
+                WriteNativeLoadLog($"missing core ffmpeg deps: {string.Join(", ", missingDependencies)}");
                 throw new DllNotFoundException(
                     $"missing ffmpeg runtime dependencies in allowed directories: {string.Join(", ", missingDependencies)}");
             }
 
             DependenciesPreloaded = true;
+        }
+    }
+
+    private static string GetNativeLoadLogPath()
+    {
+        var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(appDataPath))
+        {
+            return @"%LOCALAPPDATA%\awmkit\" + NativeLoadLogFileName;
+        }
+
+        return Path.Combine(appDataPath, "awmkit", NativeLoadLogFileName);
+    }
+
+    private static void WriteNativeLoadLog(string message)
+    {
+        try
+        {
+            var path = GetNativeLoadLogPath();
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            var line = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz}] {message}{Environment.NewLine}";
+            File.AppendAllText(path, line);
+        }
+        catch
+        {
+            // Ignore logging failures.
         }
     }
 
