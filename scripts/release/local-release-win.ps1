@@ -89,7 +89,22 @@ if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
 
 Write-Host "[INFO] Building Rust FFI/CLI for Windows..."
 cargo build --release --features ffi,app,bundled --target x86_64-pc-windows-msvc
+if ($LASTEXITCODE -ne 0) {
+  Fail "cargo build (ffi/app/bundled) failed with exit code $LASTEXITCODE"
+}
 cargo build --release --features full-cli,bundled --bin awmkit --target x86_64-pc-windows-msvc
+if ($LASTEXITCODE -ne 0) {
+  Fail "cargo build (full-cli) failed with exit code $LASTEXITCODE"
+}
+
+$rustFfiDll = Join-Path $RepoRoot "target\x86_64-pc-windows-msvc\release\awmkit.dll"
+if (-not (Test-Path $rustFfiDll)) {
+  Fail "Missing Rust FFI DLL after build: $rustFfiDll"
+}
+
+# Ensure csproj-included native DLL exists before dotnet publish item copy phase.
+$projectNativeDll = Join-Path $RepoRoot "winui-app\AWMKit\awmkit_native.dll"
+Copy-Item $rustFfiDll $projectNativeDll -Force
 
 Write-Host "[INFO] Publishing WinUI app (multi-file)..."
 dotnet publish "$RepoRoot\winui-app\AWMKit\AWMKit.csproj" `
@@ -99,6 +114,9 @@ dotnet publish "$RepoRoot\winui-app\AWMKit\AWMKit.csproj" `
   -p:SelfContained=true `
   -p:PublishSingleFile=false `
   -p:PublishTrimmed=false
+if ($LASTEXITCODE -ne 0) {
+  Fail "dotnet publish failed with exit code $LASTEXITCODE"
+}
 
 $publishDir = Get-ChildItem -Path "$RepoRoot\winui-app\AWMKit\bin" -Directory -Recurse |
   Where-Object { $_.Name -eq "publish" } |
@@ -139,6 +157,9 @@ iscc `
   "/DAppSourceDir=$appStage" `
   "/DOutputDir=$distRoot" `
   "$RepoRoot\packaging\windows\inno.iss" | Out-Host
+if ($LASTEXITCODE -ne 0) {
+  Fail "iscc build failed with exit code $LASTEXITCODE"
+}
 
 $installer = Join-Path $distRoot "AWMKit-win-x64-ui-installer-$packageVersion-$buildCommit.exe"
 if (-not (Test-Path $installer)) {
