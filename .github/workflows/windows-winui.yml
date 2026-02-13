@@ -474,16 +474,3 @@ jobs:
         with:
           name: windows-cli-${{ github.run_id }}
           path: dist/windows/awmkit-windows-x64-cli-self-contained.zip
-
-      - name: Upload Windows support artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-support-${{ github.run_id }}
-          path: |
-            target/x86_64-pc-windows-msvc/release/awmkit.exe
-            target/x86_64-pc-windows-msvc/release/awmkit.dll
-            docs/winui-equivalence-spec.md
-            docs/winui-data-contract.md
-            docs/winui-design-tokens.md
-            docs/winui-acceptance.md
-            docs/winui-publish-size-experiments.md
