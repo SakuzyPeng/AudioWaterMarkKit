@@ -39,7 +39,22 @@ internal static class AwmNative
             PreloadNativeDependencies();
             NativeLibrary.SetDllImportResolver(
                 typeof(AwmNative).Assembly,
-                static (libraryName, assembly, searchPath) => ResolveLibrary(libraryName, assembly));
+                static (libraryName, assembly, searchPath) =>
+                {
+                    if (!IsAwmkitLibraryName(libraryName))
+                    {
+                        return IntPtr.Zero;
+                    }
+
+                    var handle = ResolveLibrary(libraryName, assembly);
+                    if (handle != IntPtr.Zero)
+                    {
+                        return handle;
+                    }
+
+                    throw new DllNotFoundException(
+                        $"failed to load {libraryName} from allowed directories only");
+                });
 
             _preloadedHandle = ResolveLibrary(Lib, typeof(AwmNative).Assembly);
             if (_preloadedHandle == IntPtr.Zero)
@@ -99,12 +114,7 @@ internal static class AwmNative
         {
             return IntPtr.Zero;
         }
-
-        // Try runtime default resolver first (respects runtime-specific probing rules).
-        if (NativeLibrary.TryLoad(libraryName, assembly, DllImportSearchPath.SafeDirectories, out var runtimeResolved))
-        {
-            return runtimeResolved;
-        }
+        _ = assembly;
 
         foreach (var dir in EnumerateNativeSearchDirs())
         {
