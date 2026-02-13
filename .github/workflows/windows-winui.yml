@@ -59,6 +59,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-macos-app-
 
+      - name: Install audiowmark runtime deps (macOS)
+        run: |
+          set -euo pipefail
+          brew list libsndfile >/dev/null 2>&1 || brew install libsndfile
+          brew list mpg123 >/dev/null 2>&1 || brew install mpg123
+          brew list fftw >/dev/null 2>&1 || brew install fftw
+          brew list libgcrypt >/dev/null 2>&1 || brew install libgcrypt
+          brew list gettext >/dev/null 2>&1 || brew install gettext
+
       - name: Ensure and prepare bundled audiowmark (macOS)
         env:
           GH_TOKEN: ${{ github.token }}

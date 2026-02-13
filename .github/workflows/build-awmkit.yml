@@ -87,6 +87,17 @@ jobs:
         run: |
           gh release download "${{ matrix.ffmpeg_release }}" --repo "${{ github.repository }}" -p "${{ matrix.ffmpeg_asset }}"
 
+      - name: Install audiowmark runtime deps (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew list libsndfile >/dev/null 2>&1 || brew install libsndfile
+          brew list mpg123 >/dev/null 2>&1 || brew install mpg123
+          brew list fftw >/dev/null 2>&1 || brew install fftw
+          brew list libgcrypt >/dev/null 2>&1 || brew install libgcrypt
+          brew list gettext >/dev/null 2>&1 || brew install gettext
+
       - name: Prepare bundled audiowmark (macOS)
         if: runner.os == 'macOS'
         run: |
