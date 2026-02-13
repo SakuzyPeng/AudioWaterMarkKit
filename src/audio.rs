@@ -337,8 +337,16 @@ impl Audio {
         let input = prepared.path.as_path();
         let output = output.as_ref();
 
-        // 加载多声道音频
-        let audio = MultichannelAudio::from_file(input)?;
+        // 加载多声道音频以检测声道数。
+        // 若文件无法被 Rust 解码器解析（如含 ID3 标签的 FLAC），回退到立体声路径，
+        // 由 audiowmark 的 libsndfile 原生处理该格式。
+        let audio = match MultichannelAudio::from_file(input) {
+            Ok(a) => a,
+            Err(Error::InvalidInput(_)) => {
+                return self.embed(input, output, message);
+            }
+            Err(e) => return Err(e),
+        };
         let num_channels = audio.num_channels();
 
         // 如果是立体声，直接使用普通方法
@@ -434,8 +442,20 @@ impl Audio {
         let prepared = prepare_input_for_audiowmark(input.as_ref(), "detect_multichannel_input")?;
         let input = prepared.path.as_path();
 
-        // 加载多声道音频
-        let audio = MultichannelAudio::from_file(input)?;
+        // 加载多声道音频以检测声道数。
+        // 若文件无法被 Rust 解码器解析（如含 ID3 标签的 FLAC），回退到立体声路径，
+        // 由 audiowmark 的 libsndfile 原生处理该格式。
+        let audio = match MultichannelAudio::from_file(input) {
+            Ok(a) => a,
+            Err(Error::InvalidInput(_)) => {
+                let result = self.detect(input)?;
+                return Ok(MultichannelDetectResult {
+                    pairs: vec![(0, "FL+FR".to_string(), result.clone())],
+                    best: result,
+                });
+            }
+            Err(e) => return Err(e),
+        };
         let num_channels = audio.num_channels();
 
         // 如果是立体声，直接使用普通方法

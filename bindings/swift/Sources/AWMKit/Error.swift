@@ -32,7 +32,7 @@ public enum AWMError: Error, LocalizedError {
         case AWM_ERROR_AUDIOWMARK_NOT_FOUND.rawValue:
             self = .audiowmarkNotFound
         case AWM_ERROR_AUDIOWMARK_EXEC.rawValue:
-            self = .audiowmarkExec("Execution failed")
+            self = .audiowmarkExec("audiowmark process failed")
         case AWM_ERROR_NO_WATERMARK_FOUND.rawValue:
             self = .noWatermarkFound
         case AWM_ERROR_KEY_ALREADY_EXISTS.rawValue:

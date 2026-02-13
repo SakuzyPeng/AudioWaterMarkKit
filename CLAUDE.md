@@ -23,23 +23,41 @@ cargo test --features ffi
 # 运行带 CLI 的测试
 cargo test --features cli
 
-# 运行带 app 层的测试
+# 运行带 app 层的测试（含 multichannel + ffmpeg-decode）
 cargo test --features app
 
 # 运行单个测试
 cargo test test_name
 
-# 检查代码
+# 格式化与检查（提交前必须通过）
+cargo fmt
 cargo clippy --all-features
 ```
 
-### GUI 开发（原 Tauri 栈已移除）
+### Feature Flags 说明
+
+- `ffi` - C FFI 导出（构建动态库供 Swift/WinUI 使用）
+- `cli` - 基础 CLI（clap + hex）
+- `app` - GUI 后端完整功能（keystore/tag_store/i18n/audio_engine/settings）
+- `bundled` - 内嵌 audiowmark 二进制（zip 解压，运行时使用）
+- `full-cli` - 完整 CLI = app + bundled + ffi + ffmpeg-decode + clap + glob + indicatif
+- `multichannel` - 多声道处理（默认启用）
+- `ffmpeg-decode` - FFmpeg 解码（app/full-cli 自动启用）
+
+### macOS 应用开发
 
 ```bash
-# 当前桌面端为原生实现：
-# - macOS: macos-app/AWMKit.xcodeproj
-# - Windows: winui-app/AWMKit/AWMKit.csproj
+# 1. 构建 Rust FFI 库（macOS GUI 所需 feature 组合）
+cargo build --release --features ffi,bundled,app
+
+# 2. 生成 Xcode 项目（修改 project.yml 后需重新运行）
+cd macos-app && xcodegen generate
+
+# 3. 打开 Xcode
+open AWMKit.xcodeproj
 ```
+
+在 Xcode 中按 `Cmd+R` 运行。`bundled` feature 需要仓库中存在 `bundled/audiowmark-macos-arm64.zip`。
 
 ### Swift 绑定
 
@@ -113,10 +131,6 @@ cd bindings/swift && swift test
 - `maintenance.rs` - 维护功能（清除缓存、重置配置）
 - `error.rs` - App 层统一错误类型
 
-### 说明
-
-Tauri 后端与 React 前端目录已移除；桌面 UI 全部通过原生工程实现并调用 Rust FFI。
-
 ### 国际化 (i18n/)
 
 使用 Fluent 格式（.ftl 文件），支持 en-US 和 zh-CN。UI 文本键以 `ui-` 前缀，CLI 文本以 `cli-` 前缀。
@@ -131,6 +145,13 @@ Swift 绑定位于 `bindings/swift/`。
 - 必须为所有公共和私有 API 编写文档注释（missing_docs_in_private_items）
 
 HMAC 验证必须使用常量时间比较（防止时序攻击）。
+
+FFI 变更需同步更新 `include/awmkit.h`。
+
+## 提交规范
+
+遵循 Conventional Commits：`feat:`, `fix:`, `docs:`, `perf:`, `test:`, `api:`，可加 scope（如 `feat(cli): add key export`）。
+PR 描述和 issue 讨论默认使用中文。
 
 ### 二进制构建
 
