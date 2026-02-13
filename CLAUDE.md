@@ -170,7 +170,6 @@ cargo build --bin awmkit --features full-cli --release
 
 ## 外部依赖
 
-音频嵌入/检测需要 `audiowmark` 二进制文件，搜索路径：
-- `audiowmark`
-- `/usr/local/bin/audiowmark`
-- `/opt/homebrew/bin/audiowmark`
+音频嵌入/检测需要 `audiowmark` 二进制文件。audiowmark 无官方发行包，需自行编译。
+- `bundled` feature：运行时自动解压内嵌二进制（`~/.awmkit/bundled/bin/audiowmark`），解压失败直接报错，不再 fallback 到系统路径
+- 非 `bundled`：搜索 `audiowmark`（PATH）；开发者可通过 `--audiowmark <PATH>` 指定路径

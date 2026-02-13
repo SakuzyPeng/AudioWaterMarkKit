@@ -14,12 +14,9 @@ use crate::tag::Tag;
 #[cfg(feature = "multichannel")]
 use crate::multichannel::{ChannelLayout, MultichannelAudio};
 
-/// audiowmark 默认搜索路径
-const DEFAULT_SEARCH_PATHS: &[&str] = &[
-    "audiowmark",
-    "/usr/local/bin/audiowmark",
-    "/opt/homebrew/bin/audiowmark",
-];
+/// audiowmark 默认搜索路径（无官方包，仅供开发者本地编译后使用）
+#[cfg(not(feature = "bundled"))]
+const DEFAULT_SEARCH_PATHS: &[&str] = &["audiowmark"];
 /// audiowmark 0.6.x 候选分数阈值（低于此值通常为伪命中）
 const MIN_PATTERN_SCORE: f32 = 1.0;
 
@@ -554,6 +551,7 @@ impl Audio {
     }
 
     /// 搜索 audiowmark 二进制
+    #[cfg(not(feature = "bundled"))]
     fn find_binary() -> Option<PathBuf> {
         for path in DEFAULT_SEARCH_PATHS {
             let p = Path::new(path);
@@ -575,6 +573,7 @@ impl Audio {
         None
     }
 
+    #[cfg(not(feature = "bundled"))]
     fn strict_runtime_enabled() -> bool {
         std::env::var("AWMKIT_RUNTIME_STRICT")
             .ok()
@@ -585,23 +584,20 @@ impl Audio {
             .unwrap_or(false)
     }
 
+    #[cfg(feature = "bundled")]
+    fn resolve_binary(_fallback_path: Option<&Path>) -> Result<PathBuf> {
+        crate::bundled::ensure_extracted()
+    }
+
+    #[cfg(not(feature = "bundled"))]
     fn resolve_binary(fallback_path: Option<&Path>) -> Result<PathBuf> {
-        let strict_runtime = Self::strict_runtime_enabled();
-
-        #[cfg(feature = "bundled")]
-        {
-            if let Ok(path) = crate::bundled::ensure_extracted() {
-                return Ok(path);
-            }
-        }
-
         if let Some(path) = fallback_path {
             if let Ok(audio) = Self::with_binary(path) {
                 return Ok(audio.binary_path);
             }
         }
 
-        if strict_runtime {
+        if Self::strict_runtime_enabled() {
             return Err(Error::AudiowmarkNotFound);
         }
 
