@@ -158,12 +158,36 @@ internal static class AwmNative
                 }
             }
 
+            var coreSet = new HashSet<string>(FfmpegDependencyOrder, StringComparer.OrdinalIgnoreCase);
             foreach (var ffmpegDir in ffmpegDirs)
             {
-                foreach (var name in FfmpegDependencyOrder)
+                if (!Directory.Exists(ffmpegDir))
                 {
-                    var candidate = Path.Combine(ffmpegDir, name);
-                    if (!File.Exists(candidate) || loadedDependencies.Contains(name))
+                    continue;
+                }
+
+                // Explicitly preload all FFmpeg-side DLLs from allowed dirs only.
+                // This avoids relying on ambient machine search paths for transitive deps.
+                var dllFiles = Directory.GetFiles(ffmpegDir, "*.dll");
+                Array.Sort(
+                    dllFiles,
+                    (left, right) =>
+                    {
+                        var leftName = Path.GetFileName(left);
+                        var rightName = Path.GetFileName(right);
+                        var leftCore = coreSet.Contains(leftName);
+                        var rightCore = coreSet.Contains(rightName);
+                        if (leftCore == rightCore)
+                        {
+                            return StringComparer.OrdinalIgnoreCase.Compare(leftName, rightName);
+                        }
+                        return leftCore ? 1 : -1;
+                    });
+
+                foreach (var candidate in dllFiles)
+                {
+                    var name = Path.GetFileName(candidate);
+                    if (string.IsNullOrWhiteSpace(name) || loadedDependencies.Contains(name))
                     {
                         continue;
                     }
