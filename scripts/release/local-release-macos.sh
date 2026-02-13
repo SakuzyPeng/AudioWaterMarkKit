@@ -24,6 +24,7 @@ if [[ ! -f "${MAC_BUNDLED_ZIP}" ]]; then
   echo "[ERROR] Missing bundled zip: ${MAC_BUNDLED_ZIP}"
   exit 1
 fi
+bash "${SCRIPT_DIR}/fixup-bundled-audiowmark-macos.sh" "${MAC_BUNDLED_ZIP}"
 
 if [[ -z "${FFMPEG_MACOS_RUNTIME_ZIP:-}" ]]; then
   FFMPEG_MACOS_RUNTIME_ZIP="$(ls "${REPO_ROOT}"/ffmpeg-macos-arm64-gpl-slim-runtime-*.zip 2>/dev/null | sort | tail -n1 || true)"

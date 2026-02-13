@@ -150,6 +150,36 @@ jobs:
           fi
 
           echo ""
+          echo "=== Rewriting install names for self-contained bundle ==="
+          for dylib in ./*.dylib; do
+            [ -f "$dylib" ] || continue
+            base="$(basename "$dylib")"
+            install_name_tool -id "@loader_path/$base" "$dylib"
+          done
+          for bin in ./audiowmark ./*.dylib; do
+            [ -f "$bin" ] || continue
+            while IFS= read -r dep; do
+              dep_base="$(basename "$dep")"
+              if [ -f "./$dep_base" ]; then
+                target_dep="@loader_path/$dep_base"
+                if [ "$dep" != "$target_dep" ]; then
+                  install_name_tool -change "$dep" "$target_dep" "$bin"
+                fi
+              fi
+            done < <(otool -L "$bin" | awk 'NR>1 {print $1}')
+          done
+          for bin in ./audiowmark ./*.dylib; do
+            [ -f "$bin" ] || continue
+            codesign --force --sign - "$bin"
+          done
+
+          if otool -L audiowmark | awk 'NR>1 {print $1}' | grep -Eq '^(/opt/homebrew|/usr/local)/'; then
+            echo "✗ FAILED: audiowmark still references absolute Homebrew paths"
+            otool -L audiowmark
+            exit 1
+          fi
+
+          echo ""
           echo "=== Distribution contents ==="
           ls -lh
           echo "Total files: $(find . -type f | wc -l)"
@@ -161,11 +191,8 @@ jobs:
 
           cd "$DIST_DIR/bin"
           echo "=== Testing in isolated environment ==="
-          echo "Clearing DYLD_LIBRARY_PATH to test bundled dependencies..."
-
-          # Test with only bundled libraries
+          echo "Clearing DYLD_LIBRARY_PATH to test @loader_path-only bundle..."
           unset DYLD_LIBRARY_PATH || true
-          export DYLD_LIBRARY_PATH="$DIST_DIR/bin"
 
           echo "Testing: ./audiowmark --version"
           if ./audiowmark --version; then

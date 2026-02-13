@@ -77,6 +77,7 @@ jobs:
             mkdir -p bundled
             (cd audiowmark-dist && zip -r "$GITHUB_WORKSPACE/$ZIP_PATH" bin)
           fi
+          bash scripts/release/fixup-bundled-audiowmark-macos.sh "$ZIP_PATH"
           rm -rf tmp-bundled
           unzip -q "$ZIP_PATH" -d tmp-bundled
           test -f tmp-bundled/bin/audiowmark
