@@ -206,14 +206,17 @@ jobs:
           ditto -c -k --keepParent "$CLI_BUNDLE_ROOT" "dist/macos/awmkit-macos-arm64-cli-self-contained.zip"
           ls -lh dist/macos
 
-      - name: Upload artifacts
+      - name: Upload macOS UI package
         uses: actions/upload-artifact@v4
         with:
-          name: macos-app-${{ github.run_id }}
-          path: |
-            dist/macos/AWMKit-macos-arm64.app.zip
-            dist/macos/awmkit-macos-arm64
-            dist/macos/awmkit-macos-arm64-cli-self-contained.zip
+          name: macos-ui-${{ github.run_id }}
+          path: dist/macos/AWMKit-macos-arm64.app.zip
+
+      - name: Upload macOS CLI package
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-cli-${{ github.run_id }}
+          path: dist/macos/awmkit-macos-arm64-cli-self-contained.zip
 
   windows-build-and-package:
     runs-on: windows-latest
@@ -460,13 +463,23 @@ jobs:
             $env:PATH = $oldPath
           }
 
-      - name: Upload artifacts
+      - name: Upload Windows UI package
         uses: actions/upload-artifact@v4
         with:
-          name: windows-winui-${{ github.run_id }}
+          name: windows-ui-${{ github.run_id }}
+          path: dist/local/AWMKit-win-x64-ui-installer-*.exe
+
+      - name: Upload Windows CLI package
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-cli-${{ github.run_id }}
+          path: dist/windows/awmkit-windows-x64-cli-self-contained.zip
+
+      - name: Upload Windows support artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-support-${{ github.run_id }}
           path: |
-            dist/local/AWMKit-win-x64-ui-installer-*.exe
-            dist/windows/awmkit-windows-x64-cli-self-contained.zip
             target/x86_64-pc-windows-msvc/release/awmkit.exe
             target/x86_64-pc-windows-msvc/release/awmkit.dll
             docs/winui-equivalence-spec.md
