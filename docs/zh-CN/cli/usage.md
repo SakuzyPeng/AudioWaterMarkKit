@@ -9,13 +9,18 @@
 - macOS：下载 `awmkit-macos-arm64.tar.gz`，解压后运行 `./awmkit`
 - Windows：下载 `awmkit-windows-x86_64.zip`，解压后运行 `awmkit.exe`
 
+当前包内仅包含单个 launcher 可执行文件，首次运行会自动解压运行时到：
+- macOS：`~/.awmkit/runtime/<payload-hash>/`
+- Windows：`%LOCALAPPDATA%\\awmkit\\runtime\\<payload-hash>\\`
+
 ### 从源码构建（推荐命令）
 
 ```bash
-cargo build --bin awmkit --features full-cli --release
+cargo build --bin awmkit-core --features full-cli --release
+cargo build --bin awmkit --features launcher --release
 ```
 
-`full-cli` 会启用应用层、FFI、bundled 运行逻辑和多声道路径。
+`full-cli` 用于构建真实 CLI core，`launcher` 用于构建单文件入口。
 
 ## 2. 支持格式与布局
 
@@ -65,6 +70,7 @@ awmkit status --doctor
 - `evidence`：证据查询与删除
   - `list/show/remove/clear`
 - `status`：系统状态与诊断
+- `cache clean`：清理 launcher 运行时缓存（`--db` 可选删除数据库/配置）
 
 ## 6. 密钥槽位示例
 
@@ -114,3 +120,19 @@ awmkit evidence clear --identity SAKUZY --key-slot 0 --yes
 
 - 运行失败（参数错误、IO 错误、检测阶段出现 invalid/error）返回非 0。
 - `clone_check=suspect` 仅作为结果标注，不单独触发失败退出码。
+
+## 10. 运行时清理
+
+仅删除 `awmkit` / `awmkit.exe` 不会删除已解压运行时。
+
+```bash
+# 只清理 runtime 解压缓存
+awmkit cache clean --yes
+
+# 清理 runtime + 数据库/配置
+awmkit cache clean --db --yes
+```
+
+说明：
+- `cache clean` 不会自动删除密钥。
+- 若检测到仍有已配置槽位，会打印非阻塞提醒。

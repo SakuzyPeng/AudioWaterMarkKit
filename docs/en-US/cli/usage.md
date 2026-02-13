@@ -9,13 +9,18 @@
 - macOS: download `awmkit-macos-arm64.tar.gz`, then run `./awmkit`
 - Windows: download `awmkit-windows-x86_64.zip`, then run `awmkit.exe`
 
+Both packages contain a single launcher binary. On first run, the launcher extracts runtime files into:
+- macOS: `~/.awmkit/runtime/<payload-hash>/`
+- Windows: `%LOCALAPPDATA%\\awmkit\\runtime\\<payload-hash>\\`
+
 ### Build from source (recommended)
 
 ```bash
-cargo build --bin awmkit --features full-cli --release
+cargo build --bin awmkit-core --features full-cli --release
+cargo build --bin awmkit --features launcher --release
 ```
 
-`full-cli` enables app-layer features, FFI, bundled resolution, and multichannel paths.
+`full-cli` builds the real CLI core, while `launcher` builds the single-file entry binary.
 
 ## 2. Supported Formats and Layouts
 
@@ -65,6 +70,7 @@ awmkit status --doctor
 - `evidence`: evidence query and cleanup
   - `list/show/remove/clear`
 - `status`: system status and diagnostics
+- `cache clean`: cleanup launcher runtime cache (`--db` optionally removes db/config)
 
 ## 6. Key Slot Examples
 
@@ -114,3 +120,19 @@ Common fields from `awmkit detect --json`:
 
 - Non-zero on runtime failure (invalid args, IO failures, invalid/error detect path).
 - `clone_check=suspect` is a result annotation and does not independently force failure.
+
+## 10. Runtime Cleanup
+
+Deleting `awmkit` / `awmkit.exe` alone does not remove extracted runtime files.
+
+```bash
+# remove runtime extraction cache only
+awmkit cache clean --yes
+
+# remove runtime cache + db/config
+awmkit cache clean --db --yes
+```
+
+Notes:
+- Key material is not deleted by `cache clean`.
+- The command prints a non-blocking reminder if key slots are still configured.

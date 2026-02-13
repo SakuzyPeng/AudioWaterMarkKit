@@ -7,7 +7,8 @@
 | Target | Command | Notes |
 | --- | --- | --- |
 | Core library (multichannel by default) | `cargo build --release` | Rust library only |
-| CLI (recommended for release) | `cargo build --bin awmkit --features full-cli --release` | Self-contained runtime strategy (bundled-first, FFmpeg decode enabled) |
+| CLI core | `cargo build --bin awmkit-core --features full-cli --release` | Real CLI implementation (bundled-first, FFmpeg decode enabled) |
+| CLI launcher (single-file entry) | `cargo build --bin awmkit --features launcher --release` | Extracts runtime payload and forwards args to core |
 | FFI (macOS app) | `cargo build --lib --features ffi,app,bundled --release` | Used by Swift/GUI (FFmpeg decode enabled) |
 | FFI (Windows) | `cargo build --lib --features ffi,app,bundled --release --target x86_64-pc-windows-msvc` | Used by WinUI (FFmpeg decode enabled) |
 
@@ -33,6 +34,7 @@ cargo clippy --all-features
 
 ## Build Outputs
 
-- CLI: `target/<target>/release/awmkit(.exe)`
+- CLI launcher: `target/<target>/release/awmkit(.exe)`
+- CLI core: `target/<target>/release/awmkit-core(.exe)`
 - macOS FFI: `target/release/libawmkit.dylib`
 - Windows FFI: `target/x86_64-pc-windows-msvc/release/awmkit.dll`

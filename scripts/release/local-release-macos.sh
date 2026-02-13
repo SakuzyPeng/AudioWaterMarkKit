@@ -36,8 +36,9 @@ fi
 rm -rf "${TMP_ROOT}"
 mkdir -p "${TMP_ROOT}" "${DIST_ROOT}"
 
-echo "[INFO] Building Rust CLI/FFI (macOS arm64)..."
-cargo build --release --features full-cli,bundled,ffi,app --target aarch64-apple-darwin
+echo "[INFO] Building Rust core CLI/FFI (macOS arm64)..."
+cargo build --release --features ffi,app,bundled --target aarch64-apple-darwin
+cargo build --release --features full-cli,bundled --bin awmkit-core --target aarch64-apple-darwin
 
 echo "[INFO] Building macOS app..."
 DERIVED_DATA="${TMP_ROOT}/DerivedData"
@@ -81,21 +82,31 @@ fi
 
 APP_STAGE="${TMP_ROOT}/app-stage/AWMKit.app"
 CLI_STAGE="${TMP_ROOT}/cli-stage"
-mkdir -p "${TMP_ROOT}/app-stage" "${CLI_STAGE}/lib/ffmpeg" "${CLI_STAGE}/bundled"
+mkdir -p "${TMP_ROOT}/app-stage" "${CLI_STAGE}" "${CLI_STAGE}/payload"
 cp -a "${APP_SRC}" "${APP_STAGE}"
 mkdir -p "${APP_STAGE}/Contents/Frameworks/ffmpeg" "${APP_STAGE}/Contents/Resources/bundled"
 cp -a "${FFMPEG_LIB}/"*.dylib "${APP_STAGE}/Contents/Frameworks/ffmpeg/"
 cp "${MAC_BUNDLED_ZIP}" "${APP_STAGE}/Contents/Resources/bundled/"
 
+PAYLOAD_DIR="${CLI_STAGE}/payload"
+cp "${REPO_ROOT}/target/aarch64-apple-darwin/release/awmkit-core" "${PAYLOAD_DIR}/awmkit-core"
+cp -a "${FFMPEG_LIB}/"*.dylib "${PAYLOAD_DIR}/"
+cat > "${PAYLOAD_DIR}/manifest.json" <<'JSON'
+{"core_binary":"awmkit-core"}
+JSON
+PAYLOAD_ZIP="${CLI_STAGE}/payload.zip"
+(cd "${PAYLOAD_DIR}" && zip -q -r "${PAYLOAD_ZIP}" .)
+AWMKIT_LAUNCHER_PAYLOAD="${PAYLOAD_ZIP}" \
+  cargo build --release --features launcher --bin awmkit --target aarch64-apple-darwin
 cp "${REPO_ROOT}/target/aarch64-apple-darwin/release/awmkit" "${CLI_STAGE}/awmkit"
 chmod +x "${CLI_STAGE}/awmkit"
-cp -a "${FFMPEG_LIB}/"*.dylib "${CLI_STAGE}/lib/ffmpeg/"
-cp "${MAC_BUNDLED_ZIP}" "${CLI_STAGE}/bundled/"
+rm -rf "${HOME}/.awmkit/runtime"
+env -i HOME="${HOME}" PATH="/usr/bin:/bin:/usr/sbin:/sbin" "${CLI_STAGE}/awmkit" status --doctor
 
 APP_TARBALL="${DIST_ROOT}/AWMKit-macos-arm64-${PACKAGE_VERSION}-${SHORT_SHA}.tar.gz"
 CLI_TARBALL="${DIST_ROOT}/awmkit-cli-macos-arm64-${PACKAGE_VERSION}-${SHORT_SHA}.tar.gz"
 tar -C "${TMP_ROOT}/app-stage" -czf "${APP_TARBALL}" "AWMKit.app"
-tar -C "${CLI_STAGE}" -czf "${CLI_TARBALL}" .
+tar -C "${CLI_STAGE}" -czf "${CLI_TARBALL}" "awmkit"
 
 echo "[INFO] macOS release artifacts:"
 echo "  ${APP_TARBALL}"

@@ -50,6 +50,8 @@ pub mod ffi;
 
 #[cfg(feature = "app")]
 pub mod app;
+#[cfg(feature = "launcher")]
+pub mod launcher;
 
 // Re-exports
 pub use audio::{Audio, DetectResult};

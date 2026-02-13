@@ -22,6 +22,9 @@ Artifacts from `build-awmkit.yml`:
 - `awmkit-macos-arm64.tar.gz`
 - `awmkit-windows-x86_64.zip`
 
+Both archives now carry a single launcher binary (`awmkit` / `awmkit.exe`).
+Runtime dependencies are extracted on first run into user-local runtime directories.
+
 Triggers:
 
 - Tag push: `awmkit-*`
@@ -32,10 +35,9 @@ Triggers:
 Artifacts uploaded by `windows-winui.yml`:
 
 - `dist/macos/AWMKit-macos-arm64.app.zip`
-- `dist/macos/awmkit-macos-arm64`
+- `dist/macos/awmkit-macos-arm64-cli-single-file.zip`
 - `dist/local/AWMKit-win-x64-ui-installer-*.exe`
-- `target/x86_64-pc-windows-msvc/release/awmkit.exe`
-- `target/x86_64-pc-windows-msvc/release/awmkit.dll`
+- `dist/windows/awmkit-windows-x64-cli-single-file.zip`
 
 ## Bundled Dependency Source
 

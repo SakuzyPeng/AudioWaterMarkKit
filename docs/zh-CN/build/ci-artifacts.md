@@ -22,6 +22,9 @@
 - `awmkit-macos-arm64.tar.gz`
 - `awmkit-windows-x86_64.zip`
 
+两个包当前都仅包含 launcher 单文件（`awmkit` / `awmkit.exe`），
+运行时依赖会在首次运行时解压到用户目录 runtime。
+
 触发方式：
 
 - 推送 tag：`awmkit-*`
@@ -32,10 +35,9 @@
 `windows-winui.yml` 上传 artifact：
 
 - `dist/macos/AWMKit-macos-arm64.app.zip`
-- `dist/macos/awmkit-macos-arm64`
+- `dist/macos/awmkit-macos-arm64-cli-single-file.zip`
 - `dist/local/AWMKit-win-x64-ui-installer-*.exe`
-- `target/x86_64-pc-windows-msvc/release/awmkit.exe`
-- `target/x86_64-pc-windows-msvc/release/awmkit.dll`
+- `dist/windows/awmkit-windows-x64-cli-single-file.zip`
 
 ## bundled 依赖来源
 

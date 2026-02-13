@@ -7,6 +7,7 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/aspect-ratio/awmkit"
 keywords = ["audio", "watermark", "hmac", "ffi"]
 categories = ["multimedia::audio", "cryptography"]
+build = "build.rs"
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
@@ -14,6 +15,11 @@ crate-type = ["lib", "cdylib", "staticlib"]
 [[bin]]
 name = "awmkit"
 path = "src/bin/awmkit/main.rs"
+required-features = ["launcher"]
+
+[[bin]]
+name = "awmkit-core"
+path = "src/bin/awmkit-core/main.rs"
 required-features = ["full-cli"]
 
 [dependencies]
@@ -24,6 +30,10 @@ num-traits = "0.2"
 
 [dev-dependencies]
 hex = "0.4"
+
+[build-dependencies]
+hex = "0.4"
+sha2 = "0.10"
 
 [features]
 default = ["multichannel"]
@@ -60,6 +70,7 @@ full-cli = [
   "dep:indicatif",
 ]
 bundled = ["dep:zip"]
+launcher = ["dep:hex", "dep:keyring", "dep:serde", "dep:serde_json", "dep:zip"]
 
 [dependencies.hound]
 version = "3.5"

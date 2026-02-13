@@ -93,14 +93,14 @@ if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
   Fail "Inno Setup compiler (iscc) not found in PATH."
 }
 
-Write-Host "[INFO] Building Rust FFI/CLI for Windows..."
+Write-Host "[INFO] Building Rust FFI/core CLI for Windows..."
 cargo build --release --features ffi,app,bundled --target x86_64-pc-windows-msvc
 if ($LASTEXITCODE -ne 0) {
   Fail "cargo build (ffi/app/bundled) failed with exit code $LASTEXITCODE"
 }
-cargo build --release --features full-cli,bundled --bin awmkit --target x86_64-pc-windows-msvc
+cargo build --release --features full-cli,bundled --bin awmkit-core --target x86_64-pc-windows-msvc
 if ($LASTEXITCODE -ne 0) {
-  Fail "cargo build (full-cli) failed with exit code $LASTEXITCODE"
+  Fail "cargo build (full-cli core) failed with exit code $LASTEXITCODE"
 }
 
 $rustFfiDll = Join-Path $RepoRoot "target\x86_64-pc-windows-msvc\release\awmkit.dll"
@@ -152,14 +152,33 @@ foreach ($dir in $ffmpegBundleDirs) {
     continue
   }
   Copy-Item $dlls.FullName (Join-Path $appStage "lib\ffmpeg\") -Force
-  # CLI in clean PATH needs runtime DLLs colocated with awmkit.exe.
-  Copy-Item $dlls.FullName (Join-Path $appStage "cli\") -Force
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $appStage "bundled") | Out-Null
 Copy-Item $bundledZip (Join-Path $appStage "bundled\") -Force
+
+$launcherPayloadDir = Join-Path $stagingRoot "launcher-payload"
+$launcherPayloadZip = Join-Path $stagingRoot "launcher-payload.zip"
+Remove-Item $launcherPayloadDir -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $launcherPayloadZip -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $launcherPayloadDir | Out-Null
+Copy-Item "$RepoRoot\target\x86_64-pc-windows-msvc\release\awmkit-core.exe" (Join-Path $launcherPayloadDir "awmkit-core.exe") -Force
+Copy-Item (Join-Path $appStage "lib\ffmpeg\*.dll") $launcherPayloadDir -Force
+@'
+{"core_binary":"awmkit-core.exe"}
+'@ | Set-Content -Path (Join-Path $launcherPayloadDir "manifest.json") -Encoding UTF8
+Compress-Archive -Path "$launcherPayloadDir\*" -DestinationPath $launcherPayloadZip -Force
+
+$env:AWMKIT_LAUNCHER_PAYLOAD = $launcherPayloadZip
+cargo build --release --features launcher --bin awmkit --target x86_64-pc-windows-msvc
+if ($LASTEXITCODE -ne 0) {
+  Fail "cargo build (launcher) failed with exit code $LASTEXITCODE"
+}
+
 Copy-Item "$RepoRoot\target\x86_64-pc-windows-msvc\release\awmkit.exe" (Join-Path $appStage "cli\awmkit.exe") -Force
 
 Write-Host "[INFO] Smoke test: installed CLI mode (clean PATH)"
+$runtimeRoot = Join-Path $env:LOCALAPPDATA "awmkit\runtime"
+Remove-Item -Recurse -Force $runtimeRoot -ErrorAction SilentlyContinue
 $oldPath = $env:PATH
 $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
 try {
@@ -169,6 +188,9 @@ try {
   }
 } finally {
   $env:PATH = $oldPath
+}
+if (-not (Test-Path $runtimeRoot)) {
+  Fail "CLI runtime extraction directory was not created: $runtimeRoot"
 }
 
 New-Item -ItemType Directory -Force -Path $distRoot | Out-Null
