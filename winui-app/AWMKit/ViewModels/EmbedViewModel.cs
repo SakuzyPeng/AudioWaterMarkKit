@@ -30,8 +30,17 @@ public sealed partial class EmbedViewModel : ObservableObject
     {
         ".wav",
         ".flac",
+        ".mp3",
+        ".ogg",
+        ".opus",
         ".m4a",
         ".alac",
+        ".mp4",
+        ".mkv",
+        ".mka",
+        ".ts",
+        ".m2ts",
+        ".m2t",
     };
 
     private CancellationTokenSource? _embedCts;
@@ -299,7 +308,7 @@ public sealed partial class EmbedViewModel : ObservableObject
     public string SuffixLabel => L("输出后缀", "Output suffix");
     public string LayoutLabel => L("声道布局", "Channel layout");
     public string DropZoneTitle => L("拖拽音频文件到此处", "Drag audio files here");
-    public string DropZoneSubtitle => L("支持 WAV / FLAC / M4A / ALAC 格式，可批量拖入", "Supports WAV / FLAC / M4A / ALAC, batch drop enabled");
+    public string DropZoneSubtitle => L("支持 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS，可批量拖入", "Supports WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS, batch drop enabled");
     public string QueueTitle => L("待处理文件", "Pending files");
     public string QueueEmptyText => L("暂无文件", "No files");
     public string LogsTitle => L("事件日志", "Event logs");
@@ -973,7 +982,7 @@ public sealed partial class EmbedViewModel : ObservableObject
                 {
                     AddLog(
                         L("目录无可用音频", "No audio files in directory"),
-                        L("当前目录未找到 WAV / FLAC / M4A / ALAC 文件", "No WAV / FLAC / M4A / ALAC files found in this directory"),
+                        L("当前目录未找到 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS 文件", "No WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS files found in this directory"),
                         false,
                         true,
                         LogIconTone.Warning
@@ -996,7 +1005,7 @@ public sealed partial class EmbedViewModel : ObservableObject
 
         AddLog(
             L("不支持的输入源", "Unsupported input source"),
-            L("请选择 WAV / FLAC / M4A / ALAC 文件或包含这些文件的目录", "Select a WAV / FLAC / M4A / ALAC file or a directory containing those files"),
+            L("请选择 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS 文件或包含这些文件的目录", "Select a WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS file or a directory containing these files"),
             false,
             true,
             LogIconTone.Warning

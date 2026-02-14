@@ -91,6 +91,13 @@ pub fn run(ctx: &Context, args: &StatusArgs) -> Result<()> {
                 fmt_args.set("containers", caps.supported_containers_csv());
                 ctx.out
                     .info(i18n::tr_args("cli-status-media-containers", &fmt_args));
+                let mut fmt_args = FluentArgs::new();
+                let input_policy = i18n::tr("cli-status-media-policy-input");
+                let output_policy = i18n::tr("cli-status-media-policy-output");
+                fmt_args.set("input_policy", input_policy);
+                fmt_args.set("output_policy", output_policy);
+                ctx.out
+                    .info(i18n::tr_args("cli-status-media-policy", &fmt_args));
 
                 match TagStore::load() {
                     Ok(tags) => {

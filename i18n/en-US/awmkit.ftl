@@ -54,6 +54,9 @@ cli-status-audiowmark_not_found = audiowmark: not found
 cli-status-media_backend = media backend: { $backend }
 cli-status-media-eac3 = eac3 decode: { $available }
 cli-status-media-containers = containers: { $containers }
+cli-status-media-policy = format policy: input { $input_policy }, output { $output_policy }
+cli-status-media-policy-input = probe-first (direct wav/flac, decode others)
+cli-status-media-policy-output = wav-only
 
 cli-embed-output_single = --output only supports a single input file
 cli-embed-done = Done: { $success } succeeded, { $failed } failed

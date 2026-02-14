@@ -143,7 +143,7 @@ struct EmbedView: View {
                             .font(.title2)
                         Text(l("拖拽音频文件到此处", "Drop audio files here"))
                             .font(.headline)
-                        Text(l("支持 WAV / FLAC / M4A / ALAC 格式，可批量拖入", "Supports WAV / FLAC / M4A / ALAC, batch drop enabled"))
+                        Text(l("支持 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS，可批量拖入", "Supports WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS, batch drop enabled"))
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     }

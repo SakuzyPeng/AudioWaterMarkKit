@@ -24,8 +24,8 @@ cargo build --bin awmkit --features launcher --release
 
 ## 2. Supported Formats and Layouts
 
-- Input audio: `wav` / `flac` / `m4a` / `alac`
-- Output audio: `wav` (WAV-only output at the moment)
+- Input audio: `wav` / `flac` / `mp3` / `ogg` / `opus` / `m4a` / `alac` / `mp4` / `mkv` / `mka` / `ts` / `m2ts` / `m2t`
+- Output audio: `wav` (WAV-only output; non-`.wav` `--output` paths fail fast)
 - Channel layout: `auto`, `stereo`, `surround51`, `surround512`, `surround71`, `surround714`, `surround916`
 
 ## 3. Global Options

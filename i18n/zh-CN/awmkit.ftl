@@ -54,6 +54,9 @@ cli-status-audiowmark_not_found = audiowmark：未找到
 cli-status-media_backend = 媒体后端：{ $backend }
 cli-status-media-eac3 = eac3 解码：{ $available }
 cli-status-media-containers = 支持容器：{ $containers }
+cli-status-media-policy = 格式策略：输入 { $input_policy }，输出 { $output_policy }
+cli-status-media-policy-input = 探测优先（WAV/FLAC 直通，其余先解码）
+cli-status-media-policy-output = 仅 WAV
 
 cli-embed-output_single = --output 仅支持单个输入文件
 cli-embed-done = 完成：{ $success } 成功，{ $failed } 失败

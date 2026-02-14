@@ -93,7 +93,7 @@ class DetectViewModel: ObservableObject {
     @Published var isClearLogsSuccess = false
 
     private let maxLogCount = 200
-    private let supportedAudioExtensions: Set<String> = ["wav", "flac", "m4a", "alac"]
+    private let supportedAudioExtensions: Set<String> = ["wav", "flac", "mp3", "ogg", "opus", "m4a", "alac", "mp4", "mkv", "mka", "ts", "m2ts", "m2t"]
     private var progressResetTask: Task<Void, Never>?
 
     deinit {
@@ -216,8 +216,8 @@ class DetectViewModel: ObservableObject {
                     log(
                         localized("目录无可用音频", "No audio files in directory"),
                         detail: localized(
-                            "当前目录未找到 WAV / FLAC / M4A / ALAC 文件",
-                            "No WAV / FLAC / M4A / ALAC files found in this directory"
+                            "当前目录未找到 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS 文件",
+                            "No WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS files found in this directory"
                         ),
                         isSuccess: false,
                         kind: .directoryNoAudio,
@@ -240,8 +240,8 @@ class DetectViewModel: ObservableObject {
             log(
                 localized("不支持的输入源", "Unsupported input source"),
                 detail: localized(
-                    "请选择 WAV / FLAC / M4A / ALAC 文件或包含这些文件的目录",
-                    "Select a WAV / FLAC / M4A / ALAC file or a directory containing those files"
+                    "请选择 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS 文件或包含这些文件的目录",
+                    "Select a WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS file or a directory containing these files"
                 ),
                 isSuccess: false,
                 kind: .unsupportedInput,

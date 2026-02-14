@@ -35,8 +35,17 @@ public sealed partial class DetectViewModel : ObservableObject
     {
         ".wav",
         ".flac",
+        ".mp3",
+        ".ogg",
+        ".opus",
         ".m4a",
         ".alac",
+        ".mp4",
+        ".mkv",
+        ".mka",
+        ".ts",
+        ".m2ts",
+        ".m2t",
     };
 
     private CancellationTokenSource? _detectCts;
@@ -863,7 +872,7 @@ public sealed partial class DetectViewModel : ObservableObject
 
                 if (files.Count == 0)
                 {
-                    AddLog(L("目录无可用音频", "No audio files in directory"), L("当前目录未找到 WAV / FLAC / M4A / ALAC 文件", "No WAV / FLAC / M4A / ALAC files found in this directory"), false, true, null, LogIconTone.Warning);
+                    AddLog(L("目录无可用音频", "No audio files in directory"), L("当前目录未找到 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS 文件", "No WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS files found in this directory"), false, true, null, LogIconTone.Warning);
                 }
 
                 return files;
@@ -880,7 +889,7 @@ public sealed partial class DetectViewModel : ObservableObject
             return new[] { sourcePath };
         }
 
-        AddLog(L("不支持的输入源", "Unsupported input source"), L("请选择 WAV / FLAC / M4A / ALAC 文件或包含这些文件的目录", "Select a WAV / FLAC / M4A / ALAC file or a directory containing those files"), false, true, null, LogIconTone.Warning);
+        AddLog(L("不支持的输入源", "Unsupported input source"), L("请选择 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS 文件或包含这些文件的目录", "Select a WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS file or a directory containing these files"), false, true, null, LogIconTone.Warning);
         return Array.Empty<string>();
     }
 

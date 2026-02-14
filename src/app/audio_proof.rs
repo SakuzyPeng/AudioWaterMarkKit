@@ -1,4 +1,6 @@
 use crate::app::error::{AppError, Result};
+#[cfg(feature = "ffmpeg-decode")]
+use crate::media;
 use crate::multichannel::{MultichannelAudio, SampleFormat};
 use rusty_chromaprint::{Configuration, Fingerprinter};
 use sha2::{Digest, Sha256};
@@ -15,25 +17,60 @@ pub struct AudioProof {
 }
 
 pub fn build_audio_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {
+    let path = path.as_ref();
+
+    #[cfg(feature = "ffmpeg-decode")]
+    {
+        match build_audio_proof_via_ffmpeg(path) {
+            Ok(proof) => return Ok(proof),
+            Err(err) => {
+                // Keep legacy parser fallback for native WAV/FLAC in case FFmpeg runtime
+                // is missing, but surface FFmpeg decode errors for other extensions.
+                if !has_wav_or_flac_extension(path) {
+                    return Err(err);
+                }
+            }
+        }
+    }
+
     let audio = MultichannelAudio::from_file(path)?;
     let sample_rate = audio.sample_rate();
     let channels = u32::try_from(audio.num_channels())
         .map_err(|_| AppError::Message("channel count overflow".to_string()))?;
-    let channels_usize = usize::try_from(channels)
-        .map_err(|_| AppError::Message("channel count overflow".to_string()))?;
-    let sample_count = u64::try_from(audio.num_samples())
-        .map_err(|_| AppError::Message("sample count overflow".to_string()))?;
     let sample_format = audio.sample_format();
     let interleaved = audio.interleaved_samples();
+    build_audio_proof_from_interleaved(sample_rate, channels, &interleaved, sample_format)
+}
+
+#[cfg(feature = "ffmpeg-decode")]
+fn build_audio_proof_via_ffmpeg(path: &Path) -> Result<AudioProof> {
+    let decoded = media::decode_media_to_pcm_i32(path).map_err(AppError::from)?;
+    let channels = u32::from(decoded.channels);
+    build_audio_proof_from_interleaved(
+        decoded.sample_rate,
+        channels,
+        &decoded.samples,
+        SampleFormat::Int16,
+    )
+}
+
+fn build_audio_proof_from_interleaved(
+    sample_rate: u32,
+    channels: u32,
+    interleaved: &[i32],
+    sample_format: SampleFormat,
+) -> Result<AudioProof> {
+    let channels_usize = usize::try_from(channels)
+        .map_err(|_| AppError::Message("channel count overflow".to_string()))?;
     if channels_usize == 0 || interleaved.len() % channels_usize != 0 {
         return Err(AppError::Message(
             "interleaved sample length is not channel-aligned".to_string(),
         ));
     }
-
-    let pcm_sha256 = pcm_sha256_for_interleaved(sample_rate, channels, sample_count, &interleaved);
-    let samples_i16 = to_i16_samples(&interleaved, sample_format);
-
+    let sample_count = u64::try_from(interleaved.len() / channels_usize)
+        .map_err(|_| AppError::Message("sample count overflow".to_string()))?;
+    let pcm_sha256 = pcm_sha256_for_interleaved(sample_rate, channels, sample_count, interleaved);
+    let samples_i16 = to_i16_samples(interleaved, sample_format);
     if samples_i16.is_empty() {
         return Err(AppError::Message(
             "cannot build audio proof for empty audio".to_string(),
@@ -71,6 +108,14 @@ pub fn build_audio_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {
         chromaprint,
         fp_config_id: config.id(),
     })
+}
+
+fn has_wav_or_flac_extension(path: &Path) -> bool {
+    let ext = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(str::to_ascii_lowercase);
+    matches!(ext.as_deref(), Some("wav" | "flac"))
 }
 
 pub(crate) fn pcm_sha256_for_interleaved(
@@ -113,6 +158,7 @@ fn sample_to_i16(sample: i32, sample_format: SampleFormat) -> i16 {
 mod tests {
     use super::*;
     use crate::multichannel::SampleFormat;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn pcm_sha256_is_stable_for_same_input() {
@@ -126,5 +172,65 @@ mod tests {
     fn i24_to_i16_conversion_is_clamped() {
         assert_eq!(sample_to_i16(i32::MAX, SampleFormat::Int24), i16::MAX);
         assert_eq!(sample_to_i16(i32::MIN, SampleFormat::Int24), i16::MIN);
+    }
+
+    #[test]
+    fn build_audio_proof_accepts_wav_content_with_mp3_extension() {
+        let wav_path = unique_temp_path("proof_src.wav");
+        let mp3_like_path = unique_temp_path("proof_src.mp3");
+
+        create_test_wav(&wav_path);
+        std::fs::copy(&wav_path, &mp3_like_path).unwrap();
+
+        match build_audio_proof(&mp3_like_path) {
+            Ok(proof) => {
+                assert!(proof.channels > 0);
+                assert!(proof.sample_rate > 0);
+            }
+            Err(AppError::Awmkit(
+                crate::Error::FfmpegLibraryNotFound(_)
+                | crate::Error::FfmpegDecodeFailed(_)
+                | crate::Error::FfmpegContainerUnsupported(_),
+            )) => {
+                // Some local test environments miss FFmpeg runtime support.
+                // Ensure the baseline WAV path still works in this case.
+                let fallback = build_audio_proof(&wav_path);
+                assert!(fallback.is_ok());
+            }
+            Err(err) => panic!("unexpected proof build error: {err}"),
+        }
+
+        let _ = std::fs::remove_file(&wav_path);
+        let _ = std::fs::remove_file(&mp3_like_path);
+    }
+
+    fn create_test_wav(path: &Path) {
+        let spec = hound::WavSpec {
+            channels: 2,
+            sample_rate: 44_100,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::create(path, spec).unwrap();
+        for i in 0..(44_100_i32 * 6) {
+            let centered = (i % 1024) - 512;
+            let sample = i16::try_from(centered * 48).unwrap_or(0);
+            writer.write_sample(sample).unwrap();
+            writer.write_sample(sample).unwrap();
+        }
+        writer.finalize().unwrap();
+    }
+
+    fn unique_temp_path(file_name: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!(
+            "awmkit_audio_proof_test_{}_{}_{}",
+            std::process::id(),
+            nanos,
+            file_name
+        ))
     }
 }

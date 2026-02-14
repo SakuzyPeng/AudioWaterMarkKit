@@ -39,6 +39,7 @@ pub enum AWMError {
     AudiowmarkExec = -8,
     NoWatermarkFound = -9,
     KeyAlreadyExists = -10,
+    InvalidOutputFormat = -11,
 }
 
 /// 解码结果结构体
@@ -620,6 +621,7 @@ pub unsafe extern "C" fn awm_audio_embed(
     match (*handle).inner.embed(input_str, output_str, &msg) {
         Ok(()) => AWMError::Success as i32,
         Err(crate::Error::AudiowmarkNotFound) => AWMError::AudiowmarkNotFound as i32,
+        Err(crate::Error::InvalidOutputFormat(_)) => AWMError::InvalidOutputFormat as i32,
         Err(crate::Error::AudiowmarkExec(_) | _) => AWMError::AudiowmarkExec as i32,
     }
 }
@@ -2042,6 +2044,7 @@ pub unsafe extern "C" fn awm_audio_embed_multichannel(
     {
         Ok(()) => AWMError::Success as i32,
         Err(crate::Error::AudiowmarkNotFound) => AWMError::AudiowmarkNotFound as i32,
+        Err(crate::Error::InvalidOutputFormat(_)) => AWMError::InvalidOutputFormat as i32,
         Err(crate::Error::AudiowmarkExec(_) | _) => AWMError::AudiowmarkExec as i32,
     }
 }

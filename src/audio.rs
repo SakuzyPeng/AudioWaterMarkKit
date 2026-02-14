@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::{fs::File, io::Read};
 
 use crate::error::{Error, Result};
 #[cfg(feature = "ffmpeg-decode")]
@@ -105,6 +106,12 @@ enum InputAudioFormat {
     Ts,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum InputPrepareStrategy {
+    Direct,
+    DecodeToWav,
+}
+
 struct TempDirGuard {
     path: PathBuf,
 }
@@ -200,6 +207,7 @@ impl Audio {
         output: P,
         message: &[u8; MESSAGE_LEN],
     ) -> Result<()> {
+        validate_embed_output_path(output.as_ref())?;
         let prepared = prepare_input_for_audiowmark(input.as_ref(), "embed_input")?;
         let hex = bytes_to_hex(message);
 
@@ -416,7 +424,7 @@ impl Audio {
         )?;
 
         // 当前仅支持输出 WAV（FLAC 输出已暂时下线）。
-        ensure_wav_output_extension(output)?;
+        validate_embed_output_path(output)?;
         result.to_wav(output)?;
 
         // 清理临时目录
@@ -674,62 +682,103 @@ fn parse_detect_output(stdout: &str, stderr: &str) -> Option<DetectResult> {
     None
 }
 
-fn parse_input_audio_format(path: &Path) -> Result<InputAudioFormat> {
+fn extension_format_hint(path: &Path) -> Option<InputAudioFormat> {
     let ext = path
         .extension()
         .and_then(|s| s.to_str())
         .map(str::to_ascii_lowercase);
     match ext.as_deref() {
-        Some("wav") => Ok(InputAudioFormat::Wav),
-        Some("flac") => Ok(InputAudioFormat::Flac),
-        Some("mp3") => Ok(InputAudioFormat::Mp3),
-        Some("ogg") | Some("opus") => Ok(InputAudioFormat::Ogg),
-        Some("m4a") => Ok(InputAudioFormat::M4a),
-        Some("alac") => Ok(InputAudioFormat::Alac),
-        Some("mp4") => Ok(InputAudioFormat::Mp4),
-        Some("mkv") | Some("mka") => Ok(InputAudioFormat::Mkv),
-        Some("ts") | Some("m2ts") | Some("m2t") => Ok(InputAudioFormat::Ts),
-        Some(ext) => Err(Error::InvalidInput(format!(
-            "unsupported audio format: .{ext} (supported: wav, flac, mp3, ogg, m4a, alac, mp4, mkv, ts)"
-        ))),
-        None => Err(Error::InvalidInput(
-            "input file has no extension (supported: wav, flac, mp3, ogg, m4a, alac, mp4, mkv, ts)"
-                .to_string(),
-        )),
+        Some("wav") => Some(InputAudioFormat::Wav),
+        Some("flac") => Some(InputAudioFormat::Flac),
+        Some("mp3") => Some(InputAudioFormat::Mp3),
+        Some("ogg" | "opus") => Some(InputAudioFormat::Ogg),
+        Some("m4a") => Some(InputAudioFormat::M4a),
+        Some("alac") => Some(InputAudioFormat::Alac),
+        Some("mp4") => Some(InputAudioFormat::Mp4),
+        Some("mkv" | "mka") => Some(InputAudioFormat::Mkv),
+        Some("ts" | "m2ts" | "m2t") => Some(InputAudioFormat::Ts),
+        _ => None,
     }
 }
 
-#[cfg(feature = "multichannel")]
-fn ensure_wav_output_extension(path: &Path) -> Result<()> {
+fn sniff_input_audio_format(path: &Path) -> Option<InputAudioFormat> {
+    let mut file = File::open(path).ok()?;
+    let mut header = [0_u8; 16];
+    let len = file.read(&mut header).ok()?;
+    if len == 0 {
+        return None;
+    }
+    let data = &header[..len];
+
+    if data.starts_with(b"fLaC") {
+        return Some(InputAudioFormat::Flac);
+    }
+    if len >= 12
+        && (data.starts_with(b"RIFF") || data.starts_with(b"RF64"))
+        && &data[8..12] == b"WAVE"
+    {
+        return Some(InputAudioFormat::Wav);
+    }
+    if data.starts_with(b"OggS") {
+        return Some(InputAudioFormat::Ogg);
+    }
+    if len >= 8 && &data[4..8] == b"ftyp" {
+        return Some(InputAudioFormat::Mp4);
+    }
+    if data.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
+        return Some(InputAudioFormat::Mkv);
+    }
+    if data[0] == 0x47 {
+        return Some(InputAudioFormat::Ts);
+    }
+    if data.starts_with(b"ID3") {
+        return Some(InputAudioFormat::Mp3);
+    }
+    if len >= 2 && data[0] == 0xFF && (data[1] & 0xE0) == 0xE0 {
+        return Some(InputAudioFormat::Mp3);
+    }
+
+    None
+}
+
+fn classify_input_prepare_strategy(path: &Path) -> InputPrepareStrategy {
+    if let Some(sniffed) = sniff_input_audio_format(path) {
+        return match sniffed {
+            InputAudioFormat::Wav | InputAudioFormat::Flac => InputPrepareStrategy::Direct,
+            _ => InputPrepareStrategy::DecodeToWav,
+        };
+    }
+
+    if extension_format_hint(path).is_some() {
+        return InputPrepareStrategy::DecodeToWav;
+    }
+
+    InputPrepareStrategy::DecodeToWav
+}
+
+fn validate_embed_output_path(path: &Path) -> Result<()> {
     let ext = path
         .extension()
         .and_then(|s| s.to_str())
         .map(str::to_ascii_lowercase);
     match ext.as_deref() {
         Some("wav") => Ok(()),
-        Some(ext) => Err(Error::InvalidInput(format!(
+        Some(ext) => Err(Error::InvalidOutputFormat(format!(
             "unsupported output format: .{ext} (supported: wav)"
         ))),
-        None => Err(Error::InvalidInput(
+        None => Err(Error::InvalidOutputFormat(
             "output file has no extension (supported: wav)".to_string(),
         )),
     }
 }
 
 fn prepare_input_for_audiowmark(input: &Path, purpose: &str) -> Result<PreparedInput> {
-    let format = parse_input_audio_format(input)?;
-    match format {
-        InputAudioFormat::Wav | InputAudioFormat::Flac => Ok(PreparedInput {
+    match classify_input_prepare_strategy(input) {
+        InputPrepareStrategy::Direct => Ok(PreparedInput {
             path: input.to_path_buf(),
             _guard: None,
         }),
-        InputAudioFormat::Mp3
-        | InputAudioFormat::Ogg
-        | InputAudioFormat::M4a
-        | InputAudioFormat::Alac
-        | InputAudioFormat::Mp4
-        | InputAudioFormat::Mkv
-        | InputAudioFormat::Ts => {
+        InputPrepareStrategy::DecodeToWav => {
             let temp_dir = create_temp_dir(purpose)?;
             let temp_wav = temp_dir.join("input.wav");
             decode_to_wav(input, &temp_wav)?;
@@ -863,7 +912,7 @@ fn hex_to_bytes(hex: &str) -> Option<[u8; MESSAGE_LEN]> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn test_bytes_to_hex() {
@@ -955,15 +1004,20 @@ mod tests {
 
     #[test]
     fn test_validate_input_format_exts() {
-        assert!(parse_input_audio_format(Path::new("demo.wav")).is_ok());
-        assert!(parse_input_audio_format(Path::new("demo.flac")).is_ok());
-        assert!(parse_input_audio_format(Path::new("demo.mp3")).is_ok());
-        assert!(parse_input_audio_format(Path::new("demo.ogg")).is_ok());
-        assert!(parse_input_audio_format(Path::new("demo.m4a")).is_ok());
-        assert!(parse_input_audio_format(Path::new("demo.alac")).is_ok());
-        assert!(parse_input_audio_format(Path::new("demo.mp4")).is_ok());
-        assert!(parse_input_audio_format(Path::new("demo.mkv")).is_ok());
-        assert!(parse_input_audio_format(Path::new("demo.ts")).is_ok());
+        assert!(extension_format_hint(Path::new("demo.wav")).is_some());
+        assert!(extension_format_hint(Path::new("demo.flac")).is_some());
+        assert!(extension_format_hint(Path::new("demo.mp3")).is_some());
+        assert!(extension_format_hint(Path::new("demo.ogg")).is_some());
+        assert!(extension_format_hint(Path::new("demo.opus")).is_some());
+        assert!(extension_format_hint(Path::new("demo.m4a")).is_some());
+        assert!(extension_format_hint(Path::new("demo.alac")).is_some());
+        assert!(extension_format_hint(Path::new("demo.mp4")).is_some());
+        assert!(extension_format_hint(Path::new("demo.mkv")).is_some());
+        assert!(extension_format_hint(Path::new("demo.mka")).is_some());
+        assert!(extension_format_hint(Path::new("demo.ts")).is_some());
+        assert!(extension_format_hint(Path::new("demo.m2ts")).is_some());
+        assert!(extension_format_hint(Path::new("demo.m2t")).is_some());
+        assert!(extension_format_hint(Path::new("demo.unknown")).is_none());
     }
 
     #[test]
@@ -979,11 +1033,54 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "multichannel")]
     #[test]
     fn test_output_wav_only() {
-        assert!(ensure_wav_output_extension(Path::new("out.wav")).is_ok());
-        assert!(ensure_wav_output_extension(Path::new("out.flac")).is_err());
-        assert!(ensure_wav_output_extension(Path::new("out.m4a")).is_err());
+        assert!(validate_embed_output_path(Path::new("out.wav")).is_ok());
+        assert!(matches!(
+            validate_embed_output_path(Path::new("out.flac")),
+            Err(Error::InvalidOutputFormat(_))
+        ));
+        assert!(matches!(
+            validate_embed_output_path(Path::new("out.m4a")),
+            Err(Error::InvalidOutputFormat(_))
+        ));
+    }
+
+    #[test]
+    fn test_probe_prefers_header_over_extension() {
+        let path = unique_temp_file("probe_header_over_ext.mp3");
+        let write_result = std::fs::write(
+            &path,
+            [
+                0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
+            ],
+        );
+        assert!(write_result.is_ok());
+        let strategy = classify_input_prepare_strategy(&path);
+        assert_eq!(strategy, InputPrepareStrategy::Direct);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_probe_detects_non_wav_content_with_wav_extension() {
+        let path = unique_temp_file("probe_non_wav.wav");
+        let write_result = std::fs::write(&path, [0x49, 0x44, 0x33, 0x04, 0x00, 0x00]);
+        assert!(write_result.is_ok());
+        let strategy = classify_input_prepare_strategy(&path);
+        assert_eq!(strategy, InputPrepareStrategy::DecodeToWav);
+        let _ = std::fs::remove_file(path);
+    }
+
+    fn unique_temp_file(name: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|value| value.as_nanos())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!(
+            "awmkit_audio_test_{}_{}_{}",
+            std::process::id(),
+            nanos,
+            name
+        ))
     }
 }

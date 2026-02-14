@@ -24,8 +24,8 @@ cargo build --bin awmkit --features launcher --release
 
 ## 2. 支持格式与布局
 
-- 输入音频：`wav` / `flac` / `m4a` / `alac`
-- 输出音频：`wav`（当前仅支持 WAV 输出）
+- 输入音频：`wav` / `flac` / `mp3` / `ogg` / `opus` / `m4a` / `alac` / `mp4` / `mkv` / `mka` / `ts` / `m2ts` / `m2t`
+- 输出音频：`wav`（当前仅支持 WAV 输出；若 `--output` 不是 `.wav` 会直接报错）
 - 声道布局：`auto`、`stereo`、`surround51`、`surround512`、`surround71`、`surround714`、`surround916`
 
 ## 3. 全局参数

@@ -46,6 +46,9 @@ pub enum Error {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 
+    #[error("Invalid output format: {0}")]
+    InvalidOutputFormat(String),
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }
