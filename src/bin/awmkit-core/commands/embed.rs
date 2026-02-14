@@ -7,7 +7,7 @@ use awmkit::app::{
     analyze_snr, build_audio_proof, i18n, key_id_from_key_material, EvidenceStore, KeyStore,
     NewAudioEvidence, TagStore, SNR_STATUS_OK,
 };
-use awmkit::Message;
+use awmkit::{Error as AwmError, Message};
 use clap::Args;
 use fluent_bundle::FluentArgs;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -83,6 +83,11 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
     let mut skipped = 0usize;
     let mut failure_details: Vec<String> = Vec::new();
 
+    if !ctx.out.quiet() {
+        ctx.out
+            .info("[INFO] multichannel smart routing enabled (default: LFE skip)");
+    }
+
     for input in inputs {
         let output = match &args.output {
             Some(path) => path.clone(),
@@ -106,17 +111,31 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
                 }
             }
             Err(err) => {
-                failed += 1;
-                if let Some(ref bar) = progress {
-                    bar.println(format!("[ERR] {}: precheck failed: {err}", input.display()));
-                    bar.inc(1);
+                if matches!(err, AwmError::AdmUnsupported(_)) {
+                    if let Some(ref bar) = progress {
+                        bar.println(format!(
+                            "[WARN] {}: ADM detect 暂不支持，跳过预检并继续嵌入",
+                            input.display()
+                        ));
+                    } else if !ctx.out.quiet() {
+                        ctx.out.warn(format!(
+                            "[WARN] {}: ADM detect 暂不支持，跳过预检并继续嵌入",
+                            input.display()
+                        ));
+                    }
                 } else {
-                    crate::output::Output::error(format!(
-                        "[ERR] {}: precheck failed: {err}",
-                        input.display()
-                    ));
+                    failed += 1;
+                    if let Some(ref bar) = progress {
+                        bar.println(format!("[ERR] {}: precheck failed: {err}", input.display()));
+                        bar.inc(1);
+                    } else {
+                        crate::output::Output::error(format!(
+                            "[ERR] {}: precheck failed: {err}",
+                            input.display()
+                        ));
+                    }
+                    continue;
                 }
-                continue;
             }
         }
 

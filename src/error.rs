@@ -43,6 +43,15 @@ pub enum Error {
     #[error("FFmpeg decode failed: {0}")]
     FfmpegDecodeFailed(String),
 
+    #[error("ADM/BWF unsupported: {0}")]
+    AdmUnsupported(String),
+
+    #[error("ADM/BWF preserve failed: {0}")]
+    AdmPreserveFailed(String),
+
+    #[error("ADM/BWF PCM format unsupported: {0}")]
+    AdmPcmFormatUnsupported(String),
+
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 

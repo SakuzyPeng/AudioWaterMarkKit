@@ -37,7 +37,6 @@ pub mod audio;
 pub(crate) mod bundled;
 pub mod charset;
 pub mod error;
-#[cfg(feature = "ffmpeg-decode")]
 pub(crate) mod media;
 pub mod message;
 pub mod tag;

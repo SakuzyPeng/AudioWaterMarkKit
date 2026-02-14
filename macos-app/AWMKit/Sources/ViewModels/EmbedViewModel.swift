@@ -516,6 +516,33 @@ class EmbedViewModel: ObservableObject {
                         await Task.yield()
                         continue
                     }
+                } catch let awmError as AWMError {
+                    if case .admUnsupported = awmError {
+                        log(
+                            localized("预检已跳过", "Precheck skipped"),
+                            detail: localized(
+                                "ADM/BWF 检测暂不支持，已跳过预检并继续嵌入",
+                                "ADM/BWF detect is not supported yet; precheck was skipped and embed continues"
+                            ),
+                            isSuccess: false,
+                            kind: .evidenceWarning,
+                            isEphemeral: true
+                        )
+                    } else {
+                        log(
+                            "\(localized("失败", "Failed")): \(fileURL.lastPathComponent)",
+                            detail: localized("预检失败", "Precheck failed") + ": \(awmError.localizedDescription)",
+                            isSuccess: false,
+                            kind: .resultError
+                        )
+                        failureCount += 1
+                        if queueIndex < selectedFiles.count {
+                            selectedFiles.remove(at: queueIndex)
+                        }
+                        progress = Double(processedCount + 1) / total
+                        await Task.yield()
+                        continue
+                    }
                 } catch {
                     log(
                         "\(localized("失败", "Failed")): \(fileURL.lastPathComponent)",

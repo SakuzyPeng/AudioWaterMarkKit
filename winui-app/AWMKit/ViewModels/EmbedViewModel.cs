@@ -610,14 +610,14 @@ public sealed partial class EmbedViewModel : ObservableObject
         var (key, keyError) = AwmKeyBridge.LoadKey();
         if (key is null || keyError != AwmError.Ok)
         {
-            AddLog(L("嵌入失败", "Embed failed"), $"{L("密钥不可用", "Key unavailable")}: {keyError}", false, false, LogIconTone.Error);
+            AddLog(L("嵌入失败", "Embed failed"), $"{L("密钥不可用", "Key unavailable")}: {DescribeAwmError(keyError)}", false, false, LogIconTone.Error);
             return;
         }
 
         var (message, encodeError) = AwmBridge.EncodeMessage(resolvedTag, key, _appState.ActiveKeySlot);
         if (message is null || encodeError != AwmError.Ok)
         {
-            AddLog(L("嵌入失败", "Embed failed"), $"{L("消息编码失败", "Message encode failed")}: {encodeError}", false, false, LogIconTone.Error);
+            AddLog(L("嵌入失败", "Embed failed"), $"{L("消息编码失败", "Message encode failed")}: {DescribeAwmError(encodeError)}", false, false, LogIconTone.Error);
             return;
         }
 
@@ -646,6 +646,7 @@ public sealed partial class EmbedViewModel : ObservableObject
         var skippedFiles = new List<string>();
         var skippedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var legacyFfiWarned = false;
+        var admPrecheckWarned = false;
 
         for (var processed = 0; processed < initialTotal; processed++)
         {
@@ -665,7 +666,7 @@ public sealed partial class EmbedViewModel : ObservableObject
             CurrentProcessingFile = Path.GetFileName(inputPath);
             CurrentProcessingIndex = queueIndex;
 
-            (bool detected, AwmError error) precheckResult;
+            (bool detected, AwmError error, bool admPrecheckSkipped) precheckResult;
             try
             {
                 precheckResult = await RunCancelableNativeCallAsync(() =>
@@ -673,15 +674,20 @@ public sealed partial class EmbedViewModel : ObservableObject
                     var detect = AwmBridge.DetectAudioMultichannelDetailed(inputPath, layout);
                     if (detect.error == AwmError.Ok && detect.result is not null)
                     {
-                        return (true, AwmError.Ok);
+                        return (true, AwmError.Ok, false);
                     }
 
                     if (detect.error == AwmError.NoWatermarkFound)
                     {
-                        return (false, AwmError.Ok);
+                        return (false, AwmError.Ok, false);
                     }
 
-                    return (false, detect.error);
+                    if (detect.error == AwmError.AdmUnsupported)
+                    {
+                        return (false, AwmError.Ok, true);
+                    }
+
+                    return (false, detect.error, false);
                 }, token);
             }
             catch (OperationCanceledException)
@@ -711,7 +717,7 @@ public sealed partial class EmbedViewModel : ObservableObject
             {
                 AddLog(
                     $"{L("失败", "Failed")}: {Path.GetFileName(inputPath)}",
-                    $"{L("预检失败", "Precheck failed")}: {precheckResult.error}",
+                    $"{L("预检失败", "Precheck failed")}: {DescribeAwmError(precheckResult.error)}",
                     false,
                     false,
                     LogIconTone.Error,
@@ -724,6 +730,20 @@ public sealed partial class EmbedViewModel : ObservableObject
                 Progress = (processed + 1) / (double)initialTotal;
                 await Task.Yield();
                 continue;
+            }
+
+            if (precheckResult.admPrecheckSkipped && !admPrecheckWarned)
+            {
+                admPrecheckWarned = true;
+                AddLog(
+                    L("预检已跳过", "Precheck skipped"),
+                    L(
+                        "ADM/BWF 检测暂不支持，已跳过预检并继续嵌入",
+                        "ADM/BWF detect is not supported yet; precheck was skipped and embed continues"
+                    ),
+                    false,
+                    true,
+                    LogIconTone.Warning);
             }
 
             if (precheckResult.detected)
@@ -832,7 +852,7 @@ public sealed partial class EmbedViewModel : ObservableObject
                 {
                     AddLog(
                         L("证据记录失败", "Evidence record failed"),
-                        $"{Path.GetFileName(outputPath)}: {stepResult.evidenceError}",
+                        $"{Path.GetFileName(outputPath)}: {DescribeAwmError(stepResult.evidenceError)}",
                         false,
                         true,
                         LogIconTone.Warning);
@@ -867,7 +887,13 @@ public sealed partial class EmbedViewModel : ObservableObject
             else
             {
                 failureCount += 1;
-                AddLog($"{L("失败", "Failed")}: {Path.GetFileName(inputPath)}", stepResult.embedError.ToString(), false, false, LogIconTone.Error, LogKind.ResultError);
+                AddLog(
+                    $"{L("失败", "Failed")}: {Path.GetFileName(inputPath)}",
+                    DescribeAwmError(stepResult.embedError),
+                    false,
+                    false,
+                    LogIconTone.Error,
+                    LogKind.ResultError);
             }
 
             var removeIndex = SelectedFiles
@@ -1488,6 +1514,30 @@ public sealed partial class EmbedViewModel : ObservableObject
     }
 
     private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
+
+    private static string DescribeAwmError(AwmError error)
+    {
+        return error switch
+        {
+            AwmError.InvalidOutputFormat => L(
+                "输出格式无效：仅支持 .wav",
+                "Invalid output format: output must be .wav"
+            ),
+            AwmError.AdmUnsupported => L(
+                "ADM/BWF 不支持：当前操作或元数据结构不受支持",
+                "ADM/BWF unsupported for current operation or metadata layout"
+            ),
+            AwmError.AdmPreserveFailed => L(
+                "ADM/BWF 元数据保真失败：为避免破坏母版已中止输出",
+                "Failed to preserve ADM/BWF metadata; output was aborted to protect the master"
+            ),
+            AwmError.AdmPcmFormatUnsupported => L(
+                "ADM/BWF PCM 格式不支持：仅支持 16/24/32-bit PCM",
+                "Unsupported ADM/BWF PCM format: only 16/24/32-bit PCM"
+            ),
+            _ => error.ToString(),
+        };
+    }
 
     private static async Task<T> RunCancelableNativeCallAsync<T>(Func<T> operation, CancellationToken token)
     {

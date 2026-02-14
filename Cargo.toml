@@ -39,7 +39,7 @@ sha2 = "0.10"
 default = ["multichannel"]
 ffi = []
 cli = ["dep:clap", "dep:hex"]
-multichannel = ["dep:hound", "dep:claxon", "dep:flacenc"]
+multichannel = ["dep:hound", "dep:claxon", "dep:flacenc", "dep:bwavfile"]
 ffmpeg-decode = ["dep:ffmpeg-next", "dep:ffmpeg-sys-next"]
 app = [
   "dep:dirs",
@@ -95,6 +95,10 @@ optional = true
 [dependencies.flacenc]
 version = "0.5.1"
 default-features = false
+optional = true
+
+[dependencies.bwavfile]
+version = "2.0.1"
 optional = true
 
 [dependencies.clap]

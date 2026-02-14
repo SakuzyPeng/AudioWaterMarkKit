@@ -7,13 +7,16 @@ use std::process::Command;
 use std::{fs::File, io::Read};
 
 use crate::error::{Error, Result};
-#[cfg(feature = "ffmpeg-decode")]
+#[cfg(any(feature = "ffmpeg-decode", feature = "multichannel"))]
 use crate::media;
 use crate::message::{self, MESSAGE_LEN};
 use crate::tag::Tag;
 
 #[cfg(feature = "multichannel")]
-use crate::multichannel::{ChannelLayout, MultichannelAudio};
+use crate::multichannel::{
+    build_smart_route_plan, ChannelLayout, MultichannelAudio, RouteMode, RouteStep,
+    DEFAULT_LFE_MODE,
+};
 
 /// audiowmark 默认搜索路径（无官方包，仅供开发者本地编译后使用）
 #[cfg(not(feature = "bundled"))]
@@ -336,16 +339,21 @@ impl Audio {
         message: &[u8; MESSAGE_LEN],
         layout: Option<ChannelLayout>,
     ) -> Result<()> {
-        use std::fs;
-
-        let prepared = prepare_input_for_audiowmark(input.as_ref(), "embed_multichannel_input")?;
-        let input = prepared.path.as_path();
+        let input = input.as_ref();
         let output = output.as_ref();
+        validate_embed_output_path(output)?;
+
+        if media::adm_bwav::probe_adm_bwf(input)?.is_some() {
+            return media::adm_embed::embed_adm_multichannel(self, input, output, message, layout);
+        }
+
+        let prepared = prepare_input_for_audiowmark(input, "embed_multichannel_input")?;
+        let input = prepared.path.as_path();
 
         // 加载多声道音频以检测声道数。
         // 若文件无法被 Rust 解码器解析（如含 ID3 标签的 FLAC），回退到立体声路径，
         // 由 audiowmark 的 libsndfile 原生处理该格式。
-        let audio = match MultichannelAudio::from_file(input) {
+        let mut audio = match MultichannelAudio::from_file(input) {
             Ok(a) => a,
             Err(Error::InvalidInput(_)) => {
                 return self.embed(input, output, message);
@@ -361,74 +369,46 @@ impl Audio {
 
         // 确定声道布局
         let layout = layout.unwrap_or_else(|| audio.layout());
-        let pair_names = layout.pair_names();
-        let pairs = audio.split_stereo_pairs();
+        validate_layout_channels(layout, num_channels)?;
+        let route_plan = build_smart_route_plan(layout, num_channels, DEFAULT_LFE_MODE);
+        log_route_warnings("embed", input, &route_plan.warnings);
 
-        // 创建临时目录（含线程ID和时间戳，避免并行冲突）
-        let temp_dir = std::env::temp_dir().join(format!(
-            "awmkit_{}_{:?}_{}",
-            std::process::id(),
-            std::thread::current().id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ));
-        fs::create_dir_all(&temp_dir)?;
+        let temp_dir = create_temp_dir("awmkit_embed_smart")?;
+        let _guard = TempDirGuard {
+            path: temp_dir.clone(),
+        };
 
-        // 处理每个立体声对
-        let mut processed_pairs = Vec::with_capacity(pairs.len());
-
-        for (i, (left, right)) in pairs.into_iter().enumerate() {
-            let pair_name = pair_names.get(i).copied().unwrap_or("Unknown");
-            let temp_input = temp_dir.join(format!("pair_{i}_in.wav"));
-            let temp_output = temp_dir.join(format!("pair_{i}_out.wav"));
-
-            // 保存立体声对到临时文件
-            let stereo = MultichannelAudio::new(
-                vec![left.clone(), right.clone()],
-                audio.sample_rate(),
-                audio.sample_format(),
-            )?;
-            stereo.to_wav(&temp_input)?;
-
-            // 嵌入水印
-            match self.embed(&temp_input, &temp_output, message) {
-                Ok(()) => {
-                    // 加载处理后的立体声
-                    let processed = MultichannelAudio::from_wav(&temp_output)?;
-                    let processed_pairs_data = processed.split_stereo_pairs();
-                    if let Some((l, r)) = processed_pairs_data.into_iter().next() {
-                        processed_pairs.push((l, r));
-                    } else {
-                        processed_pairs.push((left, right));
-                    }
-                }
-                Err(e) => {
-                    // 嵌入失败，保留原始数据
-                    eprintln!("Warning: Failed to embed in {pair_name}: {e}");
-                    processed_pairs.push((left, right));
-                }
+        for (step_idx, step) in route_plan.steps.iter().enumerate() {
+            if matches!(step.mode, RouteMode::Skip { .. }) {
+                continue;
             }
 
-            // 清理临时文件
-            let _ = fs::remove_file(&temp_input);
-            let _ = fs::remove_file(&temp_output);
+            let temp_input = temp_dir.join(format!("route_{step_idx}_in.wav"));
+            let temp_output = temp_dir.join(format!("route_{step_idx}_out.wav"));
+            let stereo = build_stereo_for_route_step(&audio, step)?;
+            stereo.to_wav(&temp_input)?;
+
+            match self.embed(&temp_input, &temp_output, message) {
+                Ok(()) => {
+                    let processed = MultichannelAudio::from_wav(&temp_output)?;
+                    if let Err(err) = apply_processed_route_step(&mut audio, step, &processed) {
+                        eprintln!(
+                            "Warning: Failed to apply routed embed result for {}: {err}",
+                            step.name
+                        );
+                    }
+                }
+                Err(err) => {
+                    eprintln!(
+                        "Warning: Failed to embed in route step {}: {err}",
+                        step.name
+                    );
+                }
+            }
         }
 
-        // 合并所有声道对
-        let result = MultichannelAudio::merge_stereo_pairs(
-            &processed_pairs,
-            audio.sample_rate(),
-            audio.sample_format(),
-        )?;
-
         // 当前仅支持输出 WAV（FLAC 输出已暂时下线）。
-        validate_embed_output_path(output)?;
-        result.to_wav(output)?;
-
-        // 清理临时目录
-        let _ = fs::remove_dir(&temp_dir);
+        audio.to_wav(output)?;
 
         Ok(())
     }
@@ -442,7 +422,11 @@ impl Audio {
         input: P,
         layout: Option<ChannelLayout>,
     ) -> Result<MultichannelDetectResult> {
-        use std::fs;
+        if media::adm_bwav::probe_adm_bwf(input.as_ref())?.is_some() {
+            return Err(Error::AdmUnsupported(
+                "ADM/BWF detect is not supported in this phase".to_string(),
+            ));
+        }
 
         let prepared = prepare_input_for_audiowmark(input.as_ref(), "detect_multichannel_input")?;
         let input = prepared.path.as_path();
@@ -474,29 +458,23 @@ impl Audio {
 
         // 确定声道布局
         let layout = layout.unwrap_or_else(|| audio.layout());
-        let pair_names = layout.pair_names();
+        validate_layout_channels(layout, num_channels)?;
+        let route_plan = build_smart_route_plan(layout, num_channels, DEFAULT_LFE_MODE);
+        log_route_warnings("detect", input, &route_plan.warnings);
 
-        // 创建临时目录（含线程ID和时间戳，避免并行冲突）
-        let temp_dir = std::env::temp_dir().join(format!(
-            "awmkit_detect_{}_{:?}_{}",
-            std::process::id(),
-            std::thread::current().id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ));
-        fs::create_dir_all(&temp_dir)?;
+        let temp_dir = create_temp_dir("awmkit_detect_smart")?;
+        let _guard = TempDirGuard {
+            path: temp_dir.clone(),
+        };
 
         let mut pairs_results = Vec::new();
         let mut best: Option<DetectResult> = None;
 
-        for (i, _) in audio.split_stereo_pairs().iter().enumerate() {
-            let pair_name = pair_names.get(i).copied().unwrap_or("Unknown").to_string();
-            let temp_file = temp_dir.join(format!("pair_{i}.wav"));
-
-            // 保存立体声对
-            audio.save_stereo_pair(i, &temp_file)?;
+        for (result_idx, (step_idx, step)) in route_plan.detectable_steps().into_iter().enumerate()
+        {
+            let temp_file = temp_dir.join(format!("route_{step_idx}_detect.wav"));
+            let stereo = build_stereo_for_route_step(&audio, step)?;
+            stereo.to_wav(&temp_file)?;
 
             // 检测水印
             let result = self.detect(&temp_file)?;
@@ -509,14 +487,8 @@ impl Audio {
                 }
             }
 
-            pairs_results.push((i, pair_name, result));
-
-            // 清理临时文件
-            let _ = fs::remove_file(&temp_file);
+            pairs_results.push((result_idx, step.name.clone(), result));
         }
-
-        // 清理临时目录
-        let _ = fs::remove_dir(&temp_dir);
 
         Ok(MultichannelDetectResult {
             pairs: pairs_results,
@@ -620,6 +592,83 @@ impl Default for Audio {
             strength: 10,
             key_file: None,
         })
+    }
+}
+
+#[cfg(feature = "multichannel")]
+fn validate_layout_channels(layout: ChannelLayout, source_channels: usize) -> Result<()> {
+    let layout_channels = usize::from(layout.channels());
+    if layout_channels != source_channels {
+        return Err(Error::InvalidInput(format!(
+            "channel layout mismatch: layout={}ch, source={}ch",
+            layout_channels, source_channels
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(feature = "multichannel")]
+fn log_route_warnings(operation: &str, input: &Path, warnings: &[String]) {
+    for warning in warnings {
+        eprintln!(
+            "Warning: smart route fallback ({operation}) for {}: {warning}",
+            input.display()
+        );
+    }
+}
+
+#[cfg(feature = "multichannel")]
+fn build_stereo_for_route_step(
+    audio: &MultichannelAudio,
+    step: &RouteStep,
+) -> Result<MultichannelAudio> {
+    match step.mode {
+        RouteMode::Pair(left, right) => {
+            let left_samples = audio.channel_samples(left)?.to_vec();
+            let right_samples = audio.channel_samples(right)?.to_vec();
+            MultichannelAudio::new(
+                vec![left_samples, right_samples],
+                audio.sample_rate(),
+                audio.sample_format(),
+            )
+        }
+        RouteMode::Mono(channel) => {
+            let mono = audio.channel_samples(channel)?.to_vec();
+            MultichannelAudio::new(
+                vec![mono.clone(), mono],
+                audio.sample_rate(),
+                audio.sample_format(),
+            )
+        }
+        RouteMode::Skip { .. } => Err(Error::InvalidInput(
+            "cannot build stereo input from skip route step".to_string(),
+        )),
+    }
+}
+
+#[cfg(feature = "multichannel")]
+fn apply_processed_route_step(
+    target: &mut MultichannelAudio,
+    step: &RouteStep,
+    processed: &MultichannelAudio,
+) -> Result<()> {
+    if processed.num_channels() != 2 {
+        return Err(Error::InvalidInput(format!(
+            "processed stereo route output expects 2 channels, got {}",
+            processed.num_channels()
+        )));
+    }
+
+    let left = processed.channel_samples(0)?.to_vec();
+    match step.mode {
+        RouteMode::Pair(left_index, right_index) => {
+            let right = processed.channel_samples(1)?.to_vec();
+            target.replace_channel_samples(left_index, left)?;
+            target.replace_channel_samples(right_index, right)?;
+            Ok(())
+        }
+        RouteMode::Mono(channel) => target.replace_channel_samples(channel, left),
+        RouteMode::Skip { .. } => Ok(()),
     }
 }
 
@@ -1075,6 +1124,112 @@ mod tests {
         let strategy = classify_input_prepare_strategy(&path);
         assert_eq!(strategy, InputPrepareStrategy::DecodeToWav);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[cfg(feature = "multichannel")]
+    #[test]
+    fn test_apply_processed_route_step_mono_only_updates_target_channel() {
+        let source = MultichannelAudio::new(
+            vec![
+                vec![1, 2, 3],
+                vec![10, 20, 30],
+                vec![100, 200, 300],
+                vec![1000, 2000, 3000],
+            ],
+            48_000,
+            crate::multichannel::SampleFormat::Int24,
+        );
+        assert!(source.is_ok());
+        let Ok(mut source) = source else {
+            return;
+        };
+
+        let processed = MultichannelAudio::new(
+            vec![vec![7, 8, 9], vec![9, 9, 9]],
+            48_000,
+            crate::multichannel::SampleFormat::Int24,
+        );
+        assert!(processed.is_ok());
+        let Ok(processed) = processed else {
+            return;
+        };
+
+        let step = RouteStep {
+            name: "FC(mono)".to_string(),
+            mode: RouteMode::Mono(2),
+        };
+        let applied = apply_processed_route_step(&mut source, &step, &processed);
+        assert!(applied.is_ok());
+
+        let ch0 = source.channel_samples(0);
+        let ch1 = source.channel_samples(1);
+        let ch2 = source.channel_samples(2);
+        let ch3 = source.channel_samples(3);
+        assert!(ch0.is_ok() && ch1.is_ok() && ch2.is_ok() && ch3.is_ok());
+        assert_eq!(ch0.unwrap_or(&[]), &[1, 2, 3]);
+        assert_eq!(ch1.unwrap_or(&[]), &[10, 20, 30]);
+        assert_eq!(ch2.unwrap_or(&[]), &[7, 8, 9]);
+        assert_eq!(ch3.unwrap_or(&[]), &[1000, 2000, 3000]);
+    }
+
+    #[cfg(feature = "multichannel")]
+    #[test]
+    fn test_skip_route_keeps_lfe_unmodified() {
+        let source = MultichannelAudio::new(
+            vec![
+                vec![1, 2, 3],
+                vec![10, 20, 30],
+                vec![100, 200, 300],
+                vec![1000, 2000, 3000],
+                vec![11, 22, 33],
+                vec![44, 55, 66],
+            ],
+            48_000,
+            crate::multichannel::SampleFormat::Int24,
+        );
+        assert!(source.is_ok());
+        let Ok(mut source) = source else {
+            return;
+        };
+
+        let step = RouteStep {
+            name: "LFE(skip)".to_string(),
+            mode: RouteMode::Skip {
+                channel: 3,
+                reason: "lfe_skipped",
+            },
+        };
+        let processed = MultichannelAudio::new(
+            vec![vec![7, 7, 7], vec![8, 8, 8]],
+            48_000,
+            crate::multichannel::SampleFormat::Int24,
+        );
+        assert!(processed.is_ok());
+        let Ok(processed) = processed else {
+            return;
+        };
+
+        let before_lfe = source.channel_samples(3).map(|s| s.to_vec());
+        assert!(before_lfe.is_ok());
+        let apply = apply_processed_route_step(&mut source, &step, &processed);
+        assert!(apply.is_ok());
+        let after_lfe = source.channel_samples(3).map(|s| s.to_vec());
+        assert!(after_lfe.is_ok());
+        assert_eq!(
+            before_lfe.unwrap_or_default(),
+            after_lfe.unwrap_or_default()
+        );
+    }
+
+    #[cfg(feature = "multichannel")]
+    #[test]
+    fn test_route_detectable_steps_skip_lfe() {
+        let plan = build_smart_route_plan(ChannelLayout::Surround51, 6, DEFAULT_LFE_MODE);
+        let detectable = plan.detectable_steps();
+        assert_eq!(detectable.len(), 3);
+        assert_eq!(detectable[0].1.name, "FL+FR");
+        assert_eq!(detectable[1].1.name, "FC(mono)");
+        assert_eq!(detectable[2].1.name, "BL+BR");
     }
 
     fn unique_temp_file(name: &str) -> PathBuf {

@@ -40,6 +40,9 @@ pub enum AWMError {
     NoWatermarkFound = -9,
     KeyAlreadyExists = -10,
     InvalidOutputFormat = -11,
+    AdmUnsupported = -12,
+    AdmPreserveFailed = -13,
+    AdmPcmFormatUnsupported = -14,
 }
 
 /// 解码结果结构体
@@ -622,6 +625,9 @@ pub unsafe extern "C" fn awm_audio_embed(
         Ok(()) => AWMError::Success as i32,
         Err(crate::Error::AudiowmarkNotFound) => AWMError::AudiowmarkNotFound as i32,
         Err(crate::Error::InvalidOutputFormat(_)) => AWMError::InvalidOutputFormat as i32,
+        Err(crate::Error::AdmUnsupported(_)) => AWMError::AdmUnsupported as i32,
+        Err(crate::Error::AdmPreserveFailed(_)) => AWMError::AdmPreserveFailed as i32,
+        Err(crate::Error::AdmPcmFormatUnsupported(_)) => AWMError::AdmPcmFormatUnsupported as i32,
         Err(crate::Error::AudiowmarkExec(_) | _) => AWMError::AudiowmarkExec as i32,
     }
 }
@@ -2045,6 +2051,9 @@ pub unsafe extern "C" fn awm_audio_embed_multichannel(
         Ok(()) => AWMError::Success as i32,
         Err(crate::Error::AudiowmarkNotFound) => AWMError::AudiowmarkNotFound as i32,
         Err(crate::Error::InvalidOutputFormat(_)) => AWMError::InvalidOutputFormat as i32,
+        Err(crate::Error::AdmUnsupported(_)) => AWMError::AdmUnsupported as i32,
+        Err(crate::Error::AdmPreserveFailed(_)) => AWMError::AdmPreserveFailed as i32,
+        Err(crate::Error::AdmPcmFormatUnsupported(_)) => AWMError::AdmPcmFormatUnsupported as i32,
         Err(crate::Error::AudiowmarkExec(_) | _) => AWMError::AudiowmarkExec as i32,
     }
 }

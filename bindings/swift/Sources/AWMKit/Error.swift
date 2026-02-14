@@ -14,6 +14,9 @@ public enum AWMError: Error, LocalizedError {
     case noWatermarkFound
     case keyAlreadyExists
     case invalidOutputFormat(String)
+    case admUnsupported(String)
+    case admPreserveFailed(String)
+    case admPcmFormatUnsupported(String)
     case unknown(Int32)
 
     init(code: Int32) {
@@ -40,6 +43,12 @@ public enum AWMError: Error, LocalizedError {
             self = .keyAlreadyExists
         case AWM_ERROR_INVALID_OUTPUT_FORMAT.rawValue:
             self = .invalidOutputFormat("output must be .wav")
+        case AWM_ERROR_ADM_UNSUPPORTED.rawValue:
+            self = .admUnsupported("ADM/BWF metadata is unsupported for this operation")
+        case AWM_ERROR_ADM_PRESERVE_FAILED.rawValue:
+            self = .admPreserveFailed("failed to preserve ADM/BWF metadata while embedding")
+        case AWM_ERROR_ADM_PCM_FORMAT_UNSUPPORTED.rawValue:
+            self = .admPcmFormatUnsupported("unsupported ADM/BWF PCM format (only 16/24/32-bit PCM)")
         default:
             self = .unknown(code)
         }
@@ -69,6 +78,12 @@ public enum AWMError: Error, LocalizedError {
             return "Key already exists in slot"
         case .invalidOutputFormat(let message):
             return "Invalid output format: \(message)"
+        case .admUnsupported(let message):
+            return "ADM/BWF unsupported: \(message)"
+        case .admPreserveFailed(let message):
+            return "ADM/BWF preserve failed: \(message)"
+        case .admPcmFormatUnsupported(let message):
+            return "ADM/BWF PCM format unsupported: \(message)"
         case .unknown(let code):
             return "Unknown error: \(code)"
         }

@@ -758,7 +758,7 @@ public sealed partial class DetectViewModel : ObservableObject
                     else
                     {
                         cloneCheck = "unavailable";
-                        cloneReason = cloneError.ToString();
+                        cloneReason = DescribeAwmError(cloneError);
                     }
 
                     return new DetectRecord
@@ -800,7 +800,7 @@ public sealed partial class DetectViewModel : ObservableObject
                 DetectScore = detectScore,
                 BitErrors = mcResult.BitErrors,
                 MatchFound = true,
-                Error = unverifiedError == AwmError.Ok ? invalidReason : $"{invalidReason};{unverifiedError}",
+                Error = unverifiedError == AwmError.Ok ? invalidReason : $"{invalidReason};{DescribeAwmError(unverifiedError)}",
             };
         }
 
@@ -817,7 +817,7 @@ public sealed partial class DetectViewModel : ObservableObject
         {
             FilePath = filePath,
             Status = "error",
-            Error = detectError.ToString(),
+            Error = DescribeAwmError(detectError),
         };
     }
 
@@ -1570,4 +1570,28 @@ public sealed partial class DetectViewModel : ObservableObject
     }
 
     private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
+
+    private static string DescribeAwmError(AwmError error)
+    {
+        return error switch
+        {
+            AwmError.InvalidOutputFormat => L(
+                "输出格式无效：仅支持 .wav",
+                "Invalid output format: output must be .wav"
+            ),
+            AwmError.AdmUnsupported => L(
+                "ADM/BWF 暂不支持检测或元数据结构不受支持",
+                "ADM/BWF detect is not supported yet or metadata layout is unsupported"
+            ),
+            AwmError.AdmPreserveFailed => L(
+                "ADM/BWF 元数据保真失败",
+                "Failed to preserve ADM/BWF metadata"
+            ),
+            AwmError.AdmPcmFormatUnsupported => L(
+                "ADM/BWF PCM 格式不支持：仅支持 16/24/32-bit PCM",
+                "Unsupported ADM/BWF PCM format: only 16/24/32-bit PCM"
+            ),
+            _ => error.ToString(),
+        };
+    }
 }

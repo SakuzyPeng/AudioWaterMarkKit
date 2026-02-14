@@ -18,6 +18,9 @@ public enum AwmError
     NoWatermarkFound = -9,
     KeyAlreadyExists = -10,
     InvalidOutputFormat = -11,
+    AdmUnsupported = -12,
+    AdmPreserveFailed = -13,
+    AdmPcmFormatUnsupported = -14,
 }
 
 /// <summary>Multichannel layout enum matching AWMChannelLayout in C header.</summary>

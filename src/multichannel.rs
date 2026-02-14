@@ -25,6 +25,192 @@ pub enum ChannelLayout {
     Custom(u16),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LfeMode {
+    Skip,
+    Mono,
+    Pair,
+}
+
+pub(crate) const DEFAULT_LFE_MODE: LfeMode = LfeMode::Skip;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RouteMode {
+    Pair(usize, usize),
+    Mono(usize),
+    Skip {
+        channel: usize,
+        reason: &'static str,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RouteStep {
+    pub name: String,
+    pub mode: RouteMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RoutePlan {
+    pub layout: ChannelLayout,
+    pub channels: usize,
+    pub steps: Vec<RouteStep>,
+    pub warnings: Vec<String>,
+}
+
+impl RoutePlan {
+    #[must_use]
+    pub fn detectable_steps(&self) -> Vec<(usize, &RouteStep)> {
+        self.steps
+            .iter()
+            .enumerate()
+            .filter(|(_, step)| !matches!(step.mode, RouteMode::Skip { .. }))
+            .collect()
+    }
+}
+
+#[must_use]
+pub(crate) fn build_smart_route_plan(
+    layout: ChannelLayout,
+    channels: usize,
+    lfe_mode: LfeMode,
+) -> RoutePlan {
+    match layout {
+        ChannelLayout::Stereo if channels == 2 => RoutePlan {
+            layout,
+            channels,
+            steps: vec![pair_step(0, 1, "FL+FR")],
+            warnings: Vec::new(),
+        },
+        ChannelLayout::Surround51 if channels == 6 => RoutePlan {
+            layout,
+            channels,
+            steps: known_surround_steps(layout, lfe_mode),
+            warnings: Vec::new(),
+        },
+        ChannelLayout::Surround512 if channels == 8 => RoutePlan {
+            layout,
+            channels,
+            steps: known_surround_steps(layout, lfe_mode),
+            warnings: Vec::new(),
+        },
+        ChannelLayout::Surround71 if channels == 8 => RoutePlan {
+            layout,
+            channels,
+            steps: known_surround_steps(layout, lfe_mode),
+            warnings: Vec::new(),
+        },
+        ChannelLayout::Surround714 if channels == 12 => RoutePlan {
+            layout,
+            channels,
+            steps: known_surround_steps(layout, lfe_mode),
+            warnings: Vec::new(),
+        },
+        ChannelLayout::Surround916 if channels == 16 => RoutePlan {
+            layout,
+            channels,
+            steps: known_surround_steps(layout, lfe_mode),
+            warnings: Vec::new(),
+        },
+        _ => fallback_route_plan(layout, channels),
+    }
+}
+
+fn known_surround_steps(layout: ChannelLayout, lfe_mode: LfeMode) -> Vec<RouteStep> {
+    let mut steps = Vec::new();
+    steps.push(pair_step(0, 1, "FL+FR"));
+
+    match lfe_mode {
+        LfeMode::Skip => {
+            steps.push(mono_step(2, "FC(mono)"));
+            steps.push(skip_step(3, "LFE(skip)", "lfe_skipped"));
+        }
+        LfeMode::Mono => {
+            steps.push(mono_step(2, "FC(mono)"));
+            steps.push(mono_step(3, "LFE(mono)"));
+        }
+        LfeMode::Pair => {
+            steps.push(pair_step(2, 3, "FC+LFE"));
+        }
+    }
+
+    match layout {
+        ChannelLayout::Surround51 => {
+            steps.push(pair_step(4, 5, "BL+BR"));
+        }
+        ChannelLayout::Surround512 => {
+            steps.push(pair_step(4, 5, "BL+BR"));
+            steps.push(pair_step(6, 7, "TFL+TFR"));
+        }
+        ChannelLayout::Surround71 => {
+            steps.push(pair_step(4, 5, "BL+BR"));
+            steps.push(pair_step(6, 7, "SL+SR"));
+        }
+        ChannelLayout::Surround714 => {
+            steps.push(pair_step(4, 5, "BL+BR"));
+            steps.push(pair_step(6, 7, "SL+SR"));
+            steps.push(pair_step(8, 9, "TFL+TFR"));
+            steps.push(pair_step(10, 11, "TBL+TBR"));
+        }
+        ChannelLayout::Surround916 => {
+            steps.push(pair_step(4, 5, "BL+BR"));
+            steps.push(pair_step(6, 7, "SL+SR"));
+            steps.push(pair_step(8, 9, "FLC+FRC"));
+            steps.push(pair_step(10, 11, "TFL+TFR"));
+            steps.push(pair_step(12, 13, "TBL+TBR"));
+            steps.push(pair_step(14, 15, "TSL+TSR"));
+        }
+        _ => {}
+    }
+
+    steps
+}
+
+fn fallback_route_plan(layout: ChannelLayout, channels: usize) -> RoutePlan {
+    let mut steps = Vec::new();
+    let mut ch = 0usize;
+    while ch < channels {
+        if ch + 1 < channels {
+            steps.push(pair_step(ch, ch + 1, &format!("CH{}+CH{}", ch + 1, ch + 2)));
+            ch += 2;
+        } else {
+            steps.push(mono_step(ch, &format!("CH{}(mono)", ch + 1)));
+            ch += 1;
+        }
+    }
+
+    RoutePlan {
+        layout,
+        channels,
+        steps,
+        warnings: vec![format!(
+            "smart routing fallback is used for layout {:?} ({} channels)",
+            layout, channels
+        )],
+    }
+}
+
+fn pair_step(ch_a: usize, ch_b: usize, name: &str) -> RouteStep {
+    RouteStep {
+        name: name.to_string(),
+        mode: RouteMode::Pair(ch_a, ch_b),
+    }
+}
+
+fn mono_step(channel: usize, name: &str) -> RouteStep {
+    RouteStep {
+        name: name.to_string(),
+        mode: RouteMode::Mono(channel),
+    }
+}
+
+fn skip_step(channel: usize, name: &str, reason: &'static str) -> RouteStep {
+    RouteStep {
+        name: name.to_string(),
+        mode: RouteMode::Skip { channel, reason },
+    }
+}
+
 impl ChannelLayout {
     /// 获取声道数
     #[must_use]
@@ -415,6 +601,33 @@ impl MultichannelAudio {
             .collect()
     }
 
+    pub(crate) fn channel_samples(&self, index: usize) -> Result<&[i32]> {
+        self.channels
+            .get(index)
+            .map(Vec::as_slice)
+            .ok_or_else(|| Error::InvalidInput(format!("channel index {index} out of range")))
+    }
+
+    pub(crate) fn replace_channel_samples(
+        &mut self,
+        index: usize,
+        samples: Vec<i32>,
+    ) -> Result<()> {
+        let expected = self.num_samples();
+        if samples.len() != expected {
+            return Err(Error::InvalidInput(format!(
+                "channel {index} sample length mismatch: expected {expected}, got {}",
+                samples.len()
+            )));
+        }
+        let channel = self
+            .channels
+            .get_mut(index)
+            .ok_or_else(|| Error::InvalidInput(format!("channel index {index} out of range")))?;
+        *channel = samples;
+        Ok(())
+    }
+
     /// 从立体声对合并
     pub fn merge_stereo_pairs(
         pairs: &[(Vec<i32>, Vec<i32>)],
@@ -550,5 +763,122 @@ mod tests {
             return;
         };
         assert_eq!(merged.num_channels(), 4);
+        assert_eq!(merged.num_samples(), 4);
+    }
+
+    #[test]
+    fn test_smart_plan_surround51_default() {
+        let plan = build_smart_route_plan(ChannelLayout::Surround51, 6, DEFAULT_LFE_MODE);
+        assert!(plan.warnings.is_empty());
+        assert_eq!(plan.steps.len(), 4);
+        assert_eq!(plan.steps[0].mode, RouteMode::Pair(0, 1));
+        assert_eq!(plan.steps[1].mode, RouteMode::Mono(2));
+        assert_eq!(
+            plan.steps[2].mode,
+            RouteMode::Skip {
+                channel: 3,
+                reason: "lfe_skipped"
+            }
+        );
+        assert_eq!(plan.steps[3].mode, RouteMode::Pair(4, 5));
+    }
+
+    #[test]
+    fn test_smart_plan_surround714_default() {
+        let plan = build_smart_route_plan(ChannelLayout::Surround714, 12, DEFAULT_LFE_MODE);
+        assert!(plan.warnings.is_empty());
+        assert_eq!(
+            plan.steps
+                .iter()
+                .map(|s| s.mode.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                RouteMode::Pair(0, 1),
+                RouteMode::Mono(2),
+                RouteMode::Skip {
+                    channel: 3,
+                    reason: "lfe_skipped"
+                },
+                RouteMode::Pair(4, 5),
+                RouteMode::Pair(6, 7),
+                RouteMode::Pair(8, 9),
+                RouteMode::Pair(10, 11),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_smart_plan_surround916_default() {
+        let plan = build_smart_route_plan(ChannelLayout::Surround916, 16, DEFAULT_LFE_MODE);
+        assert!(plan.warnings.is_empty());
+        assert_eq!(
+            plan.steps
+                .iter()
+                .map(|s| s.mode.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                RouteMode::Pair(0, 1),
+                RouteMode::Mono(2),
+                RouteMode::Skip {
+                    channel: 3,
+                    reason: "lfe_skipped"
+                },
+                RouteMode::Pair(4, 5),
+                RouteMode::Pair(6, 7),
+                RouteMode::Pair(8, 9),
+                RouteMode::Pair(10, 11),
+                RouteMode::Pair(12, 13),
+                RouteMode::Pair(14, 15),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_smart_plan_custom_odd_channels() {
+        let plan = build_smart_route_plan(ChannelLayout::Custom(7), 7, DEFAULT_LFE_MODE);
+        assert_eq!(
+            plan.steps
+                .iter()
+                .map(|s| s.mode.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                RouteMode::Pair(0, 1),
+                RouteMode::Pair(2, 3),
+                RouteMode::Pair(4, 5),
+                RouteMode::Mono(6),
+            ]
+        );
+        assert_eq!(plan.detectable_steps().len(), 4);
+        assert_eq!(plan.warnings.len(), 1);
+    }
+
+    #[test]
+    fn test_channel_replace_affects_only_target() {
+        let audio = MultichannelAudio::new(
+            vec![
+                vec![1, 2, 3],
+                vec![10, 20, 30],
+                vec![100, 200, 300],
+                vec![1000, 2000, 3000],
+            ],
+            48_000,
+            SampleFormat::Int24,
+        );
+        assert!(audio.is_ok());
+        let Ok(mut audio) = audio else {
+            return;
+        };
+
+        let replace = audio.replace_channel_samples(2, vec![7, 8, 9]);
+        assert!(replace.is_ok());
+        let ch0 = audio.channel_samples(0);
+        let ch1 = audio.channel_samples(1);
+        let ch2 = audio.channel_samples(2);
+        let ch3 = audio.channel_samples(3);
+        assert!(ch0.is_ok() && ch1.is_ok() && ch2.is_ok() && ch3.is_ok());
+        assert_eq!(ch0.unwrap_or(&[]), &[1, 2, 3]);
+        assert_eq!(ch1.unwrap_or(&[]), &[10, 20, 30]);
+        assert_eq!(ch2.unwrap_or(&[]), &[7, 8, 9]);
+        assert_eq!(ch3.unwrap_or(&[]), &[1000, 2000, 3000]);
     }
 }
