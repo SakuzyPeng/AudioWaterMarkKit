@@ -99,10 +99,15 @@ public sealed partial class DetectPage : Page
     private async Task<string?> PickSingleAudioFileAsync()
     {
         var picker = new FileOpenPicker();
-        picker.FileTypeFilter.Add(".wav");
-        picker.FileTypeFilter.Add(".flac");
-        picker.FileTypeFilter.Add(".m4a");
-        picker.FileTypeFilter.Add(".alac");
+        var extensions = AppState.EffectiveSupportedInputExtensions();
+        foreach (var ext in extensions)
+        {
+            picker.FileTypeFilter.Add(ext);
+        }
+        if (extensions.Count == 0)
+        {
+            picker.FileTypeFilter.Add("*");
+        }
 
         var hWnd = WindowNative.GetWindowHandle(App.Current.MainWindow);
         InitializeWithWindow.Initialize(picker, hWnd);

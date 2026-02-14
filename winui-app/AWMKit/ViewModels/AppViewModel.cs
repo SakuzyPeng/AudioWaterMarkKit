@@ -21,6 +21,17 @@ public sealed partial class AppViewModel : ObservableObject
 {
     private static AppViewModel? _instance;
     public static AppViewModel Instance => _instance ??= new AppViewModel();
+    private static readonly string[] InputExtensionOrder =
+    [
+        ".wav", ".flac", ".mp3", ".ogg", ".opus",
+        ".m4a", ".alac", ".mp4", ".mov",
+        ".mkv", ".mka",
+        ".ts", ".m2ts", ".m2t",
+    ];
+    private static readonly string[] DirectInputExtensions = [".wav", ".flac", ".mp3", ".ogg", ".opus"];
+    private static readonly string[] Mp4FamilyExtensions = [".m4a", ".alac", ".mp4", ".mov"];
+    private static readonly string[] MkvFamilyExtensions = [".mkv", ".mka"];
+    private static readonly string[] TsFamilyExtensions = [".ts", ".m2ts", ".m2t"];
 
     private bool _keyAvailable;
     public bool KeyAvailable
@@ -120,6 +131,59 @@ public sealed partial class AppViewModel : ObservableObject
         }
     }
 
+    private bool _engineCapsKnown;
+    public bool EngineCapsKnown
+    {
+        get => _engineCapsKnown;
+        private set
+        {
+            if (SetProperty(ref _engineCapsKnown, value))
+            {
+                OnPropertyChanged(nameof(UsingFallbackInputExtensions));
+                OnPropertyChanged(nameof(EffectiveSupportedInputExtensionsDisplay));
+            }
+        }
+    }
+
+    private bool _engineContainerMp4;
+    public bool EngineContainerMp4
+    {
+        get => _engineContainerMp4;
+        private set
+        {
+            if (SetProperty(ref _engineContainerMp4, value))
+            {
+                OnPropertyChanged(nameof(EffectiveSupportedInputExtensionsDisplay));
+            }
+        }
+    }
+
+    private bool _engineContainerMkv;
+    public bool EngineContainerMkv
+    {
+        get => _engineContainerMkv;
+        private set
+        {
+            if (SetProperty(ref _engineContainerMkv, value))
+            {
+                OnPropertyChanged(nameof(EffectiveSupportedInputExtensionsDisplay));
+            }
+        }
+    }
+
+    private bool _engineContainerTs;
+    public bool EngineContainerTs
+    {
+        get => _engineContainerTs;
+        private set
+        {
+            if (SetProperty(ref _engineContainerTs, value))
+            {
+                OnPropertyChanged(nameof(EffectiveSupportedInputExtensionsDisplay));
+            }
+        }
+    }
+
     private string _engineEac3 = "unavailable";
     public string EngineEac3
     {
@@ -174,6 +238,8 @@ public sealed partial class AppViewModel : ObservableObject
     public string DatabaseStatusTooltip => DatabaseAvailable
         ? $"{L("数据库", "Database")}：{L("可用", "Available")}\n{L("映射", "Mappings")}：{TotalTags}\n{L("证据", "Evidence")}：{TotalEvidence}\n{L("点击刷新状态", "Click to refresh status")}"
         : $"{L("数据库", "Database")}：{L("不可用", "Unavailable")}\n{L("点击刷新状态", "Click to refresh status")}";
+    public bool UsingFallbackInputExtensions => !EngineCapsKnown;
+    public string EffectiveSupportedInputExtensionsDisplay => string.Join(" / ", EffectiveSupportedInputExtensions().Select(ext => ext.TrimStart('.').ToUpperInvariant()));
 
     private string _uiLanguageCode = "zh-CN";
     public string UiLanguageCode
@@ -313,6 +379,10 @@ public sealed partial class AppViewModel : ObservableObject
             EngineBackend = "-";
             EngineEac3 = "unavailable";
             EngineContainers = "-";
+            EngineCapsKnown = false;
+            EngineContainerMp4 = false;
+            EngineContainerMkv = false;
+            EngineContainerTs = false;
             TotalTags = 0;
             TotalEvidence = 0;
             ActiveKeySlot = 0;
@@ -480,6 +550,10 @@ public sealed partial class AppViewModel : ObservableObject
             {
                 EngineBackend = caps.Value.Backend;
                 EngineEac3 = caps.Value.Eac3Decode ? "available" : "unavailable";
+                EngineCapsKnown = true;
+                EngineContainerMp4 = caps.Value.ContainerMp4;
+                EngineContainerMkv = caps.Value.ContainerMkv;
+                EngineContainerTs = caps.Value.ContainerTs;
                 var containers = new List<string>();
                 if (caps.Value.ContainerMp4) containers.Add("mp4");
                 if (caps.Value.ContainerMkv) containers.Add("mkv");
@@ -491,6 +565,10 @@ public sealed partial class AppViewModel : ObservableObject
                 EngineBackend = "-";
                 EngineEac3 = "unavailable";
                 EngineContainers = "-";
+                EngineCapsKnown = false;
+                EngineContainerMp4 = false;
+                EngineContainerMkv = false;
+                EngineContainerTs = false;
             }
         }
         catch
@@ -500,7 +578,46 @@ public sealed partial class AppViewModel : ObservableObject
             EngineBackend = "-";
             EngineEac3 = "unavailable";
             EngineContainers = "-";
+            EngineCapsKnown = false;
+            EngineContainerMp4 = false;
+            EngineContainerMkv = false;
+            EngineContainerTs = false;
         }
+    }
+
+    public IReadOnlyList<string> EffectiveSupportedInputExtensions()
+    {
+        if (!EngineCapsKnown)
+        {
+            return InputExtensionOrder;
+        }
+
+        var allowed = new HashSet<string>(DirectInputExtensions, StringComparer.OrdinalIgnoreCase);
+        if (EngineContainerMp4)
+        {
+            foreach (var ext in Mp4FamilyExtensions)
+            {
+                allowed.Add(ext);
+            }
+        }
+
+        if (EngineContainerMkv)
+        {
+            foreach (var ext in MkvFamilyExtensions)
+            {
+                allowed.Add(ext);
+            }
+        }
+
+        if (EngineContainerTs)
+        {
+            foreach (var ext in TsFamilyExtensions)
+            {
+                allowed.Add(ext);
+            }
+        }
+
+        return InputExtensionOrder.Where(allowed.Contains).ToArray();
     }
 
     private static Brush GetStatusBrush(string resourceKey)

@@ -65,10 +65,22 @@ class AppState: ObservableObject {
     @Published private(set) var databaseStatusHelp: String = "-"
     @Published private(set) var mappingCount: Int = 0
     @Published private(set) var evidenceCount: Int = 0
+    @Published private(set) var audioMediaCapsKnown: Bool = false
+    @Published private(set) var audioContainerMp4: Bool = false
+    @Published private(set) var audioContainerMkv: Bool = false
+    @Published private(set) var audioContainerTs: Bool = false
+    @Published private(set) var audioInputPolicyVersion: Int = 0
     @Published var uiLanguage: UILanguageOption = .zhCN
 
     let audio: AWMAudio?
     private let audioInitError: String?
+    private static let directInputExtensions = ["wav", "flac", "mp3", "ogg", "opus"]
+    private static let mp4FamilyExtensions = ["m4a", "alac", "mp4", "mov"]
+    private static let mkvFamilyExtensions = ["mkv", "mka"]
+    private static let tsFamilyExtensions = ["ts", "m2ts", "m2t"]
+    private static let fallbackInputExtensions = [
+        "wav", "flac", "mp3", "ogg", "opus", "m4a", "alac", "mp4", "mov", "mkv", "mka", "ts", "m2ts", "m2t",
+    ]
 
     enum Tab: String, CaseIterable, Identifiable {
         case embed
@@ -203,18 +215,26 @@ class AppState: ObservableObject {
 
     func checkAudioStatus() {
         guard let audio else {
+            applyAudioInputPolicy(known: false, containerMp4: false, containerMkv: false, containerTs: false)
             audioStatusTone = .error
             audioStatusHelp = "\(l("AudioWmark 初始化失败", "AudioWmark initialization failed")): \(audioInitError ?? l("未找到可用二进制", "No available binary"))"
             return
         }
 
         guard audio.isAvailable else {
+            applyAudioInputPolicy(known: false, containerMp4: false, containerMkv: false, containerTs: false)
             audioStatusTone = .error
             audioStatusHelp = l("AudioWmark 不可用：初始化成功但无法执行", "AudioWmark unavailable: initialized but execution failed")
             return
         }
 
         if let capabilities = try? audio.mediaCapabilities() {
+            applyAudioInputPolicy(
+                known: true,
+                containerMp4: capabilities.containerMp4,
+                containerMkv: capabilities.containerMkv,
+                containerTs: capabilities.containerTs
+            )
             let containers: [String] = [
                 capabilities.containerMp4 ? "mp4" : nil,
                 capabilities.containerMkv ? "mkv" : nil,
@@ -232,8 +252,44 @@ class AppState: ObservableObject {
             return
         }
 
+        applyAudioInputPolicy(known: false, containerMp4: false, containerMkv: false, containerTs: false)
         audioStatusTone = .warning
         audioStatusHelp = "\(l("AudioWmark 可用", "AudioWmark available")) (\(inferredAudioBackend()))"
+    }
+
+    func effectiveSupportedInputExtensions() -> [String] {
+        if !audioMediaCapsKnown {
+            return Self.fallbackInputExtensions
+        }
+
+        var allowed = Set(Self.directInputExtensions)
+        if audioContainerMp4 {
+            allowed.formUnion(Self.mp4FamilyExtensions)
+        }
+        if audioContainerMkv {
+            allowed.formUnion(Self.mkvFamilyExtensions)
+        }
+        if audioContainerTs {
+            allowed.formUnion(Self.tsFamilyExtensions)
+        }
+
+        return Self.fallbackInputExtensions.filter { allowed.contains($0) }
+    }
+
+    func supportedInputExtensionsDisplay() -> String {
+        effectiveSupportedInputExtensions()
+            .map { $0.uppercased() }
+            .joined(separator: " / ")
+    }
+
+    func inputPolicyDetailText() -> String {
+        if audioMediaCapsKnown {
+            return l("按运行时解码能力筛选输入", "Input is filtered by runtime decode capabilities")
+        }
+        return l(
+            "当前按默认支持集合处理（运行时能力未知，执行阶段可能因缺少 demuxer 失败）",
+            "Using default fallback input set (runtime capabilities unknown; execution can still fail if demuxers are missing)"
+        )
     }
 
     func checkDatabaseStatus() {
@@ -331,6 +387,23 @@ class AppState: ObservableObject {
         keyStatusHelp = l("密钥状态检查中...", "Checking key status...")
         audioStatusHelp = l("AudioWmark 状态检查中...", "Checking AudioWmark status...")
         databaseStatusHelp = l("数据库状态检查中...", "Checking database status...")
+    }
+
+    private func applyAudioInputPolicy(known: Bool, containerMp4: Bool, containerMkv: Bool, containerTs: Bool) {
+        let changed =
+            audioMediaCapsKnown != known
+            || audioContainerMp4 != containerMp4
+            || audioContainerMkv != containerMkv
+            || audioContainerTs != containerTs
+
+        audioMediaCapsKnown = known
+        audioContainerMp4 = containerMp4
+        audioContainerMkv = containerMkv
+        audioContainerTs = containerTs
+
+        if changed {
+            audioInputPolicyVersion &+= 1
+        }
     }
 
     private func formatKeyStatusHelp(

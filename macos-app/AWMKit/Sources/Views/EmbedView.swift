@@ -143,7 +143,7 @@ struct EmbedView: View {
                             .font(.title2)
                         Text(l("拖拽音频文件到此处", "Drop audio files here"))
                             .font(.headline)
-                        Text(l("支持 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS，可批量拖入", "Supports WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS, batch drop enabled"))
+                        Text(viewModel.dropZoneSubtitle(appState: appState))
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     }
@@ -154,7 +154,7 @@ struct EmbedView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isDropTargeted) { providers in
-            viewModel.processDropProviders(providers)
+            viewModel.processDropProviders(providers, appState: appState)
             return true
         }
         .id(colorScheme)
@@ -166,7 +166,7 @@ struct EmbedView: View {
                 title: l("输入文件", "Input source"),
                 value: viewModel.inputSourceText,
                 systemImage: "tray.and.arrow.down",
-                onTap: { viewModel.selectFiles() }
+                onTap: { viewModel.selectFiles(appState: appState) }
             )
             Divider()
                 .background(Color.white.opacity(colorScheme == .dark ? 0.2 : 0.4))

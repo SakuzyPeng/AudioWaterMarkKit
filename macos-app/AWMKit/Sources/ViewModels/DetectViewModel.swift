@@ -93,7 +93,6 @@ class DetectViewModel: ObservableObject {
     @Published var isClearLogsSuccess = false
 
     private let maxLogCount = 200
-    private let supportedAudioExtensions: Set<String> = ["wav", "flac", "mp3", "ogg", "opus", "m4a", "alac", "mp4", "mkv", "mka", "ts", "m2ts", "m2t"]
     private var progressResetTask: Task<Void, Never>?
 
     deinit {
@@ -141,7 +140,7 @@ class DetectViewModel: ObservableObject {
 
     // MARK: - 文件选择
 
-    func selectFiles() {
+    func selectFiles(appState: AppState) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
@@ -150,7 +149,7 @@ class DetectViewModel: ObservableObject {
 
         if panel.runModal() == .OK, let source = panel.url {
             inputSource = source
-            let files = resolveAudioFiles(from: source)
+            let files = resolveAudioFiles(from: source, appState: appState)
             appendFilesWithDedup(files)
         }
     }
@@ -174,7 +173,7 @@ class DetectViewModel: ObservableObject {
         )
     }
 
-    func processDropProviders(_ providers: [NSItemProvider]) {
+    func processDropProviders(_ providers: [NSItemProvider], appState: AppState) {
         var urls: [URL] = []
         let lock = NSLock()
         let group = DispatchGroup()
@@ -192,18 +191,36 @@ class DetectViewModel: ObservableObject {
         group.notify(queue: .main) { [weak self] in
             guard let self else { return }
             var resolved: [URL] = []
+            var unsupported: [URL] = []
             for url in urls {
                 if self.isDirectory(url) {
-                    resolved.append(contentsOf: self.resolveAudioFiles(from: url))
-                } else if self.isSupportedAudioFile(url) {
+                    resolved.append(contentsOf: self.resolveAudioFiles(from: url, appState: appState))
+                } else if self.isSupportedAudioFile(url, appState: appState) {
                     resolved.append(url)
+                } else {
+                    unsupported.append(url)
                 }
             }
+            self.logUnsupportedFiles(unsupported, appState: appState)
             self.appendFilesWithDedup(resolved)
         }
     }
 
-    private func resolveAudioFiles(from source: URL) -> [URL] {
+    func dropZoneSubtitle(appState: AppState) -> String {
+        let extText = appState.supportedInputExtensionsDisplay()
+        if appState.audioMediaCapsKnown {
+            return appState.tr(
+                "支持 \(extText)，可批量拖入并检测",
+                "Supports \(extText), batch drop enabled for detection"
+            )
+        }
+        return appState.tr(
+            "支持 \(extText)，当前按默认集合处理（运行时能力未知）",
+            "Supports \(extText); using default fallback set while runtime capabilities are unknown"
+        )
+    }
+
+    private func resolveAudioFiles(from source: URL, appState: AppState) -> [URL] {
         if isDirectory(source) {
             do {
                 let items = try FileManager.default.contentsOfDirectory(
@@ -211,14 +228,14 @@ class DetectViewModel: ObservableObject {
                     includingPropertiesForKeys: [.isDirectoryKey],
                     options: [.skipsHiddenFiles]
                 )
-                let files = items.filter { isSupportedAudioFile($0) }
+                let regularFiles = items.filter { !isDirectory($0) }
+                let files = regularFiles.filter { isSupportedAudioFile($0, appState: appState) }
+                let unsupported = regularFiles.filter { !isSupportedAudioFile($0, appState: appState) }
+                logUnsupportedFiles(unsupported, appState: appState)
                 if files.isEmpty {
                     log(
                         localized("目录无可用音频", "No audio files in directory"),
-                        detail: localized(
-                            "当前目录未找到 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS 文件",
-                            "No WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS files found in this directory"
-                        ),
+                        detail: directoryNoAudioDetail(appState: appState),
                         isSuccess: false,
                         kind: .directoryNoAudio,
                         isEphemeral: true
@@ -236,13 +253,10 @@ class DetectViewModel: ObservableObject {
             }
         }
 
-        guard isSupportedAudioFile(source) else {
+        guard isSupportedAudioFile(source, appState: appState) else {
             log(
                 localized("不支持的输入源", "Unsupported input source"),
-                detail: localized(
-                    "请选择 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS 文件或包含这些文件的目录",
-                    "Select a WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS file or a directory containing these files"
-                ),
+                detail: unsupportedInputDetail(appState: appState),
                 isSuccess: false,
                 kind: .unsupportedInput,
                 isEphemeral: true
@@ -281,9 +295,73 @@ class DetectViewModel: ObservableObject {
         }
     }
 
-    private func isSupportedAudioFile(_ url: URL) -> Bool {
+    private func isSupportedAudioFile(_ url: URL, appState: AppState) -> Bool {
         guard !isDirectory(url) else { return false }
-        return supportedAudioExtensions.contains(url.pathExtension.lowercased())
+        return effectiveSupportedAudioExtensions(appState: appState).contains(url.pathExtension.lowercased())
+    }
+
+    private func effectiveSupportedAudioExtensions(appState: AppState) -> Set<String> {
+        Set(appState.effectiveSupportedInputExtensions().map { $0.lowercased() })
+    }
+
+    private func directoryNoAudioDetail(appState: AppState) -> String {
+        let extText = appState.supportedInputExtensionsDisplay()
+        if appState.audioMediaCapsKnown {
+            return appState.tr(
+                "当前目录未找到 \(extText) 文件",
+                "No \(extText) files found in this directory"
+            )
+        }
+        return appState.tr(
+            "当前目录未找到 \(extText) 文件（按默认支持集合处理）",
+            "No \(extText) files found in this directory (fallback set applied)"
+        )
+    }
+
+    private func unsupportedInputDetail(appState: AppState) -> String {
+        let extText = appState.supportedInputExtensionsDisplay()
+        if appState.audioMediaCapsKnown {
+            return appState.tr(
+                "请选择 \(extText) 文件或包含这些文件的目录",
+                "Select a \(extText) file or a directory containing these files"
+            )
+        }
+        return appState.tr(
+            "请选择 \(extText) 文件或包含这些文件的目录。当前按默认集合处理，运行时缺少 demuxer 时仍可能失败",
+            "Select a \(extText) file or a directory containing these files. Using fallback set now; execution can still fail if demuxers are missing"
+        )
+    }
+
+    private func logUnsupportedFiles(_ files: [URL], appState: AppState) {
+        var seen = Set<String>()
+        let unique = files.map(Self.normalizedPathKey).filter { seen.insert($0).inserted }
+        guard !unique.isEmpty else { return }
+
+        let preview = unique
+            .prefix(3)
+            .compactMap { URL(fileURLWithPath: $0).lastPathComponent }
+            .joined(separator: ", ")
+        let remain = max(unique.count - 3, 0)
+        let detail: String
+        if remain == 0 {
+            detail = appState.tr(
+                "已跳过 \(unique.count) 个不支持文件：\(preview)",
+                "Skipped \(unique.count) unsupported file(s): \(preview)"
+            )
+        } else {
+            detail = appState.tr(
+                "已跳过 \(unique.count) 个不支持文件：\(preview) 等 \(remain) 个",
+                "Skipped \(unique.count) unsupported file(s): \(preview) and \(remain) more"
+            )
+        }
+
+        log(
+            localized("已跳过不支持文件", "Skipped unsupported files"),
+            detail: detail,
+            isSuccess: false,
+            kind: .unsupportedInput,
+            isEphemeral: true
+        )
     }
 
     private func isDirectory(_ url: URL) -> Bool {

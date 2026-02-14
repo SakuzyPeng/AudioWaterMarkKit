@@ -139,7 +139,7 @@ struct DetectView: View {
                             .font(.title2)
                         Text(l("拖拽音频文件到此处", "Drop audio files here"))
                             .font(.headline)
-                        Text(l("检测文件中是否包含水印标签", "Detect whether file contains watermark tag"))
+                        Text(viewModel.dropZoneSubtitle(appState: appState))
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     }
@@ -150,7 +150,7 @@ struct DetectView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isDropTargeted) { providers in
-            viewModel.processDropProviders(providers)
+            viewModel.processDropProviders(providers, appState: appState)
             return true
         }
         .id(colorScheme)
@@ -162,7 +162,7 @@ struct DetectView: View {
                 title: l("待检测文件", "Input source"),
                 value: viewModel.inputSourceText,
                 systemImage: "tray.and.arrow.down",
-                onTap: { viewModel.selectFiles() }
+                onTap: { viewModel.selectFiles(appState: appState) }
             )
         }
         .padding(.horizontal, 18)

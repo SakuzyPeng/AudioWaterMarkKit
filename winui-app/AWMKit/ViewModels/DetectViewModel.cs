@@ -31,23 +31,6 @@ public sealed partial class DetectViewModel : ObservableObject
     private static Brush PrimaryBrush => ThemeBrush("TextFillColorPrimaryBrush", "NeutralBrush");
     private static Brush YellowBrush => ThemeBrush("YellowBrush", "WarningBrush");
 
-    private readonly HashSet<string> _supportedAudioExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".wav",
-        ".flac",
-        ".mp3",
-        ".ogg",
-        ".opus",
-        ".m4a",
-        ".alac",
-        ".mp4",
-        ".mkv",
-        ".mka",
-        ".ts",
-        ".m2ts",
-        ".m2t",
-    };
-
     private CancellationTokenSource? _detectCts;
     private CancellationTokenSource? _progressResetCts;
     private readonly AppViewModel _appState = AppViewModel.Instance;
@@ -301,7 +284,13 @@ public sealed partial class DetectViewModel : ObservableObject
     public string ClearActionText => L("清空", "Clear");
     public string LayoutLabel => L("声道布局", "Channel layout");
     public string DropZoneTitle => L("拖拽音频文件到此处", "Drag audio files here");
-    public string DropZoneSubtitle => L("检测文件中是否包含水印标签", "Check whether files contain watermark tags");
+    public string DropZoneSubtitle => _appState.UsingFallbackInputExtensions
+        ? L(
+            $"支持 {SupportedExtensionsDisplay()}，当前按默认集合处理（运行时能力未知）",
+            $"Supports {SupportedExtensionsDisplay()}; using default fallback set while runtime capabilities are unknown")
+        : L(
+            $"支持 {SupportedExtensionsDisplay()}，可批量拖入并检测",
+            $"Supports {SupportedExtensionsDisplay()}, batch drop enabled for detection");
     public string DetectInfoTitle => L("检测信息", "Detection info");
     public string FileFieldLabel => L("文件", "File");
     public string StatusFieldLabel => L("状态", "Status");
@@ -412,23 +401,32 @@ public sealed partial class DetectViewModel : ObservableObject
 
     private void OnAppStatePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(AppViewModel.UiLanguageCode))
+        if (e.PropertyName == nameof(AppViewModel.UiLanguageCode))
         {
+            OnPropertyChanged(nameof(InputSourceText));
+            OnPropertyChanged(nameof(DetectCountText));
+            OnPropertyChanged(nameof(LogCountText));
+            OnPropertyChanged(nameof(QueueCountText));
+            OnPropertyChanged(nameof(DetectButtonText));
+            OnPropertyChanged(nameof(DisplayStatus));
+            OnPropertyChanged(nameof(DisplayMatchFound));
+            OnPropertyChanged(nameof(DisplayPattern));
+            OnPropertyChanged(nameof(DisplayDetectTime));
+            OnPropertyChanged(nameof(DisplayCloneCheck));
+            NotifyLocalizedTextChanged();
+            RebuildLayoutOptions();
             return;
         }
 
-        OnPropertyChanged(nameof(InputSourceText));
-        OnPropertyChanged(nameof(DetectCountText));
-        OnPropertyChanged(nameof(LogCountText));
-        OnPropertyChanged(nameof(QueueCountText));
-        OnPropertyChanged(nameof(DetectButtonText));
-        OnPropertyChanged(nameof(DisplayStatus));
-        OnPropertyChanged(nameof(DisplayMatchFound));
-        OnPropertyChanged(nameof(DisplayPattern));
-        OnPropertyChanged(nameof(DisplayDetectTime));
-        OnPropertyChanged(nameof(DisplayCloneCheck));
-        NotifyLocalizedTextChanged();
-        RebuildLayoutOptions();
+        if (e.PropertyName == nameof(AppViewModel.EngineCapsKnown)
+            || e.PropertyName == nameof(AppViewModel.EngineContainerMp4)
+            || e.PropertyName == nameof(AppViewModel.EngineContainerMkv)
+            || e.PropertyName == nameof(AppViewModel.EngineContainerTs)
+            || e.PropertyName == nameof(AppViewModel.EffectiveSupportedInputExtensionsDisplay))
+        {
+            OnPropertyChanged(nameof(DropZoneSubtitle));
+            return;
+        }
     }
 
     public void SetInputSource(string sourcePath)
@@ -447,6 +445,7 @@ public sealed partial class DetectViewModel : ObservableObject
     public void AddDroppedFiles(IEnumerable<string> filePaths)
     {
         var files = new List<string>();
+        var unsupported = new List<string>();
         foreach (var path in filePaths)
         {
             if (Directory.Exists(path))
@@ -457,8 +456,13 @@ public sealed partial class DetectViewModel : ObservableObject
             {
                 files.Add(path);
             }
+            else if (File.Exists(path))
+            {
+                unsupported.Add(path);
+            }
         }
 
+        LogUnsupportedDroppedFiles(unsupported);
         AppendFilesWithDedup(files);
     }
 
@@ -867,15 +871,21 @@ public sealed partial class DetectViewModel : ObservableObject
             {
                 var files = Directory
                     .EnumerateFiles(sourcePath, "*", SearchOption.TopDirectoryOnly)
+                    .ToList();
+                var supported = files
                     .Where(IsSupportedAudioFile)
                     .ToList();
+                var unsupported = files
+                    .Where(path => !IsSupportedAudioFile(path))
+                    .ToList();
+                LogUnsupportedDroppedFiles(unsupported);
 
-                if (files.Count == 0)
+                if (supported.Count == 0)
                 {
-                    AddLog(L("目录无可用音频", "No audio files in directory"), L("当前目录未找到 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS 文件", "No WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS files found in this directory"), false, true, null, LogIconTone.Warning);
+                    AddLog(L("目录无可用音频", "No audio files in directory"), BuildDirectoryNoAudioDetail(), false, true, null, LogIconTone.Warning);
                 }
 
-                return files;
+                return supported;
             }
             catch (Exception ex)
             {
@@ -889,7 +899,7 @@ public sealed partial class DetectViewModel : ObservableObject
             return new[] { sourcePath };
         }
 
-        AddLog(L("不支持的输入源", "Unsupported input source"), L("请选择 WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS 文件或包含这些文件的目录", "Select a WAV / FLAC / MP3 / OGG / OPUS / M4A / ALAC / MP4 / MKV / TS file or a directory containing these files"), false, true, null, LogIconTone.Warning);
+        AddLog(L("不支持的输入源", "Unsupported input source"), BuildUnsupportedInputDetail(), false, true, null, LogIconTone.Warning);
         return Array.Empty<string>();
     }
 
@@ -947,7 +957,73 @@ public sealed partial class DetectViewModel : ObservableObject
     private bool IsSupportedAudioFile(string path)
     {
         var ext = Path.GetExtension(path);
-        return _supportedAudioExtensions.Contains(ext);
+        return EffectiveSupportedAudioExtensions().Contains(ext, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private IReadOnlyList<string> EffectiveSupportedAudioExtensions()
+    {
+        return _appState.EffectiveSupportedInputExtensions();
+    }
+
+    private string SupportedExtensionsDisplay()
+    {
+        return _appState.EffectiveSupportedInputExtensionsDisplay;
+    }
+
+    private string BuildDirectoryNoAudioDetail()
+    {
+        var extText = SupportedExtensionsDisplay();
+        return _appState.UsingFallbackInputExtensions
+            ? L(
+                $"当前目录未找到 {extText} 文件（按默认支持集合处理）",
+                $"No {extText} files found in this directory (fallback set applied)")
+            : L(
+                $"当前目录未找到 {extText} 文件",
+                $"No {extText} files found in this directory");
+    }
+
+    private string BuildUnsupportedInputDetail()
+    {
+        var extText = SupportedExtensionsDisplay();
+        return _appState.UsingFallbackInputExtensions
+            ? L(
+                $"请选择 {extText} 文件或包含这些文件的目录。当前按默认集合处理，运行时缺少 demuxer 时仍可能失败",
+                $"Select a {extText} file or directory containing these files. Using fallback set now; execution can still fail if demuxers are missing")
+            : L(
+                $"请选择 {extText} 文件或包含这些文件的目录",
+                $"Select a {extText} file or directory containing these files");
+    }
+
+    private void LogUnsupportedDroppedFiles(IReadOnlyList<string> unsupported)
+    {
+        if (unsupported.Count == 0)
+        {
+            return;
+        }
+
+        var unique = unsupported
+            .Select(NormalizedPathKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (unique.Count == 0)
+        {
+            return;
+        }
+
+        var preview = string.Join(", ", unique.Take(3).Select(Path.GetFileName));
+        var remain = unique.Count - Math.Min(unique.Count, 3);
+        var detail = remain <= 0
+            ? L($"已跳过 {unique.Count} 个不支持文件：{preview}", $"Skipped {unique.Count} unsupported file(s): {preview}")
+            : L($"已跳过 {unique.Count} 个不支持文件：{preview} 等 {remain} 个", $"Skipped {unique.Count} unsupported file(s): {preview} and {remain} more");
+
+        AddLog(
+            L("已跳过不支持文件", "Skipped unsupported files"),
+            detail,
+            false,
+            true,
+            null,
+            LogIconTone.Warning
+        );
     }
 
     private void InsertDetectRecord(DetectRecord record)
