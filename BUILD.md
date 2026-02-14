@@ -50,7 +50,17 @@ dotnet build winui-app/AWMKit/AWMKit.csproj -c Debug -p:Platform=x64
 
 单文件发布参考：`docs/winui-publish-size-experiments.md`
 
-## 6. 必要前置
+## 6. Windows 本地一键（同目录管理）
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/local-build-test-win.ps1
+```
+
+- 默认将构建输出放在仓库内 `target-local/`（不使用 `C:`）。
+- 默认清理可重建目录（`ffmpeg-dist`、`ffmpeg-dev`、`target-local`）。
+- 可选深度清理（空间紧张时）：`-DeepClean $true`。
+
+## 7. 必要前置
 
 - bundled 资源需可用：
   - `bundled/audiowmark-macos-arm64.zip`
