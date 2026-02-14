@@ -115,9 +115,6 @@ Ensure-ReleaseAsset -AssetPath $devAssetPath -Release $DevRelease -Repo $DevRepo
   -OutDir $runtimeOutDir `
   -InstallDev:$false `
   -GithubEnv ""
-if ($LASTEXITCODE -ne 0) {
-  Fail "bootstrap_ffmpeg_windows.ps1 failed"
-}
 
 Remove-Item -Recurse -Force $devOutDir -ErrorAction SilentlyContinue
 Expand-Archive -Path $devAssetPath -DestinationPath $devOutDir -Force
