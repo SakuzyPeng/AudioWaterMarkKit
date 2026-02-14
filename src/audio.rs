@@ -892,7 +892,13 @@ fn clamp_sample_to_bits(sample: i32, bits_per_sample: u16) -> i32 {
 
 /// 字节数组转 hex 字符串
 fn bytes_to_hex(bytes: &[u8]) -> String {
-    hex::encode(bytes)
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for &byte in bytes {
+        out.push(char::from(HEX[usize::from(byte >> 4)]));
+        out.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    out
 }
 
 /// hex 字符串转字节数组
