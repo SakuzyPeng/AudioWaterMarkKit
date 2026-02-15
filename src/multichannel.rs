@@ -495,6 +495,139 @@ impl MultichannelAudio {
         }
     }
 
+    /// 序列化为 WAV 字节（不写文件，供内存管道使用）
+    #[cfg(feature = "multichannel")]
+    pub fn to_wav_bytes(&self) -> Result<Vec<u8>> {
+        let channels = self.num_channels();
+        let sample_width: usize = match self.sample_format {
+            SampleFormat::Int16 => 2,
+            SampleFormat::Int24 => 3,
+            SampleFormat::Int32 | SampleFormat::Float32 => 4,
+        };
+        let num_samples = self.num_samples();
+        let data_size = num_samples * channels * sample_width;
+
+        let mut buf = Vec::with_capacity(44 + data_size);
+
+        // RIFF header
+        buf.extend_from_slice(b"RIFF");
+        let riff_size = u32::try_from(data_size + 36).map_err(|_| {
+            Error::InvalidInput("audio data too large for WAV format".to_string())
+        })?;
+        buf.extend_from_slice(&riff_size.to_le_bytes());
+        buf.extend_from_slice(b"WAVE");
+
+        // fmt chunk
+        buf.extend_from_slice(b"fmt ");
+        buf.extend_from_slice(&16u32.to_le_bytes());
+        let format_tag: u16 = if matches!(self.sample_format, SampleFormat::Float32) { 3 } else { 1 };
+        buf.extend_from_slice(&format_tag.to_le_bytes());
+        let ch_u16 = u16::try_from(channels).map_err(|_| {
+            Error::InvalidInput("channel count overflow for WAV header".to_string())
+        })?;
+        buf.extend_from_slice(&ch_u16.to_le_bytes());
+        buf.extend_from_slice(&self.sample_rate.to_le_bytes());
+        let byte_rate = self.sample_rate * u32::from(ch_u16) * sample_width as u32;
+        buf.extend_from_slice(&byte_rate.to_le_bytes());
+        let block_align = ch_u16 * sample_width as u16;
+        buf.extend_from_slice(&block_align.to_le_bytes());
+        let bits: u16 = sample_width as u16 * 8;
+        buf.extend_from_slice(&bits.to_le_bytes());
+
+        // data chunk
+        buf.extend_from_slice(b"data");
+        let data_size_u32 = u32::try_from(data_size).map_err(|_| {
+            Error::InvalidInput("audio data too large for WAV format".to_string())
+        })?;
+        buf.extend_from_slice(&data_size_u32.to_le_bytes());
+
+        // 交错样本
+        for i in 0..num_samples {
+            for ch in &self.channels {
+                match self.sample_format {
+                    SampleFormat::Int16 => {
+                        let v = i16::try_from(ch[i]).map_err(|_| {
+                            Error::InvalidInput(format!("sample out of 16-bit range at index {i}"))
+                        })?;
+                        buf.extend_from_slice(&v.to_le_bytes());
+                    }
+                    SampleFormat::Int24 => {
+                        let s = ch[i];
+                        buf.push((s & 0xFF) as u8);
+                        buf.push(((s >> 8) & 0xFF) as u8);
+                        buf.push(((s >> 16) & 0xFF) as u8);
+                    }
+                    SampleFormat::Int32 => {
+                        buf.extend_from_slice(&ch[i].to_le_bytes());
+                    }
+                    SampleFormat::Float32 => {
+                        let clamped = (ch[i] >> 16).clamp(i32::from(i16::MIN), i32::from(i16::MAX));
+                        let sample_i16 = i16::try_from(clamped).map_err(|_| {
+                            Error::InvalidInput(format!("float32 sample out of range at index {i}"))
+                        })?;
+                        let f = f32::from(sample_i16) / f32::from(i16::MAX);
+                        buf.extend_from_slice(&f.to_bits().to_le_bytes());
+                    }
+                }
+            }
+        }
+
+        Ok(buf)
+    }
+
+    /// 从 WAV 字节反序列化（不读文件，供内存管道使用）
+    ///
+    /// 自动处理 audiowmark `--output-format wav-pipe` 输出的 `RIFF ffffffff`
+    /// 流式格式（hound 拒绝此格式，需先修复大小字段）。
+    #[cfg(feature = "multichannel")]
+    pub fn from_wav_bytes(bytes: &[u8]) -> Result<Self> {
+        use hound::WavReader;
+        use std::io::Cursor;
+
+        let normalized = normalize_wav_pipe_sizes(bytes);
+        let reader = WavReader::new(Cursor::new(normalized.as_ref()))
+            .map_err(|e| Error::InvalidInput(format!("failed to parse WAV bytes: {e}")))?;
+
+        let spec = reader.spec();
+        let num_channels = spec.channels as usize;
+        let sample_rate = spec.sample_rate;
+
+        let sample_format = match (spec.sample_format, spec.bits_per_sample) {
+            (hound::SampleFormat::Int, 16) => SampleFormat::Int16,
+            (hound::SampleFormat::Int, 24) => SampleFormat::Int24,
+            (hound::SampleFormat::Int, 32) => SampleFormat::Int32,
+            (hound::SampleFormat::Float, 32) => SampleFormat::Float32,
+            _ => {
+                return Err(Error::InvalidInput(format!(
+                    "unsupported sample format: {:?} {}bit",
+                    spec.sample_format, spec.bits_per_sample
+                )))
+            }
+        };
+
+        let all_samples: Vec<i32> = match sample_format {
+            SampleFormat::Float32 => reader
+                .into_samples::<f32>()
+                .map(|s| {
+                    s.map(scale_float_to_i32)
+                        .map_err(|e| Error::InvalidInput(format!("read error: {e}")))
+                })
+                .collect::<Result<Vec<_>>>()?,
+            _ => reader
+                .into_samples::<i32>()
+                .map(|s| s.map_err(|e| Error::InvalidInput(format!("read error: {e}"))))
+                .collect::<Result<Vec<_>>>()?,
+        };
+
+        let num_samples = all_samples.len() / num_channels;
+        let mut channels = vec![Vec::with_capacity(num_samples); num_channels];
+        for (i, sample) in all_samples.into_iter().enumerate() {
+            channels[i % num_channels].push(sample);
+        }
+
+        Self::new(channels, sample_rate, sample_format)
+    }
+
     /// 保存为 WAV 文件
     #[cfg(feature = "multichannel")]
     pub fn to_wav<P: AsRef<Path>>(&self, path: P) -> Result<()> {
@@ -686,6 +819,49 @@ impl MultichannelAudio {
 
         Ok(())
     }
+}
+
+/// audiowmark `--output-format wav-pipe` 输出 RIFF/data chunk 大小为 `0xFFFF_FFFF`（流式未知长度）。
+/// hound 拒绝此格式；将大小字段修复为实际值后再交给 hound 解析。
+///
+/// 若 RIFF size 不为 `0xFFFF_FFFF` 则直接借用原始切片，不做任何复制。
+#[cfg(feature = "multichannel")]
+fn normalize_wav_pipe_sizes(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
+    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || bytes[4..8] != [0xFF_u8; 4] {
+        return std::borrow::Cow::Borrowed(bytes);
+    }
+
+    let mut patched = bytes.to_vec();
+
+    // 修复 RIFF chunk 大小（整个文件减去 8 字节头）
+    let riff_payload = u32::try_from(patched.len().saturating_sub(8)).unwrap_or(u32::MAX);
+    patched[4..8].copy_from_slice(&riff_payload.to_le_bytes());
+
+    // 扫描 sub-chunk，找到 data chunk 并修复其大小
+    let mut pos = 12usize; // 跳过 RIFF(4) + size(4) + WAVE(4)
+    while pos.saturating_add(8) <= patched.len() {
+        let chunk_size =
+            u32::from_le_bytes([patched[pos + 4], patched[pos + 5], patched[pos + 6], patched[pos + 7]]);
+        if &patched[pos..pos + 4] == b"data" {
+            let data_payload =
+                u32::try_from(patched.len().saturating_sub(pos + 8)).unwrap_or(u32::MAX);
+            patched[pos + 4..pos + 8].copy_from_slice(&data_payload.to_le_bytes());
+            break;
+        }
+        // chunk_size 为 0xFFFF_FFFF 说明遇到另一个未知长度 chunk，无法前进
+        let chunk_size_usize = usize::try_from(chunk_size).unwrap_or(usize::MAX);
+        let padded = usize::from(chunk_size_usize % 2 != 0);
+        let next_pos = pos
+            .saturating_add(8)
+            .saturating_add(chunk_size_usize)
+            .saturating_add(padded);
+        if next_pos <= pos {
+            break;
+        }
+        pos = next_pos;
+    }
+
+    std::borrow::Cow::Owned(patched)
 }
 
 fn scale_float_to_i32(sample: f32) -> i32 {

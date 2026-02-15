@@ -3,8 +3,13 @@
 //! 封装 audiowmark 命令行工具
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::{fs::File, io::Read};
+use std::process::{Command, Output, Stdio};
+use std::sync::OnceLock;
+use std::{
+    fs,
+    fs::File,
+    io::{Read, Write},
+};
 
 use crate::error::{Error, Result};
 #[cfg(any(feature = "ffmpeg-decode", feature = "multichannel"))]
@@ -17,6 +22,8 @@ use crate::multichannel::{
     build_smart_route_plan, ChannelLayout, MultichannelAudio, RouteMode, RouteStep,
     DEFAULT_LFE_MODE,
 };
+#[cfg(feature = "multichannel")]
+use rayon::prelude::*;
 
 /// audiowmark 默认搜索路径（无官方包，仅供开发者本地编译后使用）
 #[cfg(not(feature = "bundled"))]
@@ -115,6 +122,12 @@ enum InputPrepareStrategy {
     DecodeToWav,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AwmIoMode {
+    Pipe,
+    File,
+}
+
 struct TempDirGuard {
     path: PathBuf,
 }
@@ -128,6 +141,24 @@ impl Drop for TempDirGuard {
 struct PreparedInput {
     path: PathBuf,
     _guard: Option<TempDirGuard>,
+}
+
+static PIPE_IO_FALLBACK_WARNED: OnceLock<()> = OnceLock::new();
+
+#[cfg(feature = "multichannel")]
+#[derive(Debug)]
+struct EmbedStepTaskResult {
+    step_idx: usize,
+    step: RouteStep,
+    outcome: Result<MultichannelAudio>,
+}
+
+#[cfg(feature = "multichannel")]
+#[derive(Debug)]
+struct DetectStepTaskResult {
+    step_idx: usize,
+    step: RouteStep,
+    outcome: Option<DetectResult>,
 }
 
 impl Audio {
@@ -213,28 +244,7 @@ impl Audio {
         validate_embed_output_path(output.as_ref())?;
         let prepared = prepare_input_for_audiowmark(input.as_ref(), "embed_input")?;
         let hex = bytes_to_hex(message);
-
-        let mut cmd = self.audiowmark_command();
-        cmd.arg("add")
-            .arg("--strength")
-            .arg(self.strength.to_string());
-
-        if let Some(ref key_file) = self.key_file {
-            cmd.arg("--key").arg(key_file);
-        }
-
-        cmd.arg(&prepared.path).arg(output.as_ref()).arg(&hex);
-
-        let output = cmd
-            .output()
-            .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(Error::AudiowmarkExec(stderr.to_string()));
-        }
-
-        Ok(())
+        run_audiowmark_add_prepared(self, &prepared.path, output.as_ref(), &hex)
     }
 
     /// 便捷方法：编码消息并嵌入
@@ -260,24 +270,9 @@ impl Audio {
     /// 检测结果，如果没有检测到水印返回 None
     pub fn detect<P: AsRef<Path>>(&self, input: P) -> Result<Option<DetectResult>> {
         let prepared = prepare_input_for_audiowmark(input.as_ref(), "detect_input")?;
-        let mut cmd = self.audiowmark_command();
-        cmd.arg("get");
-
-        if let Some(ref key_file) = self.key_file {
-            cmd.arg("--key").arg(key_file);
-        }
-
-        cmd.arg(&prepared.path);
-
-        let output = cmd
-            .output()
-            .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
-
-        // audiowmark 在没有检测到水印时可能返回非零状态
+        let output = run_audiowmark_get_prepared(self, &prepared.path)?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-
-        // 解析输出
         Ok(parse_detect_output(&stdout, &stderr))
     }
 
@@ -373,39 +368,26 @@ impl Audio {
         let route_plan = build_smart_route_plan(layout, num_channels, DEFAULT_LFE_MODE);
         log_route_warnings("embed", input, &route_plan.warnings);
 
-        let temp_dir = create_temp_dir("awmkit_embed_smart")?;
-        let _guard = TempDirGuard {
-            path: temp_dir.clone(),
-        };
+        let executable_steps: Vec<(usize, RouteStep)> = route_plan
+            .steps
+            .iter()
+            .enumerate()
+            .filter(|(_, step)| !matches!(step.mode, RouteMode::Skip { .. }))
+            .map(|(idx, step)| (idx, step.clone()))
+            .collect();
+        let parallelism = compute_route_parallelism(executable_steps.len());
+        let mut step_results = with_route_thread_pool(parallelism, || {
+            executable_steps
+                .par_iter()
+                .map(|(step_idx, step)| EmbedStepTaskResult {
+                    step_idx: *step_idx,
+                    step: step.clone(),
+                    outcome: run_embed_step_task(self, &audio, step, message),
+                })
+                .collect::<Vec<_>>()
+        })?;
 
-        for (step_idx, step) in route_plan.steps.iter().enumerate() {
-            if matches!(step.mode, RouteMode::Skip { .. }) {
-                continue;
-            }
-
-            let temp_input = temp_dir.join(format!("route_{step_idx}_in.wav"));
-            let temp_output = temp_dir.join(format!("route_{step_idx}_out.wav"));
-            let stereo = build_stereo_for_route_step(&audio, step)?;
-            stereo.to_wav(&temp_input)?;
-
-            match self.embed(&temp_input, &temp_output, message) {
-                Ok(()) => {
-                    let processed = MultichannelAudio::from_wav(&temp_output)?;
-                    if let Err(err) = apply_processed_route_step(&mut audio, step, &processed) {
-                        eprintln!(
-                            "Warning: Failed to apply routed embed result for {}: {err}",
-                            step.name
-                        );
-                    }
-                }
-                Err(err) => {
-                    eprintln!(
-                        "Warning: Failed to embed in route step {}: {err}",
-                        step.name
-                    );
-                }
-            }
-        }
+        apply_embed_step_results(&mut audio, &mut step_results);
 
         // 当前仅支持输出 WAV（FLAC 输出已暂时下线）。
         audio.to_wav(output)?;
@@ -462,38 +444,27 @@ impl Audio {
         let route_plan = build_smart_route_plan(layout, num_channels, DEFAULT_LFE_MODE);
         log_route_warnings("detect", input, &route_plan.warnings);
 
-        let temp_dir = create_temp_dir("awmkit_detect_smart")?;
-        let _guard = TempDirGuard {
-            path: temp_dir.clone(),
-        };
+        let detect_steps: Vec<(usize, RouteStep)> = route_plan
+            .detectable_steps()
+            .into_iter()
+            .map(|(idx, step)| (idx, step.clone()))
+            .collect();
+        let parallelism = compute_route_parallelism(detect_steps.len());
+        let step_results = with_route_thread_pool(parallelism, || {
+            detect_steps
+                .par_iter()
+                .map(|(step_idx, step)| {
+                    let outcome = run_detect_step_task(self, &audio, step)?;
+                    Ok::<DetectStepTaskResult, Error>(DetectStepTaskResult {
+                        step_idx: *step_idx,
+                        step: step.clone(),
+                        outcome,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()
+        })??;
 
-        let mut pairs_results = Vec::new();
-        let mut best: Option<DetectResult> = None;
-
-        for (result_idx, (step_idx, step)) in route_plan.detectable_steps().into_iter().enumerate()
-        {
-            let temp_file = temp_dir.join(format!("route_{step_idx}_detect.wav"));
-            let stereo = build_stereo_for_route_step(&audio, step)?;
-            stereo.to_wav(&temp_file)?;
-
-            // 检测水印
-            let result = self.detect(&temp_file)?;
-
-            // 更新最佳结果 (选择比特错误最少的)
-            if let Some(ref r) = result {
-                if best.is_none() || r.bit_errors < best.as_ref().map_or(u32::MAX, |b| b.bit_errors)
-                {
-                    best = Some(r.clone());
-                }
-            }
-
-            pairs_results.push((result_idx, step.name.clone(), result));
-        }
-
-        Ok(MultichannelDetectResult {
-            pairs: pairs_results,
-            best,
-        })
+        Ok(finalize_detect_step_results(step_results))
     }
 
     /// 便捷方法：多声道嵌入 (使用 Tag)
@@ -595,6 +566,260 @@ impl Default for Audio {
     }
 }
 
+fn run_audiowmark_add_prepared(
+    audio: &Audio,
+    prepared_input: &Path,
+    output: &Path,
+    message_hex: &str,
+) -> Result<()> {
+    if matches!(effective_awmiomode(), AwmIoMode::File) {
+        return run_audiowmark_add_file(audio, prepared_input, output, message_hex);
+    }
+    match run_audiowmark_add_pipe(audio, prepared_input, output, message_hex) {
+        Ok(()) => Ok(()),
+        Err(err) if should_fallback_pipe_error(&err) => {
+            warn_pipe_fallback_once("add", &err);
+            run_audiowmark_add_file(audio, prepared_input, output, message_hex)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn run_audiowmark_get_prepared(audio: &Audio, prepared_input: &Path) -> Result<Output> {
+    if matches!(effective_awmiomode(), AwmIoMode::File) {
+        return run_audiowmark_get_file(audio, prepared_input);
+    }
+    match run_audiowmark_get_pipe(audio, prepared_input) {
+        Ok(output) => Ok(output),
+        Err(err) if should_fallback_pipe_error(&err) => {
+            warn_pipe_fallback_once("get", &err);
+            run_audiowmark_get_file(audio, prepared_input)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn run_audiowmark_add_file(
+    audio: &Audio,
+    prepared_input: &Path,
+    output: &Path,
+    message_hex: &str,
+) -> Result<()> {
+    let mut cmd = audio.audiowmark_command();
+    cmd.arg("add")
+        .arg("--strength")
+        .arg(audio.strength.to_string());
+
+    if let Some(ref key_file) = audio.key_file {
+        cmd.arg("--key").arg(key_file);
+    }
+
+    cmd.arg(prepared_input).arg(output).arg(message_hex);
+    let output = cmd
+        .output()
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(Error::AudiowmarkExec(stderr.to_string()));
+    }
+    Ok(())
+}
+
+fn run_audiowmark_get_file(audio: &Audio, prepared_input: &Path) -> Result<Output> {
+    let mut cmd = audio.audiowmark_command();
+    cmd.arg("get");
+
+    if let Some(ref key_file) = audio.key_file {
+        cmd.arg("--key").arg(key_file);
+    }
+
+    cmd.arg(prepared_input);
+    cmd.output()
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))
+}
+
+fn run_audiowmark_add_bytes(
+    audio: &Audio,
+    input_bytes: Vec<u8>,
+    message_hex: &str,
+) -> Result<Vec<u8>> {
+    let mut cmd = audio.audiowmark_command();
+    cmd.arg("add")
+        .arg("--strength")
+        .arg(audio.strength.to_string())
+        .arg("--input-format")
+        .arg("wav-pipe")
+        .arg("--output-format")
+        .arg("wav-pipe");
+
+    if let Some(ref key_file) = audio.key_file {
+        cmd.arg("--key").arg(key_file);
+    }
+
+    cmd.arg("-").arg("-").arg(message_hex);
+    let process_output = run_command_with_stdin(&mut cmd, input_bytes)?;
+    if !process_output.status.success() {
+        let stderr = String::from_utf8_lossy(&process_output.stderr);
+        return Err(Error::AudiowmarkExec(stderr.to_string()));
+    }
+    if !looks_like_wav_stream(&process_output.stdout) {
+        return Err(Error::AudiowmarkExec(
+            "pipe output is not a valid WAV stream".to_string(),
+        ));
+    }
+    // audiowmark --output-format wav-pipe 输出 RIFF ffffffff（流式未知长度），
+    // 修复大小字段使输出可被 hound 等工具正常读取。
+    Ok(normalize_wav_pipe_output(process_output.stdout))
+}
+
+fn run_audiowmark_get_bytes(audio: &Audio, input_bytes: Vec<u8>) -> Result<Output> {
+    let mut cmd = audio.audiowmark_command();
+    cmd.arg("get");
+
+    if let Some(ref key_file) = audio.key_file {
+        cmd.arg("--key").arg(key_file);
+    }
+
+    cmd.arg("-");
+    let output = run_command_with_stdin(&mut cmd, input_bytes)?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if is_pipe_compatibility_error(&stderr) {
+            return Err(Error::AudiowmarkExec(stderr.to_string()));
+        }
+    }
+    Ok(output)
+}
+
+fn run_audiowmark_add_pipe(
+    audio: &Audio,
+    prepared_input: &Path,
+    output: &Path,
+    message_hex: &str,
+) -> Result<()> {
+    let input_bytes = fs::read(prepared_input)?;
+    let wav_bytes = run_audiowmark_add_bytes(audio, input_bytes, message_hex)?;
+    fs::write(output, &wav_bytes)?;
+    Ok(())
+}
+
+fn run_audiowmark_get_pipe(audio: &Audio, prepared_input: &Path) -> Result<Output> {
+    let input_bytes = fs::read(prepared_input)?;
+    run_audiowmark_get_bytes(audio, input_bytes)
+}
+
+fn run_command_with_stdin(cmd: &mut Command, stdin_data: Vec<u8>) -> Result<Output> {
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+
+    // 用独立线程写 stdin，避免 stdout 缓冲区满时死锁
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| Error::AudiowmarkExec("failed to take stdin handle".to_string()))?;
+    let writer = std::thread::spawn(move || stdin.write_all(&stdin_data));
+
+    let output = child
+        .wait_with_output()
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+
+    writer
+        .join()
+        .map_err(|_| Error::AudiowmarkExec("stdin writer thread panicked".to_string()))?
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+
+    Ok(output)
+}
+
+fn effective_awmiomode() -> AwmIoMode {
+    if std::env::var("AWMKIT_DISABLE_PIPE_IO")
+        .ok()
+        .is_some_and(|value| parse_env_flag(&value))
+    {
+        AwmIoMode::File
+    } else {
+        AwmIoMode::Pipe
+    }
+}
+
+fn parse_env_flag(value: &str) -> bool {
+    let normalized = value.trim().to_ascii_lowercase();
+    matches!(normalized.as_str(), "1" | "true" | "yes" | "on")
+}
+
+fn looks_like_wav_stream(bytes: &[u8]) -> bool {
+    if bytes.len() < 12 {
+        return false;
+    }
+    let riff_like = &bytes[0..4];
+    let wave = &bytes[8..12];
+    (riff_like == b"RIFF" || riff_like == b"RF64" || riff_like == b"BW64") && wave == b"WAVE"
+}
+
+/// audiowmark `--output-format wav-pipe` 输出 RIFF/data chunk size 为 `0xFFFF_FFFF`。
+/// 修复大小字段，使返回的字节序列成为合法的标准 WAV，可被 hound 等工具直接读取。
+fn normalize_wav_pipe_output(mut bytes: Vec<u8>) -> Vec<u8> {
+    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || bytes[4..8] != [0xFF_u8; 4] {
+        return bytes;
+    }
+
+    // 修复 RIFF chunk 大小
+    let riff_payload = u32::try_from(bytes.len().saturating_sub(8)).unwrap_or(u32::MAX);
+    bytes[4..8].copy_from_slice(&riff_payload.to_le_bytes());
+
+    // 扫描 sub-chunk，找到 data chunk 并修复其大小
+    let mut pos = 12usize;
+    while pos.saturating_add(8) <= bytes.len() {
+        let chunk_size =
+            u32::from_le_bytes([bytes[pos + 4], bytes[pos + 5], bytes[pos + 6], bytes[pos + 7]]);
+        if &bytes[pos..pos + 4] == b"data" {
+            let data_payload =
+                u32::try_from(bytes.len().saturating_sub(pos + 8)).unwrap_or(u32::MAX);
+            bytes[pos + 4..pos + 8].copy_from_slice(&data_payload.to_le_bytes());
+            break;
+        }
+        let chunk_size_usize = usize::try_from(chunk_size).unwrap_or(usize::MAX);
+        let padded = usize::from(chunk_size_usize % 2 != 0);
+        let next_pos = pos
+            .saturating_add(8)
+            .saturating_add(chunk_size_usize)
+            .saturating_add(padded);
+        if next_pos <= pos {
+            break;
+        }
+        pos = next_pos;
+    }
+
+    bytes
+}
+
+fn should_fallback_pipe_error(err: &Error) -> bool {
+    matches!(err, Error::AudiowmarkExec(_) | Error::Io(_))
+}
+
+fn is_pipe_compatibility_error(stderr: &str) -> bool {
+    let normalized = stderr.to_ascii_lowercase();
+    normalized.contains("unsupported option")
+        || normalized.contains("unrecognized option")
+        || normalized.contains("invalid option")
+        || normalized.contains("cannot open -")
+        || normalized.contains("cannot open '-'")
+        || normalized.contains("stdin")
+}
+
+fn warn_pipe_fallback_once(operation: &str, err: &Error) {
+    if PIPE_IO_FALLBACK_WARNED.get().is_none() {
+        let _ = PIPE_IO_FALLBACK_WARNED.set(());
+        eprintln!(
+            "Warning: audiowmark pipe I/O failed for {operation}, fallback to file I/O: {err}"
+        );
+    }
+}
+
 #[cfg(feature = "multichannel")]
 fn validate_layout_channels(layout: ChannelLayout, source_channels: usize) -> Result<()> {
     let layout_channels = usize::from(layout.channels());
@@ -614,6 +839,125 @@ fn log_route_warnings(operation: &str, input: &Path, warnings: &[String]) {
             "Warning: smart route fallback ({operation}) for {}: {warning}",
             input.display()
         );
+    }
+}
+
+#[cfg(feature = "multichannel")]
+fn compute_route_parallelism(step_count: usize) -> usize {
+    if step_count <= 1 {
+        return 1;
+    }
+    if let Some(forced) = route_parallelism_override() {
+        return step_count.min(forced).max(1);
+    }
+    let available = std::thread::available_parallelism()
+        .map(|value| value.get())
+        .unwrap_or(1);
+    step_count.min(available).max(1)
+}
+
+#[cfg(feature = "multichannel")]
+fn route_parallelism_override() -> Option<usize> {
+    let raw = std::env::var("AWMKIT_ROUTE_PARALLELISM").ok()?;
+    let parsed = raw.trim().parse::<usize>().ok()?;
+    Some(parsed.max(1))
+}
+
+#[cfg(feature = "multichannel")]
+fn with_route_thread_pool<F, R>(parallelism: usize, f: F) -> Result<R>
+where
+    F: FnOnce() -> R + Send,
+    R: Send,
+{
+    if parallelism <= 1 {
+        return Ok(f());
+    }
+
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(parallelism)
+        .build()
+        .map_err(|err| {
+            Error::AudiowmarkExec(format!("failed to build route thread pool: {err}"))
+        })?;
+    Ok(pool.install(f))
+}
+
+#[cfg(feature = "multichannel")]
+fn run_embed_step_task(
+    audio_engine: &Audio,
+    source_audio: &MultichannelAudio,
+    step: &RouteStep,
+    message: &[u8; MESSAGE_LEN],
+) -> Result<MultichannelAudio> {
+    let stereo = build_stereo_for_route_step(source_audio, step)?;
+    let input_bytes = stereo.to_wav_bytes()?;
+    let output_bytes = run_audiowmark_add_bytes(audio_engine, input_bytes, &bytes_to_hex(message))?;
+    MultichannelAudio::from_wav_bytes(&output_bytes)
+}
+
+#[cfg(feature = "multichannel")]
+fn run_detect_step_task(
+    audio_engine: &Audio,
+    source_audio: &MultichannelAudio,
+    step: &RouteStep,
+) -> Result<Option<DetectResult>> {
+    let stereo = build_stereo_for_route_step(source_audio, step)?;
+    let input_bytes = stereo.to_wav_bytes()?;
+    let output = run_audiowmark_get_bytes(audio_engine, input_bytes)?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    Ok(parse_detect_output(&stdout, &stderr))
+}
+
+#[cfg(feature = "multichannel")]
+fn apply_embed_step_results(
+    target: &mut MultichannelAudio,
+    step_results: &mut [EmbedStepTaskResult],
+) {
+    step_results.sort_by_key(|item| item.step_idx);
+    for step_result in step_results {
+        match &step_result.outcome {
+            Ok(processed) => {
+                if let Err(err) = apply_processed_route_step(target, &step_result.step, processed) {
+                    eprintln!(
+                        "Warning: Failed to apply routed embed result for {}: {err}",
+                        step_result.step.name
+                    );
+                }
+            }
+            Err(err) => {
+                eprintln!(
+                    "Warning: Failed to embed in route step {}: {err}",
+                    step_result.step.name
+                );
+            }
+        }
+    }
+}
+
+#[cfg(feature = "multichannel")]
+fn finalize_detect_step_results(
+    mut step_results: Vec<DetectStepTaskResult>,
+) -> MultichannelDetectResult {
+    step_results.sort_by_key(|item| item.step_idx);
+
+    let mut pairs_results = Vec::with_capacity(step_results.len());
+    let mut best: Option<DetectResult> = None;
+    for (result_idx, step_result) in step_results.into_iter().enumerate() {
+        let outcome = step_result.outcome;
+        if let Some(ref detected) = outcome {
+            if best.is_none()
+                || detected.bit_errors < best.as_ref().map_or(u32::MAX, |value| value.bit_errors)
+            {
+                best = Some(detected.clone());
+            }
+        }
+        pairs_results.push((result_idx, step_result.step.name.clone(), outcome));
+    }
+
+    MultichannelDetectResult {
+        pairs: pairs_results,
+        best,
     }
 }
 
@@ -968,6 +1312,7 @@ fn hex_to_bytes(hex: &str) -> Option<[u8; MESSAGE_LEN]> {
 mod tests {
     use super::*;
     use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
 
     #[test]
     fn test_bytes_to_hex() {
@@ -1126,6 +1471,64 @@ mod tests {
         let _ = std::fs::remove_file(path);
     }
 
+    #[test]
+    fn test_parse_env_flag_truthy_values() {
+        assert!(parse_env_flag("1"));
+        assert!(parse_env_flag("true"));
+        assert!(parse_env_flag("YES"));
+        assert!(parse_env_flag(" on "));
+        assert!(!parse_env_flag("0"));
+        assert!(!parse_env_flag("false"));
+    }
+
+    #[test]
+    fn test_looks_like_wav_stream() {
+        assert!(looks_like_wav_stream(b"RIFF\x00\x00\x00\x00WAVE"));
+        assert!(looks_like_wav_stream(b"RF64\x00\x00\x00\x00WAVE"));
+        assert!(looks_like_wav_stream(b"BW64\x00\x00\x00\x00WAVE"));
+        assert!(!looks_like_wav_stream(b"ID3\x04\x00\x00\x00\x00\x00\x00"));
+        assert!(!looks_like_wav_stream(b""));
+    }
+
+    #[test]
+    fn test_effective_awmiomode_respects_env() {
+        with_disable_pipe_env(None, || {
+            assert_eq!(effective_awmiomode(), AwmIoMode::Pipe);
+        });
+        with_disable_pipe_env(Some("1"), || {
+            assert_eq!(effective_awmiomode(), AwmIoMode::File);
+        });
+        with_disable_pipe_env(Some("true"), || {
+            assert_eq!(effective_awmiomode(), AwmIoMode::File);
+        });
+        with_disable_pipe_env(Some("0"), || {
+            assert_eq!(effective_awmiomode(), AwmIoMode::Pipe);
+        });
+    }
+
+    #[test]
+    fn test_pipe_compatibility_error_detection() {
+        assert!(is_pipe_compatibility_error(
+            "unsupported option '--stdin' for command 'get'"
+        ));
+        assert!(is_pipe_compatibility_error("cannot open '-'"));
+        assert!(is_pipe_compatibility_error("failed to read from stdin"));
+        assert!(!is_pipe_compatibility_error("no watermark found"));
+    }
+
+    #[test]
+    fn test_should_fallback_pipe_error_kinds() {
+        assert!(should_fallback_pipe_error(&Error::AudiowmarkExec(
+            "pipe not supported".to_string(),
+        )));
+        assert!(should_fallback_pipe_error(&Error::Io(
+            std::io::Error::other("broken pipe",)
+        )));
+        assert!(!should_fallback_pipe_error(&Error::InvalidInput(
+            "bad input".to_string(),
+        )));
+    }
+
     #[cfg(feature = "multichannel")]
     #[test]
     fn test_apply_processed_route_step_mono_only_updates_target_channel() {
@@ -1232,6 +1635,116 @@ mod tests {
         assert_eq!(detectable[2].1.name, "BL+BR");
     }
 
+    #[cfg(feature = "multichannel")]
+    #[test]
+    fn test_compute_route_parallelism_bounds() {
+        assert_eq!(compute_route_parallelism(0), 1);
+        assert_eq!(compute_route_parallelism(1), 1);
+        let available = std::thread::available_parallelism()
+            .map(|value| value.get())
+            .unwrap_or(1);
+        assert_eq!(compute_route_parallelism(available + 8), available);
+    }
+
+    #[cfg(feature = "multichannel")]
+    #[test]
+    fn test_apply_embed_step_results_sorted_and_non_blocking() {
+        let source = MultichannelAudio::new(
+            vec![vec![1, 2], vec![10, 20], vec![100, 200], vec![1000, 2000]],
+            48_000,
+            crate::multichannel::SampleFormat::Int24,
+        );
+        assert!(source.is_ok());
+        let Ok(mut source) = source else {
+            return;
+        };
+
+        let mono_processed = MultichannelAudio::new(
+            vec![vec![7, 8], vec![9, 9]],
+            48_000,
+            crate::multichannel::SampleFormat::Int24,
+        );
+        assert!(mono_processed.is_ok());
+        let Ok(mono_processed) = mono_processed else {
+            return;
+        };
+
+        let mut step_results = vec![
+            EmbedStepTaskResult {
+                step_idx: 1,
+                step: RouteStep {
+                    name: "FC(mono)".to_string(),
+                    mode: RouteMode::Mono(2),
+                },
+                outcome: Ok(mono_processed),
+            },
+            EmbedStepTaskResult {
+                step_idx: 0,
+                step: RouteStep {
+                    name: "FL+FR".to_string(),
+                    mode: RouteMode::Pair(0, 1),
+                },
+                outcome: Err(Error::AudiowmarkExec("mock embed failure".to_string())),
+            },
+        ];
+
+        apply_embed_step_results(&mut source, &mut step_results);
+        assert_eq!(step_results[0].step_idx, 0);
+        assert_eq!(step_results[1].step_idx, 1);
+
+        let ch0 = source.channel_samples(0);
+        let ch1 = source.channel_samples(1);
+        let ch2 = source.channel_samples(2);
+        let ch3 = source.channel_samples(3);
+        assert!(ch0.is_ok() && ch1.is_ok() && ch2.is_ok() && ch3.is_ok());
+        assert_eq!(ch0.unwrap_or(&[]), &[1, 2]);
+        assert_eq!(ch1.unwrap_or(&[]), &[10, 20]);
+        assert_eq!(ch2.unwrap_or(&[]), &[7, 8]);
+        assert_eq!(ch3.unwrap_or(&[]), &[1000, 2000]);
+    }
+
+    #[cfg(feature = "multichannel")]
+    #[test]
+    fn test_finalize_detect_step_results_sorted_and_best() {
+        let step_results = vec![
+            DetectStepTaskResult {
+                step_idx: 2,
+                step: RouteStep {
+                    name: "BL+BR".to_string(),
+                    mode: RouteMode::Pair(4, 5),
+                },
+                outcome: Some(DetectResult {
+                    raw_message: [2; MESSAGE_LEN],
+                    pattern: "single".to_string(),
+                    detect_score: Some(1.2),
+                    bit_errors: 5,
+                    match_found: true,
+                }),
+            },
+            DetectStepTaskResult {
+                step_idx: 0,
+                step: RouteStep {
+                    name: "FL+FR".to_string(),
+                    mode: RouteMode::Pair(0, 1),
+                },
+                outcome: Some(DetectResult {
+                    raw_message: [1; MESSAGE_LEN],
+                    pattern: "single".to_string(),
+                    detect_score: Some(1.8),
+                    bit_errors: 1,
+                    match_found: true,
+                }),
+            },
+        ];
+
+        let finalized = finalize_detect_step_results(step_results);
+        assert_eq!(finalized.pairs.len(), 2);
+        assert_eq!(finalized.pairs[0].1, "FL+FR");
+        assert_eq!(finalized.pairs[1].1, "BL+BR");
+        assert!(finalized.best.is_some());
+        assert_eq!(finalized.best.map(|value| value.bit_errors), Some(1));
+    }
+
     fn unique_temp_file(name: &str) -> PathBuf {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1243,5 +1756,31 @@ mod tests {
             nanos,
             name
         ))
+    }
+
+    fn with_disable_pipe_env(value: Option<&str>, f: impl FnOnce()) {
+        static ENV_LOCK: std::sync::OnceLock<Mutex<()>> = std::sync::OnceLock::new();
+        let lock = ENV_LOCK.get_or_init(|| Mutex::new(()));
+        let _guard = match lock.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        let prev = std::env::var("AWMKIT_DISABLE_PIPE_IO").ok();
+        match value {
+            Some(v) => {
+                std::env::set_var("AWMKIT_DISABLE_PIPE_IO", v);
+            }
+            None => {
+                std::env::remove_var("AWMKIT_DISABLE_PIPE_IO");
+            }
+        }
+
+        f();
+
+        match prev {
+            Some(v) => std::env::set_var("AWMKIT_DISABLE_PIPE_IO", v),
+            None => std::env::remove_var("AWMKIT_DISABLE_PIPE_IO"),
+        }
     }
 }

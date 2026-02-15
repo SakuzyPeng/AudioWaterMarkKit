@@ -60,9 +60,14 @@ pub(crate) struct ChunkIndex {
 }
 
 impl ChunkIndex {
+    /// 文件是否需要 ADM 专用路径处理。
+    ///
+    /// 仅有 `bext` 的普通 BWF 文件不需要此路径——audiowmark 可以直接
+    /// 处理其 PCM 数据，而无需精确保留 ADM 对象元数据。
+    /// 真正的 ADM 文件需要有 `axml`（对象路由 XML）或 `chna`（声道编号）chunk。
     #[must_use]
     pub const fn is_adm_or_bwf(&self) -> bool {
-        self.has_bext || self.has_axml || self.has_chna || self.has_ixml
+        self.has_axml || self.has_chna
     }
 }
 

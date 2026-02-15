@@ -87,38 +87,31 @@ fn embed_pairs_via_audiowmark(
     }
 
     let temp_dir = create_temp_dir("awmkit_adm_embed")?;
-    let pairs = source_audio.split_stereo_pairs();
-    let mut processed_pairs = Vec::with_capacity(pairs.len());
+    let temp_input = temp_dir.join("source_multichannel.wav");
+    let temp_output = temp_dir.join("embedded_multichannel.wav");
 
-    for (i, (left, right)) in pairs.into_iter().enumerate() {
-        let temp_input = temp_dir.join(format!("pair_{i}_in.wav"));
-        let temp_output = temp_dir.join(format!("pair_{i}_out.wav"));
-
-        let stereo = MultichannelAudio::new(
-            vec![left, right],
-            source_audio.sample_rate(),
-            source_audio.sample_format(),
+    let embed_result = (|| {
+        source_audio.to_wav(&temp_input)?;
+        audio_engine.embed_multichannel(
+            &temp_input,
+            &temp_output,
+            message,
+            Some(selected_layout),
         )?;
-        stereo.to_wav(&temp_input)?;
-        audio_engine.embed(&temp_input, &temp_output, message)?;
-
-        let processed = MultichannelAudio::from_wav(&temp_output)?;
-        let mut out_pairs = processed.split_stereo_pairs();
-        let processed_pair = out_pairs.drain(..).next().ok_or_else(|| {
-            Error::AdmPreserveFailed(format!("empty processed pair output at index {i}"))
+        // embed_multichannel 在 pipe 模式下输出 RIFF ffffffff 格式；
+        // 通过 from_wav_bytes 读取可自动修复大小字段。
+        let temp_bytes = fs::read(&temp_output).map_err(|e| {
+            crate::error::Error::AdmPreserveFailed(format!(
+                "failed to read embedded temp output: {e}"
+            ))
         })?;
-        processed_pairs.push(processed_pair);
+        MultichannelAudio::from_wav_bytes(&temp_bytes)
+    })();
 
-        let _ = fs::remove_file(&temp_input);
-        let _ = fs::remove_file(&temp_output);
-    }
-
+    let _ = fs::remove_file(&temp_input);
+    let _ = fs::remove_file(&temp_output);
     let _ = fs::remove_dir(&temp_dir);
-    MultichannelAudio::merge_stereo_pairs(
-        &processed_pairs,
-        source_audio.sample_rate(),
-        source_audio.sample_format(),
-    )
+    embed_result
 }
 
 fn validate_audio_shape(original: &MultichannelAudio, processed: &MultichannelAudio) -> Result<()> {
