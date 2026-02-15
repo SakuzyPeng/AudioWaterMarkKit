@@ -364,11 +364,8 @@ impl Audio {
                         // 立体声：字节管线直接完成，无需继续路由
                         if a.num_channels() == 2 {
                             let wav_bytes = a.to_wav_bytes()?;
-                            let out_bytes = run_audiowmark_add_bytes(
-                                self,
-                                wav_bytes,
-                                &bytes_to_hex(message),
-                            )?;
+                            let out_bytes =
+                                run_audiowmark_add_bytes(self, wav_bytes, &bytes_to_hex(message))?;
                             return MultichannelAudio::from_wav_bytes(&out_bytes)?.to_wav(output);
                         }
                         a
@@ -530,19 +527,9 @@ impl Audio {
 
         // 顺序检测声道对；bit_errors == 0 是全局最优（不可能更低），立即返回，
         // 跳过剩余声道对。有损伤的文件（所有对 bit_errors > 0）行为与之前相同。
-        let mut step_results: Vec<DetectStepTaskResult> = Vec::with_capacity(detect_steps.len());
-        for (step_idx, step) in &detect_steps {
-            let outcome = run_detect_step_task(self, &audio, step)?;
-            let perfect = outcome.as_ref().map_or(false, |r| r.bit_errors == 0);
-            step_results.push(DetectStepTaskResult {
-                step_idx: *step_idx,
-                step: step.clone(),
-                outcome,
-            });
-            if perfect {
-                break;
-            }
-        }
+        let step_results = collect_detect_step_results_with_early_exit(&detect_steps, |step| {
+            run_detect_step_task(self, &audio, step)
+        })?;
 
         Ok(finalize_detect_step_results(step_results))
     }
@@ -1374,6 +1361,32 @@ fn finalize_detect_step_results(
         pairs: pairs_results,
         best,
     }
+}
+
+#[cfg(feature = "multichannel")]
+fn collect_detect_step_results_with_early_exit<F>(
+    detect_steps: &[(usize, RouteStep)],
+    mut run_step: F,
+) -> Result<Vec<DetectStepTaskResult>>
+where
+    F: FnMut(&RouteStep) -> Result<Option<DetectResult>>,
+{
+    let mut step_results: Vec<DetectStepTaskResult> = Vec::with_capacity(detect_steps.len());
+    for (step_idx, step) in detect_steps {
+        let outcome = run_step(step)?;
+        let perfect = outcome
+            .as_ref()
+            .is_some_and(|result| result.bit_errors == 0);
+        step_results.push(DetectStepTaskResult {
+            step_idx: *step_idx,
+            step: step.clone(),
+            outcome,
+        });
+        if perfect {
+            break;
+        }
+    }
+    Ok(step_results)
 }
 
 #[cfg(feature = "multichannel")]
@@ -2236,6 +2249,145 @@ mod tests {
         assert_eq!(finalized.pairs[1].1, "BL+BR");
         assert!(finalized.best.is_some());
         assert_eq!(finalized.best.map(|value| value.bit_errors), Some(1));
+    }
+
+    #[cfg(feature = "multichannel")]
+    #[test]
+    fn test_collect_detect_step_results_early_exit_on_zero_bit_errors() {
+        let detect_steps = vec![
+            (
+                0,
+                RouteStep {
+                    name: "FL+FR".to_string(),
+                    mode: RouteMode::Pair(0, 1),
+                },
+            ),
+            (
+                1,
+                RouteStep {
+                    name: "FC(mono)".to_string(),
+                    mode: RouteMode::Mono(2),
+                },
+            ),
+            (
+                2,
+                RouteStep {
+                    name: "BL+BR".to_string(),
+                    mode: RouteMode::Pair(4, 5),
+                },
+            ),
+        ];
+
+        let outcomes = [
+            Some(DetectResult {
+                raw_message: [1; MESSAGE_LEN],
+                pattern: "single".to_string(),
+                detect_score: Some(1.8),
+                bit_errors: 2,
+                match_found: true,
+            }),
+            Some(DetectResult {
+                raw_message: [2; MESSAGE_LEN],
+                pattern: "single".to_string(),
+                detect_score: Some(2.0),
+                bit_errors: 0,
+                match_found: true,
+            }),
+            Some(DetectResult {
+                raw_message: [3; MESSAGE_LEN],
+                pattern: "single".to_string(),
+                detect_score: Some(2.1),
+                bit_errors: 5,
+                match_found: true,
+            }),
+        ];
+
+        let mut calls = 0usize;
+        let step_results = collect_detect_step_results_with_early_exit(&detect_steps, |_step| {
+            let idx = calls;
+            calls += 1;
+            Ok(outcomes.get(idx).cloned().flatten())
+        });
+        assert!(step_results.is_ok());
+        let step_results = step_results.unwrap_or_default();
+
+        assert_eq!(calls, 2);
+        assert_eq!(step_results.len(), 2);
+        assert_eq!(step_results[0].step_idx, 0);
+        assert_eq!(step_results[1].step_idx, 1);
+        assert_eq!(
+            step_results[1]
+                .outcome
+                .as_ref()
+                .map(|value| value.bit_errors),
+            Some(0)
+        );
+    }
+
+    #[cfg(feature = "multichannel")]
+    #[test]
+    fn test_collect_detect_step_results_runs_all_when_no_zero_bit_errors() {
+        let detect_steps = vec![
+            (
+                0,
+                RouteStep {
+                    name: "FL+FR".to_string(),
+                    mode: RouteMode::Pair(0, 1),
+                },
+            ),
+            (
+                1,
+                RouteStep {
+                    name: "FC(mono)".to_string(),
+                    mode: RouteMode::Mono(2),
+                },
+            ),
+            (
+                2,
+                RouteStep {
+                    name: "BL+BR".to_string(),
+                    mode: RouteMode::Pair(4, 5),
+                },
+            ),
+        ];
+
+        let outcomes = [
+            Some(DetectResult {
+                raw_message: [1; MESSAGE_LEN],
+                pattern: "single".to_string(),
+                detect_score: Some(1.2),
+                bit_errors: 4,
+                match_found: true,
+            }),
+            None,
+            Some(DetectResult {
+                raw_message: [3; MESSAGE_LEN],
+                pattern: "single".to_string(),
+                detect_score: Some(1.6),
+                bit_errors: 1,
+                match_found: true,
+            }),
+        ];
+
+        let mut calls = 0usize;
+        let step_results = collect_detect_step_results_with_early_exit(&detect_steps, |_step| {
+            let idx = calls;
+            calls += 1;
+            Ok(outcomes.get(idx).cloned().flatten())
+        });
+        assert!(step_results.is_ok());
+        let step_results = step_results.unwrap_or_default();
+
+        assert_eq!(calls, 3);
+        assert_eq!(step_results.len(), 3);
+        assert_eq!(step_results[2].step_idx, 2);
+        assert_eq!(
+            step_results[2]
+                .outcome
+                .as_ref()
+                .map(|value| value.bit_errors),
+            Some(1)
+        );
     }
 
     fn unique_temp_file(name: &str) -> PathBuf {
