@@ -443,95 +443,46 @@ impl Audio {
         layout: Option<ChannelLayout>,
     ) -> Result<MultichannelDetectResult> {
         let input = input.as_ref();
-        if media::adm_bwav::probe_adm_bwf(input)?.is_some() {
-            return Err(Error::AdmUnsupported(
-                "ADM/BWF detect is not supported in this phase".to_string(),
-            ));
-        }
 
-        let mut prepared_fallback: Option<PreparedInput> = None;
+        // ADM/BWF 路径：直接从 data chunk 读 PCM，跳过 FFmpeg 解码，保留所有非音频 chunk 语义。
+        if let Some(ref index) = media::adm_bwav::probe_adm_bwf(input)? {
+            let audio = media::adm_embed::decode_pcm_audio(input, index)?;
+            return detect_multichannel_from_audio(self, audio, None, input, layout);
+        }
 
         // 加载多声道音频以检测声道数。
         // 优先尝试原始输入，避免对可直接读取的 WAV/FLAC 先做不必要的临时解码。
         // 若失败则先尝试内存解码管线（DecodedPcm → MultichannelAudio，无临时文件）；
         // 仍失败则 prepare/临时文件兜底；最终失败回退到立体声路径。
-        let audio = match MultichannelAudio::from_file(input) {
-            Ok(a) => a,
-            Err(Error::InvalidInput(_)) => {
-                // 内存管线：decode → MultichannelAudio，跳过临时文件
-                match decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel) {
-                    Ok(a) => {
-                        // 立体声：字节管线直接完成，无需继续路由
-                        if a.num_channels() == 2 {
-                            let wav_bytes = a.to_wav_bytes()?;
-                            let raw = run_audiowmark_get_bytes(self, wav_bytes)?;
-                            let stdout = String::from_utf8_lossy(&raw.stdout);
-                            let stderr = String::from_utf8_lossy(&raw.stderr);
-                            let result = parse_detect_output(&stdout, &stderr);
-                            return Ok(MultichannelDetectResult {
-                                pairs: vec![(0, "FL+FR".to_string(), result.clone())],
-                                best: result,
-                            });
-                        }
-                        a
-                    }
-                    Err(_) => {
-                        // 兜底：传统临时文件路径
-                        let prepared =
-                            prepare_input_for_audiowmark(input, "detect_multichannel_input")?;
-                        match MultichannelAudio::from_file(&prepared.path) {
-                            Ok(a) => {
-                                prepared_fallback = Some(prepared);
-                                a
+        let (audio, stereo_file): (MultichannelAudio, Option<PathBuf>) =
+            match MultichannelAudio::from_file(input) {
+                Ok(a) => (a, Some(input.to_path_buf())),
+                Err(Error::InvalidInput(_)) => {
+                    // 内存管线：decode → MultichannelAudio，跳过临时文件
+                    match decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel) {
+                        Ok(a) => (a, None),
+                        Err(_) => {
+                            // 兜底：传统临时文件路径
+                            let prepared =
+                                prepare_input_for_audiowmark(input, "detect_multichannel_input")?;
+                            match MultichannelAudio::from_file(&prepared.path) {
+                                Ok(a) => (a, Some(prepared.path.clone())),
+                                Err(Error::InvalidInput(_)) => {
+                                    let result = self.detect(prepared.path.as_path())?;
+                                    return Ok(MultichannelDetectResult {
+                                        pairs: vec![(0, "FL+FR".to_string(), result.clone())],
+                                        best: result,
+                                    });
+                                }
+                                Err(e) => return Err(e),
                             }
-                            Err(Error::InvalidInput(_)) => {
-                                let result = self.detect(prepared.path.as_path())?;
-                                return Ok(MultichannelDetectResult {
-                                    pairs: vec![(0, "FL+FR".to_string(), result.clone())],
-                                    best: result,
-                                });
-                            }
-                            Err(e) => return Err(e),
                         }
                     }
                 }
-            }
-            Err(e) => return Err(e),
-        };
-        let num_channels = audio.num_channels();
-        // stereo_input 仅用于 prepared_fallback 路径的立体声兜底
-        let stereo_input = prepared_fallback
-            .as_ref()
-            .map_or(input, |prepared| prepared.path.as_path());
+                Err(e) => return Err(e),
+            };
 
-        // 如果是立体声（来自 prepared_fallback 路径），直接使用普通方法
-        if num_channels == 2 {
-            let result = self.detect(stereo_input)?;
-            return Ok(MultichannelDetectResult {
-                pairs: vec![(0, "FL+FR".to_string(), result.clone())],
-                best: result,
-            });
-        }
-
-        // 确定声道布局
-        let layout = layout.unwrap_or_else(|| audio.layout());
-        validate_layout_channels(layout, num_channels)?;
-        let route_plan = build_smart_route_plan(layout, num_channels, DEFAULT_LFE_MODE);
-        log_route_warnings("detect", input, &route_plan.warnings);
-
-        let detect_steps: Vec<(usize, RouteStep)> = route_plan
-            .detectable_steps()
-            .into_iter()
-            .map(|(idx, step)| (idx, step.clone()))
-            .collect();
-
-        // 顺序检测声道对；bit_errors == 0 是全局最优（不可能更低），立即返回，
-        // 跳过剩余声道对。有损伤的文件（所有对 bit_errors > 0）行为与之前相同。
-        let step_results = collect_detect_step_results_with_early_exit(&detect_steps, |step| {
-            run_detect_step_task(self, &audio, step)
-        })?;
-
-        Ok(finalize_detect_step_results(step_results))
+        detect_multichannel_from_audio(self, audio, stereo_file.as_deref(), input, layout)
     }
 
     /// 便捷方法：多声道嵌入 (使用 Tag)
@@ -1387,6 +1338,58 @@ where
         }
     }
     Ok(step_results)
+}
+
+/// 从已加载的 [`MultichannelAudio`] 执行检测路由。
+///
+/// - `stereo_file`: `Some(p)` → 立体声时直接用文件路径调用 `detect()`（性能更优）；
+///   `None` → 将立体声编码为内存 WAV 字节后检测（ADM 或纯内存路径）。
+/// - `input_for_log`: 仅用于路由警告日志中显示的文件名。
+#[cfg(feature = "multichannel")]
+fn detect_multichannel_from_audio(
+    audio_engine: &Audio,
+    audio: MultichannelAudio,
+    stereo_file: Option<&Path>,
+    input_for_log: &Path,
+    layout: Option<ChannelLayout>,
+) -> Result<MultichannelDetectResult> {
+    let num_channels = audio.num_channels();
+
+    if num_channels == 2 {
+        if let Some(path) = stereo_file {
+            let result = audio_engine.detect(path)?;
+            return Ok(MultichannelDetectResult {
+                pairs: vec![(0, "FL+FR".to_string(), result.clone())],
+                best: result,
+            });
+        }
+        let wav_bytes = audio.to_wav_bytes()?;
+        let raw = run_audiowmark_get_bytes(audio_engine, wav_bytes)?;
+        let stdout = String::from_utf8_lossy(&raw.stdout);
+        let stderr = String::from_utf8_lossy(&raw.stderr);
+        let result = parse_detect_output(&stdout, &stderr);
+        return Ok(MultichannelDetectResult {
+            pairs: vec![(0, "FL+FR".to_string(), result.clone())],
+            best: result,
+        });
+    }
+
+    let layout = layout.unwrap_or_else(|| audio.layout());
+    validate_layout_channels(layout, num_channels)?;
+    let route_plan = build_smart_route_plan(layout, num_channels, DEFAULT_LFE_MODE);
+    log_route_warnings("detect", input_for_log, &route_plan.warnings);
+
+    let detect_steps: Vec<(usize, RouteStep)> = route_plan
+        .detectable_steps()
+        .into_iter()
+        .map(|(idx, step)| (idx, step.clone()))
+        .collect();
+
+    let step_results = collect_detect_step_results_with_early_exit(&detect_steps, |step| {
+        run_detect_step_task(audio_engine, &audio, step)
+    })?;
+
+    Ok(finalize_detect_step_results(step_results))
 }
 
 #[cfg(feature = "multichannel")]

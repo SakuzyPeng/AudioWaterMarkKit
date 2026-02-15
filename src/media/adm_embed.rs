@@ -59,15 +59,45 @@ where
         )));
     }
 
-    fs::copy(input, output).map_err(|e| {
+    // 先写临时文件，替换 data chunk 后再原子 rename，避免崩溃时损坏输出。
+    // 使用同目录下 PID+时间戳的随机文件名，避免与用户输出路径重合。
+    let temp_output = {
+        let stem = format!(
+            ".awmkit_adm_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        );
+        output
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .join(stem)
+    };
+    let copy_result = fs::copy(input, &temp_output).map_err(|e| {
         Error::AdmPreserveFailed(format!(
-            "failed to copy input to output ({} -> {}): {e}",
+            "failed to copy input to temp ({} -> {}): {e}",
             input.display(),
+            temp_output.display()
+        ))
+    });
+    if let Err(e) = copy_result {
+        let _ = fs::remove_file(&temp_output);
+        return Err(e);
+    }
+    if let Err(e) = replace_data_chunk_bytes(&temp_output, index, &replacement) {
+        let _ = fs::remove_file(&temp_output);
+        return Err(e);
+    }
+    fs::rename(&temp_output, output).map_err(|e| {
+        let _ = fs::remove_file(&temp_output);
+        Error::AdmPreserveFailed(format!(
+            "failed to rename temp to output ({} -> {}): {e}",
+            temp_output.display(),
             output.display()
         ))
-    })?;
-    replace_data_chunk_bytes(output, index, &replacement)?;
-    Ok(())
+    })
 }
 
 fn embed_pairs_via_audiowmark(
@@ -108,9 +138,7 @@ fn embed_pairs_via_audiowmark(
         MultichannelAudio::from_wav_bytes(&temp_bytes)
     })();
 
-    let _ = fs::remove_file(&temp_input);
-    let _ = fs::remove_file(&temp_output);
-    let _ = fs::remove_dir(&temp_dir);
+    let _ = fs::remove_dir_all(&temp_dir);
     embed_result
 }
 
@@ -146,7 +174,7 @@ fn validate_audio_shape(original: &MultichannelAudio, processed: &MultichannelAu
     Ok(())
 }
 
-fn decode_pcm_audio(path: &Path, index: &ChunkIndex) -> Result<MultichannelAudio> {
+pub(crate) fn decode_pcm_audio(path: &Path, index: &ChunkIndex) -> Result<MultichannelAudio> {
     let data_size = usize::try_from(index.data_chunk.size)
         .map_err(|_| Error::AdmUnsupported("data chunk too large to decode".to_string()))?;
     let mut file = File::open(path).map_err(|e| {

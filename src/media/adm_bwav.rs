@@ -248,6 +248,17 @@ fn validate_with_bwavfile(path: &Path) -> Result<()> {
     reader
         .read_axml(&mut axml)
         .map_err(|e| Error::AdmUnsupported(format!("bwavfile axml read failed: {e}")))?;
+    if axml.is_empty() {
+        // chna-only 文件（无 axml）：通过 channels() 验证声道分配是否存在
+        let ch_descs = reader
+            .channels()
+            .map_err(|e| Error::AdmUnsupported(format!("bwavfile channels read failed: {e}")))?;
+        if ch_descs.is_empty() {
+            return Err(Error::AdmUnsupported(
+                "chna-only ADM file has no channel assignments".to_string(),
+            ));
+        }
+    }
     Ok(())
 }
 
