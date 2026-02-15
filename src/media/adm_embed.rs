@@ -250,25 +250,18 @@ fn encode_pcm_audio_data(audio: &MultichannelAudio, fmt: PcmFormat) -> Result<Ve
         })?
     ];
 
-    let pairs = audio.split_stereo_pairs();
-    let mut channels_data = Vec::with_capacity(expected_channels);
-    for (left, right) in pairs {
-        channels_data.push(left);
-        channels_data.push(right);
-    }
-    if channels_data.len() != expected_channels {
-        return Err(Error::AdmPreserveFailed(format!(
-            "unexpected channel split result: {} != {}",
-            channels_data.len(),
-            expected_channels
-        )));
-    }
-
     for frame in 0..frame_count {
-        for (ch, ch_data) in channels_data.iter().enumerate().take(expected_channels) {
-            let sample = ch_data.get(frame).copied().ok_or_else(|| {
-                Error::AdmPreserveFailed("channel sample index out of range".to_string())
-            })?;
+        for ch in 0..expected_channels {
+            let sample = audio
+                .channel_samples(ch)
+                .map_err(|e| Error::AdmPreserveFailed(format!("channel {ch} access error: {e}")))?
+                .get(frame)
+                .copied()
+                .ok_or_else(|| {
+                    Error::AdmPreserveFailed(format!(
+                        "channel {ch} sample index {frame} out of range"
+                    ))
+                })?;
             let base = frame
                 .checked_mul(frame_size)
                 .and_then(|v| v.checked_add(ch.checked_mul(sample_width)?))
