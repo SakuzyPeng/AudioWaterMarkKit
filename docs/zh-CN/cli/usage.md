@@ -22,6 +22,10 @@ cargo build --bin awmkit --features launcher --release
 
 `full-cli` 用于构建真实 CLI core，`launcher` 用于构建单文件入口。
 
+性能提示：
+- 做性能测试（尤其多声道 `embed/detect`）时请使用 `target/release/awmkit-core`。
+- `target/debug/awmkit-core` 会显著偏慢，容易误判并行/pipe 优化效果。
+
 ## 2. 支持格式与布局
 
 - 输入音频：`wav` / `flac` / `mp3` / `ogg` / `opus` / `m4a` / `alac` / `mp4` / `mkv` / `mka` / `ts` / `m2ts` / `m2t`

@@ -511,16 +511,19 @@ impl MultichannelAudio {
 
         // RIFF header
         buf.extend_from_slice(b"RIFF");
-        let riff_size = u32::try_from(data_size + 36).map_err(|_| {
-            Error::InvalidInput("audio data too large for WAV format".to_string())
-        })?;
+        let riff_size = u32::try_from(data_size + 36)
+            .map_err(|_| Error::InvalidInput("audio data too large for WAV format".to_string()))?;
         buf.extend_from_slice(&riff_size.to_le_bytes());
         buf.extend_from_slice(b"WAVE");
 
         // fmt chunk
         buf.extend_from_slice(b"fmt ");
         buf.extend_from_slice(&16u32.to_le_bytes());
-        let format_tag: u16 = if matches!(self.sample_format, SampleFormat::Float32) { 3 } else { 1 };
+        let format_tag: u16 = if matches!(self.sample_format, SampleFormat::Float32) {
+            3
+        } else {
+            1
+        };
         buf.extend_from_slice(&format_tag.to_le_bytes());
         let ch_u16 = u16::try_from(channels).map_err(|_| {
             Error::InvalidInput("channel count overflow for WAV header".to_string())
@@ -536,9 +539,8 @@ impl MultichannelAudio {
 
         // data chunk
         buf.extend_from_slice(b"data");
-        let data_size_u32 = u32::try_from(data_size).map_err(|_| {
-            Error::InvalidInput("audio data too large for WAV format".to_string())
-        })?;
+        let data_size_u32 = u32::try_from(data_size)
+            .map_err(|_| Error::InvalidInput("audio data too large for WAV format".to_string()))?;
         buf.extend_from_slice(&data_size_u32.to_le_bytes());
 
         // 交错样本
@@ -840,8 +842,12 @@ fn normalize_wav_pipe_sizes(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
     // 扫描 sub-chunk，找到 data chunk 并修复其大小
     let mut pos = 12usize; // 跳过 RIFF(4) + size(4) + WAVE(4)
     while pos.saturating_add(8) <= patched.len() {
-        let chunk_size =
-            u32::from_le_bytes([patched[pos + 4], patched[pos + 5], patched[pos + 6], patched[pos + 7]]);
+        let chunk_size = u32::from_le_bytes([
+            patched[pos + 4],
+            patched[pos + 5],
+            patched[pos + 6],
+            patched[pos + 7],
+        ]);
         if &patched[pos..pos + 4] == b"data" {
             let data_payload =
                 u32::try_from(patched.len().saturating_sub(pos + 8)).unwrap_or(u32::MAX);

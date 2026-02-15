@@ -342,24 +342,37 @@ impl Audio {
             return media::adm_embed::embed_adm_multichannel(self, input, output, message, layout);
         }
 
-        let prepared = prepare_input_for_audiowmark(input, "embed_multichannel_input")?;
-        let input = prepared.path.as_path();
+        let mut prepared_fallback: Option<PreparedInput> = None;
 
         // 加载多声道音频以检测声道数。
-        // 若文件无法被 Rust 解码器解析（如含 ID3 标签的 FLAC），回退到立体声路径，
+        // 优先尝试原始输入，避免对可直接读取的 WAV/FLAC 先做不必要的临时解码。
+        // 若失败则再走 prepare/decode 兜底；若仍失败，回退到立体声路径，
         // 由 audiowmark 的 libsndfile 原生处理该格式。
         let mut audio = match MultichannelAudio::from_file(input) {
             Ok(a) => a,
             Err(Error::InvalidInput(_)) => {
-                return self.embed(input, output, message);
+                let prepared = prepare_input_for_audiowmark(input, "embed_multichannel_input")?;
+                match MultichannelAudio::from_file(&prepared.path) {
+                    Ok(a) => {
+                        prepared_fallback = Some(prepared);
+                        a
+                    }
+                    Err(Error::InvalidInput(_)) => {
+                        return self.embed(prepared.path.as_path(), output, message);
+                    }
+                    Err(e) => return Err(e),
+                }
             }
             Err(e) => return Err(e),
         };
         let num_channels = audio.num_channels();
+        let stereo_input = prepared_fallback
+            .as_ref()
+            .map_or(input, |prepared| prepared.path.as_path());
 
         // 如果是立体声，直接使用普通方法
         if num_channels == 2 {
-            return self.embed(input, output, message);
+            return self.embed(stereo_input, output, message);
         }
 
         // 确定声道布局
@@ -404,34 +417,48 @@ impl Audio {
         input: P,
         layout: Option<ChannelLayout>,
     ) -> Result<MultichannelDetectResult> {
-        if media::adm_bwav::probe_adm_bwf(input.as_ref())?.is_some() {
+        let input = input.as_ref();
+        if media::adm_bwav::probe_adm_bwf(input)?.is_some() {
             return Err(Error::AdmUnsupported(
                 "ADM/BWF detect is not supported in this phase".to_string(),
             ));
         }
 
-        let prepared = prepare_input_for_audiowmark(input.as_ref(), "detect_multichannel_input")?;
-        let input = prepared.path.as_path();
+        let mut prepared_fallback: Option<PreparedInput> = None;
 
         // 加载多声道音频以检测声道数。
-        // 若文件无法被 Rust 解码器解析（如含 ID3 标签的 FLAC），回退到立体声路径，
+        // 优先尝试原始输入，避免对可直接读取的 WAV/FLAC 先做不必要的临时解码。
+        // 若失败则再走 prepare/decode 兜底；若仍失败，回退到立体声路径，
         // 由 audiowmark 的 libsndfile 原生处理该格式。
         let audio = match MultichannelAudio::from_file(input) {
             Ok(a) => a,
             Err(Error::InvalidInput(_)) => {
-                let result = self.detect(input)?;
-                return Ok(MultichannelDetectResult {
-                    pairs: vec![(0, "FL+FR".to_string(), result.clone())],
-                    best: result,
-                });
+                let prepared = prepare_input_for_audiowmark(input, "detect_multichannel_input")?;
+                match MultichannelAudio::from_file(&prepared.path) {
+                    Ok(a) => {
+                        prepared_fallback = Some(prepared);
+                        a
+                    }
+                    Err(Error::InvalidInput(_)) => {
+                        let result = self.detect(prepared.path.as_path())?;
+                        return Ok(MultichannelDetectResult {
+                            pairs: vec![(0, "FL+FR".to_string(), result.clone())],
+                            best: result,
+                        });
+                    }
+                    Err(e) => return Err(e),
+                }
             }
             Err(e) => return Err(e),
         };
         let num_channels = audio.num_channels();
+        let stereo_input = prepared_fallback
+            .as_ref()
+            .map_or(input, |prepared| prepared.path.as_path());
 
         // 如果是立体声，直接使用普通方法
         if num_channels == 2 {
-            let result = self.detect(input)?;
+            let result = self.detect(stereo_input)?;
             return Ok(MultichannelDetectResult {
                 pairs: vec![(0, "FL+FR".to_string(), result.clone())],
                 best: result,
@@ -643,6 +670,25 @@ fn run_audiowmark_add_bytes(
     input_bytes: Vec<u8>,
     message_hex: &str,
 ) -> Result<Vec<u8>> {
+    if matches!(effective_awmiomode(), AwmIoMode::File) {
+        return run_audiowmark_add_bytes_file(audio, input_bytes, message_hex);
+    }
+    let pipe_input = input_bytes.clone();
+    match run_audiowmark_add_bytes_pipe(audio, pipe_input, message_hex) {
+        Ok(output_bytes) => Ok(output_bytes),
+        Err(err) if should_fallback_pipe_error(&err) => {
+            warn_pipe_fallback_once("add-bytes", &err);
+            run_audiowmark_add_bytes_file(audio, input_bytes, message_hex)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn run_audiowmark_add_bytes_pipe(
+    audio: &Audio,
+    input_bytes: Vec<u8>,
+    message_hex: &str,
+) -> Result<Vec<u8>> {
     let mut cmd = audio.audiowmark_command();
     cmd.arg("add")
         .arg("--strength")
@@ -673,6 +719,21 @@ fn run_audiowmark_add_bytes(
 }
 
 fn run_audiowmark_get_bytes(audio: &Audio, input_bytes: Vec<u8>) -> Result<Output> {
+    if matches!(effective_awmiomode(), AwmIoMode::File) {
+        return run_audiowmark_get_bytes_file(audio, input_bytes);
+    }
+    let pipe_input = input_bytes.clone();
+    match run_audiowmark_get_bytes_pipe(audio, pipe_input) {
+        Ok(output) => Ok(output),
+        Err(err) if should_fallback_pipe_error(&err) => {
+            warn_pipe_fallback_once("get-bytes", &err);
+            run_audiowmark_get_bytes_file(audio, input_bytes)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn run_audiowmark_get_bytes_pipe(audio: &Audio, input_bytes: Vec<u8>) -> Result<Output> {
     let mut cmd = audio.audiowmark_command();
     cmd.arg("get");
 
@@ -691,6 +752,33 @@ fn run_audiowmark_get_bytes(audio: &Audio, input_bytes: Vec<u8>) -> Result<Outpu
     Ok(output)
 }
 
+fn run_audiowmark_add_bytes_file(
+    audio: &Audio,
+    input_bytes: Vec<u8>,
+    message_hex: &str,
+) -> Result<Vec<u8>> {
+    let temp_dir = create_temp_dir("awmkit_add_bytes_file")?;
+    let _guard = TempDirGuard {
+        path: temp_dir.clone(),
+    };
+    let input_path = temp_dir.join("input.wav");
+    let output_path = temp_dir.join("output.wav");
+    fs::write(&input_path, input_bytes)?;
+    run_audiowmark_add_file(audio, &input_path, &output_path, message_hex)?;
+    let output_bytes = fs::read(&output_path)?;
+    Ok(output_bytes)
+}
+
+fn run_audiowmark_get_bytes_file(audio: &Audio, input_bytes: Vec<u8>) -> Result<Output> {
+    let temp_dir = create_temp_dir("awmkit_get_bytes_file")?;
+    let _guard = TempDirGuard {
+        path: temp_dir.clone(),
+    };
+    let input_path = temp_dir.join("input.wav");
+    fs::write(&input_path, input_bytes)?;
+    run_audiowmark_get_file(audio, &input_path)
+}
+
 fn run_audiowmark_add_pipe(
     audio: &Audio,
     prepared_input: &Path,
@@ -698,14 +786,14 @@ fn run_audiowmark_add_pipe(
     message_hex: &str,
 ) -> Result<()> {
     let input_bytes = fs::read(prepared_input)?;
-    let wav_bytes = run_audiowmark_add_bytes(audio, input_bytes, message_hex)?;
+    let wav_bytes = run_audiowmark_add_bytes_pipe(audio, input_bytes, message_hex)?;
     fs::write(output, &wav_bytes)?;
     Ok(())
 }
 
 fn run_audiowmark_get_pipe(audio: &Audio, prepared_input: &Path) -> Result<Output> {
     let input_bytes = fs::read(prepared_input)?;
-    run_audiowmark_get_bytes(audio, input_bytes)
+    run_audiowmark_get_bytes_pipe(audio, input_bytes)
 }
 
 fn run_command_with_stdin(cmd: &mut Command, stdin_data: Vec<u8>) -> Result<Output> {
@@ -774,8 +862,12 @@ fn normalize_wav_pipe_output(mut bytes: Vec<u8>) -> Vec<u8> {
     // 扫描 sub-chunk，找到 data chunk 并修复其大小
     let mut pos = 12usize;
     while pos.saturating_add(8) <= bytes.len() {
-        let chunk_size =
-            u32::from_le_bytes([bytes[pos + 4], bytes[pos + 5], bytes[pos + 6], bytes[pos + 7]]);
+        let chunk_size = u32::from_le_bytes([
+            bytes[pos + 4],
+            bytes[pos + 5],
+            bytes[pos + 6],
+            bytes[pos + 7],
+        ]);
         if &bytes[pos..pos + 4] == b"data" {
             let data_payload =
                 u32::try_from(bytes.len().saturating_sub(pos + 8)).unwrap_or(u32::MAX);
@@ -850,10 +942,10 @@ fn compute_route_parallelism(step_count: usize) -> usize {
     if let Some(forced) = route_parallelism_override() {
         return step_count.min(forced).max(1);
     }
-    let available = std::thread::available_parallelism()
-        .map(|value| value.get())
-        .unwrap_or(1);
-    step_count.min(available).max(1)
+    // Benchmarks show single-threaded is fastest for typical route sizes (≤20 steps):
+    // thread-pool overhead (~200ms) outweighs the parallelism benefit.
+    // Users can still opt-in via AWMKIT_ROUTE_PARALLELISM=N.
+    1
 }
 
 #[cfg(feature = "multichannel")]
@@ -1640,10 +1732,9 @@ mod tests {
     fn test_compute_route_parallelism_bounds() {
         assert_eq!(compute_route_parallelism(0), 1);
         assert_eq!(compute_route_parallelism(1), 1);
-        let available = std::thread::available_parallelism()
-            .map(|value| value.get())
-            .unwrap_or(1);
-        assert_eq!(compute_route_parallelism(available + 8), available);
+        // Default is single-threaded; thread-pool overhead outweighs benefit for small step counts.
+        assert_eq!(compute_route_parallelism(8), 1);
+        assert_eq!(compute_route_parallelism(100), 1);
     }
 
     #[cfg(feature = "multichannel")]

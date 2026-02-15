@@ -22,6 +22,10 @@ cargo build --bin awmkit --features launcher --release
 
 `full-cli` builds the real CLI core, while `launcher` builds the single-file entry binary.
 
+Performance note:
+- Use `target/release/awmkit-core` for performance measurements (especially multichannel `embed/detect`).
+- `target/debug/awmkit-core` is significantly slower and can distort conclusions about parallel/pipe optimizations.
+
 ## 2. Supported Formats and Layouts
 
 - Input audio: `wav` / `flac` / `mp3` / `ogg` / `opus` / `m4a` / `alac` / `mp4` / `mkv` / `mka` / `ts` / `m2ts` / `m2t`
