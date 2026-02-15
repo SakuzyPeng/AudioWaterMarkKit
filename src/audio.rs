@@ -673,8 +673,7 @@ fn run_audiowmark_add_bytes(
     if matches!(effective_awmiomode(), AwmIoMode::File) {
         return run_audiowmark_add_bytes_file(audio, input_bytes, message_hex);
     }
-    let pipe_input = input_bytes.clone();
-    match run_audiowmark_add_bytes_pipe(audio, pipe_input, message_hex) {
+    match run_audiowmark_add_bytes_pipe(audio, &input_bytes, message_hex) {
         Ok(output_bytes) => Ok(output_bytes),
         Err(err) if should_fallback_pipe_error(&err) => {
             warn_pipe_fallback_once("add-bytes", &err);
@@ -686,7 +685,7 @@ fn run_audiowmark_add_bytes(
 
 fn run_audiowmark_add_bytes_pipe(
     audio: &Audio,
-    input_bytes: Vec<u8>,
+    input_bytes: &[u8],
     message_hex: &str,
 ) -> Result<Vec<u8>> {
     let mut cmd = audio.audiowmark_command();
@@ -722,8 +721,7 @@ fn run_audiowmark_get_bytes(audio: &Audio, input_bytes: Vec<u8>) -> Result<Outpu
     if matches!(effective_awmiomode(), AwmIoMode::File) {
         return run_audiowmark_get_bytes_file(audio, input_bytes);
     }
-    let pipe_input = input_bytes.clone();
-    match run_audiowmark_get_bytes_pipe(audio, pipe_input) {
+    match run_audiowmark_get_bytes_pipe(audio, &input_bytes) {
         Ok(output) => Ok(output),
         Err(err) if should_fallback_pipe_error(&err) => {
             warn_pipe_fallback_once("get-bytes", &err);
@@ -733,7 +731,7 @@ fn run_audiowmark_get_bytes(audio: &Audio, input_bytes: Vec<u8>) -> Result<Outpu
     }
 }
 
-fn run_audiowmark_get_bytes_pipe(audio: &Audio, input_bytes: Vec<u8>) -> Result<Output> {
+fn run_audiowmark_get_bytes_pipe(audio: &Audio, input_bytes: &[u8]) -> Result<Output> {
     let mut cmd = audio.audiowmark_command();
     cmd.arg("get");
 
@@ -786,17 +784,17 @@ fn run_audiowmark_add_pipe(
     message_hex: &str,
 ) -> Result<()> {
     let input_bytes = fs::read(prepared_input)?;
-    let wav_bytes = run_audiowmark_add_bytes_pipe(audio, input_bytes, message_hex)?;
+    let wav_bytes = run_audiowmark_add_bytes_pipe(audio, &input_bytes, message_hex)?;
     fs::write(output, &wav_bytes)?;
     Ok(())
 }
 
 fn run_audiowmark_get_pipe(audio: &Audio, prepared_input: &Path) -> Result<Output> {
     let input_bytes = fs::read(prepared_input)?;
-    run_audiowmark_get_bytes_pipe(audio, input_bytes)
+    run_audiowmark_get_bytes_pipe(audio, &input_bytes)
 }
 
-fn run_command_with_stdin(cmd: &mut Command, stdin_data: Vec<u8>) -> Result<Output> {
+fn run_command_with_stdin(cmd: &mut Command, stdin_data: &[u8]) -> Result<Output> {
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -804,21 +802,24 @@ fn run_command_with_stdin(cmd: &mut Command, stdin_data: Vec<u8>) -> Result<Outp
         .spawn()
         .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
 
-    // 用独立线程写 stdin，避免 stdout 缓冲区满时死锁
+    // 用 scoped thread 并发写 stdin 与读 stdout/stderr，避免双向管道死锁。
     let mut stdin = child
         .stdin
         .take()
         .ok_or_else(|| Error::AudiowmarkExec("failed to take stdin handle".to_string()))?;
-    let writer = std::thread::spawn(move || stdin.write_all(&stdin_data));
+    let output = std::thread::scope(|scope| -> Result<Output> {
+        let writer = scope.spawn(|| stdin.write_all(stdin_data));
+        let output = child
+            .wait_with_output()
+            .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
 
-    let output = child
-        .wait_with_output()
-        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+        writer
+            .join()
+            .map_err(|_| Error::AudiowmarkExec("stdin writer thread panicked".to_string()))?
+            .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
 
-    writer
-        .join()
-        .map_err(|_| Error::AudiowmarkExec("stdin writer thread panicked".to_string()))?
-        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+        Ok(output)
+    })?;
 
     Ok(output)
 }
