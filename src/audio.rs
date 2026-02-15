@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use std::{
     fs,
     fs::File,
-    io::{Read, Seek, SeekFrom, Write},
+    io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write},
 };
 
 use crate::error::{Error, Result};
@@ -28,6 +28,13 @@ use rayon::prelude::*;
 /// audiowmark 默认搜索路径（无官方包，仅供开发者本地编译后使用）
 #[cfg(not(feature = "bundled"))]
 const DEFAULT_SEARCH_PATHS: &[&str] = &["audiowmark"];
+
+/// 管道 I/O 的用户态缓冲区大小。
+///
+/// Windows 匿名管道内核缓冲区默认只有 4 KB，直接用 `io::copy` 的 8 KB 块写会频繁
+/// 触发系统调用切换。用 `BufWriter`/`BufReader` 在用户态积累更大的块，可显著减少
+/// Windows 上的上下文切换次数；在 macOS/Linux 上也能减少 syscall 开销。
+const PIPE_BUF_SIZE: usize = 256 * 1024;
 /// audiowmark 0.6.x 候选分数阈值（低于此值通常为伪命中）
 const MIN_PATTERN_SCORE: f32 = 1.0;
 
@@ -840,13 +847,15 @@ fn run_audiowmark_add_pipe_streaming(
     let output_file = File::create(output)?;
 
     let (status, stdin_result, stdout_result, stderr_result) = std::thread::scope(|scope| {
-        let stdin_writer = scope.spawn(move || {
+        let stdin_writer = scope.spawn(move || -> std::io::Result<u64> {
             let mut input_file = input_file;
-            let mut stdin = stdin;
-            std::io::copy(&mut input_file, &mut stdin)
+            let mut stdin = BufWriter::with_capacity(PIPE_BUF_SIZE, stdin);
+            let n = std::io::copy(&mut input_file, &mut stdin)?;
+            stdin.flush()?;
+            Ok(n)
         });
         let stdout_reader = scope.spawn(move || {
-            let mut stdout = stdout;
+            let mut stdout = BufReader::with_capacity(PIPE_BUF_SIZE, stdout);
             let mut output_file = output_file;
             std::io::copy(&mut stdout, &mut output_file)
         });
@@ -913,12 +922,15 @@ fn run_command_with_stdin(cmd: &mut Command, stdin_data: &[u8]) -> Result<Output
         .ok_or_else(|| Error::AudiowmarkExec("failed to take stderr handle".to_string()))?;
 
     let (status, stdin_result, stdout_result, stderr_result) = std::thread::scope(|scope| {
-        let writer = scope.spawn(move || {
-            let mut stdin = stdin;
-            stdin.write_all(stdin_data)
+        let writer = scope.spawn(move || -> std::io::Result<u64> {
+            let mut src = std::io::Cursor::new(stdin_data);
+            let mut stdin = BufWriter::with_capacity(PIPE_BUF_SIZE, stdin);
+            let n = std::io::copy(&mut src, &mut stdin)?;
+            stdin.flush()?;
+            Ok(n)
         });
         let stdout_reader = scope.spawn(move || -> std::io::Result<Vec<u8>> {
-            let mut stdout = stdout;
+            let mut stdout = BufReader::with_capacity(PIPE_BUF_SIZE, stdout);
             let mut buf = Vec::new();
             stdout.read_to_end(&mut buf)?;
             Ok(buf)
@@ -978,13 +990,15 @@ fn run_command_with_stdin_from_file(cmd: &mut Command, input_path: &Path) -> Res
     let input_file = File::open(input_path)?;
 
     let (status, stdin_result, stdout_result, stderr_result) = std::thread::scope(|scope| {
-        let writer = scope.spawn(move || {
+        let writer = scope.spawn(move || -> std::io::Result<u64> {
             let mut input_file = input_file;
-            let mut stdin = stdin;
-            std::io::copy(&mut input_file, &mut stdin)
+            let mut stdin = BufWriter::with_capacity(PIPE_BUF_SIZE, stdin);
+            let n = std::io::copy(&mut input_file, &mut stdin)?;
+            stdin.flush()?;
+            Ok(n)
         });
         let stdout_reader = scope.spawn(move || -> std::io::Result<Vec<u8>> {
-            let mut stdout = stdout;
+            let mut stdout = BufReader::with_capacity(PIPE_BUF_SIZE, stdout);
             let mut buf = Vec::new();
             stdout.read_to_end(&mut buf)?;
             Ok(buf)
