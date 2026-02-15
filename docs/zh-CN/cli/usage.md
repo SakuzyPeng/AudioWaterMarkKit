@@ -29,6 +29,7 @@ cargo build --bin awmkit --features launcher --release
 - ADM/BWF（一期）：`embed` 会自动识别 `RIFF/RF64/BW64` 中的 ADM/BWF 元数据并走保真路径；若保真链路失败会直接报错（不降级）；`detect` 暂不支持 ADM 专项检测
 - 声道布局：`auto`、`stereo`、`surround51`、`surround512`、`surround71`、`surround714`、`surround916`
 - 多声道默认路由（smart）：`FL/FR` 与环绕声道按成对嵌入，`FC` 按单声道嵌入（dual-mono），`LFE` 默认跳过；未知/自定义布局回退为顺序配对，若奇数声道则最后一路按单声道处理并给出警告
+- 多声道路由执行：内部使用 Rayon 并行处理 RouteStep，并按 step 索引确定性归并结果（不新增 CLI 参数）
 
 ## 3. 全局参数
 

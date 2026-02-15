@@ -29,6 +29,7 @@ cargo build --bin awmkit --features launcher --release
 - ADM/BWF (phase 1): `embed` auto-detects ADM/BWF metadata in `RIFF/RF64/BW64` and uses a metadata-preserving path; failures fail fast (no downgrade). ADM-specific `detect` is not supported yet
 - Channel layout: `auto`, `stereo`, `surround51`, `surround512`, `surround71`, `surround714`, `surround916`
 - Default multichannel routing (`smart`): stereo/surround pairs are embedded as pairs, `FC` is embedded as mono (dual-mono wrapper), `LFE` is skipped by default; unknown/custom layouts fall back to sequential pairing, with a final mono step for odd channel counts and a warning
+- Multichannel route execution: RouteSteps are processed with internal Rayon parallelism and merged deterministically by step index (no new CLI flags)
 
 ## 3. Global Options
 

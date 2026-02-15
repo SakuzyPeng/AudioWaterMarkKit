@@ -73,6 +73,14 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
             None
         }
     };
+    if ctx.out.verbose() && !ctx.out.quiet() {
+        let parallelism = std::thread::available_parallelism()
+            .map(|value| value.get())
+            .unwrap_or(1);
+        ctx.out.info(format!(
+            "[INFO] multichannel route steps use Rayon parallel execution (max workers: {parallelism})"
+        ));
+    }
 
     if args.json {
         let mut results = Vec::new();

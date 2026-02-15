@@ -12,7 +12,9 @@ AWMKit is a cross-platform audio watermark toolkit built around a Rust core, wit
 - SQLite persistence for mappings, evidence, and app settings
 - Input support: `wav` / `flac` / `mp3` / `ogg` / `opus` / `m4a` / `alac` / `mp4` / `mkv` / `mka` / `ts` / `m2ts` / `m2t`
 - Current output limitation: embed output is `WAV` only (non-`wav` output paths fail fast)
+- `audiowmark` runtime I/O: `stdin/stdout` pipe is enabled by default; set `AWMKIT_DISABLE_PIPE_IO=1` to force file I/O
 - Default multichannel routing (`smart`): `FC` uses mono embed (dual-mono wrapper), `LFE` is skipped by default, and other channels follow pair routing; unknown/custom layouts fall back to sequential pairing with a final mono step for odd channel counts (with warnings)
+- Multichannel route execution: RouteStep processing uses internal Rayon parallelism with deterministic merge by step index (public parameters and result schema are unchanged)
 - ADM/BWF master embed (phase 1): `embed` auto-detects ADM/BWF metadata in `RIFF/RF64/BW64` and applies metadata-preserving data replacement; ADM-specific `detect` is not available yet
 - Safety policy: inputs with existing watermarks are auto-skipped, with a batch summary warning at the end
 

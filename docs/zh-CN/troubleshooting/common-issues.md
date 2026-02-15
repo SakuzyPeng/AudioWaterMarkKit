@@ -52,3 +52,17 @@
 2. 清除隔离属性后再启动：
    - `xattr -dr com.apple.quarantine /path/to/AWMKit.app`
 3. 若仍被拦截，可在“系统设置 -> 隐私与安全性”中允许该应用后重试。
+
+## 7. 管道 I/O 兼容问题（`stdin/stdout`）
+
+说明：当前默认优先使用 `audiowmark` 管道 I/O（`-` 作为输入/输出）。若本地 `audiowmark` 构建不支持该模式，运行时会自动回退到文件 I/O。  
+
+手动强制关闭管道模式（便于排查）：
+
+- macOS/Linux：`AWMKIT_DISABLE_PIPE_IO=1 awmkit ...`
+- Windows PowerShell：`$env:AWMKIT_DISABLE_PIPE_IO=1; awmkit ...`
+
+建议：
+
+1. 先执行 `awmkit status --doctor` 确认当前 `audiowmark` 来源和版本。
+2. 若出现异常且关闭 pipe 后恢复，优先升级/替换 `audiowmark` 二进制。

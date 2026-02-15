@@ -52,3 +52,17 @@ Fix:
 2. Remove quarantine attribute, then launch again:
    - `xattr -dr com.apple.quarantine /path/to/AWMKit.app`
 3. If still blocked, allow the app in “System Settings -> Privacy & Security”, then retry.
+
+## 7. Pipe I/O Compatibility (`stdin/stdout`)
+
+Note: runtime now prefers `audiowmark` pipe I/O (`-` as input/output). If the local `audiowmark` build does not support this mode, AWMKit automatically falls back to file I/O.
+
+Force-disable pipe mode for troubleshooting:
+
+- macOS/Linux: `AWMKIT_DISABLE_PIPE_IO=1 awmkit ...`
+- Windows PowerShell: `$env:AWMKIT_DISABLE_PIPE_IO=1; awmkit ...`
+
+Recommended checks:
+
+1. Run `awmkit status --doctor` to confirm the active `audiowmark` binary and version.
+2. If failures disappear when pipe mode is disabled, upgrade or replace the `audiowmark` binary first.

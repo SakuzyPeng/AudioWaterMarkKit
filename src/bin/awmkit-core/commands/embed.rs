@@ -86,6 +86,14 @@ pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
     if !ctx.out.quiet() {
         ctx.out
             .info("[INFO] multichannel smart routing enabled (default: LFE skip)");
+        if ctx.out.verbose() {
+            let parallelism = std::thread::available_parallelism()
+                .map(|value| value.get())
+                .unwrap_or(1);
+            ctx.out.info(format!(
+                "[INFO] multichannel route steps use Rayon parallel execution (max workers: {parallelism})"
+            ));
+        }
     }
 
     for input in inputs {
