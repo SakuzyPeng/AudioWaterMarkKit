@@ -527,20 +527,22 @@ impl Audio {
             .into_iter()
             .map(|(idx, step)| (idx, step.clone()))
             .collect();
-        let parallelism = compute_route_parallelism(detect_steps.len());
-        let step_results = with_route_thread_pool(parallelism, || {
-            detect_steps
-                .par_iter()
-                .map(|(step_idx, step)| {
-                    let outcome = run_detect_step_task(self, &audio, step)?;
-                    Ok::<DetectStepTaskResult, Error>(DetectStepTaskResult {
-                        step_idx: *step_idx,
-                        step: step.clone(),
-                        outcome,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()
-        })??;
+
+        // 顺序检测声道对；bit_errors == 0 是全局最优（不可能更低），立即返回，
+        // 跳过剩余声道对。有损伤的文件（所有对 bit_errors > 0）行为与之前相同。
+        let mut step_results: Vec<DetectStepTaskResult> = Vec::with_capacity(detect_steps.len());
+        for (step_idx, step) in &detect_steps {
+            let outcome = run_detect_step_task(self, &audio, step)?;
+            let perfect = outcome.as_ref().map_or(false, |r| r.bit_errors == 0);
+            step_results.push(DetectStepTaskResult {
+                step_idx: *step_idx,
+                step: step.clone(),
+                outcome,
+            });
+            if perfect {
+                break;
+            }
+        }
 
         Ok(finalize_detect_step_results(step_results))
     }
