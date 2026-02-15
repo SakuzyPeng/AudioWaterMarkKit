@@ -353,31 +353,52 @@ impl Audio {
 
         // 加载多声道音频以检测声道数。
         // 优先尝试原始输入，避免对可直接读取的 WAV/FLAC 先做不必要的临时解码。
-        // 若失败则再走 prepare/decode 兜底；若仍失败，回退到立体声路径，
-        // 由 audiowmark 的 libsndfile 原生处理该格式。
+        // 若失败则先尝试内存解码管线（DecodedPcm → MultichannelAudio，无临时文件）；
+        // 仍失败则 prepare/临时文件兜底；最终失败回退到立体声路径。
         let mut audio = match MultichannelAudio::from_file(input) {
             Ok(a) => a,
             Err(Error::InvalidInput(_)) => {
-                let prepared = prepare_input_for_audiowmark(input, "embed_multichannel_input")?;
-                match MultichannelAudio::from_file(&prepared.path) {
+                // 内存管线：decode → MultichannelAudio，跳过临时文件
+                match decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel) {
                     Ok(a) => {
-                        prepared_fallback = Some(prepared);
+                        // 立体声：字节管线直接完成，无需继续路由
+                        if a.num_channels() == 2 {
+                            let wav_bytes = a.to_wav_bytes()?;
+                            let out_bytes = run_audiowmark_add_bytes(
+                                self,
+                                wav_bytes,
+                                &bytes_to_hex(message),
+                            )?;
+                            return MultichannelAudio::from_wav_bytes(&out_bytes)?.to_wav(output);
+                        }
                         a
                     }
-                    Err(Error::InvalidInput(_)) => {
-                        return self.embed(prepared.path.as_path(), output, message);
+                    Err(_) => {
+                        // 兜底：传统临时文件路径
+                        let prepared =
+                            prepare_input_for_audiowmark(input, "embed_multichannel_input")?;
+                        match MultichannelAudio::from_file(&prepared.path) {
+                            Ok(a) => {
+                                prepared_fallback = Some(prepared);
+                                a
+                            }
+                            Err(Error::InvalidInput(_)) => {
+                                return self.embed(prepared.path.as_path(), output, message);
+                            }
+                            Err(e) => return Err(e),
+                        }
                     }
-                    Err(e) => return Err(e),
                 }
             }
             Err(e) => return Err(e),
         };
         let num_channels = audio.num_channels();
+        // stereo_input 仅用于 prepared_fallback 路径的立体声兜底
         let stereo_input = prepared_fallback
             .as_ref()
             .map_or(input, |prepared| prepared.path.as_path());
 
-        // 如果是立体声，直接使用普通方法
+        // 如果是立体声（来自 prepared_fallback 路径），直接使用普通方法
         if num_channels == 2 {
             return self.embed(stereo_input, output, message);
         }
@@ -435,35 +456,58 @@ impl Audio {
 
         // 加载多声道音频以检测声道数。
         // 优先尝试原始输入，避免对可直接读取的 WAV/FLAC 先做不必要的临时解码。
-        // 若失败则再走 prepare/decode 兜底；若仍失败，回退到立体声路径，
-        // 由 audiowmark 的 libsndfile 原生处理该格式。
+        // 若失败则先尝试内存解码管线（DecodedPcm → MultichannelAudio，无临时文件）；
+        // 仍失败则 prepare/临时文件兜底；最终失败回退到立体声路径。
         let audio = match MultichannelAudio::from_file(input) {
             Ok(a) => a,
             Err(Error::InvalidInput(_)) => {
-                let prepared = prepare_input_for_audiowmark(input, "detect_multichannel_input")?;
-                match MultichannelAudio::from_file(&prepared.path) {
+                // 内存管线：decode → MultichannelAudio，跳过临时文件
+                match decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel) {
                     Ok(a) => {
-                        prepared_fallback = Some(prepared);
+                        // 立体声：字节管线直接完成，无需继续路由
+                        if a.num_channels() == 2 {
+                            let wav_bytes = a.to_wav_bytes()?;
+                            let raw = run_audiowmark_get_bytes(self, wav_bytes)?;
+                            let stdout = String::from_utf8_lossy(&raw.stdout);
+                            let stderr = String::from_utf8_lossy(&raw.stderr);
+                            let result = parse_detect_output(&stdout, &stderr);
+                            return Ok(MultichannelDetectResult {
+                                pairs: vec![(0, "FL+FR".to_string(), result.clone())],
+                                best: result,
+                            });
+                        }
                         a
                     }
-                    Err(Error::InvalidInput(_)) => {
-                        let result = self.detect(prepared.path.as_path())?;
-                        return Ok(MultichannelDetectResult {
-                            pairs: vec![(0, "FL+FR".to_string(), result.clone())],
-                            best: result,
-                        });
+                    Err(_) => {
+                        // 兜底：传统临时文件路径
+                        let prepared =
+                            prepare_input_for_audiowmark(input, "detect_multichannel_input")?;
+                        match MultichannelAudio::from_file(&prepared.path) {
+                            Ok(a) => {
+                                prepared_fallback = Some(prepared);
+                                a
+                            }
+                            Err(Error::InvalidInput(_)) => {
+                                let result = self.detect(prepared.path.as_path())?;
+                                return Ok(MultichannelDetectResult {
+                                    pairs: vec![(0, "FL+FR".to_string(), result.clone())],
+                                    best: result,
+                                });
+                            }
+                            Err(e) => return Err(e),
+                        }
                     }
-                    Err(e) => return Err(e),
                 }
             }
             Err(e) => return Err(e),
         };
         let num_channels = audio.num_channels();
+        // stereo_input 仅用于 prepared_fallback 路径的立体声兜底
         let stereo_input = prepared_fallback
             .as_ref()
             .map_or(input, |prepared| prepared.path.as_path());
 
-        // 如果是立体声，直接使用普通方法
+        // 如果是立体声（来自 prepared_fallback 路径），直接使用普通方法
         if num_channels == 2 {
             let result = self.detect(stereo_input)?;
             return Ok(MultichannelDetectResult {
@@ -1642,6 +1686,45 @@ pub fn media_capabilities() -> AudioMediaCapabilities {
             container_ts: false,
         }
     }
+}
+
+/// 直接从已解码的 PCM 数据构建 `MultichannelAudio`，跳过"写临时 WAV → 再读回"的冗余 I/O。
+///
+/// `decode_to_wav` 路径：`DecodedPcm`（内存） → 磁盘 → `from_wav`（内存）
+/// 本函数路径：`DecodedPcm`（内存） → `MultichannelAudio`（内存），无磁盘接触。
+#[cfg(feature = "multichannel")]
+fn decoded_pcm_into_multichannel(decoded: DecodedPcm) -> Result<MultichannelAudio> {
+    use crate::multichannel::SampleFormat;
+
+    let num_channels = decoded.channels as usize;
+    if num_channels == 0 {
+        return Err(Error::InvalidInput(
+            "decoded PCM has no channels".to_string(),
+        ));
+    }
+    let sample_format = match decoded.bits_per_sample {
+        16 => SampleFormat::Int16,
+        24 => SampleFormat::Int24,
+        32 => SampleFormat::Int32,
+        b => {
+            return Err(Error::InvalidInput(format!(
+                "unsupported decoded bit depth: {b}"
+            )))
+        }
+    };
+    let total = decoded.samples.len();
+    if total % num_channels != 0 {
+        return Err(Error::InvalidInput(format!(
+            "decoded sample count {total} is not divisible by channel count {num_channels}"
+        )));
+    }
+    let num_samples = total / num_channels;
+    let mut channels = vec![Vec::with_capacity(num_samples); num_channels];
+    for (i, sample) in decoded.samples.into_iter().enumerate() {
+        let clamped = clamp_sample_to_bits(sample, decoded.bits_per_sample);
+        channels[i % num_channels].push(clamped);
+    }
+    MultichannelAudio::new(channels, decoded.sample_rate, sample_format)
 }
 
 fn clamp_sample_to_bits(sample: i32, bits_per_sample: u16) -> i32 {
