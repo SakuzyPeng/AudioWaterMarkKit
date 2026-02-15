@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use std::{
     fs,
     fs::File,
-    io::{Read, Write},
+    io::{Read, Seek, SeekFrom, Write},
 };
 
 use crate::error::{Error, Result};
@@ -783,15 +783,112 @@ fn run_audiowmark_add_pipe(
     output: &Path,
     message_hex: &str,
 ) -> Result<()> {
-    let input_bytes = fs::read(prepared_input)?;
-    let wav_bytes = run_audiowmark_add_bytes_pipe(audio, &input_bytes, message_hex)?;
-    fs::write(output, &wav_bytes)?;
-    Ok(())
+    run_audiowmark_add_pipe_streaming(audio, prepared_input, output, message_hex)
 }
 
 fn run_audiowmark_get_pipe(audio: &Audio, prepared_input: &Path) -> Result<Output> {
-    let input_bytes = fs::read(prepared_input)?;
-    run_audiowmark_get_bytes_pipe(audio, &input_bytes)
+    let mut cmd = audio.audiowmark_command();
+    cmd.arg("get");
+
+    if let Some(ref key_file) = audio.key_file {
+        cmd.arg("--key").arg(key_file);
+    }
+
+    cmd.arg("-");
+    run_command_with_stdin_from_file(&mut cmd, prepared_input)
+}
+
+fn run_audiowmark_add_pipe_streaming(
+    audio: &Audio,
+    prepared_input: &Path,
+    output: &Path,
+    message_hex: &str,
+) -> Result<()> {
+    let mut cmd = audio.audiowmark_command();
+    cmd.arg("add")
+        .arg("--strength")
+        .arg(audio.strength.to_string())
+        .arg("--input-format")
+        .arg("wav-pipe")
+        .arg("--output-format")
+        .arg("wav-pipe");
+
+    if let Some(ref key_file) = audio.key_file {
+        cmd.arg("--key").arg(key_file);
+    }
+    cmd.arg("-").arg("-").arg(message_hex);
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| Error::AudiowmarkExec("failed to take stdin handle".to_string()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| Error::AudiowmarkExec("failed to take stdout handle".to_string()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| Error::AudiowmarkExec("failed to take stderr handle".to_string()))?;
+    let input_file = File::open(prepared_input)?;
+    let output_file = File::create(output)?;
+
+    let (status, stdin_result, stdout_result, stderr_result) = std::thread::scope(|scope| {
+        let stdin_writer = scope.spawn(move || {
+            let mut input_file = input_file;
+            let mut stdin = stdin;
+            std::io::copy(&mut input_file, &mut stdin)
+        });
+        let stdout_reader = scope.spawn(move || {
+            let mut stdout = stdout;
+            let mut output_file = output_file;
+            std::io::copy(&mut stdout, &mut output_file)
+        });
+        let stderr_reader = scope.spawn(move || -> std::io::Result<Vec<u8>> {
+            let mut stderr = stderr;
+            let mut buf = Vec::new();
+            stderr.read_to_end(&mut buf)?;
+            Ok(buf)
+        });
+
+        let status = child.wait();
+        let stdin_result = stdin_writer.join();
+        let stdout_result = stdout_reader.join();
+        let stderr_result = stderr_reader.join();
+        (status, stdin_result, stdout_result, stderr_result)
+    });
+
+    let status = status.map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    let stdin_copied = stdin_result
+        .map_err(|_| Error::AudiowmarkExec("stdin streaming thread panicked".to_string()))?
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    let _ = stdin_copied;
+    let stdout_copied = stdout_result
+        .map_err(|_| Error::AudiowmarkExec("stdout streaming thread panicked".to_string()))?
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    if stdout_copied == 0 {
+        return Err(Error::AudiowmarkExec(
+            "pipe output is empty; expected WAV stream".to_string(),
+        ));
+    }
+    let stderr_bytes = stderr_result
+        .map_err(|_| Error::AudiowmarkExec("stderr streaming thread panicked".to_string()))?
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+
+    if !status.success() {
+        let stderr_text = String::from_utf8_lossy(&stderr_bytes);
+        return Err(Error::AudiowmarkExec(stderr_text.to_string()));
+    }
+    validate_wav_output_file(output)?;
+
+    normalize_wav_pipe_file_in_place(output)?;
+    Ok(())
 }
 
 fn run_command_with_stdin(cmd: &mut Command, stdin_data: &[u8]) -> Result<Output> {
@@ -802,26 +899,127 @@ fn run_command_with_stdin(cmd: &mut Command, stdin_data: &[u8]) -> Result<Output
         .spawn()
         .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
 
-    // 用 scoped thread 并发写 stdin 与读 stdout/stderr，避免双向管道死锁。
-    let mut stdin = child
+    let stdin = child
         .stdin
         .take()
         .ok_or_else(|| Error::AudiowmarkExec("failed to take stdin handle".to_string()))?;
-    let output = std::thread::scope(|scope| -> Result<Output> {
-        let writer = scope.spawn(|| stdin.write_all(stdin_data));
-        let output = child
-            .wait_with_output()
-            .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| Error::AudiowmarkExec("failed to take stdout handle".to_string()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| Error::AudiowmarkExec("failed to take stderr handle".to_string()))?;
 
-        writer
-            .join()
-            .map_err(|_| Error::AudiowmarkExec("stdin writer thread panicked".to_string()))?
-            .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    let (status, stdin_result, stdout_result, stderr_result) = std::thread::scope(|scope| {
+        let writer = scope.spawn(move || {
+            let mut stdin = stdin;
+            stdin.write_all(stdin_data)
+        });
+        let stdout_reader = scope.spawn(move || -> std::io::Result<Vec<u8>> {
+            let mut stdout = stdout;
+            let mut buf = Vec::new();
+            stdout.read_to_end(&mut buf)?;
+            Ok(buf)
+        });
+        let stderr_reader = scope.spawn(move || -> std::io::Result<Vec<u8>> {
+            let mut stderr = stderr;
+            let mut buf = Vec::new();
+            stderr.read_to_end(&mut buf)?;
+            Ok(buf)
+        });
+        let status = child.wait();
+        (
+            status,
+            writer.join(),
+            stdout_reader.join(),
+            stderr_reader.join(),
+        )
+    });
 
-        Ok(output)
-    })?;
+    let status = status.map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    stdin_result
+        .map_err(|_| Error::AudiowmarkExec("stdin writer thread panicked".to_string()))?
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    let stdout = stdout_result
+        .map_err(|_| Error::AudiowmarkExec("stdout reader thread panicked".to_string()))?
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    let stderr = stderr_result
+        .map_err(|_| Error::AudiowmarkExec("stderr reader thread panicked".to_string()))?
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
 
-    Ok(output)
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
+fn run_command_with_stdin_from_file(cmd: &mut Command, input_path: &Path) -> Result<Output> {
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| Error::AudiowmarkExec("failed to take stdin handle".to_string()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| Error::AudiowmarkExec("failed to take stdout handle".to_string()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| Error::AudiowmarkExec("failed to take stderr handle".to_string()))?;
+    let input_file = File::open(input_path)?;
+
+    let (status, stdin_result, stdout_result, stderr_result) = std::thread::scope(|scope| {
+        let writer = scope.spawn(move || {
+            let mut input_file = input_file;
+            let mut stdin = stdin;
+            std::io::copy(&mut input_file, &mut stdin)
+        });
+        let stdout_reader = scope.spawn(move || -> std::io::Result<Vec<u8>> {
+            let mut stdout = stdout;
+            let mut buf = Vec::new();
+            stdout.read_to_end(&mut buf)?;
+            Ok(buf)
+        });
+        let stderr_reader = scope.spawn(move || -> std::io::Result<Vec<u8>> {
+            let mut stderr = stderr;
+            let mut buf = Vec::new();
+            stderr.read_to_end(&mut buf)?;
+            Ok(buf)
+        });
+        let status = child.wait();
+        (
+            status,
+            writer.join(),
+            stdout_reader.join(),
+            stderr_reader.join(),
+        )
+    });
+
+    let status = status.map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    stdin_result
+        .map_err(|_| Error::AudiowmarkExec("stdin writer thread panicked".to_string()))?
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    let stdout = stdout_result
+        .map_err(|_| Error::AudiowmarkExec("stdout reader thread panicked".to_string()))?
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    let stderr = stderr_result
+        .map_err(|_| Error::AudiowmarkExec("stderr reader thread panicked".to_string()))?
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
+    })
 }
 
 fn effective_awmiomode() -> AwmIoMode {
@@ -888,6 +1086,70 @@ fn normalize_wav_pipe_output(mut bytes: Vec<u8>) -> Vec<u8> {
     }
 
     bytes
+}
+
+fn validate_wav_output_file(path: &Path) -> Result<()> {
+    let mut file = File::open(path)?;
+    let mut header = [0_u8; 12];
+    file.read_exact(&mut header)
+        .map_err(|e| Error::AudiowmarkExec(format!("failed to read output header: {e}")))?;
+    if !looks_like_wav_stream(&header) {
+        return Err(Error::AudiowmarkExec(
+            "pipe output is not a valid WAV stream".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn normalize_wav_pipe_file_in_place(path: &Path) -> Result<()> {
+    let mut file = fs::OpenOptions::new().read(true).write(true).open(path)?;
+    let file_len = file.metadata()?.len();
+    if file_len < 12 {
+        return Ok(());
+    }
+
+    let mut header = [0_u8; 12];
+    file.read_exact(&mut header)?;
+    if &header[0..4] != b"RIFF" || header[4..8] != [0xFF_u8; 4] || &header[8..12] != b"WAVE" {
+        return Ok(());
+    }
+
+    let riff_payload = u32::try_from(file_len.saturating_sub(8)).unwrap_or(u32::MAX);
+    file.seek(SeekFrom::Start(4))?;
+    file.write_all(&riff_payload.to_le_bytes())?;
+
+    let mut pos = 12_u64;
+    while pos.saturating_add(8) <= file_len {
+        file.seek(SeekFrom::Start(pos))?;
+        let mut chunk_header = [0_u8; 8];
+        file.read_exact(&mut chunk_header)?;
+        let chunk_size = u32::from_le_bytes([
+            chunk_header[4],
+            chunk_header[5],
+            chunk_header[6],
+            chunk_header[7],
+        ]);
+
+        if &chunk_header[0..4] == b"data" {
+            let data_payload = u32::try_from(file_len.saturating_sub(pos + 8)).unwrap_or(u32::MAX);
+            file.seek(SeekFrom::Start(pos + 4))?;
+            file.write_all(&data_payload.to_le_bytes())?;
+            break;
+        }
+
+        let chunk_size_usize = usize::try_from(chunk_size).unwrap_or(usize::MAX);
+        let padded = usize::from(chunk_size_usize % 2 != 0);
+        let next_pos = pos
+            .saturating_add(8)
+            .saturating_add(u64::try_from(chunk_size_usize).unwrap_or(u64::MAX))
+            .saturating_add(u64::try_from(padded).unwrap_or(0));
+        if next_pos <= pos {
+            break;
+        }
+        pos = next_pos;
+    }
+
+    Ok(())
 }
 
 fn should_fallback_pipe_error(err: &Error) -> bool {
@@ -1584,6 +1846,46 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_wav_output_file_rejects_non_wav() {
+        let path = unique_temp_file("validate_non_wav.bin");
+        let write_result = std::fs::write(&path, b"not-a-wav-stream");
+        assert!(write_result.is_ok());
+
+        let validated = validate_wav_output_file(&path);
+        assert!(matches!(validated, Err(Error::AudiowmarkExec(_))));
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_normalize_wav_pipe_file_in_place_updates_sizes() {
+        let path = unique_temp_file("normalize_wav_pipe.wav");
+        let wav_pipe = wav_pipe_fixture_bytes();
+        let write_result = std::fs::write(&path, &wav_pipe);
+        assert!(write_result.is_ok());
+
+        let normalized = normalize_wav_pipe_file_in_place(&path);
+        assert!(normalized.is_ok());
+
+        let bytes = std::fs::read(&path);
+        assert!(bytes.is_ok());
+        let bytes = bytes.unwrap_or_default();
+        assert!(bytes.len() >= 48);
+        assert_eq!(&bytes[0..4], b"RIFF");
+        assert_eq!(&bytes[8..12], b"WAVE");
+        assert_eq!(
+            u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]),
+            40
+        );
+        assert_eq!(
+            u32::from_le_bytes([bytes[40], bytes[41], bytes[42], bytes[43]]),
+            4
+        );
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn test_effective_awmiomode_respects_env() {
         with_disable_pipe_env(None, || {
             assert_eq!(effective_awmiomode(), AwmIoMode::Pipe);
@@ -1848,6 +2150,25 @@ mod tests {
             nanos,
             name
         ))
+    }
+
+    fn wav_pipe_fixture_bytes() -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&[0xFF_u8; 4]);
+        bytes.extend_from_slice(b"WAVE");
+        bytes.extend_from_slice(b"fmt ");
+        bytes.extend_from_slice(&16_u32.to_le_bytes());
+        bytes.extend_from_slice(&1_u16.to_le_bytes());
+        bytes.extend_from_slice(&2_u16.to_le_bytes());
+        bytes.extend_from_slice(&48_000_u32.to_le_bytes());
+        bytes.extend_from_slice(&192_000_u32.to_le_bytes());
+        bytes.extend_from_slice(&4_u16.to_le_bytes());
+        bytes.extend_from_slice(&16_u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&[0xFF_u8; 4]);
+        bytes.extend_from_slice(&[1_u8, 2_u8, 3_u8, 4_u8]);
+        bytes
     }
 
     fn with_disable_pipe_env(value: Option<&str>, f: impl FnOnce()) {
