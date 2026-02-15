@@ -361,8 +361,8 @@ impl Audio {
                 // 内存管线：decode → MultichannelAudio，跳过临时文件
                 match decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel) {
                     Ok(a) => {
-                        // 立体声：字节管线直接完成，无需继续路由
-                        if a.num_channels() == 2 {
+                        // 单声道或立体声：字节管线直接完成，无需继续路由
+                        if a.num_channels() <= 2 {
                             let wav_bytes = a.to_wav_bytes()?;
                             let out_bytes =
                                 run_audiowmark_add_bytes(self, wav_bytes, &bytes_to_hex(message))?;
@@ -390,13 +390,13 @@ impl Audio {
             Err(e) => return Err(e),
         };
         let num_channels = audio.num_channels();
-        // stereo_input 仅用于 prepared_fallback 路径的立体声兜底
+        // stereo_input 仅用于 prepared_fallback 路径的单声道/立体声兜底
         let stereo_input = prepared_fallback
             .as_ref()
             .map_or(input, |prepared| prepared.path.as_path());
 
-        // 如果是立体声（来自 prepared_fallback 路径），直接使用普通方法
-        if num_channels == 2 {
+        // 单声道或立体声（来自 prepared_fallback 路径），直接使用普通方法
+        if num_channels <= 2 {
             return self.embed(stereo_input, output, message);
         }
 
@@ -1355,7 +1355,8 @@ fn detect_multichannel_from_audio(
 ) -> Result<MultichannelDetectResult> {
     let num_channels = audio.num_channels();
 
-    if num_channels == 2 {
+    // 单声道或立体声：audiowmark 原生支持，无需多声道路由
+    if num_channels <= 2 {
         if let Some(path) = stereo_file {
             let result = audio_engine.detect(path)?;
             return Ok(MultichannelDetectResult {
@@ -1408,9 +1409,11 @@ fn build_stereo_for_route_step(
             )
         }
         RouteMode::Mono(channel) => {
+            // 直接发 1 声道给 audiowmark；audiowmark 原生支持 mono，
+            // 无需 L+L 复制（复制会引入人工相关性，降低水印质量）。
             let mono = audio.channel_samples(channel)?.to_vec();
             MultichannelAudio::new(
-                vec![mono.clone(), mono],
+                vec![mono],
                 audio.sample_rate(),
                 audio.sample_format(),
             )
@@ -1427,22 +1430,30 @@ fn apply_processed_route_step(
     step: &RouteStep,
     processed: &MultichannelAudio,
 ) -> Result<()> {
-    if processed.num_channels() != 2 {
-        return Err(Error::InvalidInput(format!(
-            "processed stereo route output expects 2 channels, got {}",
-            processed.num_channels()
-        )));
-    }
-
-    let left = processed.channel_samples(0)?.to_vec();
     match step.mode {
         RouteMode::Pair(left_index, right_index) => {
+            if processed.num_channels() != 2 {
+                return Err(Error::InvalidInput(format!(
+                    "processed pair route output expects 2 channels, got {}",
+                    processed.num_channels()
+                )));
+            }
+            let left = processed.channel_samples(0)?.to_vec();
             let right = processed.channel_samples(1)?.to_vec();
             target.replace_channel_samples(left_index, left)?;
             target.replace_channel_samples(right_index, right)?;
             Ok(())
         }
-        RouteMode::Mono(channel) => target.replace_channel_samples(channel, left),
+        RouteMode::Mono(channel) => {
+            // Mono 步骤：audiowmark 输出 1 声道（新路径）或 2 声道均可，取 ch 0
+            if processed.num_channels() == 0 {
+                return Err(Error::InvalidInput(
+                    "processed mono route output has no channels".to_string(),
+                ));
+            }
+            let samples = processed.channel_samples(0)?.to_vec();
+            target.replace_channel_samples(channel, samples)
+        }
         RouteMode::Skip { .. } => Ok(()),
     }
 }
@@ -2057,8 +2068,9 @@ mod tests {
             return;
         };
 
+        // 新路径：audiowmark 返回 1 声道（native mono）
         let processed = MultichannelAudio::new(
-            vec![vec![7, 8, 9], vec![9, 9, 9]],
+            vec![vec![7, 8, 9]],
             48_000,
             crate::multichannel::SampleFormat::Int24,
         );
