@@ -71,6 +71,68 @@ impl ChunkIndex {
     }
 }
 
+/// 解析 chna chunk，返回属于 Bed（DirectSpeakers）的 0-based 声道索引列表。
+///
+/// packFormat ID 含 `_0001`（DirectSpeakers 类型）视为 Bed；
+/// 含 `_0003`（Objects 类型）视为 Object，排除在外。
+/// 若 chna 不存在或解析失败，返回 `None`（调用方应退回全声道路径）。
+pub(crate) fn parse_bed_channel_indices(
+    path: &Path,
+    index: &ChunkIndex,
+) -> Result<Option<Vec<usize>>> {
+    let Some(chna_entry) = index.chunks.iter().find(|c| c.id == CHNA_SIG) else {
+        return Ok(None);
+    };
+    let payload_size = usize::try_from(chna_entry.size)
+        .map_err(|_| Error::AdmUnsupported("chna chunk too large".to_string()))?;
+    if payload_size < 4 {
+        return Ok(None);
+    }
+    let mut file = File::open(path)
+        .map_err(|e| Error::AdmUnsupported(format!("failed to open for chna: {e}")))?;
+    file.seek(SeekFrom::Start(chna_entry.data_offset))
+        .map_err(|e| Error::AdmUnsupported(format!("failed to seek chna: {e}")))?;
+    let mut payload = vec![0_u8; payload_size];
+    file.read_exact(&mut payload)
+        .map_err(|e| Error::AdmUnsupported(format!("failed to read chna: {e}")))?;
+
+    let num_uids = usize::from(read_u16_le(&payload[2..4])?);
+    const ENTRY_SIZE: usize = 40;
+    let mut bed_indices = Vec::new();
+    for i in 0..num_uids {
+        let off = 4 + i * ENTRY_SIZE;
+        if off + ENTRY_SIZE > payload.len() {
+            break;
+        }
+        let track_num = usize::from(read_u16_le(&payload[off..off + 2])?);
+        if track_num == 0 {
+            continue;
+        }
+        let channel_index = track_num - 1; // 1-based → 0-based
+        // packFormat 引用在偏移 26，长度 11 字节（含 NUL padding）
+        let pack_fmt_bytes = &payload[off + 26..off + 37];
+        let pack_fmt = pack_fmt_bytes
+            .iter()
+            .take_while(|&&b| b != 0)
+            .copied()
+            .collect::<Vec<u8>>();
+        let pack_fmt_str = String::from_utf8_lossy(&pack_fmt);
+        if is_bed_pack_format(&pack_fmt_str) {
+            bed_indices.push(channel_index);
+        }
+    }
+    if bed_indices.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(bed_indices))
+    }
+}
+
+/// DirectSpeakers（Bed）packFormat 判断：ID 含 `_0001`，不含 `_0003`（Objects）。
+fn is_bed_pack_format(pack_fmt: &str) -> bool {
+    pack_fmt.contains("_0001") && !pack_fmt.contains("_0003")
+}
+
 pub(crate) fn probe_adm_bwf(path: &Path) -> Result<Option<ChunkIndex>> {
     let maybe_index = parse_chunk_index(path)?;
     let Some(index) = maybe_index else {

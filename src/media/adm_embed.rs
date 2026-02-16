@@ -9,7 +9,7 @@ use crate::error::{Error, Result};
 use crate::message::MESSAGE_LEN;
 use crate::multichannel::{ChannelLayout, MultichannelAudio, SampleFormat};
 
-use super::adm_bwav::{probe_adm_bwf, ChunkIndex, PcmFormat};
+use super::adm_bwav::{parse_bed_channel_indices, probe_adm_bwf, ChunkIndex, PcmFormat};
 
 pub(crate) fn embed_adm_multichannel(
     audio_engine: &Audio,
@@ -31,8 +31,11 @@ pub(crate) fn embed_adm_multichannel(
         )));
     };
 
+    // 解析 chna 分离 Bed / Object 声道；若无 chna 则退回全声道路径。
+    let bed_indices = parse_bed_channel_indices(input, &index)?;
+
     rewrite_adm_with_transform(input, output, &index, |source_audio| {
-        embed_pairs_via_audiowmark(audio_engine, source_audio, message, layout)
+        embed_adm_bed_only(audio_engine, source_audio, message, layout, &bed_indices)
     })
 }
 
@@ -98,6 +101,76 @@ where
             output.display()
         ))
     })
+}
+
+/// ADM Bed-only 嵌入：仅对 Bed 声道打水印，Object 声道原样保留。
+///
+/// `bed_indices`: `Some(indices)` 时只对指定声道处理，`None` 时退回全声道。
+fn embed_adm_bed_only(
+    audio_engine: &Audio,
+    source_audio: MultichannelAudio,
+    message: &[u8; MESSAGE_LEN],
+    layout: Option<ChannelLayout>,
+    bed_indices: &Option<Vec<usize>>,
+) -> Result<MultichannelAudio> {
+    let Some(indices) = bed_indices else {
+        // 无 chna → 全声道路径
+        return embed_pairs_via_audiowmark(audio_engine, source_audio, message, layout);
+    };
+
+    // 校验 indices 合法性
+    let total_ch = source_audio.num_channels();
+    if indices.is_empty() || indices.iter().any(|&i| i >= total_ch) {
+        return embed_pairs_via_audiowmark(audio_engine, source_audio, message, layout);
+    }
+
+    // 如果所有声道都是 Bed，直接走全声道路径（避免无意义的提取-重组开销）
+    if indices.len() == total_ch {
+        return embed_pairs_via_audiowmark(audio_engine, source_audio, message, layout);
+    }
+
+    // 提取 Bed 声道
+    let bed_layout = layout.or_else(|| ChannelLayout::from_channels_opt(indices.len()));
+    let bed_audio = extract_channels(&source_audio, indices)?;
+
+    // 对 Bed 声道打水印
+    let watermarked_bed =
+        embed_pairs_via_audiowmark(audio_engine, bed_audio, message, bed_layout)?;
+
+    // 将水印后的 Bed 写回对应位置，Object 声道不变
+    let mut result = source_audio;
+    for (bed_pos, &ch_idx) in indices.iter().enumerate() {
+        let samples = watermarked_bed
+            .channel_samples(bed_pos)
+            .map_err(|e| {
+                Error::AdmPreserveFailed(format!("bed channel {bed_pos} read error: {e}"))
+            })?
+            .to_vec();
+        result
+            .replace_channel_samples(ch_idx, samples)
+            .map_err(|e| {
+                Error::AdmPreserveFailed(format!("bed channel {ch_idx} write error: {e}"))
+            })?;
+    }
+    Ok(result)
+}
+
+/// 从 MultichannelAudio 按索引提取子集声道（供外部模块调用）。
+pub(crate) fn extract_bed_channels(
+    audio: &MultichannelAudio,
+    indices: &[usize],
+) -> Result<MultichannelAudio> {
+    extract_channels(audio, indices)
+}
+
+/// 从 MultichannelAudio 按索引提取子集声道。
+fn extract_channels(audio: &MultichannelAudio, indices: &[usize]) -> Result<MultichannelAudio> {
+    let mut channels = Vec::with_capacity(indices.len());
+    for &idx in indices {
+        channels.push(audio.channel_samples(idx)?.to_vec());
+    }
+    MultichannelAudio::new(channels, audio.sample_rate(), audio.sample_format())
+        .map_err(|e| Error::AdmPreserveFailed(format!("failed to build bed audio: {e}")))
 }
 
 fn embed_pairs_via_audiowmark(

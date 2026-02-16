@@ -445,9 +445,19 @@ impl Audio {
         let input = input.as_ref();
 
         // ADM/BWF 路径：直接从 data chunk 读 PCM，跳过 FFmpeg 解码，保留所有非音频 chunk 语义。
+        // 解析 chna 提取 Bed 声道，仅对 Bed 做检测路由，Object 声道不参与。
         if let Some(ref index) = media::adm_bwav::probe_adm_bwf(input)? {
-            let audio = media::adm_embed::decode_pcm_audio(input, index)?;
-            return detect_multichannel_from_audio(self, audio, None, input, layout);
+            let full_audio = media::adm_embed::decode_pcm_audio(input, index)?;
+            let bed_indices = media::adm_bwav::parse_bed_channel_indices(input, index)?;
+            let (bed_audio, bed_layout) = if let Some(ref indices) = bed_indices {
+                let extracted = media::adm_embed::extract_bed_channels(&full_audio, indices)
+                    .unwrap_or(full_audio);
+                let detected_layout = ChannelLayout::from_channels_opt(extracted.num_channels());
+                (extracted, detected_layout.or(layout))
+            } else {
+                (full_audio, layout)
+            };
+            return detect_multichannel_from_audio(self, bed_audio, None, input, bed_layout);
         }
 
         // 加载多声道音频以检测声道数。
@@ -1047,17 +1057,24 @@ fn looks_like_wav_stream(bytes: &[u8]) -> bool {
 
 /// audiowmark `--output-format wav-pipe` 输出 RIFF/data chunk size 为 `0xFFFF_FFFF`。
 /// 修复大小字段，使返回的字节序列成为合法的标准 WAV，可被 hound 等工具直接读取。
+///
+/// 注意：audiowmark 在 pipe 模式下会在奇数长度 data 末尾追加 1 字节 WAV 对齐填充。
+/// 必须从 fmt chunk 读取 block_align 并将 data size 截断到 block_align 的整数倍，
+/// 否则 hound 会报 "data chunk length is not a multiple of sample size"。
 fn normalize_wav_pipe_output(mut bytes: Vec<u8>) -> Vec<u8> {
-    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || bytes[4..8] != [0xFF_u8; 4] {
+    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
         return bytes;
     }
 
-    // 修复 RIFF chunk 大小
-    let riff_payload = u32::try_from(bytes.len().saturating_sub(8)).unwrap_or(u32::MAX);
-    bytes[4..8].copy_from_slice(&riff_payload.to_le_bytes());
+    // 修复 RIFF chunk 大小（流式占位符 0xFFFFFFFF）
+    if bytes[4..8] == [0xFF_u8; 4] {
+        let riff_payload = u32::try_from(bytes.len().saturating_sub(8)).unwrap_or(u32::MAX);
+        bytes[4..8].copy_from_slice(&riff_payload.to_le_bytes());
+    }
 
-    // 扫描 sub-chunk，找到 data chunk 并修复其大小
+    // 扫描 sub-chunk：先从 fmt 读取 block_align，再修复 data chunk 大小
     let mut pos = 12usize;
+    let mut block_align: u32 = 1;
     while pos.saturating_add(8) <= bytes.len() {
         let chunk_size = u32::from_le_bytes([
             bytes[pos + 4],
@@ -1065,10 +1082,24 @@ fn normalize_wav_pipe_output(mut bytes: Vec<u8>) -> Vec<u8> {
             bytes[pos + 6],
             bytes[pos + 7],
         ]);
-        if &bytes[pos..pos + 4] == b"data" {
-            let data_payload =
+        if &bytes[pos..pos + 4] == b"fmt " {
+            // fmt payload 布局：AudioFormat(2)+NumChannels(2)+SampleRate(4)+ByteRate(4)+BlockAlign(2)
+            // block_align 位于 chunk body 偏移 12，即文件偏移 pos+8+12 = pos+20
+            if pos + 22 <= bytes.len() {
+                let ba = u16::from_le_bytes([bytes[pos + 20], bytes[pos + 21]]);
+                if ba > 0 {
+                    block_align = u32::from(ba);
+                }
+            }
+        } else if &bytes[pos..pos + 4] == b"data" && chunk_size == u32::MAX {
+            let raw =
                 u32::try_from(bytes.len().saturating_sub(pos + 8)).unwrap_or(u32::MAX);
+            // 截断到 block_align 整数倍，排除 WAV 块尾部的对齐填充字节
+            let data_payload = raw - (raw % block_align);
             bytes[pos + 4..pos + 8].copy_from_slice(&data_payload.to_le_bytes());
+            break;
+        } else if &bytes[pos..pos + 4] == b"data" {
+            // data chunk 大小已知（非流式），不修改
             break;
         }
         let chunk_size_usize = usize::try_from(chunk_size).unwrap_or(usize::MAX);
@@ -1108,15 +1139,19 @@ fn normalize_wav_pipe_file_in_place(path: &Path) -> Result<()> {
 
     let mut header = [0_u8; 12];
     file.read_exact(&mut header)?;
-    if &header[0..4] != b"RIFF" || header[4..8] != [0xFF_u8; 4] || &header[8..12] != b"WAVE" {
+    if &header[0..4] != b"RIFF" || &header[8..12] != b"WAVE" {
         return Ok(());
     }
 
-    let riff_payload = u32::try_from(file_len.saturating_sub(8)).unwrap_or(u32::MAX);
-    file.seek(SeekFrom::Start(4))?;
-    file.write_all(&riff_payload.to_le_bytes())?;
+    // 修复 RIFF chunk 大小（流式占位符 0xFFFFFFFF）
+    if header[4..8] == [0xFF_u8; 4] {
+        let riff_payload = u32::try_from(file_len.saturating_sub(8)).unwrap_or(u32::MAX);
+        file.seek(SeekFrom::Start(4))?;
+        file.write_all(&riff_payload.to_le_bytes())?;
+    }
 
     let mut pos = 12_u64;
+    let mut block_align: u32 = 1;
     while pos.saturating_add(8) <= file_len {
         file.seek(SeekFrom::Start(pos))?;
         let mut chunk_header = [0_u8; 8];
@@ -1128,10 +1163,26 @@ fn normalize_wav_pipe_file_in_place(path: &Path) -> Result<()> {
             chunk_header[7],
         ]);
 
-        if &chunk_header[0..4] == b"data" {
-            let data_payload = u32::try_from(file_len.saturating_sub(pos + 8)).unwrap_or(u32::MAX);
-            file.seek(SeekFrom::Start(pos + 4))?;
-            file.write_all(&data_payload.to_le_bytes())?;
+        if &chunk_header[0..4] == b"fmt " {
+            // block_align 位于 fmt chunk body 偏移 12（pos+8+12=pos+20）
+            if pos + 22 <= file_len {
+                file.seek(SeekFrom::Start(pos + 20))?;
+                let mut ba_bytes = [0_u8; 2];
+                file.read_exact(&mut ba_bytes)?;
+                let ba = u16::from_le_bytes(ba_bytes);
+                if ba > 0 {
+                    block_align = u32::from(ba);
+                }
+            }
+        } else if &chunk_header[0..4] == b"data" {
+            if chunk_size == u32::MAX {
+                let raw =
+                    u32::try_from(file_len.saturating_sub(pos + 8)).unwrap_or(u32::MAX);
+                // 截断到 block_align 整数倍，排除 WAV 块尾部的对齐填充字节
+                let data_payload = raw - (raw % block_align);
+                file.seek(SeekFrom::Start(pos + 4))?;
+                file.write_all(&data_payload.to_le_bytes())?;
+            }
             break;
         }
 

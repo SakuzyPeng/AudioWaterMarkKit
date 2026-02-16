@@ -17,6 +17,8 @@ pub enum ChannelLayout {
     Surround512,
     /// 7.1 环绕 (8ch): FL FR FC LFE BL BR SL SR
     Surround71,
+    /// 7.1.2 Atmos Bed (10ch): FL FR FC LFE BL BR SL SR Lts Rts
+    Surround712,
     /// 7.1.4 Atmos (12ch): FL FR FC LFE BL BR SL SR TFL TFR TBL TBR
     Surround714,
     /// 9.1.6 Atmos (16ch): FL FR FC LFE BL BR SL SR FLC FRC TFL TFR TBL TBR TSL TSR
@@ -100,6 +102,12 @@ pub(crate) fn build_smart_route_plan(
             steps: known_surround_steps(layout, lfe_mode),
             warnings: Vec::new(),
         },
+        ChannelLayout::Surround712 if channels == 10 => RoutePlan {
+            layout,
+            channels,
+            steps: known_surround_steps(layout, lfe_mode),
+            warnings: Vec::new(),
+        },
         ChannelLayout::Surround714 if channels == 12 => RoutePlan {
             layout,
             channels,
@@ -145,6 +153,13 @@ fn known_surround_steps(layout: ChannelLayout, lfe_mode: LfeMode) -> Vec<RouteSt
         ChannelLayout::Surround71 => {
             steps.push(pair_step(4, 5, "BL+BR"));
             steps.push(pair_step(6, 7, "SL+SR"));
+        }
+        ChannelLayout::Surround712 => {
+            // 7.1.2: FL FR FC LFE BL BR SL SR Lts Rts
+            // 前 3 步（FL+FR, FC(mono), LFE）由 known_surround_steps 顶部公共代码添加
+            steps.push(pair_step(4, 5, "BL+BR"));
+            steps.push(pair_step(6, 7, "SL+SR"));
+            steps.push(pair_step(8, 9, "Lts+Rts"));
         }
         ChannelLayout::Surround714 => {
             steps.push(pair_step(4, 5, "BL+BR"));
@@ -219,6 +234,7 @@ impl ChannelLayout {
             Self::Stereo => 2,
             Self::Surround51 => 6,
             Self::Surround512 | Self::Surround71 => 8,
+            Self::Surround712 => 10,
             Self::Surround714 => 12,
             Self::Surround916 => 16,
             Self::Custom(n) => *n,
@@ -238,9 +254,24 @@ impl ChannelLayout {
             2 => Self::Stereo,
             6 => Self::Surround51,
             8 => Self::Surround71, // 默认 7.1，可手动指定 5.1.2
+            10 => Self::Surround712,
             12 => Self::Surround714,
             16 => Self::Surround916,
             n => Self::Custom(n),
+        }
+    }
+
+    /// 从声道数推断布局，无已知匹配时返回 `None`（不产生 `Custom` 兜底）。
+    #[must_use]
+    pub const fn from_channels_opt(channels: usize) -> Option<Self> {
+        match channels {
+            2 => Some(Self::Stereo),
+            6 => Some(Self::Surround51),
+            8 => Some(Self::Surround71),
+            10 => Some(Self::Surround712),
+            12 => Some(Self::Surround714),
+            16 => Some(Self::Surround916),
+            _ => None,
         }
     }
 
@@ -252,6 +283,7 @@ impl ChannelLayout {
             Self::Surround51 => vec!["FL+FR", "FC+LFE", "BL+BR"],
             Self::Surround512 => vec!["FL+FR", "FC+LFE", "BL+BR", "TFL+TFR"],
             Self::Surround71 => vec!["FL+FR", "FC+LFE", "BL+BR", "SL+SR"],
+            Self::Surround712 => vec!["FL+FR", "FC+LFE", "BL+BR", "SL+SR", "Lts+Rts"],
             Self::Surround714 => {
                 vec!["FL+FR", "FC+LFE", "BL+BR", "SL+SR", "TFL+TFR", "TBL+TBR"]
             }
@@ -827,9 +859,17 @@ impl MultichannelAudio {
 /// hound 拒绝此格式；将大小字段修复为实际值后再交给 hound 解析。
 ///
 /// 若 RIFF size 不为 `0xFFFF_FFFF` 则直接借用原始切片，不做任何复制。
+///
+/// 注意：audiowmark 在 pipe 模式下会在奇数长度 data 末尾追加 1 字节 WAV 对齐填充。
+/// 必须从 fmt chunk 读取 block_align 并将 data size 截断到 block_align 的整数倍。
 #[cfg(feature = "multichannel")]
 fn normalize_wav_pipe_sizes(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
-    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || bytes[4..8] != [0xFF_u8; 4] {
+    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return std::borrow::Cow::Borrowed(bytes);
+    }
+
+    // RIFF size が 0xFFFFFFFF でなければ修复不要
+    if bytes[4..8] != [0xFF_u8; 4] {
         return std::borrow::Cow::Borrowed(bytes);
     }
 
@@ -839,8 +879,9 @@ fn normalize_wav_pipe_sizes(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
     let riff_payload = u32::try_from(patched.len().saturating_sub(8)).unwrap_or(u32::MAX);
     patched[4..8].copy_from_slice(&riff_payload.to_le_bytes());
 
-    // 扫描 sub-chunk，找到 data chunk 并修复其大小
+    // 扫描 sub-chunk：先从 fmt 读取 block_align，再修复 data chunk 大小
     let mut pos = 12usize; // 跳过 RIFF(4) + size(4) + WAVE(4)
+    let mut block_align: u32 = 1;
     while pos.saturating_add(8) <= patched.len() {
         let chunk_size = u32::from_le_bytes([
             patched[pos + 4],
@@ -848,11 +889,24 @@ fn normalize_wav_pipe_sizes(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
             patched[pos + 6],
             patched[pos + 7],
         ]);
-        if &patched[pos..pos + 4] == b"data" {
-            let data_payload =
+        if &patched[pos..pos + 4] == b"fmt " {
+            // fmt payload 布局：AudioFormat(2)+NumChannels(2)+SampleRate(4)+ByteRate(4)+BlockAlign(2)
+            // block_align 位于 chunk body 偏移 12，即 pos+20
+            if pos + 22 <= patched.len() {
+                let ba = u16::from_le_bytes([patched[pos + 20], patched[pos + 21]]);
+                if ba > 0 {
+                    block_align = u32::from(ba);
+                }
+            }
+        } else if &patched[pos..pos + 4] == b"data" && chunk_size == u32::MAX {
+            let raw =
                 u32::try_from(patched.len().saturating_sub(pos + 8)).unwrap_or(u32::MAX);
+            // 截断到 block_align 整数倍，排除 WAV 块尾部的对齐填充字节
+            let data_payload = raw - (raw % block_align);
             patched[pos + 4..pos + 8].copy_from_slice(&data_payload.to_le_bytes());
             break;
+        } else if &patched[pos..pos + 4] == b"data" {
+            break; // data chunk 大小已知，不修改
         }
         // chunk_size 为 0xFFFF_FFFF 说明遇到另一个未知长度 chunk，无法前进
         let chunk_size_usize = usize::try_from(chunk_size).unwrap_or(usize::MAX);
