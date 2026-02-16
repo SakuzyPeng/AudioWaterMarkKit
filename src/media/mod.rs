@@ -4,6 +4,8 @@
 pub(crate) mod adm_bwav;
 #[cfg(feature = "multichannel")]
 pub(crate) mod adm_embed;
+#[cfg(feature = "multichannel")]
+pub(crate) mod adm_routing;
 
 #[cfg(feature = "ffmpeg-decode")]
 mod ffmpeg_decode;

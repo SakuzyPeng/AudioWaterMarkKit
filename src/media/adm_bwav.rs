@@ -128,6 +128,98 @@ pub(crate) fn parse_bed_channel_indices(
     }
 }
 
+/// 解析 chna + axml，返回 Bed 声道的 `(channelIndex, speakerLabel)` 列表。
+///
+/// 同时返回 [`AdmMaps`] 供调用方进一步使用。
+///
+/// 解析链路（参见 [`adm_routing`] 模块文档）：
+/// `chna trackIndex → AT_xxx → (axml) AS_xxx → AC_xxx → speakerLabel`
+///
+/// 若 chna/axml 缺失、解析失败或没有任何 Bed 声道，返回空 `Vec`。
+pub(crate) fn parse_bed_channel_speaker_labels(
+    path: &Path,
+    index: &ChunkIndex,
+) -> Result<Vec<(usize, String)>> {
+    use super::adm_routing::{AdmMaps, parse_adm_maps};
+
+    // ── 读 chna ──
+    let Some(chna_entry) = index.chunks.iter().find(|c| c.id == CHNA_SIG) else {
+        return Ok(Vec::new());
+    };
+    let payload_size = usize::try_from(chna_entry.size)
+        .map_err(|_| Error::AdmUnsupported("chna chunk too large".to_string()))?;
+    if payload_size < 4 {
+        return Ok(Vec::new());
+    }
+    let mut file = File::open(path)
+        .map_err(|e| Error::AdmUnsupported(format!("failed to open for chna: {e}")))?;
+    file.seek(SeekFrom::Start(chna_entry.data_offset))
+        .map_err(|e| Error::AdmUnsupported(format!("failed to seek chna: {e}")))?;
+    let mut chna_payload = vec![0_u8; payload_size];
+    file.read_exact(&mut chna_payload)
+        .map_err(|e| Error::AdmUnsupported(format!("failed to read chna: {e}")))?;
+
+    // ── 读 axml ──
+    let maps: AdmMaps = if let Some(axml_entry) = index.chunks.iter().find(|c| c.id == AXML_SIG) {
+        let axml_size = usize::try_from(axml_entry.size)
+            .unwrap_or(0);
+        let mut axml_buf = vec![0_u8; axml_size];
+        file.seek(SeekFrom::Start(axml_entry.data_offset))
+            .map_err(|e| Error::AdmUnsupported(format!("failed to seek axml: {e}")))?;
+        file.read_exact(&mut axml_buf)
+            .map_err(|e| Error::AdmUnsupported(format!("failed to read axml: {e}")))?;
+        parse_adm_maps(&axml_buf)
+    } else {
+        AdmMaps::default()
+    };
+
+    // ── 解析 chna 条目，提取 Bed 声道 → speakerLabel ──
+    let num_uids = usize::from(read_u16_le(&chna_payload[2..4])?);
+    const ENTRY_SIZE: usize = 40;
+    let mut result = Vec::new();
+
+    for i in 0..num_uids {
+        let off = 4 + i * ENTRY_SIZE;
+        if off + ENTRY_SIZE > chna_payload.len() {
+            break;
+        }
+        let track_num = usize::from(read_u16_le(&chna_payload[off..off + 2])?);
+        if track_num == 0 {
+            continue;
+        }
+        let channel_index = track_num - 1; // 1-based → 0-based
+
+        // packFormatIDRef (bytes 26..37) — 判断 Bed / Object
+        let pack_fmt_bytes = &chna_payload[off + 26..off + 37];
+        let pack_fmt_str = bytes_to_ascii_str(pack_fmt_bytes);
+        if !is_bed_pack_format(&pack_fmt_str) {
+            continue;
+        }
+
+        // audioTrackFormatIDRef (bytes 14..25) → AT_xxxxxxxx
+        let track_fmt_bytes = &chna_payload[off + 14..off + 25];
+        let at_id = bytes_to_ascii_str(track_fmt_bytes);
+
+        // AT → speakerLabel（通过 axml 链路）
+        let label = maps
+            .resolve_at_to_label(&at_id)
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("?{at_id}?"));
+
+        result.push((channel_index, label));
+    }
+
+    Ok(result)
+}
+
+/// `&[u8]` → ASCII 字符串（截止 NUL 或非 ASCII）。
+fn bytes_to_ascii_str(b: &[u8]) -> String {
+    b.iter()
+        .take_while(|&&c| c != 0 && c.is_ascii())
+        .map(|&c| c as char)
+        .collect()
+}
+
 /// DirectSpeakers（Bed）packFormat 判断：ID 含 `_0001`，不含 `_0003`（Objects）。
 fn is_bed_pack_format(pack_fmt: &str) -> bool {
     pack_fmt.contains("_0001") && !pack_fmt.contains("_0003")

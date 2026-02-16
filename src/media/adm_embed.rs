@@ -9,7 +9,11 @@ use crate::error::{Error, Result};
 use crate::message::MESSAGE_LEN;
 use crate::multichannel::{ChannelLayout, MultichannelAudio, SampleFormat};
 
-use super::adm_bwav::{parse_bed_channel_indices, probe_adm_bwf, ChunkIndex, PcmFormat};
+use super::adm_bwav::{
+    parse_bed_channel_indices, parse_bed_channel_speaker_labels, probe_adm_bwf, ChunkIndex,
+    PcmFormat,
+};
+use super::adm_routing::build_route_plan_from_labels;
 
 pub(crate) fn embed_adm_multichannel(
     audio_engine: &Audio,
@@ -31,11 +35,58 @@ pub(crate) fn embed_adm_multichannel(
         )));
     };
 
-    // 解析 chna 分离 Bed / Object 声道；若无 chna 则退回全声道路径。
-    let bed_indices = parse_bed_channel_indices(input, &index)?;
+    // 优先：从 chna + axml 解析带 speakerLabel 的 Bed 声道列表，用于位置感知配对。
+    // 失败时（axml 缺失/标签未知）显式警告，并退回按数量推断的路径。
+    let bed_speaker_labels = match parse_bed_channel_speaker_labels(input, &index) {
+        Ok(labels) if !labels.is_empty() => {
+            // 检查是否全部标签都能被识别（无 `?AT_xxx?` 格式的未知标签）
+            let all_known = labels.iter().all(|(_, l)| !l.starts_with('?'));
+            if !all_known {
+                let unknown: Vec<&str> = labels
+                    .iter()
+                    .filter(|(_, l)| l.starts_with('?'))
+                    .map(|(_, l)| l.as_str())
+                    .collect();
+                eprintln!(
+                    "[awmkit] ADM routing warning: \
+                     could not resolve speaker labels for {unknown:?} via AT→AS→AC chain; \
+                     falling back to channel-count-based routing"
+                );
+                None
+            } else {
+                Some(labels)
+            }
+        }
+        Ok(_) => {
+            // 空列表：无 chna 或无 Bed 声道
+            None
+        }
+        Err(e) => {
+            eprintln!(
+                "[awmkit] ADM routing warning: \
+                 failed to parse speaker labels from chna/axml ({e}); \
+                 falling back to channel-count-based routing"
+            );
+            None
+        }
+    };
+
+    // 退回路径：按声道索引列表（不含位置信息）
+    let bed_indices = if bed_speaker_labels.is_none() {
+        parse_bed_channel_indices(input, &index)?
+    } else {
+        None // 有 speaker_labels 时不需要 bed_indices
+    };
 
     rewrite_adm_with_transform(input, output, &index, |source_audio| {
-        embed_adm_bed_only(audio_engine, source_audio, message, layout, &bed_indices)
+        embed_adm_bed_only(
+            audio_engine,
+            source_audio,
+            message,
+            layout,
+            &bed_indices,
+            bed_speaker_labels.as_deref(),
+        )
     })
 }
 
@@ -105,39 +156,41 @@ where
 
 /// ADM Bed-only 嵌入：仅对 Bed 声道打水印，Object 声道原样保留。
 ///
-/// `bed_indices`: `Some(indices)` 时只对指定声道处理，`None` 时退回全声道。
+/// - `bed_indices`: 仅声道索引（无位置信息），用于 fallback 路径。
+/// - `speaker_labels`: `Some(&[(channelIndex, label)])` 时使用 axml 位置感知路由；
+///   `None` 时退回按数量推断路由。两者均为 `None`/空 时走全声道路径。
 fn embed_adm_bed_only(
     audio_engine: &Audio,
     source_audio: MultichannelAudio,
     message: &[u8; MESSAGE_LEN],
     layout: Option<ChannelLayout>,
     bed_indices: &Option<Vec<usize>>,
+    speaker_labels: Option<&[(usize, String)]>,
 ) -> Result<MultichannelAudio> {
+    // ── 路径 A：axml 位置感知路由 ──
+    if let Some(labels) = speaker_labels {
+        if !labels.is_empty() {
+            return embed_bed_by_speaker_labels(audio_engine, source_audio, message, labels);
+        }
+    }
+
+    // ── 路径 B：仅声道索引的 fallback 路由 ──
     let Some(indices) = bed_indices else {
-        // 无 chna → 全声道路径
         return embed_pairs_via_audiowmark(audio_engine, source_audio, message, layout);
     };
-
-    // 校验 indices 合法性
     let total_ch = source_audio.num_channels();
     if indices.is_empty() || indices.iter().any(|&i| i >= total_ch) {
         return embed_pairs_via_audiowmark(audio_engine, source_audio, message, layout);
     }
-
-    // 如果所有声道都是 Bed，直接走全声道路径（避免无意义的提取-重组开销）
     if indices.len() == total_ch {
         return embed_pairs_via_audiowmark(audio_engine, source_audio, message, layout);
     }
 
-    // 提取 Bed 声道
     let bed_layout = layout.or_else(|| ChannelLayout::from_channels_opt(indices.len()));
     let bed_audio = extract_channels(&source_audio, indices)?;
-
-    // 对 Bed 声道打水印
     let watermarked_bed =
         embed_pairs_via_audiowmark(audio_engine, bed_audio, message, bed_layout)?;
 
-    // 将水印后的 Bed 写回对应位置，Object 声道不变
     let mut result = source_audio;
     for (bed_pos, &ch_idx) in indices.iter().enumerate() {
         let samples = watermarked_bed
@@ -153,6 +206,147 @@ fn embed_adm_bed_only(
             })?;
     }
     Ok(result)
+}
+
+/// 路径 A：使用 axml speakerLabel 构建 RoutePlan，按位置配对嵌入 Bed 声道。
+///
+/// `speaker_labels`: `(channelIndex, speakerLabel)` 列表，仅含 Bed 声道。
+fn embed_bed_by_speaker_labels(
+    audio_engine: &Audio,
+    source_audio: MultichannelAudio,
+    message: &[u8; MESSAGE_LEN],
+    speaker_labels: &[(usize, String)],
+) -> Result<MultichannelAudio> {
+    use crate::multichannel::{RouteMode, DEFAULT_LFE_MODE};
+
+    let plan = build_route_plan_from_labels(speaker_labels, DEFAULT_LFE_MODE);
+
+    // 打印 fallback 警告（未识别标签）
+    for w in &plan.warnings {
+        eprintln!("[awmkit] ADM routing warning: {w}");
+    }
+
+    let total_ch = source_audio.num_channels();
+
+    // 校验所有声道索引均在范围内
+    for step in &plan.steps {
+        let bad = match &step.mode {
+            RouteMode::Pair(a, b) => *a >= total_ch || *b >= total_ch,
+            RouteMode::Mono(a) | RouteMode::Skip { channel: a, .. } => *a >= total_ch,
+        };
+        if bad {
+            return Err(Error::AdmPreserveFailed(format!(
+                "ADM bed route step \"{}\" references channel out of range (total={})",
+                step.name, total_ch
+            )));
+        }
+    }
+
+    let mut result = source_audio.clone();
+
+    for step in &plan.steps {
+        match &step.mode {
+            RouteMode::Skip { .. } => {
+                // 跳过，原样保留
+            }
+            RouteMode::Mono(ch) => {
+                // 真单声道：单声道 WAV → audiowmark → 写回
+                let mono = source_audio.channel_samples(*ch)?.to_vec();
+                let mono_audio = MultichannelAudio::new(
+                    vec![mono],
+                    source_audio.sample_rate(),
+                    source_audio.sample_format(),
+                )
+                .map_err(|e| {
+                    Error::AdmPreserveFailed(format!("mono audio build error: {e}"))
+                })?;
+                match embed_single_audio_via_audiowmark(audio_engine, mono_audio, message) {
+                    Ok(processed) => {
+                        let samples = processed.channel_samples(0)?.to_vec();
+                        result.replace_channel_samples(*ch, samples).map_err(|e| {
+                            Error::AdmPreserveFailed(format!(
+                                "mono ch{ch} write error: {e}"
+                            ))
+                        })?;
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[awmkit] ADM routing warning: \
+                             step \"{}\" (Mono ch{ch}) failed: {e}; channel unchanged",
+                            step.name
+                        );
+                    }
+                }
+            }
+            RouteMode::Pair(ch_l, ch_r) => {
+                let left  = source_audio.channel_samples(*ch_l)?.to_vec();
+                let right = source_audio.channel_samples(*ch_r)?.to_vec();
+                let stereo = MultichannelAudio::new(
+                    vec![left, right],
+                    source_audio.sample_rate(),
+                    source_audio.sample_format(),
+                )
+                .map_err(|e| {
+                    Error::AdmPreserveFailed(format!("stereo audio build error: {e}"))
+                })?;
+                match embed_single_audio_via_audiowmark(audio_engine, stereo, message) {
+                    Ok(processed) => {
+                        let l_samples = processed.channel_samples(0)?.to_vec();
+                        let r_samples = processed.channel_samples(1)?.to_vec();
+                        result.replace_channel_samples(*ch_l, l_samples).map_err(|e| {
+                            Error::AdmPreserveFailed(format!(
+                                "pair ch{ch_l} write error: {e}"
+                            ))
+                        })?;
+                        result.replace_channel_samples(*ch_r, r_samples).map_err(|e| {
+                            Error::AdmPreserveFailed(format!(
+                                "pair ch{ch_r} write error: {e}"
+                            ))
+                        })?;
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "[awmkit] ADM routing warning: \
+                             step \"{}\" (Pair ch{ch_l}+ch{ch_r}) failed: {e}; channels unchanged",
+                            step.name
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// 对单个 [`MultichannelAudio`]（1ch mono 或 2ch stereo）执行 audiowmark 嵌入。
+///
+/// 写临时文件 → audiowmark → 读回。
+fn embed_single_audio_via_audiowmark(
+    audio_engine: &Audio,
+    audio: MultichannelAudio,
+    message: &[u8; MESSAGE_LEN],
+) -> Result<MultichannelAudio> {
+    let temp_dir = create_temp_dir("awmkit_adm_step")?;
+    let temp_in  = temp_dir.join("step_in.wav");
+    let temp_out = temp_dir.join("step_out.wav");
+
+    let result = (|| {
+        audio.to_wav(&temp_in)?;
+        audio_engine.embed_multichannel(
+            &temp_in,
+            &temp_out,
+            message,
+            Some(audio.layout()),
+        )?;
+        let bytes = fs::read(&temp_out).map_err(|e| {
+            Error::AdmPreserveFailed(format!("failed to read step output: {e}"))
+        })?;
+        MultichannelAudio::from_wav_bytes(&bytes)
+    })();
+
+    let _ = fs::remove_dir_all(&temp_dir);
+    result
 }
 
 /// 从 MultichannelAudio 按索引提取子集声道（供外部模块调用）。

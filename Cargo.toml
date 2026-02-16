@@ -45,6 +45,7 @@ multichannel = [
   "dep:flacenc",
   "dep:bwavfile",
   "dep:rayon",
+  "dep:quick-xml",
 ]
 ffmpeg-decode = ["dep:ffmpeg-next", "dep:ffmpeg-sys-next"]
 app = [
@@ -105,6 +106,10 @@ optional = true
 
 [dependencies.bwavfile]
 version = "2.0.1"
+optional = true
+
+[dependencies.quick-xml]
+version = "0.37"
 optional = true
 
 [dependencies.rayon]
