@@ -10,10 +10,10 @@ use crate::message::MESSAGE_LEN;
 use crate::multichannel::{ChannelLayout, MultichannelAudio, SampleFormat};
 
 use super::adm_bwav::{
-    parse_bed_channel_indices, parse_bed_channel_speaker_labels, probe_adm_bwf, ChunkIndex,
-    PcmFormat,
+    parse_bed_channel_indices, parse_bed_channel_speaker_labels, parse_object_channel_indices,
+    probe_adm_bwf, ChunkIndex, PcmFormat,
 };
-use super::adm_routing::build_route_plan_from_labels;
+use super::adm_routing::{build_route_plan_from_labels, is_silent};
 
 pub(crate) fn embed_adm_multichannel(
     audio_engine: &Audio,
@@ -78,15 +78,25 @@ pub(crate) fn embed_adm_multichannel(
         None // 有 speaker_labels 时不需要 bed_indices
     };
 
+    // 解析 Object（_0003 类型）声道索引，静默声道在嵌入时跳过
+    let obj_indices = parse_object_channel_indices(input, &index).unwrap_or_default();
+    if !obj_indices.is_empty() {
+        eprintln!("[awmkit] ADM: found {} Object channel(s) to embed", obj_indices.len());
+    }
+
     rewrite_adm_with_transform(input, output, &index, |source_audio| {
-        embed_adm_bed_only(
+        // Step 1：嵌入 Bed 声道
+        let mut audio = embed_adm_bed_only(
             audio_engine,
             source_audio,
             message,
             layout,
             &bed_indices,
             bed_speaker_labels.as_deref(),
-        )
+        )?;
+        // Step 2：嵌入 Object 声道（每个真单声道，静默跳过）
+        embed_object_channels_into_audio(audio_engine, &mut audio, message, &obj_indices)?;
+        Ok(audio)
     })
 }
 
@@ -317,6 +327,71 @@ fn embed_bed_by_speaker_labels(
     }
 
     Ok(result)
+}
+
+/// 对 ADM Object 声道列表依序嵌入水印（真单声道，各自独立）。
+///
+/// 处理流程（对每个 `obj_idx`）：
+/// 1. 越界检查 → 跳过并警告
+/// 2. 静默检测（~-80 dBFS）→ 跳过并提示
+/// 3. 构建 1ch [`MultichannelAudio`] → audiowmark → 写回原声道
+/// 4. 失败 → 警告（原声道不变，不影响整体流程）
+fn embed_object_channels_into_audio(
+    audio_engine: &Audio,
+    audio: &mut MultichannelAudio,
+    message: &[u8; MESSAGE_LEN],
+    obj_indices: &[usize],
+) -> Result<()> {
+    let total_ch = audio.num_channels();
+    let sf = audio.sample_format();
+
+    for &obj_idx in obj_indices {
+        if obj_idx >= total_ch {
+            eprintln!(
+                "[awmkit] ADM: Object ch{obj_idx} out of range (total={total_ch}), skipping"
+            );
+            continue;
+        }
+        let samples = audio
+            .channel_samples(obj_idx)
+            .map_err(|e| {
+                Error::AdmPreserveFailed(format!("Object ch{obj_idx} channel_samples error: {e}"))
+            })?;
+        if is_silent(samples, sf) {
+            eprintln!("[awmkit] ADM: Object ch{obj_idx} is silent (~-80 dBFS), skipping");
+            continue;
+        }
+        let mono_audio = MultichannelAudio::new(
+            vec![samples.to_vec()],
+            audio.sample_rate(),
+            sf,
+        )
+        .map_err(|e| {
+            Error::AdmPreserveFailed(format!("Object ch{obj_idx} mono build error: {e}"))
+        })?;
+        match embed_single_audio_via_audiowmark(audio_engine, mono_audio, message) {
+            Ok(processed) => {
+                let new_samples = processed
+                    .channel_samples(0)
+                    .map_err(|e| {
+                        Error::AdmPreserveFailed(format!(
+                            "Object ch{obj_idx} result channel_samples error: {e}"
+                        ))
+                    })?
+                    .to_vec();
+                audio.replace_channel_samples(obj_idx, new_samples).map_err(|e| {
+                    Error::AdmPreserveFailed(format!("Object ch{obj_idx} write-back error: {e}"))
+                })?;
+            }
+            Err(e) => {
+                eprintln!(
+                    "[awmkit] ADM routing warning: Object ch{obj_idx} embed failed: {e}; \
+                     channel unchanged"
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 /// 对单个 [`MultichannelAudio`]（1ch mono 或 2ch stereo）执行 audiowmark 嵌入。

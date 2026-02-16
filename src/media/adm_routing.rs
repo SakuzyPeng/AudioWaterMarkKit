@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 
-use crate::multichannel::{LfeMode, RouteMode, RoutePlan, RouteStep};
+use crate::multichannel::{LfeMode, RouteMode, RoutePlan, RouteStep, SampleFormat};
 
 // ─────────────────── 喇叭标签配对表 ───────────────────
 
@@ -336,6 +336,31 @@ pub(crate) fn build_route_plan_from_labels(
     RoutePlan { layout, channels, steps, warnings }
 }
 
+// ─────────────────── 静默检测 ─────────────────────────
+
+/// 静默检测：声道峰值低于约 -80 dBFS 时返回 `true`。
+///
+/// ADM Object 声道嵌入/检测前调用，避免对静默声道浪费 audiowmark 调用。
+///
+/// 阈值换算（`max_val / 10_000` ≈ -80 dBFS）：
+/// - `Int16`  : 32_767 / 10_000 = 3
+/// - `Int24`  : 8_388_607 / 10_000 = 838
+/// - `Int32` / `Float32` : i32::MAX / 10_000 = 214_748
+///
+/// 注意：`Float32` 样本在 [`MultichannelAudio`] 中同样以 i32 存储，
+/// 归一化值 [-1.0, 1.0] 转换后绝对值远低于 i32::MAX，因此阈值仍能
+/// 有效过滤真正静默的 Float32 声道。
+#[must_use]
+pub(crate) fn is_silent(samples: &[i32], format: SampleFormat) -> bool {
+    let max_val: i32 = match format {
+        SampleFormat::Int16 => 32_767,
+        SampleFormat::Int24 => 8_388_607,
+        SampleFormat::Int32 | SampleFormat::Float32 => i32::MAX,
+    };
+    let threshold = (max_val / 10_000).max(1);
+    samples.iter().all(|&s| s.abs() < threshold)
+}
+
 // ─── 辅助构造 ─────────────────────────────────────────
 
 fn make_pair(ch_a: usize, ch_b: usize, name: &str) -> RouteStep {
@@ -453,5 +478,49 @@ mod tests {
         assert_eq!(strip_track_fmt_suffix("AT_00011001_01"), "AT_00011001");
         assert_eq!(strip_track_fmt_suffix("AT_00011001"),    "AT_00011001");
         assert_eq!(strip_track_fmt_suffix("AT_0001100a_01"), "AT_0001100a");
+    }
+
+    #[test]
+    fn is_silent_int16_true_on_zero() {
+        use crate::multichannel::SampleFormat;
+        let samples = vec![0_i32; 100];
+        assert!(is_silent(&samples, SampleFormat::Int16));
+    }
+
+    #[test]
+    fn is_silent_int16_false_on_loud() {
+        use crate::multichannel::SampleFormat;
+        // 1000 > 32767/10000=3 threshold
+        let samples = vec![1_000_i32; 100];
+        assert!(!is_silent(&samples, SampleFormat::Int16));
+    }
+
+    #[test]
+    fn is_silent_int24_threshold() {
+        use crate::multichannel::SampleFormat;
+        let threshold = 8_388_607_i32 / 10_000; // 838
+        // 样本峰值 = threshold - 1 → 静默
+        let quiet = vec![(threshold - 1); 50];
+        assert!(is_silent(&quiet, SampleFormat::Int24));
+        // 样本峰值 = threshold → 非静默
+        let loud = vec![threshold; 50];
+        assert!(!is_silent(&loud, SampleFormat::Int24));
+    }
+
+    #[test]
+    fn is_silent_int32_threshold() {
+        use crate::multichannel::SampleFormat;
+        let threshold = i32::MAX / 10_000; // 214_748
+        let quiet = vec![(threshold - 1); 10];
+        assert!(is_silent(&quiet, SampleFormat::Int32));
+        let loud = vec![threshold; 10];
+        assert!(!is_silent(&loud, SampleFormat::Int32));
+    }
+
+    #[test]
+    fn is_silent_empty_slice() {
+        use crate::multichannel::SampleFormat;
+        // 空切片：所有迭代器上的 all() 对空集合返回 true
+        assert!(is_silent(&[], SampleFormat::Int24));
     }
 }

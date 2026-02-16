@@ -445,9 +445,71 @@ impl Audio {
         let input = input.as_ref();
 
         // ADM/BWF 路径：直接从 data chunk 读 PCM，跳过 FFmpeg 解码，保留所有非音频 chunk 语义。
-        // 解析 chna 提取 Bed 声道，仅对 Bed 做检测路由，Object 声道不参与。
+        //
+        // Path A（axml 可用，speakerLabel 全部识别）：
+        //   用 axml speakerLabel 构建 Bed 路由步骤，并附加 Object 声道的 Mono 步骤，
+        //   合并后统一运行检测。
+        //
+        // Path B（无 axml 或标签无法识别，退回）：
+        //   与旧行为相同，仅提取 Bed 声道按声道数量推断布局后检测。
         if let Some(ref index) = media::adm_bwav::probe_adm_bwf(input)? {
             let full_audio = media::adm_embed::decode_pcm_audio(input, index)?;
+
+            // ── Path A：axml 位置感知路由（Bed + Object）──
+            let speaker_labels =
+                media::adm_bwav::parse_bed_channel_speaker_labels(input, index)
+                    .unwrap_or_default();
+            let has_valid_labels = !speaker_labels.is_empty()
+                && speaker_labels.iter().all(|(_, l)| !l.starts_with('?'));
+
+            if has_valid_labels {
+                let bed_plan = media::adm_routing::build_route_plan_from_labels(
+                    &speaker_labels,
+                    DEFAULT_LFE_MODE,
+                );
+                for w in &bed_plan.warnings {
+                    eprintln!("[awmkit] ADM detect routing warning: {w}");
+                }
+                let mut all_steps = bed_plan.steps;
+
+                // Object 声道：静默过滤后添加 Mono 步骤
+                let obj_indices =
+                    media::adm_bwav::parse_object_channel_indices(input, index)
+                        .unwrap_or_default();
+                let sf = full_audio.sample_format();
+                for obj_idx in obj_indices {
+                    if let Ok(samples) = full_audio.channel_samples(obj_idx) {
+                        if media::adm_routing::is_silent(samples, sf) {
+                            eprintln!(
+                                "[awmkit] ADM detect: Object ch{obj_idx} silent (~-80 dBFS), skip"
+                            );
+                            continue;
+                        }
+                        all_steps.push(RouteStep {
+                            name: format!("obj_ch{obj_idx}"),
+                            mode: RouteMode::Mono(obj_idx),
+                        });
+                    }
+                }
+
+                // 排除 Skip 步骤后构建带索引的检测列表
+                let detect_steps: Vec<(usize, RouteStep)> = all_steps
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(_, s)| !matches!(s.mode, RouteMode::Skip { .. }))
+                    .collect();
+                let step_results = collect_detect_step_results_with_early_exit(
+                    &detect_steps,
+                    |step| run_detect_step_task(self, &full_audio, step),
+                )?;
+                return Ok(finalize_detect_step_results(step_results));
+            }
+
+            // ── Path B：退回路径（现有行为不变）──
+            eprintln!(
+                "[awmkit] ADM detect: axml speaker labels unavailable or unresolved; \
+                 falling back to channel-count-based bed routing"
+            );
             let bed_indices = media::adm_bwav::parse_bed_channel_indices(input, index)?;
             let (bed_audio, bed_layout) = if let Some(ref indices) = bed_indices {
                 let extracted = media::adm_embed::extract_bed_channels(&full_audio, indices)

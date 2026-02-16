@@ -212,6 +212,57 @@ pub(crate) fn parse_bed_channel_speaker_labels(
     Ok(result)
 }
 
+/// 解析 chna chunk，返回属于 Object（TypeDefinition: Objects，`_0003` 类型）的 0-based 声道索引列表。
+///
+/// packFormatIDRef 含 `_0003`（Objects 类型）视为 Object；
+/// 含 `_0001`（DirectSpeakers）视为 Bed，排除在外。
+/// 若 chna 不存在或无 Object 声道，返回空 Vec。
+pub(crate) fn parse_object_channel_indices(
+    path: &Path,
+    index: &ChunkIndex,
+) -> Result<Vec<usize>> {
+    let Some(chna_entry) = index.chunks.iter().find(|c| c.id == CHNA_SIG) else {
+        return Ok(Vec::new());
+    };
+    let payload_size = usize::try_from(chna_entry.size)
+        .map_err(|_| Error::AdmUnsupported("chna chunk too large".to_string()))?;
+    if payload_size < 4 {
+        return Ok(Vec::new());
+    }
+    let mut file = File::open(path)
+        .map_err(|e| Error::AdmUnsupported(format!("failed to open for chna: {e}")))?;
+    file.seek(SeekFrom::Start(chna_entry.data_offset))
+        .map_err(|e| Error::AdmUnsupported(format!("failed to seek chna: {e}")))?;
+    let mut payload = vec![0_u8; payload_size];
+    file.read_exact(&mut payload)
+        .map_err(|e| Error::AdmUnsupported(format!("failed to read chna: {e}")))?;
+
+    let num_uids = usize::from(read_u16_le(&payload[2..4])?);
+    const ENTRY_SIZE: usize = 40;
+    let mut obj_indices = Vec::new();
+
+    for i in 0..num_uids {
+        let off = 4 + i * ENTRY_SIZE;
+        if off + ENTRY_SIZE > payload.len() {
+            break;
+        }
+        let track_num = usize::from(read_u16_le(&payload[off..off + 2])?);
+        if track_num == 0 {
+            continue;
+        }
+        let channel_index = track_num - 1; // 1-based → 0-based
+        // packFormat 引用在偏移 26，长度 11 字节
+        let pack_fmt_bytes = &payload[off + 26..off + 37];
+        let pack_fmt_str = bytes_to_ascii_str(pack_fmt_bytes);
+        // Object: 含 _0003，不是 Bed（_0001）
+        if pack_fmt_str.contains("_0003") && !pack_fmt_str.contains("_0001") {
+            obj_indices.push(channel_index);
+        }
+    }
+
+    Ok(obj_indices)
+}
+
 /// `&[u8]` → ASCII 字符串（截止 NUL 或非 ASCII）。
 fn bytes_to_ascii_str(b: &[u8]) -> String {
     b.iter()
@@ -680,6 +731,109 @@ mod tests {
         };
         assert!(found.is_some());
         let _ = fs::remove_file(&path);
+    }
+
+    /// 构建指定 packFormatIDRef 的 40 字节 chna entry。
+    ///
+    /// 仅填写 trackIndex（bytes 0-1）和 packFormatIDRef（bytes 26-36），其余全零。
+    fn make_chna_entry(track_idx: u16, pack_fmt: &[u8; 11]) -> [u8; 40] {
+        let mut entry = [0u8; 40];
+        let [lo, hi] = track_idx.to_le_bytes();
+        entry[0] = lo;
+        entry[1] = hi;
+        entry[26..37].copy_from_slice(pack_fmt);
+        entry
+    }
+
+    #[test]
+    fn parse_object_channel_indices_basic() {
+        // chna: track 1 (Bed, _0001) + track 3 (Object, _0003)
+        // 预期：parse_object_channel_indices 仅返回 [2]（track 3 → 0-based index 2）
+        let mut chna_payload = Vec::new();
+        chna_payload.extend_from_slice(&2u16.to_le_bytes()); // numTracks
+        chna_payload.extend_from_slice(&2u16.to_le_bytes()); // numUIDs
+        chna_payload.extend_from_slice(&make_chna_entry(1, b"AP_00011001")); // Bed
+        chna_payload.extend_from_slice(&make_chna_entry(3, b"AP_00031001")); // Object
+
+        let mut fmt = Vec::new();
+        fmt.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        fmt.extend_from_slice(&4u16.to_le_bytes()); // 4 channels
+        fmt.extend_from_slice(&48_000u32.to_le_bytes());
+        fmt.extend_from_slice(&(48_000u32 * 4 * 3).to_le_bytes());
+        fmt.extend_from_slice(&12u16.to_le_bytes()); // block align
+        fmt.extend_from_slice(&24u16.to_le_bytes()); // bps
+
+        let mut chunks = Vec::new();
+        push_chunk(&mut chunks, FMT_SIG, &fmt, None);
+        push_chunk(&mut chunks, AXML_SIG, b"<adm/>", None);
+        push_chunk(&mut chunks, CHNA_SIG, &chna_payload, None);
+        // 4ch × 3 bytes/sample × 2 frames = 24 bytes
+        push_chunk(&mut chunks, DATA_SIG, &[0u8; 24], None);
+
+        let mut out = Vec::new();
+        out.extend_from_slice(&RIFF_SIG);
+        let riff_size = u32::try_from(chunks.len() + 4).unwrap_or(0);
+        out.extend_from_slice(&riff_size.to_le_bytes());
+        out.extend_from_slice(&WAVE_SIG);
+        out.extend_from_slice(&chunks);
+
+        let Ok(path) = write_temp_bytes("adm_obj_chna", &out) else { return; };
+        let Ok(Some(index)) = parse_chunk_index(&path) else {
+            let _ = fs::remove_file(&path);
+            return;
+        };
+
+        let obj_result = parse_object_channel_indices(&path, &index);
+        let _ = fs::remove_file(&path);
+
+        assert!(obj_result.is_ok(), "parse_object_channel_indices failed");
+        let Ok(obj) = obj_result else { return; };
+        // track 3 → 0-based index 2
+        assert_eq!(obj, vec![2], "only Object channel expected");
+    }
+
+    #[test]
+    fn parse_object_channel_indices_empty_when_no_objects() {
+        // chna 仅含 Bed 声道，Object 列表应为空
+        let mut chna_payload = Vec::new();
+        chna_payload.extend_from_slice(&1u16.to_le_bytes());
+        chna_payload.extend_from_slice(&1u16.to_le_bytes());
+        chna_payload.extend_from_slice(&make_chna_entry(1, b"AP_00011001")); // Bed only
+
+        let mut fmt = Vec::new();
+        fmt.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        fmt.extend_from_slice(&1u16.to_le_bytes()); // 1 channel
+        fmt.extend_from_slice(&48_000u32.to_le_bytes());
+        fmt.extend_from_slice(&(48_000u32 * 1 * 3).to_le_bytes());
+        fmt.extend_from_slice(&3u16.to_le_bytes()); // block align
+        fmt.extend_from_slice(&24u16.to_le_bytes()); // bps
+
+        // block_align != channels*bytes_per_sample 时会报错（1ch×3bytes=3 ✓）
+        let mut chunks = Vec::new();
+        push_chunk(&mut chunks, FMT_SIG, &fmt, None);
+        push_chunk(&mut chunks, AXML_SIG, b"<adm/>", None);
+        push_chunk(&mut chunks, CHNA_SIG, &chna_payload, None);
+        push_chunk(&mut chunks, DATA_SIG, &[0u8; 6], None);
+
+        let mut out = Vec::new();
+        out.extend_from_slice(&RIFF_SIG);
+        let riff_size = u32::try_from(chunks.len() + 4).unwrap_or(0);
+        out.extend_from_slice(&riff_size.to_le_bytes());
+        out.extend_from_slice(&WAVE_SIG);
+        out.extend_from_slice(&chunks);
+
+        let Ok(path) = write_temp_bytes("adm_obj_chna_noobj", &out) else { return; };
+        let Ok(Some(index)) = parse_chunk_index(&path) else {
+            let _ = fs::remove_file(&path);
+            return;
+        };
+
+        let obj_result = parse_object_channel_indices(&path, &index);
+        let _ = fs::remove_file(&path);
+
+        assert!(obj_result.is_ok());
+        let Ok(obj) = obj_result else { return; };
+        assert!(obj.is_empty(), "no Object channels expected: {obj:?}");
     }
 
     #[test]
