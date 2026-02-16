@@ -4,7 +4,6 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-use std::sync::OnceLock;
 use std::{
     fs,
     fs::File,
@@ -135,6 +134,14 @@ enum AwmIoMode {
     File,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PipeInputSource {
+    FileDirect,
+    #[cfg(feature = "ffmpeg-decode")]
+    DecodeToWavStream,
+    FallbackToPreparedFile,
+}
+
 struct TempDirGuard {
     path: PathBuf,
 }
@@ -149,8 +156,6 @@ struct PreparedInput {
     path: PathBuf,
     _guard: Option<TempDirGuard>,
 }
-
-static PIPE_IO_FALLBACK_WARNED: OnceLock<()> = OnceLock::new();
 
 #[cfg(feature = "multichannel")]
 #[derive(Debug)]
@@ -276,8 +281,8 @@ impl Audio {
     /// # Returns
     /// 检测结果，如果没有检测到水印返回 None
     pub fn detect<P: AsRef<Path>>(&self, input: P) -> Result<Option<DetectResult>> {
-        let prepared = prepare_input_for_audiowmark(input.as_ref(), "detect_input")?;
-        let output = run_audiowmark_get_prepared(self, &prepared.path)?;
+        let input = input.as_ref();
+        let output = run_audiowmark_get_detect(self, input)?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         Ok(parse_detect_output(&stdout, &stderr))
@@ -457,8 +462,7 @@ impl Audio {
 
             // ── Path A：axml 位置感知路由（Bed + Object）──
             let speaker_labels =
-                media::adm_bwav::parse_bed_channel_speaker_labels(input, index)
-                    .unwrap_or_default();
+                media::adm_bwav::parse_bed_channel_speaker_labels(input, index).unwrap_or_default();
             let has_valid_labels = !speaker_labels.is_empty()
                 && speaker_labels.iter().all(|(_, l)| !l.starts_with('?'));
 
@@ -474,8 +478,7 @@ impl Audio {
 
                 // Object 声道：静默过滤后添加 Mono 步骤
                 let obj_indices =
-                    media::adm_bwav::parse_object_channel_indices(input, index)
-                        .unwrap_or_default();
+                    media::adm_bwav::parse_object_channel_indices(input, index).unwrap_or_default();
                 let sf = full_audio.sample_format();
                 for obj_idx in obj_indices {
                     if let Ok(samples) = full_audio.channel_samples(obj_idx) {
@@ -498,10 +501,10 @@ impl Audio {
                     .enumerate()
                     .filter(|(_, s)| !matches!(s.mode, RouteMode::Skip { .. }))
                     .collect();
-                let step_results = collect_detect_step_results_with_early_exit(
-                    &detect_steps,
-                    |step| run_detect_step_task(self, &full_audio, step),
-                )?;
+                let step_results =
+                    collect_detect_step_results_with_early_exit(&detect_steps, |step| {
+                        run_detect_step_task(self, &full_audio, step)
+                    })?;
                 return Ok(finalize_detect_step_results(step_results));
             }
 
@@ -668,24 +671,51 @@ fn run_audiowmark_add_prepared(
     match run_audiowmark_add_pipe(audio, prepared_input, output, message_hex) {
         Ok(()) => Ok(()),
         Err(err) if should_fallback_pipe_error(&err) => {
-            warn_pipe_fallback_once("add", &err);
+            warn_pipe_fallback("add", prepared_input.display(), &err);
             run_audiowmark_add_file(audio, prepared_input, output, message_hex)
         }
         Err(err) => Err(err),
     }
 }
 
-fn run_audiowmark_get_prepared(audio: &Audio, prepared_input: &Path) -> Result<Output> {
+fn run_audiowmark_get_file_with_prepare(audio: &Audio, input: &Path) -> Result<Output> {
+    let prepared = prepare_input_for_audiowmark(input, "detect_input")?;
+    run_audiowmark_get_file(audio, &prepared.path)
+}
+
+fn run_audiowmark_get_detect(audio: &Audio, input: &Path) -> Result<Output> {
     if matches!(effective_awmiomode(), AwmIoMode::File) {
-        return run_audiowmark_get_file(audio, prepared_input);
+        return run_audiowmark_get_file_with_prepare(audio, input);
     }
-    match run_audiowmark_get_pipe(audio, prepared_input) {
-        Ok(output) => Ok(output),
-        Err(err) if should_fallback_pipe_error(&err) => {
-            warn_pipe_fallback_once("get", &err);
-            run_audiowmark_get_file(audio, prepared_input)
+
+    match classify_pipe_input_source(input) {
+        PipeInputSource::FileDirect => match run_audiowmark_get_pipe(audio, input) {
+            Ok(output) => Ok(output),
+            Err(err) if should_fallback_pipe_error(&err) => {
+                warn_pipe_fallback("get", input.display(), &err);
+                run_audiowmark_get_file_with_prepare(audio, input)
+            }
+            Err(err) => Err(err),
+        },
+        #[cfg(feature = "ffmpeg-decode")]
+        PipeInputSource::DecodeToWavStream => {
+            match run_audiowmark_get_pipe_decoded_streaming(audio, input) {
+                Ok(output) => Ok(output),
+                Err(err) if should_fallback_pipe_error(&err) => {
+                    warn_pipe_fallback("get", input.display(), &err);
+                    run_audiowmark_get_file_with_prepare(audio, input)
+                }
+                Err(err) => Err(err),
+            }
         }
-        Err(err) => Err(err),
+        #[cfg(not(feature = "ffmpeg-decode"))]
+        PipeInputSource::FallbackToPreparedFile => {
+            run_audiowmark_get_file_with_prepare(audio, input)
+        }
+        #[cfg(feature = "ffmpeg-decode")]
+        PipeInputSource::FallbackToPreparedFile => {
+            run_audiowmark_get_file_with_prepare(audio, input)
+        }
     }
 }
 
@@ -739,7 +769,7 @@ fn run_audiowmark_add_bytes(
     match run_audiowmark_add_bytes_pipe(audio, &input_bytes, message_hex) {
         Ok(output_bytes) => Ok(output_bytes),
         Err(err) if should_fallback_pipe_error(&err) => {
-            warn_pipe_fallback_once("add-bytes", &err);
+            warn_pipe_fallback("add-bytes", "<memory-bytes>", &err);
             run_audiowmark_add_bytes_file(audio, input_bytes, message_hex)
         }
         Err(err) => Err(err),
@@ -787,7 +817,7 @@ fn run_audiowmark_get_bytes(audio: &Audio, input_bytes: Vec<u8>) -> Result<Outpu
     match run_audiowmark_get_bytes_pipe(audio, &input_bytes) {
         Ok(output) => Ok(output),
         Err(err) if should_fallback_pipe_error(&err) => {
-            warn_pipe_fallback_once("get-bytes", &err);
+            warn_pipe_fallback("get-bytes", "<memory-bytes>", &err);
             run_audiowmark_get_bytes_file(audio, input_bytes)
         }
         Err(err) => Err(err),
@@ -859,6 +889,82 @@ fn run_audiowmark_get_pipe(audio: &Audio, prepared_input: &Path) -> Result<Outpu
 
     cmd.arg("-");
     run_command_with_stdin_from_file(&mut cmd, prepared_input)
+}
+
+#[cfg(feature = "ffmpeg-decode")]
+fn run_audiowmark_get_pipe_decoded_streaming(audio: &Audio, input: &Path) -> Result<Output> {
+    let mut cmd = audio.audiowmark_command();
+    cmd.arg("get");
+
+    if let Some(ref key_file) = audio.key_file {
+        cmd.arg("--key").arg(key_file);
+    }
+
+    cmd.arg("-");
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| Error::AudiowmarkExec("failed to take stdin handle".to_string()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| Error::AudiowmarkExec("failed to take stdout handle".to_string()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| Error::AudiowmarkExec("failed to take stderr handle".to_string()))?;
+    let input_path = input.to_path_buf();
+
+    let (status, stdin_result, stdout_result, stderr_result) = std::thread::scope(|scope| {
+        let writer = scope.spawn(move || -> Result<()> {
+            let mut stdin = BufWriter::with_capacity(PIPE_BUF_SIZE, stdin);
+            decode_media_to_wav_pipe(&input_path, &mut stdin)?;
+            stdin.flush()?;
+            Ok(())
+        });
+        let stdout_reader = scope.spawn(move || -> std::io::Result<Vec<u8>> {
+            let mut stdout = BufReader::with_capacity(PIPE_BUF_SIZE, stdout);
+            let mut buf = Vec::new();
+            stdout.read_to_end(&mut buf)?;
+            Ok(buf)
+        });
+        let stderr_reader = scope.spawn(move || -> std::io::Result<Vec<u8>> {
+            let mut stderr = stderr;
+            let mut buf = Vec::new();
+            stderr.read_to_end(&mut buf)?;
+            Ok(buf)
+        });
+        let status = child.wait();
+        (
+            status,
+            writer.join(),
+            stdout_reader.join(),
+            stderr_reader.join(),
+        )
+    });
+
+    let status = status.map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    stdin_result
+        .map_err(|_| Error::AudiowmarkExec("stdin decode thread panicked".to_string()))??;
+    let stdout = stdout_result
+        .map_err(|_| Error::AudiowmarkExec("stdout reader thread panicked".to_string()))?
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+    let stderr = stderr_result
+        .map_err(|_| Error::AudiowmarkExec("stderr reader thread panicked".to_string()))?
+        .map_err(|e| Error::AudiowmarkExec(e.to_string()))?;
+
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
+    })
 }
 
 fn run_audiowmark_add_pipe_streaming(
@@ -1154,8 +1260,7 @@ fn normalize_wav_pipe_output(mut bytes: Vec<u8>) -> Vec<u8> {
                 }
             }
         } else if &bytes[pos..pos + 4] == b"data" && chunk_size == u32::MAX {
-            let raw =
-                u32::try_from(bytes.len().saturating_sub(pos + 8)).unwrap_or(u32::MAX);
+            let raw = u32::try_from(bytes.len().saturating_sub(pos + 8)).unwrap_or(u32::MAX);
             // 截断到 block_align 整数倍，排除 WAV 块尾部的对齐填充字节
             let data_payload = raw - (raw % block_align);
             bytes[pos + 4..pos + 8].copy_from_slice(&data_payload.to_le_bytes());
@@ -1238,8 +1343,7 @@ fn normalize_wav_pipe_file_in_place(path: &Path) -> Result<()> {
             }
         } else if &chunk_header[0..4] == b"data" {
             if chunk_size == u32::MAX {
-                let raw =
-                    u32::try_from(file_len.saturating_sub(pos + 8)).unwrap_or(u32::MAX);
+                let raw = u32::try_from(file_len.saturating_sub(pos + 8)).unwrap_or(u32::MAX);
                 // 截断到 block_align 整数倍，排除 WAV 块尾部的对齐填充字节
                 let data_payload = raw - (raw % block_align);
                 file.seek(SeekFrom::Start(pos + 4))?;
@@ -1277,13 +1381,10 @@ fn is_pipe_compatibility_error(stderr: &str) -> bool {
         || normalized.contains("stdin")
 }
 
-fn warn_pipe_fallback_once(operation: &str, err: &Error) {
-    if PIPE_IO_FALLBACK_WARNED.get().is_none() {
-        let _ = PIPE_IO_FALLBACK_WARNED.set(());
-        eprintln!(
-            "Warning: audiowmark pipe I/O failed for {operation}, fallback to file I/O: {err}"
-        );
-    }
+fn warn_pipe_fallback(operation: &str, source: impl std::fmt::Display, err: &Error) {
+    eprintln!(
+        "Warning: audiowmark pipe I/O failed for {operation} (input: {source}), fallback to file I/O: {err}"
+    );
 }
 
 #[cfg(feature = "multichannel")]
@@ -1525,11 +1626,7 @@ fn build_stereo_for_route_step(
             // 直接发 1 声道给 audiowmark；audiowmark 原生支持 mono，
             // 无需 L+L 复制（复制会引入人工相关性，降低水印质量）。
             let mono = audio.channel_samples(channel)?.to_vec();
-            MultichannelAudio::new(
-                vec![mono],
-                audio.sample_rate(),
-                audio.sample_format(),
-            )
+            MultichannelAudio::new(vec![mono], audio.sample_rate(), audio.sample_format())
         }
         RouteMode::Skip { .. } => Err(Error::InvalidInput(
             "cannot build stereo input from skip route step".to_string(),
@@ -1642,7 +1739,7 @@ fn extension_format_hint(path: &Path) -> Option<InputAudioFormat> {
         Some("ogg" | "opus") => Some(InputAudioFormat::Ogg),
         Some("m4a") => Some(InputAudioFormat::M4a),
         Some("alac") => Some(InputAudioFormat::Alac),
-        Some("mp4") => Some(InputAudioFormat::Mp4),
+        Some("mp4" | "mov") => Some(InputAudioFormat::Mp4),
         Some("mkv" | "mka") => Some(InputAudioFormat::Mkv),
         Some("ts" | "m2ts" | "m2t") => Some(InputAudioFormat::Ts),
         _ => None,
@@ -1662,7 +1759,7 @@ fn sniff_input_audio_format(path: &Path) -> Option<InputAudioFormat> {
         return Some(InputAudioFormat::Flac);
     }
     if len >= 12
-        && (data.starts_with(b"RIFF") || data.starts_with(b"RF64"))
+        && (data.starts_with(b"RIFF") || data.starts_with(b"RF64") || data.starts_with(b"BW64"))
         && &data[8..12] == b"WAVE"
     {
         return Some(InputAudioFormat::Wav);
@@ -1687,6 +1784,23 @@ fn sniff_input_audio_format(path: &Path) -> Option<InputAudioFormat> {
     }
 
     None
+}
+
+fn classify_pipe_input_source(path: &Path) -> PipeInputSource {
+    match sniff_input_audio_format(path) {
+        Some(InputAudioFormat::Wav) => PipeInputSource::FileDirect,
+        Some(_) => {
+            #[cfg(feature = "ffmpeg-decode")]
+            {
+                PipeInputSource::DecodeToWavStream
+            }
+            #[cfg(not(feature = "ffmpeg-decode"))]
+            {
+                PipeInputSource::FallbackToPreparedFile
+            }
+        }
+        None => PipeInputSource::FallbackToPreparedFile,
+    }
 }
 
 fn classify_input_prepare_strategy(path: &Path) -> InputPrepareStrategy {
@@ -1808,6 +1922,11 @@ fn decode_media_to_pcm_i32(_input: &Path) -> Result<DecodedPcm> {
     Err(Error::FfmpegLibraryNotFound(
         "ffmpeg-decode feature is disabled".to_string(),
     ))
+}
+
+#[cfg(feature = "ffmpeg-decode")]
+fn decode_media_to_wav_pipe(input: &Path, writer: &mut dyn Write) -> Result<()> {
+    media::decode_media_to_wav_pipe(input, writer)
 }
 
 /// 当前构建可用的媒体能力摘要。
@@ -2011,7 +2130,64 @@ mod tests {
         assert!(extension_format_hint(Path::new("demo.ts")).is_some());
         assert!(extension_format_hint(Path::new("demo.m2ts")).is_some());
         assert!(extension_format_hint(Path::new("demo.m2t")).is_some());
+        assert!(extension_format_hint(Path::new("demo.mov")).is_some());
         assert!(extension_format_hint(Path::new("demo.unknown")).is_none());
+    }
+
+    #[test]
+    fn test_sniff_detects_bw64_as_wav() {
+        let path = unique_temp_file("probe_bw64.wav");
+        let write_result = std::fs::write(
+            &path,
+            [
+                0x42, 0x57, 0x36, 0x34, 0x00, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
+            ],
+        );
+        assert!(write_result.is_ok());
+        assert_eq!(sniff_input_audio_format(&path), Some(InputAudioFormat::Wav));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_classify_pipe_input_source_for_wav_header() {
+        let path = unique_temp_file("pipe_source_wav_header.mp3");
+        let write_result = std::fs::write(
+            &path,
+            [
+                0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
+            ],
+        );
+        assert!(write_result.is_ok());
+        assert_eq!(
+            classify_pipe_input_source(&path),
+            PipeInputSource::FileDirect
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_classify_pipe_input_source_for_mp3_header() {
+        let path = unique_temp_file("pipe_source_mp3.mp3");
+        let write_result = std::fs::write(&path, [0x49, 0x44, 0x33, 0x04, 0x00, 0x00]);
+        assert!(write_result.is_ok());
+        let source = classify_pipe_input_source(&path);
+        #[cfg(feature = "ffmpeg-decode")]
+        assert_eq!(source, PipeInputSource::DecodeToWavStream);
+        #[cfg(not(feature = "ffmpeg-decode"))]
+        assert_eq!(source, PipeInputSource::FallbackToPreparedFile);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_classify_pipe_input_source_unknown_fallback() {
+        let path = unique_temp_file("pipe_source_unknown.bin");
+        let write_result = std::fs::write(&path, b"unknown-bytes");
+        assert!(write_result.is_ok());
+        assert_eq!(
+            classify_pipe_input_source(&path),
+            PipeInputSource::FallbackToPreparedFile
+        );
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

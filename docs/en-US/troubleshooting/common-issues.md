@@ -55,8 +55,9 @@ Fix:
 
 ## 7. Pipe I/O Compatibility (`stdin/stdout`)
 
-Note: runtime now prefers `audiowmark` pipe I/O (`-` as input/output). If the local `audiowmark` build does not support this mode, AWMKit automatically falls back to file I/O.
+Note: runtime now prefers `audiowmark` pipe I/O (`-` as input/output). For non-WAV detect input, AWMKit uses true streaming (`FFmpeg decode -> WAV pipe -> audiowmark`). If the local environment is incompatible, AWMKit automatically falls back to file I/O.
 In recent builds, Unix `SIGPIPE` is guarded in the FFI path (Swift/ObjC/.NET), so pipe write failures are converted to normal errors and fallback can proceed instead of crashing the host process.
+Fallback logs are emitted per file (operation + input path) to make sample-level troubleshooting easier.
 
 Force-disable pipe mode for troubleshooting:
 

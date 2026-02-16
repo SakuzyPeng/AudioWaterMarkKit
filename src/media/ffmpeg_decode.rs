@@ -1,6 +1,7 @@
 //! FFmpeg 动态库解码后端
 
 use std::ffi::CString;
+use std::io::Write;
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -10,97 +11,57 @@ use crate::audio::{AudioMediaCapabilities, DecodedPcm};
 use crate::error::{Error, Result};
 
 static FFMPEG_INIT: OnceLock<std::result::Result<(), String>> = OnceLock::new();
+const WAV_PIPE_UNKNOWN_SIZE: u32 = u32::MAX;
+
+struct DecodeContext {
+    input_ctx: ffmpeg::format::context::Input,
+    decoder: ffmpeg::codec::decoder::Audio,
+    stream_index: usize,
+    sample_rate: u32,
+    channels: u16,
+    output_layout: ffmpeg::ChannelLayout,
+    output_rate: u32,
+    resampler: ffmpeg::software::resampling::Context,
+}
 
 pub(crate) fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
-    ensure_ffmpeg_initialized()?;
-
-    let mut input_ctx =
-        ffmpeg::format::input(input).map_err(|err| map_open_error(input, &err.to_string()))?;
-
-    let stream = input_ctx
-        .streams()
-        .best(ffmpeg::media::Type::Audio)
-        .ok_or_else(|| Error::InvalidInput("no decodable audio track found".to_string()))?;
-    let stream_index = stream.index();
-    let stream_codec_id = stream.parameters().id();
-
-    if stream_codec_id == ffmpeg::codec::Id::EAC3
-        && ffmpeg::codec::decoder::find(ffmpeg::codec::Id::EAC3).is_none()
-    {
-        return Err(Error::FfmpegDecoderUnavailable("eac3".to_string()));
-    }
-
-    let context = ffmpeg::codec::context::Context::from_parameters(stream.parameters())
-        .map_err(|err| Error::FfmpegDecodeFailed(format!("failed to load codec context: {err}")))?;
-    let mut decoder = context
-        .decoder()
-        .audio()
-        .map_err(|err| Error::FfmpegDecodeFailed(format!("failed to open audio decoder: {err}")))?;
-
-    let sample_rate = decoder.rate();
-    let channels = decoder.channels();
-    if channels == 0 || sample_rate == 0 {
-        return Err(Error::FfmpegDecodeFailed(
-            "decoded audio metadata is invalid".to_string(),
-        ));
-    }
-
-    let output_layout = normalize_layout(decoder.channel_layout(), channels);
-    let output_rate = sample_rate;
-    let mut resampler = create_resampler(
-        decoder.format(),
-        output_layout,
-        sample_rate,
-        output_layout,
-        output_rate,
-    )?;
-
-    let mut decoded = ffmpeg::frame::Audio::empty();
+    let mut context = open_decode_context(input)?;
     let mut samples = Vec::<i32>::new();
+    let copied = decode_with_sink(&mut context, |bytes| {
+        append_packed_i16_bytes(bytes, &mut samples);
+        Ok(())
+    })?;
 
-    for (packet_stream, packet) in input_ctx.packets() {
-        if packet_stream.index() != stream_index {
-            continue;
-        }
-
-        decoder.send_packet(&packet).map_err(|err| {
-            Error::FfmpegDecodeFailed(format!("decoder send packet failed: {err}"))
-        })?;
-        receive_decoded_frames(
-            &mut decoder,
-            &mut resampler,
-            &mut decoded,
-            &mut samples,
-            output_layout,
-            output_rate,
-        )?;
-    }
-
-    decoder
-        .send_eof()
-        .map_err(|err| Error::FfmpegDecodeFailed(format!("decoder send eof failed: {err}")))?;
-    receive_decoded_frames(
-        &mut decoder,
-        &mut resampler,
-        &mut decoded,
-        &mut samples,
-        output_layout,
-        output_rate,
-    )?;
-    flush_resampler(&mut resampler, &mut samples)?;
-
-    if samples.is_empty() {
+    if copied == 0 {
         return Err(Error::FfmpegDecodeFailed(
             "no decodable audio samples found".to_string(),
         ));
     }
 
     Ok(DecodedPcm {
-        sample_rate,
-        channels,
+        sample_rate: context.sample_rate,
+        channels: context.channels,
         bits_per_sample: 16,
         samples,
     })
+}
+
+pub(crate) fn decode_media_to_wav_pipe(input: &Path, writer: &mut dyn Write) -> Result<()> {
+    let mut context = open_decode_context(input)?;
+    write_wav_pipe_header(writer, context.sample_rate, context.channels)?;
+    let copied = decode_with_sink(&mut context, |bytes| {
+        writer.write_all(bytes)?;
+        Ok(())
+    })?;
+    writer.flush()?;
+
+    if copied == 0 {
+        return Err(Error::FfmpegDecodeFailed(
+            "no decodable audio samples found".to_string(),
+        ));
+    }
+
+    Ok(())
 }
 
 pub(crate) fn media_capabilities() -> AudioMediaCapabilities {
@@ -121,6 +82,113 @@ pub(crate) fn media_capabilities() -> AudioMediaCapabilities {
         container_mkv: has_demuxer("matroska"),
         container_ts: has_demuxer("mpegts"),
     }
+}
+
+fn open_decode_context(input: &Path) -> Result<DecodeContext> {
+    ensure_ffmpeg_initialized()?;
+
+    let input_ctx =
+        ffmpeg::format::input(input).map_err(|err| map_open_error(input, &err.to_string()))?;
+    let stream = input_ctx
+        .streams()
+        .best(ffmpeg::media::Type::Audio)
+        .ok_or_else(|| Error::InvalidInput("no decodable audio track found".to_string()))?;
+    let stream_index = stream.index();
+    let stream_codec_id = stream.parameters().id();
+
+    if stream_codec_id == ffmpeg::codec::Id::EAC3
+        && ffmpeg::codec::decoder::find(ffmpeg::codec::Id::EAC3).is_none()
+    {
+        return Err(Error::FfmpegDecoderUnavailable("eac3".to_string()));
+    }
+
+    let codec_context = ffmpeg::codec::context::Context::from_parameters(stream.parameters())
+        .map_err(|err| Error::FfmpegDecodeFailed(format!("failed to load codec context: {err}")))?;
+    let decoder = codec_context
+        .decoder()
+        .audio()
+        .map_err(|err| Error::FfmpegDecodeFailed(format!("failed to open audio decoder: {err}")))?;
+
+    let sample_rate = decoder.rate();
+    let channels = decoder.channels();
+    if channels == 0 || sample_rate == 0 {
+        return Err(Error::FfmpegDecodeFailed(
+            "decoded audio metadata is invalid".to_string(),
+        ));
+    }
+
+    let output_layout = normalize_layout(decoder.channel_layout(), channels);
+    let output_rate = sample_rate;
+    let resampler = create_resampler(
+        decoder.format(),
+        output_layout,
+        sample_rate,
+        output_layout,
+        output_rate,
+    )?;
+
+    Ok(DecodeContext {
+        input_ctx,
+        decoder,
+        stream_index,
+        sample_rate,
+        channels,
+        output_layout,
+        output_rate,
+        resampler,
+    })
+}
+
+fn decode_with_sink<F>(context: &mut DecodeContext, mut sink: F) -> Result<usize>
+where
+    F: FnMut(&[u8]) -> Result<()>,
+{
+    let mut total_bytes = 0usize;
+    let mut decoded = ffmpeg::frame::Audio::empty();
+
+    {
+        let input_ctx = &mut context.input_ctx;
+        let decoder = &mut context.decoder;
+        let resampler = &mut context.resampler;
+        let output_layout = context.output_layout;
+        let output_rate = context.output_rate;
+        let stream_index = context.stream_index;
+
+        for (packet_stream, packet) in input_ctx.packets() {
+            if packet_stream.index() != stream_index {
+                continue;
+            }
+
+            decoder.send_packet(&packet).map_err(|err| {
+                Error::FfmpegDecodeFailed(format!("decoder send packet failed: {err}"))
+            })?;
+            receive_decoded_frames(
+                decoder,
+                resampler,
+                &mut decoded,
+                output_layout,
+                output_rate,
+                &mut total_bytes,
+                &mut sink,
+            )?;
+        }
+
+        decoder
+            .send_eof()
+            .map_err(|err| Error::FfmpegDecodeFailed(format!("decoder send eof failed: {err}")))?;
+        receive_decoded_frames(
+            decoder,
+            resampler,
+            &mut decoded,
+            output_layout,
+            output_rate,
+            &mut total_bytes,
+            &mut sink,
+        )?;
+        flush_resampler(resampler, &mut total_bytes, &mut sink)?;
+    }
+
+    Ok(total_bytes)
 }
 
 fn ensure_ffmpeg_initialized() -> Result<()> {
@@ -150,27 +218,42 @@ fn map_open_error(input: &Path, detail: &str) -> Error {
     Error::FfmpegDecodeFailed(format!("failed to open input media: {detail}"))
 }
 
-fn receive_decoded_frames(
+fn receive_decoded_frames<F>(
     decoder: &mut ffmpeg::codec::decoder::Audio,
     resampler: &mut ffmpeg::software::resampling::Context,
     decoded: &mut ffmpeg::frame::Audio,
-    samples: &mut Vec<i32>,
     output_layout: ffmpeg::ChannelLayout,
     output_rate: u32,
-) -> Result<()> {
+    total_bytes: &mut usize,
+    sink: &mut F,
+) -> Result<()>
+where
+    F: FnMut(&[u8]) -> Result<()>,
+{
     while decoder.receive_frame(decoded).is_ok() {
-        resample_frame(resampler, decoded, samples, output_layout, output_rate)?;
+        resample_frame(
+            resampler,
+            decoded,
+            output_layout,
+            output_rate,
+            total_bytes,
+            sink,
+        )?;
     }
     Ok(())
 }
 
-fn resample_frame(
+fn resample_frame<F>(
     resampler: &mut ffmpeg::software::resampling::Context,
     decoded: &ffmpeg::frame::Audio,
-    samples: &mut Vec<i32>,
     output_layout: ffmpeg::ChannelLayout,
     output_rate: u32,
-) -> Result<()> {
+    total_bytes: &mut usize,
+    sink: &mut F,
+) -> Result<()>
+where
+    F: FnMut(&[u8]) -> Result<()>,
+{
     let input_layout = normalize_layout(decoded.channel_layout(), decoded.channels());
     let input_rate = decoded.rate();
 
@@ -179,7 +262,7 @@ fn resample_frame(
         && input_layout == output_layout
         && input_rate == output_rate
     {
-        return append_packed_i16_frame(decoded, samples);
+        return sink_frame_bytes(decoded, total_bytes, sink);
     }
 
     // Some real-world streams (especially containerized/transcoded assets) can
@@ -188,7 +271,7 @@ fn resample_frame(
     for _attempt in 0..3 {
         let mut output = ffmpeg::frame::Audio::empty();
         match resampler.run(decoded, &mut output) {
-            Ok(_) => return append_packed_i16_frame(&output, samples),
+            Ok(_) => return sink_frame_bytes(&output, total_bytes, sink),
             Err(ffmpeg::Error::InputChanged | ffmpeg::Error::OutputChanged) => {
                 // Some frames report rate=0 after parameter switch; fall back to
                 // target output rate to keep resampler reconfiguration valid.
@@ -216,13 +299,13 @@ fn resample_frame(
     )?;
     let mut output = ffmpeg::frame::Audio::empty();
     match one_shot.run(decoded, &mut output) {
-        Ok(_) => append_packed_i16_frame(&output, samples),
+        Ok(_) => sink_frame_bytes(&output, total_bytes, sink),
         Err(ffmpeg::Error::InputChanged | ffmpeg::Error::OutputChanged)
             if decoded.format()
                 == ffmpeg::format::Sample::I16(ffmpeg::format::sample::Type::Packed)
                 && input_layout == output_layout =>
         {
-            append_packed_i16_frame(decoded, samples)
+            sink_frame_bytes(decoded, total_bytes, sink)
         }
         Err(err) => Err(Error::FfmpegDecodeFailed(format!(
             "resample failed after fallback: {err}"
@@ -256,10 +339,14 @@ fn normalize_layout(layout: ffmpeg::ChannelLayout, channels: u16) -> ffmpeg::Cha
     }
 }
 
-fn flush_resampler(
+fn flush_resampler<F>(
     resampler: &mut ffmpeg::software::resampling::Context,
-    samples: &mut Vec<i32>,
-) -> Result<()> {
+    total_bytes: &mut usize,
+    sink: &mut F,
+) -> Result<()>
+where
+    F: FnMut(&[u8]) -> Result<()>,
+{
     loop {
         let mut flushed = ffmpeg::frame::Audio::empty();
         match resampler.flush(&mut flushed) {
@@ -267,7 +354,7 @@ fn flush_resampler(
                 if flushed.samples() == 0 {
                     break;
                 }
-                append_packed_i16_frame(&flushed, samples)?;
+                sink_frame_bytes(&flushed, total_bytes, sink)?;
             }
             // 某些容器/轨道在 flush 阶段会返回参数切换信号；这里按“无更多可刷数据”处理。
             Err(
@@ -285,11 +372,34 @@ fn flush_resampler(
     Ok(())
 }
 
-fn append_packed_i16_frame(frame: &ffmpeg::frame::Audio, samples: &mut Vec<i32>) -> Result<()> {
+fn sink_frame_bytes<F>(
+    frame: &ffmpeg::frame::Audio,
+    total_bytes: &mut usize,
+    sink: &mut F,
+) -> Result<()>
+where
+    F: FnMut(&[u8]) -> Result<()>,
+{
+    let bytes = packed_i16_frame_bytes(frame)?;
+    if bytes.is_empty() {
+        return Ok(());
+    }
+    *total_bytes = total_bytes.saturating_add(bytes.len());
+    sink(bytes)
+}
+
+fn packed_i16_frame_bytes(frame: &ffmpeg::frame::Audio) -> Result<&[u8]> {
+    if frame.format() != ffmpeg::format::Sample::I16(ffmpeg::format::sample::Type::Packed) {
+        return Err(Error::FfmpegDecodeFailed(format!(
+            "unexpected sample format {:?}, expected packed i16",
+            frame.format()
+        )));
+    }
+
     let channels = usize::from(frame.channels());
     let sample_count = frame.samples();
     if channels == 0 || sample_count == 0 {
-        return Ok(());
+        return Ok(&[]);
     }
 
     let expected_bytes = sample_count
@@ -305,10 +415,42 @@ fn append_packed_i16_frame(frame: &ffmpeg::frame::Audio, samples: &mut Vec<i32>)
         )));
     }
 
-    for chunk in data[..expected_bytes].chunks_exact(2) {
+    Ok(&data[..expected_bytes])
+}
+
+fn append_packed_i16_bytes(bytes: &[u8], samples: &mut Vec<i32>) {
+    for chunk in bytes.chunks_exact(2) {
         let sample = i16::from_ne_bytes([chunk[0], chunk[1]]);
         samples.push(i32::from(sample));
     }
+}
+
+fn write_wav_pipe_header(writer: &mut dyn Write, sample_rate: u32, channels: u16) -> Result<()> {
+    if channels == 0 {
+        return Err(Error::FfmpegDecodeFailed(
+            "decoded audio metadata is invalid".to_string(),
+        ));
+    }
+    let block_align = channels
+        .checked_mul(2)
+        .ok_or_else(|| Error::FfmpegDecodeFailed("wav header block_align overflow".to_string()))?;
+    let byte_rate = sample_rate
+        .checked_mul(u32::from(block_align))
+        .ok_or_else(|| Error::FfmpegDecodeFailed("wav header byte_rate overflow".to_string()))?;
+
+    writer.write_all(b"RIFF")?;
+    writer.write_all(&WAV_PIPE_UNKNOWN_SIZE.to_le_bytes())?;
+    writer.write_all(b"WAVE")?;
+    writer.write_all(b"fmt ")?;
+    writer.write_all(&16_u32.to_le_bytes())?;
+    writer.write_all(&1_u16.to_le_bytes())?;
+    writer.write_all(&channels.to_le_bytes())?;
+    writer.write_all(&sample_rate.to_le_bytes())?;
+    writer.write_all(&byte_rate.to_le_bytes())?;
+    writer.write_all(&block_align.to_le_bytes())?;
+    writer.write_all(&16_u16.to_le_bytes())?;
+    writer.write_all(b"data")?;
+    writer.write_all(&WAV_PIPE_UNKNOWN_SIZE.to_le_bytes())?;
     Ok(())
 }
 
@@ -319,4 +461,29 @@ fn has_demuxer(name: &str) -> bool {
     };
     // SAFETY: av_find_input_format 只读取传入的 null-terminated 字符串。
     unsafe { !ffmpeg::ffi::av_find_input_format(c_name.as_ptr()).is_null() }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::write_wav_pipe_header;
+
+    #[test]
+    fn test_write_wav_pipe_header_layout() {
+        let mut out = Vec::new();
+        let wrote = write_wav_pipe_header(&mut out, 48_000, 2);
+        assert!(wrote.is_ok());
+        assert_eq!(out.len(), 44);
+        assert_eq!(&out[0..4], b"RIFF");
+        assert_eq!(&out[8..12], b"WAVE");
+        assert_eq!(&out[12..16], b"fmt ");
+        assert_eq!(&out[36..40], b"data");
+        assert_eq!(
+            u32::from_le_bytes([out[4], out[5], out[6], out[7]]),
+            u32::MAX
+        );
+        assert_eq!(
+            u32::from_le_bytes([out[40], out[41], out[42], out[43]]),
+            u32::MAX
+        );
+    }
 }

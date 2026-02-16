@@ -11,4 +11,6 @@ pub(crate) mod adm_routing;
 mod ffmpeg_decode;
 
 #[cfg(feature = "ffmpeg-decode")]
-pub(crate) use ffmpeg_decode::{decode_media_to_pcm_i32, media_capabilities};
+pub(crate) use ffmpeg_decode::{
+    decode_media_to_pcm_i32, decode_media_to_wav_pipe, media_capabilities,
+};

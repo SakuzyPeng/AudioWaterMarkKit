@@ -12,7 +12,7 @@ AWMKit 是一个围绕音频水印场景构建的跨平台工具集，包含 Rus
 - SQLite 持久化：映射、证据、应用设置
 - 输入支持：`wav` / `flac` / `mp3` / `ogg` / `opus` / `m4a` / `alac` / `mp4` / `mkv` / `mka` / `ts` / `m2ts` / `m2t`
 - 当前输出限制：嵌入结果统一输出为 `WAV`（非 `wav` 输出路径将直接报错）
-- `audiowmark` 执行 I/O：默认优先 `stdin/stdout pipe`，可通过 `AWMKIT_DISABLE_PIPE_IO=1` 强制回退文件 I/O
+- `audiowmark` 执行 I/O：默认优先 `stdin/stdout pipe`；`detect` 对非 WAV 输入走“FFmpeg 解码 -> WAV pipe -> audiowmark”真流式链路，可通过 `AWMKIT_DISABLE_PIPE_IO=1` 强制回退文件 I/O
 - 多声道默认路由（smart）：`FC` 单声道嵌入（dual-mono），`LFE` 默认跳过，其余按成对路由；未知/自定义布局回退顺序配对并在奇数声道时追加单声道步骤（带告警）
 - 多声道路由执行：内部使用 Rayon 并行执行 RouteStep，结果按 step 索引确定性归并（外部参数与返回格式不变）
 - ADM/BWF 母版嵌入（一期）：`embed` 会自动识别 `RIFF/RF64/BW64` 中的 ADM/BWF 元数据并走保真 data 替换；`detect` 暂不支持 ADM 专项链路

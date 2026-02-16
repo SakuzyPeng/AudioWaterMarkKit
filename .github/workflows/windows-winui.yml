@@ -449,7 +449,14 @@ jobs:
           }
           $env:PATH = "$ffmpegRuntime;$env:PATH"
 
-          foreach ($input in @("test-audio/sample_wm.wav", "test-audio/multichannel_sample_wm.wav")) {
+          $candidateInputs = @("test-audio/sample_wm.wav", "test-audio/multichannel_sample_wm.wav")
+          $inputs = @($candidateInputs | Where-Object { Test-Path $_ })
+          if ($inputs.Count -eq 0) {
+            Write-Warning "Regression fixtures not found in workspace; skipping detect regression."
+            return
+          }
+
+          foreach ($input in $inputs) {
             & $coreExe detect $input
             if ($LASTEXITCODE -ne 0) {
               throw "Default detect failed for $input (exit=$LASTEXITCODE)"
@@ -457,7 +464,7 @@ jobs:
           }
 
           $env:AWMKIT_DISABLE_PIPE_IO = "1"
-          foreach ($input in @("test-audio/sample_wm.wav", "test-audio/multichannel_sample_wm.wav")) {
+          foreach ($input in $inputs) {
             & $coreExe detect $input
             if ($LASTEXITCODE -ne 0) {
               throw "File-mode detect failed for $input (exit=$LASTEXITCODE)"
