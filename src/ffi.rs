@@ -2085,7 +2085,9 @@ pub unsafe extern "C" fn awm_audio_detect_multichannel(
     match (*handle).inner.detect_multichannel(input_str, rust_layout) {
         Ok(mc_result) => {
             // 初始化结果
-            (*result).pair_count = u32::try_from(mc_result.pairs.len()).unwrap_or(u32::MAX);
+            // pairs 数组固定 8 槽，pair_count 取实际写入数（不超过 8）
+            let written = mc_result.pairs.len().min(8);
+            (*result).pair_count = u32::try_from(written).unwrap_or(8);
             (*result).has_best = mc_result.best.is_some();
 
             // 复制各声道对结果
