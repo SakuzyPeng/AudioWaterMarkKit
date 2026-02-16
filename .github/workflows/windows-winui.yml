@@ -435,6 +435,36 @@ jobs:
       - name: Build CLI core (release, full-cli)
         run: cargo build --bin awmkit-core --features full-cli --release --target x86_64-pc-windows-msvc
 
+      - name: Windows pipe/file detect regression
+        shell: pwsh
+        run: |
+          $coreExe = "target/x86_64-pc-windows-msvc/release/awmkit-core.exe"
+          if (-not (Test-Path $coreExe)) {
+            throw "CLI core binary not found: $coreExe"
+          }
+
+          $ffmpegRuntime = (Resolve-Path "ffmpeg-dist/lib").Path
+          if (-not (Test-Path $ffmpegRuntime)) {
+            throw "Missing FFmpeg runtime directory: $ffmpegRuntime"
+          }
+          $env:PATH = "$ffmpegRuntime;$env:PATH"
+
+          foreach ($input in @("test-audio/sample_wm.wav", "test-audio/multichannel_sample_wm.wav")) {
+            & $coreExe detect $input
+            if ($LASTEXITCODE -ne 0) {
+              throw "Default detect failed for $input (exit=$LASTEXITCODE)"
+            }
+          }
+
+          $env:AWMKIT_DISABLE_PIPE_IO = "1"
+          foreach ($input in @("test-audio/sample_wm.wav", "test-audio/multichannel_sample_wm.wav")) {
+            & $coreExe detect $input
+            if ($LASTEXITCODE -ne 0) {
+              throw "File-mode detect failed for $input (exit=$LASTEXITCODE)"
+            }
+          }
+          Remove-Item Env:AWMKIT_DISABLE_PIPE_IO -ErrorAction SilentlyContinue
+
       - name: Build FFI cdylib (release)
         run: cargo build --lib --features ffi,app,bundled --release --target x86_64-pc-windows-msvc
 

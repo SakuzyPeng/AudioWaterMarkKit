@@ -326,6 +326,7 @@ dependencies = [
  "i18n-embed-fl",
  "indicatif",
  "keyring",
+ "libc",
  "num-traits",
  "once_cell",
  "quick-xml",

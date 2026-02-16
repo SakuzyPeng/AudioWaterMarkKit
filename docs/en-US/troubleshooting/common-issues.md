@@ -56,6 +56,7 @@ Fix:
 ## 7. Pipe I/O Compatibility (`stdin/stdout`)
 
 Note: runtime now prefers `audiowmark` pipe I/O (`-` as input/output). If the local `audiowmark` build does not support this mode, AWMKit automatically falls back to file I/O.
+In recent builds, Unix `SIGPIPE` is guarded in the FFI path (Swift/ObjC/.NET), so pipe write failures are converted to normal errors and fallback can proceed instead of crashing the host process.
 
 Force-disable pipe mode for troubleshooting:
 
@@ -66,3 +67,4 @@ Recommended checks:
 
 1. Run `awmkit status --doctor` to confirm the active `audiowmark` binary and version.
 2. If failures disappear when pipe mode is disabled, upgrade or replace the `audiowmark` binary first.
+3. `AWMKIT_DISABLE_PIPE_IO=1` changes only the transport strategy, not watermark business semantics.

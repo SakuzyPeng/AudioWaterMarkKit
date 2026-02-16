@@ -56,6 +56,7 @@
 ## 7. 管道 I/O 兼容问题（`stdin/stdout`）
 
 说明：当前默认优先使用 `audiowmark` 管道 I/O（`-` 作为输入/输出）。若本地 `audiowmark` 构建不支持该模式，运行时会自动回退到文件 I/O。  
+在新版中，FFI（Swift/ObjC/.NET）主链已对 Unix `SIGPIPE` 做了防护，管道写入失败会转为普通错误并进入回退，而不是导致宿主进程直接闪退。
 
 手动强制关闭管道模式（便于排查）：
 
@@ -66,3 +67,4 @@
 
 1. 先执行 `awmkit status --doctor` 确认当前 `audiowmark` 来源和版本。
 2. 若出现异常且关闭 pipe 后恢复，优先升级/替换 `audiowmark` 二进制。
+3. `AWMKIT_DISABLE_PIPE_IO=1` 只改变 I/O 通道策略，不改变水印业务语义。

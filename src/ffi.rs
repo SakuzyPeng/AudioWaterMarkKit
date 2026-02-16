@@ -80,6 +80,21 @@ const fn u8_to_c_char(byte: u8) -> c_char {
     i8::from_ne_bytes([byte])
 }
 
+#[cfg(unix)]
+fn ensure_sigpipe_ignored_once() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        // FFI host process (Swift/ObjC/.NET) should never be terminated by SIGPIPE.
+        // Convert broken pipe to regular EPIPE so Rust fallback logic can run.
+        unsafe {
+            libc::signal(libc::SIGPIPE, libc::SIG_IGN);
+        }
+    });
+}
+
+#[cfg(not(unix))]
+fn ensure_sigpipe_ignored_once() {}
+
 /// Write UTF-8 string into C buffer with two-step size negotiation.
 ///
 /// # Safety
@@ -520,6 +535,7 @@ impl AWMEmbedEvidenceResult {
 /// 返回的指针需要通过 `awm_audio_free` 释放
 #[no_mangle]
 pub extern "C" fn awm_audio_new() -> *mut AWMAudioHandle {
+    ensure_sigpipe_ignored_once();
     match Audio::new() {
         Ok(audio) => Box::into_raw(Box::new(AWMAudioHandle { inner: audio })),
         Err(_) => ptr::null_mut(),
@@ -535,6 +551,7 @@ pub extern "C" fn awm_audio_new() -> *mut AWMAudioHandle {
 pub unsafe extern "C" fn awm_audio_new_with_binary(
     binary_path: *const c_char,
 ) -> *mut AWMAudioHandle {
+    ensure_sigpipe_ignored_once();
     if binary_path.is_null() {
         return ptr::null_mut();
     }
@@ -2148,5 +2165,16 @@ pub const extern "C" fn awm_channel_layout_channels(layout: AWMChannelLayout) ->
         AWMChannelLayout::Surround714 => 12,
         AWMChannelLayout::Surround916 => 16,
         AWMChannelLayout::Auto => 0,
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::ensure_sigpipe_ignored_once;
+
+    #[test]
+    fn test_ensure_sigpipe_ignored_once_is_idempotent() {
+        ensure_sigpipe_ignored_once();
+        ensure_sigpipe_ignored_once();
     }
 }
