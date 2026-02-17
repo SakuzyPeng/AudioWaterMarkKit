@@ -1,0 +1,14 @@
+root = true
+
+[*.cs]
+# CA2007: ConfigureAwait - WinUI UI app must resume on UI thread, not needed here
+dotnet_diagnostic.CA2007.severity = none
+
+# CA1515: Make public types internal - MVVM ViewModels must be public for XAML binding
+dotnet_diagnostic.CA1515.severity = none
+
+# CA5392: Use DefaultDllImportSearchPaths - WinUI SDK generated P/Invoke code
+dotnet_diagnostic.CA5392.severity = none
+
+# CA2101: Specify marshaling for P/Invoke - WinUI SDK generated interop code
+dotnet_diagnostic.CA2101.severity = none
