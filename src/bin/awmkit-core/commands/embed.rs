@@ -4,8 +4,8 @@ use crate::util::{
 };
 use crate::Context;
 use awmkit::app::{
-    analyze_snr, build_audio_proof, i18n, key_id_from_key_material, EvidenceStore, KeyStore,
-    NewAudioEvidence, SnrAnalysis, TagStore, SNR_STATUS_OK,
+    analyze, build_proof, i18n, key_id_from_key_material, Analysis, EvidenceStore, KeyStore,
+    NewAudioEvidence, TagStore, SNR_STATUS_OK,
 };
 use awmkit::{Error as AwmError, Message};
 use clap::Args;
@@ -125,7 +125,7 @@ struct EmbedShared<'a> {
     /// Internal field.
     message: &'a [u8; awmkit::MESSAGE_LEN],
     /// Internal field.
-    decoded_message: &'a awmkit::MessageResult,
+    decoded_message: &'a awmkit::Decoded,
     /// Internal field.
     key: &'a [u8],
     /// Internal field.
@@ -190,7 +190,7 @@ fn process_embed_input(
     {
         Ok(()) => {
             stats.success = stats.success.saturating_add(1);
-            let snr = analyze_snr(input, output);
+            let snr = analyze(input, output);
             persist_evidence(shared, input, output, &snr);
             report_embed_ok(shared.ctx, input, output, &snr);
         }
@@ -257,13 +257,13 @@ fn persist_evidence(
     shared: &EmbedShared<'_>,
     input: &std::path::Path,
     output: &std::path::Path,
-    snr: &SnrAnalysis,
+    snr: &Analysis,
 ) {
     let Some(evidence_store) = shared.evidence_store else {
         return;
     };
 
-    let proof = match build_audio_proof(output) {
+    let proof = match build_proof(output) {
         Ok(proof) => proof,
         Err(err) => {
             shared.ctx.out.warn(format!(
@@ -308,7 +308,7 @@ fn report_embed_ok(
     ctx: &Context,
     input: &std::path::Path,
     output: &std::path::Path,
-    snr: &SnrAnalysis,
+    snr: &Analysis,
 ) {
     if ctx.out.quiet() {
         return;
@@ -366,7 +366,7 @@ fn print_embed_summary(ctx: &Context, stats: &EmbedStats) {
 fn save_identity_mapping(
     ctx: &Context,
     stats: &EmbedStats,
-    decoded_message: &awmkit::MessageResult,
+    decoded_message: &awmkit::Decoded,
     tag: &awmkit::Tag,
 ) {
     if stats.success == 0 {

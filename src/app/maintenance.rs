@@ -1,6 +1,6 @@
 use crate::app::error::Result;
 use crate::app::keystore::KeyStore;
-use crate::app::settings::AppSettings;
+use crate::app::settings::Preferences;
 use crate::app::tag_store::TagStore;
 use crate::bundled;
 use std::fs;
@@ -12,7 +12,7 @@ pub fn clear_local_cache() -> Result<()> {
     if cache_root.exists() {
         fs::remove_dir_all(&cache_root)?;
     }
-    AppSettings::remove_config()?;
+    Preferences::remove_config()?;
     Ok(())
 }
 

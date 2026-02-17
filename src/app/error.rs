@@ -2,7 +2,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 #[allow(clippy::module_name_repetitions)]
-pub enum AppError {
+pub enum Failure {
     #[error("{0}")]
     Message(String),
 
@@ -40,4 +40,4 @@ pub enum AppError {
     Awmkit(#[from] crate::Error),
 }
 
-pub type Result<T> = std::result::Result<T, AppError>;
+pub type Result<T> = std::result::Result<T, Failure>;

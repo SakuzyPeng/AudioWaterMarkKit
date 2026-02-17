@@ -21,13 +21,13 @@ static FFMPEG_INIT: OnceLock<std::result::Result<(), String>> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 #[allow(clippy::module_name_repetitions)]
-pub struct SnrAnalysis {
+pub struct Analysis {
     pub snr_db: Option<f64>,
     pub status: String,
     pub detail: Option<String>,
 }
 
-impl SnrAnalysis {
+impl Analysis {
     #[must_use]
     pub fn ok(snr_db: f64) -> Self {
         Self {
@@ -55,33 +55,33 @@ impl SnrAnalysis {
 }
 
 #[allow(clippy::module_name_repetitions)]
-pub fn analyze_snr<P: AsRef<Path>>(input: P, output: P) -> SnrAnalysis {
+pub fn analyze<P: AsRef<Path>>(input: P, output: P) -> Analysis {
     #[cfg(not(feature = "ffmpeg-decode"))]
     {
         let _ = input;
         let _ = output;
-        return SnrAnalysis::unavailable("ffmpeg_decode_feature_disabled");
+        return Analysis::unavailable("ffmpeg_decode_feature_disabled");
     }
 
     #[cfg(feature = "ffmpeg-decode")]
     let input_samples = match decode_media_to_i16_mono_via_avfilter(input.as_ref()) {
         Ok(value) => value,
-        Err(error) => return SnrAnalysis::unavailable(format!("input_decode_failed:{error}")),
+        Err(error) => return Analysis::unavailable(format!("input_decode_failed:{error}")),
     };
 
     #[cfg(feature = "ffmpeg-decode")]
     let output_samples = match decode_media_to_i16_mono_via_avfilter(output.as_ref()) {
         Ok(value) => value,
-        Err(error) => return SnrAnalysis::unavailable(format!("output_decode_failed:{error}")),
+        Err(error) => return Analysis::unavailable(format!("output_decode_failed:{error}")),
     };
 
     if input_samples.is_empty() || output_samples.is_empty() {
-        return SnrAnalysis::unavailable("empty_audio");
+        return Analysis::unavailable("empty_audio");
     }
 
     let overlap = input_samples.len().min(output_samples.len());
     if overlap < SNR_MIN_OVERLAP_SAMPLES {
-        return SnrAnalysis::unavailable("insufficient_overlap");
+        return Analysis::unavailable("insufficient_overlap");
     }
 
     let mut signal_power = 0.0_f64;
@@ -101,30 +101,30 @@ pub fn analyze_snr<P: AsRef<Path>>(input: P, output: P) -> SnrAnalysis {
     }
 
     if sample_count <= 0.0 {
-        return SnrAnalysis::unavailable("empty_audio");
+        return Analysis::unavailable("empty_audio");
     }
 
     signal_power /= sample_count;
     noise_power /= sample_count;
 
     if !signal_power.is_finite() || !noise_power.is_finite() {
-        return SnrAnalysis::error("non_finite_power");
+        return Analysis::error("non_finite_power");
     }
 
     if noise_power <= f64::EPSILON {
-        return SnrAnalysis::ok(120.0);
+        return Analysis::ok(120.0);
     }
 
     if signal_power <= f64::EPSILON {
-        return SnrAnalysis::unavailable("near_silence_input");
+        return Analysis::unavailable("near_silence_input");
     }
 
     let snr_db = 10.0 * (signal_power / noise_power).log10();
     if !snr_db.is_finite() {
-        return SnrAnalysis::error("non_finite_snr");
+        return Analysis::error("non_finite_snr");
     }
 
-    SnrAnalysis::ok(snr_db.clamp(-60.0, 120.0))
+    Analysis::ok(snr_db.clamp(-60.0, 120.0))
 }
 
 /// Internal helper function.
@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn snr_analysis_ok_helper_sets_status() {
-        let value = SnrAnalysis::ok(12.34);
+        let value = Analysis::ok(12.34);
         assert_eq!(value.status, SNR_STATUS_OK);
         assert_eq!(value.snr_db, Some(12.34));
     }

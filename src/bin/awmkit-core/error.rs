@@ -66,26 +66,26 @@ pub enum CliError {
 /// Internal type alias.
 pub type Result<T> = std::result::Result<T, CliError>;
 
-impl From<awmkit::app::AppError> for CliError {
-    fn from(err: awmkit::app::AppError) -> Self {
-        use awmkit::app::AppError;
+impl From<awmkit::app::Failure> for CliError {
+    fn from(err: awmkit::app::Failure) -> Self {
+        use awmkit::app::Failure;
         match err {
-            AppError::Message(msg) => Self::Message(msg),
-            AppError::KeyNotFound => Self::KeyNotFound,
-            AppError::InvalidKeyLength { expected, actual } => {
+            Failure::Message(msg) => Self::Message(msg),
+            Failure::KeyNotFound => Self::KeyNotFound,
+            Failure::InvalidKeyLength { expected, actual } => {
                 Self::InvalidKeyLength { expected, actual }
             }
-            AppError::KeyStore(msg) => Self::KeyStore(msg),
-            AppError::MappingExists {
+            Failure::KeyStore(msg) => Self::KeyStore(msg),
+            Failure::MappingExists {
                 username,
                 existing_tag: _,
             } => Self::MappingExists(username),
-            AppError::Io(err) => Self::Io(err),
-            AppError::Json(err) => Self::Json(err),
-            AppError::Sqlite(err) => Self::Message(err.to_string()),
-            AppError::Awmkit(err) => Self::Awmkit(err),
-            AppError::TomlDe(err) => Self::Message(err.to_string()),
-            AppError::TomlSer(err) => Self::Message(err.to_string()),
+            Failure::Io(err) => Self::Io(err),
+            Failure::Json(err) => Self::Json(err),
+            Failure::Sqlite(err) => Self::Message(err.to_string()),
+            Failure::Awmkit(err) => Self::Awmkit(err),
+            Failure::TomlDe(err) => Self::Message(err.to_string()),
+            Failure::TomlSer(err) => Self::Message(err.to_string()),
         }
     }
 }

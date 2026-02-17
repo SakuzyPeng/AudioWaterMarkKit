@@ -56,11 +56,11 @@ pub mod launcher;
 // Re-exports
 pub use audio::{Audio, DetectResult};
 pub use error::{Error, Result};
-pub use message::{MessageResult, CURRENT_VERSION, MESSAGE_LEN};
+pub use message::{Decoded, CURRENT_VERSION, MESSAGE_LEN};
 pub use tag::Tag;
 
 #[cfg(feature = "multichannel")]
-pub use multichannel::{ChannelLayout, MultichannelAudio, SampleFormat};
+pub use multichannel::{AudioBuffer, ChannelLayout, SampleFormat};
 
 #[cfg(feature = "multichannel")]
 pub use audio::MultichannelDetectResult;
@@ -124,7 +124,7 @@ impl Message {
     ///
     /// # Errors
     /// 当消息长度不正确、版本不支持或消息内容损坏时返回错误。.
-    pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
+    pub fn decode(data: &[u8], key: &[u8]) -> Result<Decoded> {
         message::decode(data, key)
     }
 
@@ -132,7 +132,7 @@ impl Message {
     ///
     /// # Errors
     /// 当消息长度不正确、版本不支持或消息内容损坏时返回错误。.
-    pub fn decode_unverified(data: &[u8]) -> Result<MessageResult> {
+    pub fn decode_unverified(data: &[u8]) -> Result<Decoded> {
         message::decode_unverified(data)
     }
 

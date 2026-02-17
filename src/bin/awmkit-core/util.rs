@@ -1,6 +1,6 @@
 use crate::error::{CliError, Result};
 use crate::Context;
-use awmkit::app::{i18n, AppConfig, AudioEngine};
+use awmkit::app::{i18n, AudioEngine, Config};
 use awmkit::ChannelLayout;
 use awmkit::Tag;
 use clap::ValueEnum;
@@ -88,11 +88,11 @@ pub fn ensure_file(path: &Path) -> Result<()> {
 
 /// Internal helper function.
 pub fn audio_from_context(ctx: &Context) -> Result<awmkit::Audio> {
-    let config = AppConfig {
+    let config = Config {
         audiowmark_override: ctx.audiowmark.clone(),
     };
     let engine = AudioEngine::new(&config).map_err(|err| match err {
-        awmkit::app::AppError::Awmkit(awmkit::Error::AudiowmarkNotFound) => {
+        awmkit::app::Failure::Awmkit(awmkit::Error::AudiowmarkNotFound) => {
             CliError::AudiowmarkNotFound
         }
         other => CliError::from(other),

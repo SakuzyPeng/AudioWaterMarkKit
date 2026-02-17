@@ -40,7 +40,7 @@ const DEFAULT_KEY_SLOT: u8 = 0;
 /// 解码后的消息结果.
 #[derive(Debug, Clone)]
 #[allow(clippy::module_name_repetitions)]
-pub struct MessageResult {
+pub struct Decoded {
     /// 协议版本.
     pub version: u8,
     /// UTC Unix 时间戳 (秒).
@@ -53,7 +53,7 @@ pub struct MessageResult {
     pub tag: Tag,
 }
 
-impl MessageResult {
+impl Decoded {
     /// 获取身份字符串.
     #[must_use]
     pub fn identity(&self) -> &str {
@@ -156,7 +156,7 @@ pub fn encode_with_slot(
 ///
 /// # Errors
 /// 当消息长度不正确、版本不支持、槽位非法或 HMAC 校验失败时返回错误。.
-pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
+pub fn decode(data: &[u8], key: &[u8]) -> Result<Decoded> {
     if data.len() != MESSAGE_LEN {
         return Err(Error::InvalidMessageLength(data.len()));
     }
@@ -180,7 +180,7 @@ pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
 ///
 /// # Errors
 /// 当消息长度不正确、版本不支持或字段解析失败时返回错误。.
-pub fn decode_unverified(data: &[u8]) -> Result<MessageResult> {
+pub fn decode_unverified(data: &[u8]) -> Result<Decoded> {
     if data.len() != MESSAGE_LEN {
         return Err(Error::InvalidMessageLength(data.len()));
     }
@@ -223,7 +223,7 @@ pub fn peek_version_and_slot(data: &[u8]) -> Result<(u8, u8)> {
 }
 
 /// Internal helper function.
-fn parse_message_fields(data: &[u8]) -> Result<MessageResult> {
+fn parse_message_fields(data: &[u8]) -> Result<Decoded> {
     // 解析字段
     let version = data[0];
 
@@ -242,7 +242,7 @@ fn parse_message_fields(data: &[u8]) -> Result<MessageResult> {
     tag_packed.copy_from_slice(&data[5..10]);
     let tag = Tag::from_packed(&tag_packed)?;
 
-    Ok(MessageResult {
+    Ok(Decoded {
         version,
         timestamp_utc: u64::from(timestamp_minutes) * 60,
         timestamp_minutes,

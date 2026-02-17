@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use crate::audio::Audio;
 use crate::error::{Error, Result};
 use crate::message::MESSAGE_LEN;
-use crate::multichannel::{ChannelLayout, MultichannelAudio, SampleFormat};
+use crate::multichannel::{AudioBuffer, ChannelLayout, SampleFormat};
 
 use super::adm_bwav::{
     parse_bed_channel_indices, parse_bed_channel_speaker_labels, parse_object_channel_indices,
@@ -112,7 +112,7 @@ pub fn rewrite_adm_with_transform<F>(
     mut transform: F,
 ) -> Result<()>
 where
-    F: FnMut(MultichannelAudio) -> Result<MultichannelAudio>,
+    F: FnMut(AudioBuffer) -> Result<AudioBuffer>,
 {
     let original_audio = decode_pcm_audio(input, index)?;
     let processed_audio = transform(original_audio.clone())?;
@@ -176,12 +176,12 @@ where
 ///   `None` 时退回按数量推断路由。两者均为 `None`/空 时走全声道路径。
 fn embed_adm_bed_only(
     audio_engine: &Audio,
-    source_audio: &MultichannelAudio,
+    source_audio: &AudioBuffer,
     message: &[u8; MESSAGE_LEN],
     layout: Option<ChannelLayout>,
     bed_indices: Option<&[usize]>,
     speaker_labels: Option<&[(usize, String)]>,
-) -> Result<MultichannelAudio> {
+) -> Result<AudioBuffer> {
     // ── 路径 A：axml 位置感知路由 ──
     if let Some(labels) = speaker_labels {
         if !labels.is_empty() {
@@ -228,10 +228,10 @@ fn embed_adm_bed_only(
 /// `speaker_labels`: `(channelIndex, speakerLabel)` 列表，仅含 Bed 声道。.
 fn embed_bed_by_speaker_labels(
     audio_engine: &Audio,
-    source_audio: &MultichannelAudio,
+    source_audio: &AudioBuffer,
     message: &[u8; MESSAGE_LEN],
     speaker_labels: &[(usize, String)],
-) -> Result<MultichannelAudio> {
+) -> Result<AudioBuffer> {
     use crate::multichannel::{effective_lfe_mode, RouteMode};
 
     let plan = build_route_plan_from_labels(speaker_labels, effective_lfe_mode());
@@ -267,7 +267,7 @@ fn embed_bed_by_speaker_labels(
             RouteMode::Mono(ch) => {
                 // 真单声道：单声道 WAV → audiowmark → 写回
                 let mono = source_audio.channel_samples(*ch)?.to_vec();
-                let mono_audio = MultichannelAudio::new(
+                let mono_audio = AudioBuffer::new(
                     vec![mono],
                     source_audio.sample_rate(),
                     source_audio.sample_format(),
@@ -292,7 +292,7 @@ fn embed_bed_by_speaker_labels(
             RouteMode::Pair(ch_l, ch_r) => {
                 let left = source_audio.channel_samples(*ch_l)?.to_vec();
                 let right = source_audio.channel_samples(*ch_r)?.to_vec();
-                let stereo = MultichannelAudio::new(
+                let stereo = AudioBuffer::new(
                     vec![left, right],
                     source_audio.sample_rate(),
                     source_audio.sample_format(),
@@ -333,11 +333,11 @@ fn embed_bed_by_speaker_labels(
 /// 处理流程（对每个 `obj_idx`）：.
 /// 1. 越界检查 → 跳过并警告
 /// 2. 静默检测（~-80 dBFS）→ 跳过并提示
-/// 3. 构建 1ch [`MultichannelAudio`] → audiowmark → 写回原声道
+/// 3. 构建 1ch [`AudioBuffer`] → audiowmark → 写回原声道
 /// 4. 失败 → 警告（原声道不变，不影响整体流程）
 fn embed_object_channels_into_audio(
     audio_engine: &Audio,
-    audio: &mut MultichannelAudio,
+    audio: &mut AudioBuffer,
     message: &[u8; MESSAGE_LEN],
     obj_indices: &[usize],
 ) -> Result<()> {
@@ -356,7 +356,7 @@ fn embed_object_channels_into_audio(
             eprintln!("[awmkit] ADM: Object ch{obj_idx} is silent (~-80 dBFS), skipping");
             continue;
         }
-        let mono_audio = MultichannelAudio::new(vec![samples.to_vec()], audio.sample_rate(), sf)
+        let mono_audio = AudioBuffer::new(vec![samples.to_vec()], audio.sample_rate(), sf)
             .map_err(|e| {
                 Error::AdmPreserveFailed(format!("Object ch{obj_idx} mono build error: {e}"))
             })?;
@@ -389,14 +389,14 @@ fn embed_object_channels_into_audio(
     Ok(())
 }
 
-/// 对单个 [`MultichannelAudio`]（1ch mono 或 2ch stereo）执行 audiowmark 嵌入。.
+/// 对单个 [`AudioBuffer`]（1ch mono 或 2ch stereo）执行 audiowmark 嵌入。.
 ///
 /// 写临时文件 → audiowmark → 读回。.
 fn embed_single_audio_via_audiowmark(
     audio_engine: &Audio,
-    audio: &MultichannelAudio,
+    audio: &AudioBuffer,
     message: &[u8; MESSAGE_LEN],
-) -> Result<MultichannelAudio> {
+) -> Result<AudioBuffer> {
     let temp_dir = create_temp_dir("awmkit_adm_step")?;
     let temp_in = temp_dir.join("step_in.wav");
     let temp_out = temp_dir.join("step_out.wav");
@@ -406,38 +406,35 @@ fn embed_single_audio_via_audiowmark(
         audio_engine.embed_multichannel(&temp_in, &temp_out, message, Some(audio.layout()))?;
         let bytes = fs::read(&temp_out)
             .map_err(|e| Error::AdmPreserveFailed(format!("failed to read step output: {e}")))?;
-        MultichannelAudio::from_wav_bytes(&bytes)
+        AudioBuffer::from_wav_bytes(&bytes)
     })();
 
     let _ = fs::remove_dir_all(&temp_dir);
     result
 }
 
-/// 从 `MultichannelAudio` 按索引提取子集声道（供外部模块调用）。.
-pub fn extract_bed_channels(
-    audio: &MultichannelAudio,
-    indices: &[usize],
-) -> Result<MultichannelAudio> {
+/// 从 `AudioBuffer` 按索引提取子集声道（供外部模块调用）。.
+pub fn extract_bed_channels(audio: &AudioBuffer, indices: &[usize]) -> Result<AudioBuffer> {
     extract_channels(audio, indices)
 }
 
-/// 从 `MultichannelAudio` 按索引提取子集声道。.
-fn extract_channels(audio: &MultichannelAudio, indices: &[usize]) -> Result<MultichannelAudio> {
+/// 从 `AudioBuffer` 按索引提取子集声道。.
+fn extract_channels(audio: &AudioBuffer, indices: &[usize]) -> Result<AudioBuffer> {
     let mut channels = Vec::with_capacity(indices.len());
     for &idx in indices {
         channels.push(audio.channel_samples(idx)?.to_vec());
     }
-    MultichannelAudio::new(channels, audio.sample_rate(), audio.sample_format())
+    AudioBuffer::new(channels, audio.sample_rate(), audio.sample_format())
         .map_err(|e| Error::AdmPreserveFailed(format!("failed to build bed audio: {e}")))
 }
 
 /// Internal helper function.
 fn embed_pairs_via_audiowmark(
     audio_engine: &Audio,
-    source_audio: &MultichannelAudio,
+    source_audio: &AudioBuffer,
     message: &[u8; MESSAGE_LEN],
     layout: Option<ChannelLayout>,
-) -> Result<MultichannelAudio> {
+) -> Result<AudioBuffer> {
     let selected_layout = layout.unwrap_or_else(|| source_audio.layout());
     let selected_channels = usize::from(selected_layout.channels());
     if selected_channels != source_audio.num_channels() {
@@ -467,7 +464,7 @@ fn embed_pairs_via_audiowmark(
                 "failed to read embedded temp output: {e}"
             ))
         })?;
-        MultichannelAudio::from_wav_bytes(&temp_bytes)
+        AudioBuffer::from_wav_bytes(&temp_bytes)
     })();
 
     let _ = fs::remove_dir_all(&temp_dir);
@@ -475,7 +472,7 @@ fn embed_pairs_via_audiowmark(
 }
 
 /// Internal helper function.
-fn validate_audio_shape(original: &MultichannelAudio, processed: &MultichannelAudio) -> Result<()> {
+fn validate_audio_shape(original: &AudioBuffer, processed: &AudioBuffer) -> Result<()> {
     if original.num_channels() != processed.num_channels() {
         return Err(Error::AdmPreserveFailed(format!(
             "channel count changed after transform: {} -> {}",
@@ -508,7 +505,7 @@ fn validate_audio_shape(original: &MultichannelAudio, processed: &MultichannelAu
 }
 
 /// Internal helper function.
-pub fn decode_pcm_audio(path: &Path, index: &ChunkIndex) -> Result<MultichannelAudio> {
+pub fn decode_pcm_audio(path: &Path, index: &ChunkIndex) -> Result<AudioBuffer> {
     let data_size = usize::try_from(index.data_chunk.size)
         .map_err(|_| Error::AdmUnsupported("data chunk too large to decode".to_string()))?;
     let mut file = File::open(path).map_err(|e| {
@@ -560,11 +557,11 @@ pub fn decode_pcm_audio(path: &Path, index: &ChunkIndex) -> Result<MultichannelA
     }
 
     let sample_format = sample_format_from_bits(index.fmt.bits_per_sample)?;
-    MultichannelAudio::new(separated, index.fmt.sample_rate, sample_format)
+    AudioBuffer::new(separated, index.fmt.sample_rate, sample_format)
 }
 
 /// Internal helper function.
-fn encode_pcm_audio_data(audio: &MultichannelAudio, fmt: PcmFormat) -> Result<Vec<u8>> {
+fn encode_pcm_audio_data(audio: &AudioBuffer, fmt: PcmFormat) -> Result<Vec<u8>> {
     let channels = audio.num_channels();
     let expected_channels = usize::from(fmt.channels);
     if channels != expected_channels {
@@ -813,11 +810,7 @@ mod tests {
                     *first_sample += 111;
                 }
             }
-            MultichannelAudio::merge_stereo_pairs(
-                &pairs,
-                audio.sample_rate(),
-                audio.sample_format(),
-            )
+            AudioBuffer::merge_stereo_pairs(&pairs, audio.sample_rate(), audio.sample_format())
         });
         assert!(rewritten.is_ok());
 
@@ -878,11 +871,7 @@ mod tests {
                     *sample += 200;
                 }
             }
-            MultichannelAudio::merge_stereo_pairs(
-                &pairs,
-                audio.sample_rate(),
-                audio.sample_format(),
-            )
+            AudioBuffer::merge_stereo_pairs(&pairs, audio.sample_rate(), audio.sample_format())
         });
         assert!(rewritten.is_ok());
 

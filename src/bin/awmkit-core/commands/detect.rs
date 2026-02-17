@@ -1,7 +1,7 @@
 use crate::error::{CliError, Result};
 use crate::util::{audio_from_context, ensure_file, expand_inputs, CliLayout};
 use crate::Context;
-use awmkit::app::{build_audio_proof, i18n, AppError, EvidenceStore, KeyStore};
+use awmkit::app::{build_proof, i18n, EvidenceStore, Failure, KeyStore};
 use awmkit::ChannelLayout;
 use awmkit::Message;
 use clap::Args;
@@ -169,7 +169,7 @@ struct InvalidReport<'a> {
     /// Internal field.
     error: &'a str,
     /// Internal field.
-    unverified: Option<&'a awmkit::MessageResult>,
+    unverified: Option<&'a awmkit::Decoded>,
     /// Internal field.
     detect_score: Option<f32>,
     /// Internal field.
@@ -459,7 +459,7 @@ enum DetectOutcome {
         /// Internal field.
         error: String,
         /// Internal field.
-        unverified: Option<awmkit::MessageResult>,
+        unverified: Option<awmkit::Decoded>,
         /// Internal field.
         detect_score: Option<f32>,
         /// Internal field.
@@ -731,7 +731,7 @@ fn detect_best(
 /// Internal struct.
 struct DecodedSlotMessage {
     /// Internal field.
-    message: awmkit::MessageResult,
+    message: awmkit::Decoded,
     /// Internal field.
     slot_hint: u8,
     /// Internal field.
@@ -786,7 +786,7 @@ fn resolve_decode_slot(message: &[u8], key_store: &KeyStore) -> SlotResolution {
         }
     }
 
-    let mut decode_successes: Vec<(u8, awmkit::MessageResult)> = Vec::new();
+    let mut decode_successes: Vec<(u8, awmkit::Decoded)> = Vec::new();
     let mut scan_count: u32 = 0;
     let mut hint_key_missing = false;
 
@@ -798,7 +798,7 @@ fn resolve_decode_slot(message: &[u8], key_store: &KeyStore) -> SlotResolution {
                     decode_successes.push((slot, decoded));
                 }
             }
-            Err(AppError::KeyNotFound) => {
+            Err(Failure::KeyNotFound) => {
                 if slot == slot_hint {
                     hint_key_missing = true;
                 }
@@ -856,14 +856,14 @@ fn resolve_decode_slot(message: &[u8], key_store: &KeyStore) -> SlotResolution {
 /// Internal helper function.
 fn evaluate_clone_check(
     input: &std::path::Path,
-    decoded: &awmkit::MessageResult,
+    decoded: &awmkit::Decoded,
     evidence_store: Option<&EvidenceStore>,
 ) -> CloneCheck {
     let Some(evidence_store) = evidence_store else {
         return CloneCheck::unavailable("evidence_store_unavailable".to_string());
     };
 
-    let proof = match build_audio_proof(input) {
+    let proof = match build_proof(input) {
         Ok(proof) => proof,
         Err(err) => return CloneCheck::unavailable(format!("proof_error: {err}")),
     };

@@ -368,7 +368,7 @@ pub fn build_route_plan_from_labels(
 /// - `Int24`  : `8_388_607` / `10_000` = `838`
 /// - `Int32` / `Float32` : `i32::MAX` / `10_000` = `214_748`
 ///
-/// 注意：`Float32` 样本在 [`MultichannelAudio`] 中同样以 i32 存储，
+/// 注意：`Float32` 样本在 [`AudioBuffer`] 中同样以 i32 存储，
 /// 归一化值 [-1.0, 1.0] 转换后绝对值远低于 `i32::MAX`，因此阈值仍能
 /// 有效过滤真正静默的 Float32 声道。.
 #[must_use]

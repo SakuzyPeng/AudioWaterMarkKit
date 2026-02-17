@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 
 use ffmpeg_next as ffmpeg;
 
-use crate::audio::{AudioMediaCapabilities, ContainerCapabilities, DecodedPcm};
+use crate::audio::{ContainerCapabilities, DecodedPcm, MediaCapabilities};
 use crate::error::{Error, Result};
 
 /// Internal item.
@@ -78,16 +78,16 @@ pub fn decode_media_to_wav_pipe(input: &Path, writer: &mut dyn Write) -> Result<
 }
 
 /// Internal helper function.
-pub fn media_capabilities() -> AudioMediaCapabilities {
+pub fn media_capabilities() -> MediaCapabilities {
     if ensure_ffmpeg_initialized().is_err() {
-        return AudioMediaCapabilities {
+        return MediaCapabilities {
             backend: "ffmpeg",
             eac3_decode: false,
             containers: ContainerCapabilities::from_flags(false, false, false),
         };
     }
 
-    AudioMediaCapabilities {
+    MediaCapabilities {
         backend: "ffmpeg",
         eac3_decode: ffmpeg::codec::decoder::find(ffmpeg::codec::Id::EAC3).is_some(),
         containers: ContainerCapabilities::from_flags(

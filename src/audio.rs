@@ -20,8 +20,7 @@ use crate::tag::Tag;
 use crate::multichannel::DEFAULT_LFE_MODE;
 #[cfg(feature = "multichannel")]
 use crate::multichannel::{
-    build_smart_route_plan, effective_lfe_mode, ChannelLayout, MultichannelAudio, RouteMode,
-    RouteStep,
+    build_smart_route_plan, effective_lfe_mode, AudioBuffer, ChannelLayout, RouteMode, RouteStep,
 };
 #[cfg(feature = "multichannel")]
 use rayon::prelude::*;
@@ -42,7 +41,7 @@ const MIN_PATTERN_SCORE: f32 = 1.0;
 /// 媒体解码能力摘要（用于 doctor/UI 状态）.
 #[derive(Debug, Clone, Copy)]
 #[allow(clippy::module_name_repetitions)]
-pub struct AudioMediaCapabilities {
+pub struct MediaCapabilities {
     /// 当前媒体后端名称.
     pub backend: &'static str,
     /// 是否支持 E-AC-3 解码.
@@ -94,7 +93,7 @@ impl ContainerCapabilities {
     }
 }
 
-impl AudioMediaCapabilities {
+impl MediaCapabilities {
     #[must_use]
     pub const fn container_mp4(self) -> bool {
         self.containers.has_mp4()
@@ -248,7 +247,7 @@ struct EmbedStepTaskResult {
     /// Internal field.
     step: RouteStep,
     /// Internal field.
-    outcome: Result<MultichannelAudio>,
+    outcome: Result<AudioBuffer>,
 }
 
 #[cfg(feature = "multichannel")]
@@ -335,7 +334,7 @@ impl Audio {
 
     /// 返回当前媒体解码能力摘要。.
     #[must_use]
-    pub fn media_capabilities(&self) -> AudioMediaCapabilities {
+    pub fn media_capabilities(&self) -> MediaCapabilities {
         media_capabilities()
     }
 
@@ -403,7 +402,7 @@ impl Audio {
         &self,
         input: P,
         hmac_key: &[u8],
-    ) -> Result<Option<crate::message::MessageResult>> {
+    ) -> Result<Option<crate::message::Decoded>> {
         match self.detect(input)? {
             Some(result) => {
                 let decoded = message::decode(&result.raw_message, hmac_key)?;
@@ -474,12 +473,12 @@ impl Audio {
 
         // 加载多声道音频以检测声道数。
         // 优先尝试原始输入，避免对可直接读取的 WAV/FLAC 先做不必要的临时解码。
-        // 若失败则先尝试内存解码管线（DecodedPcm → MultichannelAudio，无临时文件）；
+        // 若失败则先尝试内存解码管线（DecodedPcm → AudioBuffer，无临时文件）；
         // 仍失败则 prepare/临时文件兜底；最终失败回退到立体声路径。
-        let mut audio = match MultichannelAudio::from_file(input) {
+        let mut audio = match AudioBuffer::from_file(input) {
             Ok(a) => a,
             Err(Error::InvalidInput(_)) => {
-                // 内存管线：decode → MultichannelAudio，跳过临时文件
+                // 内存管线：decode → AudioBuffer，跳过临时文件
                 if let Ok(a) =
                     decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel)
                 {
@@ -488,13 +487,13 @@ impl Audio {
                         let wav_bytes = a.to_wav_bytes()?;
                         let out_bytes =
                             run_audiowmark_add_bytes(self, wav_bytes, &bytes_to_hex(message))?;
-                        return MultichannelAudio::from_wav_bytes(&out_bytes)?.to_wav(output);
+                        return AudioBuffer::from_wav_bytes(&out_bytes)?.to_wav(output);
                     }
                     a
                 } else {
                     // 兜底：传统临时文件路径
                     let prepared = prepare_input_for_audiowmark(input, "embed_multichannel_input")?;
-                    match MultichannelAudio::from_file(&prepared.path) {
+                    match AudioBuffer::from_file(&prepared.path) {
                         Ok(a) => {
                             prepared_fallback = Some(prepared);
                             a
@@ -644,13 +643,13 @@ impl Audio {
 
         // 加载多声道音频以检测声道数。
         // 优先尝试原始输入，避免对可直接读取的 WAV/FLAC 先做不必要的临时解码。
-        // 若失败则先尝试内存解码管线（DecodedPcm → MultichannelAudio，无临时文件）；
+        // 若失败则先尝试内存解码管线（DecodedPcm → AudioBuffer，无临时文件）；
         // 仍失败则 prepare/临时文件兜底；最终失败回退到立体声路径。
-        let (audio, stereo_file): (MultichannelAudio, Option<PathBuf>) =
-            match MultichannelAudio::from_file(input) {
+        let (audio, stereo_file): (AudioBuffer, Option<PathBuf>) =
+            match AudioBuffer::from_file(input) {
                 Ok(a) => (a, Some(input.to_path_buf())),
                 Err(Error::InvalidInput(_)) => {
-                    // 内存管线：decode → MultichannelAudio，跳过临时文件
+                    // 内存管线：decode → AudioBuffer，跳过临时文件
                     if let Ok(a) =
                         decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel)
                     {
@@ -659,7 +658,7 @@ impl Audio {
                         // 兜底：传统临时文件路径
                         let prepared =
                             prepare_input_for_audiowmark(input, "detect_multichannel_input")?;
-                        match MultichannelAudio::from_file(&prepared.path) {
+                        match AudioBuffer::from_file(&prepared.path) {
                             Ok(a) => (a, Some(prepared.path)),
                             Err(Error::InvalidInput(_)) => {
                                 let result = self.detect(prepared.path.as_path())?;
@@ -707,7 +706,7 @@ impl Audio {
         input: P,
         hmac_key: &[u8],
         layout: Option<ChannelLayout>,
-    ) -> Result<Option<crate::message::MessageResult>> {
+    ) -> Result<Option<crate::message::Decoded>> {
         let result = self.detect_multichannel(input, layout)?;
         match result.best {
             Some(detect) => {
@@ -1607,21 +1606,21 @@ where
 /// Internal helper function.
 fn run_embed_step_task(
     audio_engine: &Audio,
-    source_audio: &MultichannelAudio,
+    source_audio: &AudioBuffer,
     step: &RouteStep,
     message: &[u8; MESSAGE_LEN],
-) -> Result<MultichannelAudio> {
+) -> Result<AudioBuffer> {
     let stereo = build_stereo_for_route_step(source_audio, step)?;
     let input_bytes = stereo.to_wav_bytes()?;
     let output_bytes = run_audiowmark_add_bytes(audio_engine, input_bytes, &bytes_to_hex(message))?;
-    MultichannelAudio::from_wav_bytes(&output_bytes)
+    AudioBuffer::from_wav_bytes(&output_bytes)
 }
 
 #[cfg(feature = "multichannel")]
 /// Internal helper function.
 fn run_detect_step_task(
     audio_engine: &Audio,
-    source_audio: &MultichannelAudio,
+    source_audio: &AudioBuffer,
     step: &RouteStep,
 ) -> Result<Option<DetectResult>> {
     let stereo = build_stereo_for_route_step(source_audio, step)?;
@@ -1634,10 +1633,7 @@ fn run_detect_step_task(
 
 #[cfg(feature = "multichannel")]
 /// Internal helper function.
-fn apply_embed_step_results(
-    target: &mut MultichannelAudio,
-    step_results: &mut [EmbedStepTaskResult],
-) {
+fn apply_embed_step_results(target: &mut AudioBuffer, step_results: &mut [EmbedStepTaskResult]) {
     step_results.sort_by_key(|item| item.step_idx);
     for step_result in step_results {
         match &step_result.outcome {
@@ -1713,7 +1709,7 @@ where
     Ok(step_results)
 }
 
-/// 从已加载的 [`MultichannelAudio`] 执行检测路由。.
+/// 从已加载的 [`AudioBuffer`] 执行检测路由。.
 ///
 /// - `stereo_file`: `Some(p)` → 立体声时直接用文件路径调用 `detect()`（性能更优）；
 ///   `None` → 将立体声编码为内存 WAV 字节后检测（ADM 或纯内存路径）。
@@ -1721,7 +1717,7 @@ where
 #[cfg(feature = "multichannel")]
 fn detect_multichannel_from_audio(
     audio_engine: &Audio,
-    audio: &MultichannelAudio,
+    audio: &AudioBuffer,
     stereo_file: Option<&Path>,
     input_for_log: &Path,
     layout: Option<ChannelLayout>,
@@ -1768,15 +1764,12 @@ fn detect_multichannel_from_audio(
 
 #[cfg(feature = "multichannel")]
 /// Internal helper function.
-fn build_stereo_for_route_step(
-    audio: &MultichannelAudio,
-    step: &RouteStep,
-) -> Result<MultichannelAudio> {
+fn build_stereo_for_route_step(audio: &AudioBuffer, step: &RouteStep) -> Result<AudioBuffer> {
     match step.mode {
         RouteMode::Pair(left, right) => {
             let left_samples = audio.channel_samples(left)?.to_vec();
             let right_samples = audio.channel_samples(right)?.to_vec();
-            MultichannelAudio::new(
+            AudioBuffer::new(
                 vec![left_samples, right_samples],
                 audio.sample_rate(),
                 audio.sample_format(),
@@ -1786,7 +1779,7 @@ fn build_stereo_for_route_step(
             // 直接发 1 声道给 audiowmark；audiowmark 原生支持 mono，
             // 无需 L+L 复制（复制会引入人工相关性，降低水印质量）。
             let mono = audio.channel_samples(channel)?.to_vec();
-            MultichannelAudio::new(vec![mono], audio.sample_rate(), audio.sample_format())
+            AudioBuffer::new(vec![mono], audio.sample_rate(), audio.sample_format())
         }
         RouteMode::Skip { .. } => Err(Error::InvalidInput(
             "cannot build stereo input from skip route step".to_string(),
@@ -1797,9 +1790,9 @@ fn build_stereo_for_route_step(
 #[cfg(feature = "multichannel")]
 /// Internal helper function.
 fn apply_processed_route_step(
-    target: &mut MultichannelAudio,
+    target: &mut AudioBuffer,
     step: &RouteStep,
-    processed: &MultichannelAudio,
+    processed: &AudioBuffer,
 ) -> Result<()> {
     match step.mode {
         RouteMode::Pair(left_index, right_index) => {
@@ -2107,7 +2100,7 @@ fn decode_media_to_wav_pipe(input: &Path, writer: &mut dyn Write) -> Result<()> 
 
 /// 当前构建可用的媒体能力摘要。.
 #[must_use]
-pub fn media_capabilities() -> AudioMediaCapabilities {
+pub fn media_capabilities() -> MediaCapabilities {
     #[cfg(feature = "ffmpeg-decode")]
     {
         media::media_capabilities()
@@ -2115,7 +2108,7 @@ pub fn media_capabilities() -> AudioMediaCapabilities {
 
     #[cfg(not(feature = "ffmpeg-decode"))]
     {
-        AudioMediaCapabilities {
+        MediaCapabilities {
             backend: "ffmpeg",
             eac3_decode: false,
             containers: ContainerCapabilities::from_flags(false, false, false),
@@ -2123,12 +2116,12 @@ pub fn media_capabilities() -> AudioMediaCapabilities {
     }
 }
 
-/// 直接从已解码的 PCM 数据构建 `MultichannelAudio`，跳过"写临时 WAV → 再读回"的冗余 I/O。.
+/// 直接从已解码的 PCM 数据构建 `AudioBuffer`，跳过"写临时 WAV → 再读回"的冗余 I/O。.
 ///
 /// `decode_to_wav` 路径：`DecodedPcm`（内存） → 磁盘 → `from_wav`（内存）
-/// 本函数路径：`DecodedPcm`（内存） → `MultichannelAudio`（内存），无磁盘接触。.
+/// 本函数路径：`DecodedPcm`（内存） → `AudioBuffer`（内存），无磁盘接触。.
 #[cfg(feature = "multichannel")]
-fn decoded_pcm_into_multichannel(decoded: DecodedPcm) -> Result<MultichannelAudio> {
+fn decoded_pcm_into_multichannel(decoded: DecodedPcm) -> Result<AudioBuffer> {
     use crate::multichannel::SampleFormat;
 
     let num_channels = decoded.channels as usize;
@@ -2159,7 +2152,7 @@ fn decoded_pcm_into_multichannel(decoded: DecodedPcm) -> Result<MultichannelAudi
         let clamped = clamp_sample_to_bits(sample, decoded.bits_per_sample);
         channels[i % num_channels].push(clamped);
     }
-    MultichannelAudio::new(channels, decoded.sample_rate, sample_format)
+    AudioBuffer::new(channels, decoded.sample_rate, sample_format)
 }
 
 /// Internal helper function.
@@ -2517,7 +2510,7 @@ mod tests {
     #[cfg(feature = "multichannel")]
     #[test]
     fn test_apply_processed_route_step_mono_only_updates_target_channel() {
-        let source = MultichannelAudio::new(
+        let source = AudioBuffer::new(
             vec![
                 vec![1, 2, 3],
                 vec![10, 20, 30],
@@ -2533,7 +2526,7 @@ mod tests {
         };
 
         // 新路径：audiowmark 返回 1 声道（native mono）
-        let processed = MultichannelAudio::new(
+        let processed = AudioBuffer::new(
             vec![vec![7, 8, 9]],
             48_000,
             crate::multichannel::SampleFormat::Int24,
@@ -2564,7 +2557,7 @@ mod tests {
     #[cfg(feature = "multichannel")]
     #[test]
     fn test_skip_route_keeps_lfe_unmodified() {
-        let source = MultichannelAudio::new(
+        let source = AudioBuffer::new(
             vec![
                 vec![1, 2, 3],
                 vec![10, 20, 30],
@@ -2588,7 +2581,7 @@ mod tests {
                 reason: "lfe_skipped",
             },
         };
-        let processed = MultichannelAudio::new(
+        let processed = AudioBuffer::new(
             vec![vec![7, 7, 7], vec![8, 8, 8]],
             48_000,
             crate::multichannel::SampleFormat::Int24,
@@ -2634,7 +2627,7 @@ mod tests {
     #[cfg(feature = "multichannel")]
     #[test]
     fn test_apply_embed_step_results_sorted_and_non_blocking() {
-        let source = MultichannelAudio::new(
+        let source = AudioBuffer::new(
             vec![vec![1, 2], vec![10, 20], vec![100, 200], vec![1000, 2000]],
             48_000,
             crate::multichannel::SampleFormat::Int24,
@@ -2644,7 +2637,7 @@ mod tests {
             return;
         };
 
-        let mono_processed = MultichannelAudio::new(
+        let mono_processed = AudioBuffer::new(
             vec![vec![7, 8], vec![9, 9]],
             48_000,
             crate::multichannel::SampleFormat::Int24,

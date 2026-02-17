@@ -1,5 +1,5 @@
-use crate::app::app_settings_store::{validate_slot, AppSettingsStore, KEY_SLOT_MAX, KEY_SLOT_MIN};
-use crate::app::error::{AppError, Result};
+use crate::app::error::{Failure, Result};
+use crate::app::settings_store::{validate_slot, SettingsStore, KEY_SLOT_MAX, KEY_SLOT_MIN};
 use crate::app::{EvidenceSlotUsage, EvidenceStore};
 use keyring::Entry;
 use rand::rngs::OsRng;
@@ -62,7 +62,7 @@ impl KeyStore {
         {
             let store = Self {};
             // Ensure settings table exists and perform one-time legacy migration.
-            let _ = AppSettingsStore::load()?;
+            let _ = SettingsStore::load()?;
             store.migrate_legacy_to_slot0()?;
             Ok(store)
         }
@@ -71,7 +71,7 @@ impl KeyStore {
         {
             let dpapi_base_dir = dpapi_base_dir()?;
             let store = Self { dpapi_base_dir };
-            let _ = AppSettingsStore::load()?;
+            let _ = SettingsStore::load()?;
             store.migrate_legacy_to_slot0()?;
             Ok(store)
         }
@@ -80,7 +80,7 @@ impl KeyStore {
     /// # Errors
     /// 当配置存储读取失败时返回错误。.
     pub fn active_slot(&self) -> Result<u8> {
-        let settings = AppSettingsStore::load()?;
+        let settings = SettingsStore::load()?;
         settings.active_key_slot()
     }
 
@@ -88,7 +88,7 @@ impl KeyStore {
     /// 当槽位非法或配置写入失败时返回错误。.
     pub fn set_active_slot(&self, slot: u8) -> Result<()> {
         validate_slot(slot)?;
-        let settings = AppSettingsStore::load()?;
+        let settings = SettingsStore::load()?;
         settings.set_active_key_slot(slot)
     }
 
@@ -165,7 +165,7 @@ impl KeyStore {
             }
         }
         if !removed {
-            return Err(AppError::KeyNotFound);
+            return Err(Failure::KeyNotFound);
         }
         Ok(())
     }
@@ -221,7 +221,7 @@ impl KeyStore {
     /// 当任一槽位的配置、证据统计或密钥读取失败时返回错误。.
     pub fn slot_summaries(&self) -> Result<Vec<KeySlotSummary>> {
         let active_slot = self.active_slot()?;
-        let settings = AppSettingsStore::load()?;
+        let settings = SettingsStore::load()?;
         let evidence_store = EvidenceStore::load()?;
         let mut summaries = Vec::with_capacity(usize::from(KEY_SLOT_MAX) + 1);
 
@@ -278,7 +278,7 @@ impl KeyStore {
         }
         #[cfg(not(windows))]
         {
-            Err(AppError::KeyStore(
+            Err(Failure::KeyStore(
                 "failed to store key in keyring".to_string(),
             ))
         }
@@ -312,7 +312,7 @@ impl KeyStore {
         let _ = self;
         match Self::load_from_legacy_keyring() {
             Ok(key) => return Ok(Some(key)),
-            Err(AppError::KeyNotFound | AppError::KeyStore(_)) => {}
+            Err(Failure::KeyNotFound | Failure::KeyStore(_)) => {}
             Err(err) => return Err(err),
         }
         #[cfg(windows)]
@@ -328,8 +328,8 @@ impl KeyStore {
     fn load_from_keyring_slot(slot: u8) -> Result<Vec<u8>> {
         let username = slot_username(slot);
         let entry = keyring_entry(&username)?;
-        let hex_key = entry.get_password().map_err(|_| AppError::KeyNotFound)?;
-        let key = hex::decode(hex_key).map_err(|e| AppError::Message(e.to_string()))?;
+        let hex_key = entry.get_password().map_err(|_| Failure::KeyNotFound)?;
+        let key = hex::decode(hex_key).map_err(|e| Failure::Message(e.to_string()))?;
         validate_key_len(key.len())?;
         Ok(key)
     }
@@ -340,7 +340,7 @@ impl KeyStore {
         let entry = keyring_entry(&username)?;
         entry
             .set_password(&hex::encode(key))
-            .map_err(|e| AppError::KeyStore(e.to_string()))?;
+            .map_err(|e| Failure::KeyStore(e.to_string()))?;
         Ok(())
     }
 
@@ -350,15 +350,15 @@ impl KeyStore {
         let entry = keyring_entry(&username)?;
         entry
             .delete_password()
-            .map_err(|e| AppError::KeyStore(e.to_string()))?;
+            .map_err(|e| Failure::KeyStore(e.to_string()))?;
         Ok(())
     }
 
     /// Internal associated function.
     fn load_from_legacy_keyring() -> Result<Vec<u8>> {
         let entry = keyring_entry(LEGACY_USERNAME)?;
-        let hex_key = entry.get_password().map_err(|_| AppError::KeyNotFound)?;
-        let key = hex::decode(hex_key).map_err(|e| AppError::Message(e.to_string()))?;
+        let hex_key = entry.get_password().map_err(|_| Failure::KeyNotFound)?;
+        let key = hex::decode(hex_key).map_err(|e| Failure::Message(e.to_string()))?;
         validate_key_len(key.len())?;
         Ok(key)
     }
@@ -426,7 +426,7 @@ const fn validate_key_len(len: usize) -> Result<()> {
     if len == KEY_LEN {
         Ok(())
     } else {
-        Err(AppError::InvalidKeyLength {
+        Err(Failure::InvalidKeyLength {
             expected: KEY_LEN,
             actual: len,
         })
@@ -478,7 +478,7 @@ fn apply_duplicate_status(summaries: &mut [KeySlotSummary]) {
 
 /// Internal helper function.
 fn keyring_entry(username: &str) -> Result<Entry> {
-    Entry::new(SERVICE, username).map_err(|e| AppError::KeyStore(e.to_string()))
+    Entry::new(SERVICE, username).map_err(|e| Failure::KeyStore(e.to_string()))
 }
 
 #[cfg(test)]
@@ -546,7 +546,7 @@ mod tests {
 fn dpapi_base_dir() -> Result<PathBuf> {
     let base = std::env::var_os("LOCALAPPDATA")
         .or_else(|| std::env::var_os("APPDATA"))
-        .ok_or_else(|| AppError::KeyStore("LOCALAPPDATA/APPDATA not set".to_string()))?;
+        .ok_or_else(|| Failure::KeyStore("LOCALAPPDATA/APPDATA not set".to_string()))?;
     let mut path = PathBuf::from(base);
     path.push("awmkit");
     Ok(path)
@@ -557,11 +557,11 @@ fn encrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
     use windows_dpapi::{encrypt_data, Scope};
 
     if data.is_empty() {
-        return Err(AppError::KeyStore("dpapi encrypt: empty data".to_string()));
+        return Err(Failure::KeyStore("dpapi encrypt: empty data".to_string()));
     }
 
     encrypt_data(data, Scope::User)
-        .map_err(|e| AppError::KeyStore(format!("dpapi encrypt failed: {e}")))
+        .map_err(|e| Failure::KeyStore(format!("dpapi encrypt failed: {e}")))
 }
 
 #[cfg(windows)]
@@ -569,9 +569,9 @@ fn decrypt_dpapi(data: &[u8]) -> Result<Vec<u8>> {
     use windows_dpapi::{decrypt_data, Scope};
 
     if data.is_empty() {
-        return Err(AppError::KeyStore("dpapi decrypt: empty data".to_string()));
+        return Err(Failure::KeyStore("dpapi decrypt: empty data".to_string()));
     }
 
     decrypt_data(data, Scope::User)
-        .map_err(|e| AppError::KeyStore(format!("dpapi decrypt failed: {e}")))
+        .map_err(|e| Failure::KeyStore(format!("dpapi decrypt failed: {e}")))
 }

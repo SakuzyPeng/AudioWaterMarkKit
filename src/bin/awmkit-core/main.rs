@@ -30,7 +30,7 @@ mod output;
 mod util;
 
 #[cfg(feature = "full-cli")]
-use awmkit::app::{i18n, AppSettings};
+use awmkit::app::{i18n, Preferences};
 #[cfg(feature = "full-cli")]
 use clap::{Parser, Subcommand};
 #[cfg(feature = "full-cli")]
@@ -156,7 +156,7 @@ struct Context {
 fn run() -> Result<()> {
     let cli = Cli::parse();
 
-    let settings = AppSettings::load().unwrap_or_default();
+    let settings = Preferences::load().unwrap_or_default();
     let env_lang = i18n::env_language();
     let lang = cli
         .lang

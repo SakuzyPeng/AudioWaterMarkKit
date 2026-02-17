@@ -1,7 +1,7 @@
-use crate::app::error::{AppError, Result};
+use crate::app::error::{Failure, Result};
 #[cfg(feature = "ffmpeg-decode")]
 use crate::media;
-use crate::multichannel::{MultichannelAudio, SampleFormat};
+use crate::multichannel::{AudioBuffer, SampleFormat};
 use rusty_chromaprint::{Configuration, Fingerprinter};
 use sha2::{Digest, Sha256};
 use std::path::Path;
@@ -19,7 +19,7 @@ pub struct AudioProof {
 #[allow(clippy::module_name_repetitions)]
 /// # Errors
 /// 当输入无法解码、样本不合法或指纹计算失败时返回错误。.
-pub fn build_audio_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {
+pub fn build_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {
     let path = path.as_ref();
 
     #[cfg(feature = "ffmpeg-decode")]
@@ -36,10 +36,10 @@ pub fn build_audio_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {
         }
     }
 
-    let audio = MultichannelAudio::from_file(path)?;
+    let audio = AudioBuffer::from_file(path)?;
     let sample_rate = audio.sample_rate();
     let channels = u32::try_from(audio.num_channels())
-        .map_err(|_| AppError::Message("channel count overflow".to_string()))?;
+        .map_err(|_| Failure::Message("channel count overflow".to_string()))?;
     let sample_format = audio.sample_format();
     let interleaved = audio.interleaved_samples();
     build_audio_proof_from_interleaved(sample_rate, channels, &interleaved, sample_format)
@@ -48,7 +48,7 @@ pub fn build_audio_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {
 #[cfg(feature = "ffmpeg-decode")]
 /// Internal helper function.
 fn build_audio_proof_via_ffmpeg(path: &Path) -> Result<AudioProof> {
-    let decoded = media::decode_media_to_pcm_i32(path).map_err(AppError::from)?;
+    let decoded = media::decode_media_to_pcm_i32(path).map_err(Failure::from)?;
     let channels = u32::from(decoded.channels);
     build_audio_proof_from_interleaved(
         decoded.sample_rate,
@@ -66,18 +66,18 @@ fn build_audio_proof_from_interleaved(
     sample_format: SampleFormat,
 ) -> Result<AudioProof> {
     let channels_usize = usize::try_from(channels)
-        .map_err(|_| AppError::Message("channel count overflow".to_string()))?;
+        .map_err(|_| Failure::Message("channel count overflow".to_string()))?;
     if channels_usize == 0 || !interleaved.len().is_multiple_of(channels_usize) {
-        return Err(AppError::Message(
+        return Err(Failure::Message(
             "interleaved sample length is not channel-aligned".to_string(),
         ));
     }
     let sample_count = u64::try_from(interleaved.len() / channels_usize)
-        .map_err(|_| AppError::Message("sample count overflow".to_string()))?;
+        .map_err(|_| Failure::Message("sample count overflow".to_string()))?;
     let pcm_sha256 = pcm_sha256_for_interleaved(sample_rate, channels, sample_count, interleaved);
     let samples_i16 = to_i16_samples(interleaved, sample_format);
     if samples_i16.is_empty() {
-        return Err(AppError::Message(
+        return Err(Failure::Message(
             "cannot build audio proof for empty audio".to_string(),
         ));
     }
@@ -86,7 +86,7 @@ fn build_audio_proof_from_interleaved(
     let mut fingerprinter = Fingerprinter::new(&config);
     fingerprinter
         .start(sample_rate, channels)
-        .map_err(|e| AppError::Message(format!("chromaprint start failed: {e}")))?;
+        .map_err(|e| Failure::Message(format!("chromaprint start failed: {e}")))?;
 
     // Feed full frames only: chunk size must be divisible by channel count.
     let chunk_frames = 4096usize;
@@ -100,7 +100,7 @@ fn build_audio_proof_from_interleaved(
 
     let chromaprint = fingerprinter.fingerprint().to_vec();
     if chromaprint.is_empty() {
-        return Err(AppError::Message(
+        return Err(Failure::Message(
             "chromaprint fingerprint is empty".to_string(),
         ));
     }
@@ -191,7 +191,7 @@ mod tests {
         let copied = std::fs::copy(&wav_path, &mp3_like_path);
         assert!(copied.is_ok());
 
-        match build_audio_proof(&mp3_like_path) {
+        match build_proof(&mp3_like_path) {
             Ok(proof) => {
                 assert!(proof.channels > 0);
                 assert!(proof.sample_rate > 0);
@@ -199,7 +199,7 @@ mod tests {
             Err(err) => {
                 let is_ffmpeg_runtime_issue = matches!(
                     err,
-                    AppError::Awmkit(
+                    Failure::Awmkit(
                         crate::Error::FfmpegLibraryNotFound(_)
                             | crate::Error::FfmpegDecodeFailed(_)
                             | crate::Error::FfmpegContainerUnsupported(_),
@@ -212,7 +212,7 @@ mod tests {
                 if is_ffmpeg_runtime_issue {
                     // Some local test environments miss FFmpeg runtime support.
                     // Ensure the baseline WAV path still works in this case.
-                    let fallback = build_audio_proof(&wav_path);
+                    let fallback = build_proof(&wav_path);
                     assert!(fallback.is_ok());
                 }
             }

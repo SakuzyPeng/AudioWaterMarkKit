@@ -2,7 +2,7 @@ use crate::error::{CliError, Result};
 use crate::Context;
 use crate::KeyCommand;
 use awmkit::app::{
-    generate_key, i18n, AppError, AppSettingsStore, EvidenceStore, KeyStore, KEY_LEN, KEY_SLOT_MAX,
+    generate_key, i18n, EvidenceStore, Failure, KeyStore, SettingsStore, KEY_LEN, KEY_SLOT_MAX,
 };
 use clap::{Args, Subcommand};
 use fluent_bundle::FluentArgs;
@@ -236,7 +236,7 @@ fn show(ctx: &Context, args: &ShowArgs) -> Result<()> {
             args.set("backend", backend.label());
             ctx.out.info(i18n::tr_args("cli-key-storage", &args));
         }
-        Err(AppError::KeyNotFound) => {
+        Err(Failure::KeyNotFound) => {
             ctx.out.info(i18n::tr("cli-status-key_not_configured"));
         }
         Err(err) => return Err(err.into()),
@@ -367,7 +367,7 @@ fn slot(ctx: &Context, command: SlotCommand) -> Result<()> {
 
 /// Internal helper function.
 fn slot_current(ctx: &Context) -> Result<()> {
-    let store = AppSettingsStore::load()?;
+    let store = SettingsStore::load()?;
     let slot = store.active_key_slot()?;
     let mut args = FluentArgs::new();
     args.set("slot", slot.to_string());
@@ -377,7 +377,7 @@ fn slot_current(ctx: &Context) -> Result<()> {
 
 /// Internal helper function.
 fn slot_use(ctx: &Context, args: &SlotUseArgs) -> Result<()> {
-    let store = AppSettingsStore::load()?;
+    let store = SettingsStore::load()?;
     store.set_active_key_slot(args.slot)?;
     let mut fmt = FluentArgs::new();
     fmt.set("slot", args.slot.to_string());
@@ -388,7 +388,7 @@ fn slot_use(ctx: &Context, args: &SlotUseArgs) -> Result<()> {
 /// Internal helper function.
 fn slot_list(ctx: &Context, args: &SlotListArgs) -> Result<()> {
     let store = KeyStore::new()?;
-    let settings = AppSettingsStore::load()?;
+    let settings = SettingsStore::load()?;
     let evidence_store = EvidenceStore::load()?;
     let active = settings.active_key_slot()?;
 
@@ -449,7 +449,7 @@ fn slot_list(ctx: &Context, args: &SlotListArgs) -> Result<()> {
 
 /// Internal helper function.
 fn slot_label_set(ctx: &Context, args: &SlotLabelSetArgs) -> Result<()> {
-    let store = AppSettingsStore::load()?;
+    let store = SettingsStore::load()?;
     store.set_slot_label(args.slot, &args.label)?;
     let mut fmt = FluentArgs::new();
     fmt.set("slot", args.slot.to_string());
@@ -460,7 +460,7 @@ fn slot_label_set(ctx: &Context, args: &SlotLabelSetArgs) -> Result<()> {
 
 /// Internal helper function.
 fn slot_label_clear(ctx: &Context, args: &SlotLabelClearArgs) -> Result<()> {
-    let store = AppSettingsStore::load()?;
+    let store = SettingsStore::load()?;
     store.clear_slot_label(args.slot)?;
     let mut fmt = FluentArgs::new();
     fmt.set("slot", args.slot.to_string());

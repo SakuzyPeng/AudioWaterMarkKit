@@ -1,4 +1,4 @@
-use crate::app::error::{AppError, Result};
+use crate::app::error::{Failure, Result};
 use fluent_bundle::FluentArgs;
 use i18n_embed::fluent::FluentLanguageLoader;
 use i18n_embed::{DesktopLanguageRequester, LanguageLoader};
@@ -75,17 +75,17 @@ pub fn env_language() -> Option<String> {
 pub fn set_language(lang: Option<&str>) -> Result<()> {
     let requested = if let Some(lang) = lang {
         vec![LanguageIdentifier::from_str(lang)
-            .map_err(|_| AppError::Message(format!("invalid language identifier: {lang}")))?]
+            .map_err(|_| Failure::Message(format!("invalid language identifier: {lang}")))?]
     } else {
         DesktopLanguageRequester::requested_languages()
     };
 
     let selected = i18n_embed::select(&*LOADER, &Localizations, &requested)
-        .map_err(|err| AppError::Message(format!("i18n load failed: {err}")))?;
+        .map_err(|err| Failure::Message(format!("i18n load failed: {err}")))?;
     if selected.is_empty() {
         LOADER
             .load_fallback_language(&Localizations)
-            .map_err(|err| AppError::Message(format!("i18n fallback failed: {err}")))?;
+            .map_err(|err| Failure::Message(format!("i18n fallback failed: {err}")))?;
     }
     Ok(())
 }

@@ -14,8 +14,8 @@ use crate::tag::Tag;
 
 #[cfg(feature = "app")]
 use crate::app::{
-    analyze_snr, build_audio_proof, key_id_from_key_material, AppSettingsStore, EvidenceStore,
-    KeySlotSummary, NewAudioEvidence, TagStore,
+    analyze, build_proof, key_id_from_key_material, EvidenceStore, KeySlotSummary,
+    NewAudioEvidence, SettingsStore, TagStore,
 };
 #[cfg(feature = "app")]
 use rusty_chromaprint::{match_fingerprints, Configuration};
@@ -390,7 +390,7 @@ pub const extern "C" fn awm_current_version() -> u8 {
 }
 
 /// Internal helper function.
-unsafe fn fill_awm_result(result: *mut AWMResult, r: &crate::message::MessageResult) {
+unsafe fn fill_awm_result(result: *mut AWMResult, r: &crate::message::Decoded) {
     (*result).version = r.version;
     (*result).timestamp_utc = r.timestamp_utc;
     (*result).timestamp_minutes = r.timestamp_minutes;
@@ -719,7 +719,7 @@ fn evaluate_clone_check(
     };
 
     let evidence_store = EvidenceStore::load().map_err(|e| format!("evidence_store: {e}"))?;
-    let proof = catch_unwind(AssertUnwindSafe(|| build_audio_proof(input)))
+    let proof = catch_unwind(AssertUnwindSafe(|| build_proof(input)))
         .map_err(|_| "proof_panic".to_string())?
         .map_err(|e| format!("proof_error: {e}"))?;
 
@@ -924,9 +924,9 @@ pub unsafe extern "C" fn awm_evidence_record_embed_file_ex(
 
     #[cfg(feature = "app")]
     let snr = catch_unwind(AssertUnwindSafe(|| {
-        analyze_snr(input_path_str_raw, output_path_str_raw)
+        analyze(input_path_str_raw, output_path_str_raw)
     }))
-    .unwrap_or_else(|_| crate::app::SnrAnalysis {
+    .unwrap_or_else(|_| crate::app::Analysis {
         snr_db: None,
         status: FFI_SNR_STATUS_UNAVAILABLE.to_string(),
         detail: Some("snr_panic".to_string()),
@@ -1004,8 +1004,7 @@ unsafe fn record_evidence_file_impl(
             Err(_) => return AWMError::InvalidTag as i32,
         };
 
-        let Ok(Ok(proof)) = catch_unwind(AssertUnwindSafe(|| build_audio_proof(file_path_str)))
-        else {
+        let Ok(Ok(proof)) = catch_unwind(AssertUnwindSafe(|| build_proof(file_path_str))) else {
             return AWMError::AudiowmarkExec as i32;
         };
         let Ok(store) = EvidenceStore::load() else {
@@ -1160,7 +1159,7 @@ pub unsafe extern "C" fn awm_ui_language_get(
 ) -> i32 {
     #[cfg(feature = "app")]
     {
-        let Ok(settings) = AppSettingsStore::load() else {
+        let Ok(settings) = SettingsStore::load() else {
             return AWMError::AudiowmarkExec as i32;
         };
         let Ok(value) = settings.ui_language() else {
@@ -1206,7 +1205,7 @@ pub unsafe extern "C" fn awm_ui_language_set(lang_or_null: *const c_char) -> i32
             }
         };
 
-        match AppSettingsStore::load().and_then(|settings| settings.set_ui_language(normalized)) {
+        match SettingsStore::load().and_then(|settings| settings.set_ui_language(normalized)) {
             Ok(()) => AWMError::Success as i32,
             Err(_) => AWMError::AudiowmarkExec as i32,
         }
@@ -1752,7 +1751,7 @@ pub unsafe extern "C" fn awm_key_slot_label_set(slot: u8, label: *const c_char) 
         if label_str.trim().is_empty() {
             return AWMError::InvalidTag as i32;
         }
-        match crate::app::AppSettingsStore::load()
+        match crate::app::SettingsStore::load()
             .and_then(|settings| settings.set_slot_label(slot, label_str))
         {
             Ok(()) => AWMError::Success as i32,
@@ -1771,8 +1770,7 @@ pub unsafe extern "C" fn awm_key_slot_label_set(slot: u8, label: *const c_char) 
 pub extern "C" fn awm_key_slot_label_clear(slot: u8) -> i32 {
     #[cfg(feature = "app")]
     {
-        match crate::app::AppSettingsStore::load()
-            .and_then(|settings| settings.clear_slot_label(slot))
+        match crate::app::SettingsStore::load().and_then(|settings| settings.clear_slot_label(slot))
         {
             Ok(()) => AWMError::Success as i32,
             Err(_) => AWMError::AudiowmarkExec as i32,

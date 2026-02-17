@@ -1,15 +1,15 @@
-use crate::app::error::{AppError, Result};
+use crate::app::error::{Failure, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[allow(clippy::module_name_repetitions)]
-pub struct AppSettings {
+pub struct Preferences {
     pub language: Option<String>,
 }
 
-impl AppSettings {
+impl Preferences {
     /// # Errors
     /// 当配置路径解析或配置文件读取/解析失败时返回错误。.
     pub fn load() -> Result<Self> {
@@ -48,13 +48,13 @@ impl AppSettings {
 }
 
 /// Internal helper function.
-fn load_from(path: &Path) -> Result<AppSettings> {
+fn load_from(path: &Path) -> Result<Preferences> {
     if !path.exists() {
-        return Ok(AppSettings::default());
+        return Ok(Preferences::default());
     }
     let raw = fs::read_to_string(path)?;
     if raw.trim().is_empty() {
-        return Ok(AppSettings::default());
+        return Ok(Preferences::default());
     }
     let settings = toml::from_str(&raw)?;
     Ok(settings)
@@ -67,7 +67,7 @@ pub fn config_path() -> Result<PathBuf> {
     {
         let base = std::env::var_os("LOCALAPPDATA")
             .or_else(|| std::env::var_os("APPDATA"))
-            .ok_or_else(|| AppError::Message("LOCALAPPDATA/APPDATA not set".to_string()))?;
+            .ok_or_else(|| Failure::Message("LOCALAPPDATA/APPDATA not set".to_string()))?;
         let mut path = PathBuf::from(base);
         path.push("awmkit");
         path.push("config.toml");
@@ -76,8 +76,8 @@ pub fn config_path() -> Result<PathBuf> {
 
     #[cfg(not(target_os = "windows"))]
     {
-        let home = std::env::var_os("HOME")
-            .ok_or_else(|| AppError::Message("HOME not set".to_string()))?;
+        let home =
+            std::env::var_os("HOME").ok_or_else(|| Failure::Message("HOME not set".to_string()))?;
         let mut path = PathBuf::from(home);
         path.push(".awmkit");
         path.push("config.toml");
@@ -93,7 +93,7 @@ mod tests {
     fn settings_roundtrip() {
         let temp = std::env::temp_dir().join("awmkit_settings_test.toml");
         let _ = fs::remove_file(&temp);
-        let settings = AppSettings {
+        let settings = Preferences {
             language: Some("zh-CN".to_string()),
         };
         let save_result = settings.save_to(&temp);

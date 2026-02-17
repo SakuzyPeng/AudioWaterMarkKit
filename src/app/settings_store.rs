@@ -1,4 +1,4 @@
-use crate::app::error::{AppError, Result};
+use crate::app::error::{Failure, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -18,14 +18,14 @@ const UI_LANG_ZH_CN: &str = "zh-CN";
 const UI_LANG_EN_US: &str = "en-US";
 
 /// App-level settings store backed by sqlite.
-pub struct AppSettingsStore {
+pub struct SettingsStore {
     /// Internal field.
     conn: Connection,
     /// Internal field.
     path: PathBuf,
 }
 
-impl AppSettingsStore {
+impl SettingsStore {
     /// Open settings store at shared awmkit sqlite database.
     ///
     /// # Errors
@@ -105,7 +105,7 @@ impl AppSettingsStore {
         match lang {
             Some(raw) => {
                 let Some(normalized) = normalize_ui_language(raw) else {
-                    return Err(AppError::Message(format!(
+                    return Err(Failure::Message(format!(
                         "invalid ui language: {raw} (expected {UI_LANG_ZH_CN} or {UI_LANG_EN_US})"
                     )));
                 };
@@ -155,7 +155,7 @@ impl AppSettingsStore {
         validate_slot(slot)?;
         let trimmed = label.trim();
         if trimmed.is_empty() {
-            return Err(AppError::Message("slot label cannot be empty".to_string()));
+            return Err(Failure::Message("slot label cannot be empty".to_string()));
         }
         let now = now_ts()?;
         self.conn.execute(
@@ -232,7 +232,7 @@ pub fn validate_slot(slot: u8) -> Result<()> {
     if is_valid_slot(slot) {
         Ok(())
     } else {
-        Err(AppError::Message(format!(
+        Err(Failure::Message(format!(
             "invalid key slot: {slot} (expected {KEY_SLOT_MIN}..={KEY_SLOT_MAX})"
         )))
     }
@@ -250,7 +250,7 @@ fn db_path() -> Result<PathBuf> {
     {
         let base = std::env::var_os("LOCALAPPDATA")
             .or_else(|| std::env::var_os("APPDATA"))
-            .ok_or_else(|| AppError::Message("LOCALAPPDATA/APPDATA not set".to_string()))?;
+            .ok_or_else(|| Failure::Message("LOCALAPPDATA/APPDATA not set".to_string()))?;
         let mut path = PathBuf::from(base);
         path.push("awmkit");
         path.push("awmkit.db");
@@ -259,8 +259,8 @@ fn db_path() -> Result<PathBuf> {
 
     #[cfg(not(target_os = "windows"))]
     {
-        let home = std::env::var_os("HOME")
-            .ok_or_else(|| AppError::Message("HOME not set".to_string()))?;
+        let home =
+            std::env::var_os("HOME").ok_or_else(|| Failure::Message("HOME not set".to_string()))?;
         let mut path = PathBuf::from(home);
         path.push(".awmkit");
         path.push("awmkit.db");
@@ -294,7 +294,7 @@ fn open_db(path: &Path) -> Result<Connection> {
 fn now_ts() -> Result<u64> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| AppError::Message(format!("clock error: {e}")))?;
+        .map_err(|e| Failure::Message(format!("clock error: {e}")))?;
     Ok(now.as_secs())
 }
 

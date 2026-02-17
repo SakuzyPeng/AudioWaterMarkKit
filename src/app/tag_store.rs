@@ -1,4 +1,4 @@
-use crate::app::error::{AppError, Result};
+use crate::app::error::{Failure, Result};
 use crate::charset::CHARSET;
 use crate::Tag;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -119,7 +119,7 @@ impl TagStore {
                 return Ok(());
             }
             if !force {
-                return Err(AppError::MappingExists {
+                return Err(Failure::MappingExists {
                     username,
                     existing_tag,
                 });
@@ -149,7 +149,7 @@ impl TagStore {
             params![username],
         )?;
         if affected == 0 {
-            return Err(AppError::Message(format!("mapping not found: {username}")));
+            return Err(Failure::Message(format!("mapping not found: {username}")));
         }
         self.refresh_entries()
     }
@@ -195,7 +195,7 @@ impl TagStore {
         hasher.update(username.as_bytes());
         let hash = hasher.finalize();
         let identity = hash_to_identity(&hash);
-        Tag::new(&identity).map_err(AppError::from)
+        Tag::new(&identity).map_err(Failure::from)
     }
 
     pub fn path(&self) -> &Path {
@@ -213,7 +213,7 @@ impl TagStore {
 fn normalize_username(username: &str) -> Result<String> {
     let trimmed = username.trim();
     if trimmed.is_empty() {
-        return Err(AppError::Message("username cannot be empty".to_string()));
+        return Err(Failure::Message("username cannot be empty".to_string()));
     }
     Ok(trimmed.to_string())
 }
@@ -224,7 +224,7 @@ fn db_path() -> Result<PathBuf> {
     {
         let base = std::env::var_os("LOCALAPPDATA")
             .or_else(|| std::env::var_os("APPDATA"))
-            .ok_or_else(|| AppError::Message("LOCALAPPDATA/APPDATA not set".to_string()))?;
+            .ok_or_else(|| Failure::Message("LOCALAPPDATA/APPDATA not set".to_string()))?;
         let mut path = PathBuf::from(base);
         path.push("awmkit");
         path.push("awmkit.db");
@@ -233,8 +233,8 @@ fn db_path() -> Result<PathBuf> {
 
     #[cfg(not(target_os = "windows"))]
     {
-        let home = std::env::var_os("HOME")
-            .ok_or_else(|| AppError::Message("HOME not set".to_string()))?;
+        let home =
+            std::env::var_os("HOME").ok_or_else(|| Failure::Message("HOME not set".to_string()))?;
         let mut path = PathBuf::from(home);
         path.push(".awmkit");
         path.push("awmkit.db");
@@ -287,7 +287,7 @@ fn load_entries(conn: &Connection) -> Result<Vec<TagEntry>> {
 fn now_ts() -> Result<u64> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| AppError::Message(format!("clock error: {e}")))?;
+        .map_err(|e| Failure::Message(format!("clock error: {e}")))?;
     Ok(now.as_secs())
 }
 
@@ -374,7 +374,7 @@ mod tests {
         let Some(err) = err.err() else {
             return;
         };
-        assert!(matches!(err, AppError::MappingExists { .. }));
+        assert!(matches!(err, Failure::MappingExists { .. }));
         let _ = fs::remove_file(path);
     }
 }

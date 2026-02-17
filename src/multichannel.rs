@@ -377,7 +377,7 @@ impl SampleFormat {
 /// 多声道音频数据.
 #[derive(Debug, Clone)]
 #[allow(clippy::module_name_repetitions)]
-pub struct MultichannelAudio {
+pub struct AudioBuffer {
     /// 每个声道的样本数据 [channel][sample]
     /// 统一存储为 i32，便于处理.
     channels: Vec<Vec<i32>>,
@@ -387,7 +387,7 @@ pub struct MultichannelAudio {
     sample_format: SampleFormat,
 }
 
-impl MultichannelAudio {
+impl AudioBuffer {
     /// 创建新的多声道音频.
     ///
     /// # Errors
@@ -1056,7 +1056,7 @@ mod tests {
             vec![13, 14, 15, 16],
         ];
 
-        let audio_result = MultichannelAudio::new(channels, 48000, SampleFormat::Int24);
+        let audio_result = AudioBuffer::new(channels, 48000, SampleFormat::Int24);
         assert!(audio_result.is_ok());
         let Ok(audio) = audio_result else {
             return;
@@ -1069,8 +1069,7 @@ mod tests {
         assert_eq!(pairs[1].0, vec![9, 10, 11, 12]);
         assert_eq!(pairs[1].1, vec![13, 14, 15, 16]);
 
-        let merged_result =
-            MultichannelAudio::merge_stereo_pairs(&pairs, 48000, SampleFormat::Int24);
+        let merged_result = AudioBuffer::merge_stereo_pairs(&pairs, 48000, SampleFormat::Int24);
         assert!(merged_result.is_ok());
         let Ok(merged) = merged_result else {
             return;
@@ -1167,7 +1166,7 @@ mod tests {
 
     #[test]
     fn test_channel_replace_affects_only_target() {
-        let audio = MultichannelAudio::new(
+        let audio = AudioBuffer::new(
             vec![
                 vec![1, 2, 3],
                 vec![10, 20, 30],
