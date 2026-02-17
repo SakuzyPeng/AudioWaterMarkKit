@@ -1,14 +1,37 @@
 root = true
 
 [*.cs]
-# CA2007: ConfigureAwait - WinUI UI app must resume on UI thread, not needed here
+# ── 原有噪音 suppress ────────────────────────────────────────────────────────
+
+# CA2007: ConfigureAwait - WinUI UI app must resume on UI thread
 dotnet_diagnostic.CA2007.severity = none
 
-# CA1515: Make public types internal - MVVM ViewModels must be public for XAML binding
+# CA1515: Make public types internal - ViewModels must be public for XAML binding
 dotnet_diagnostic.CA1515.severity = none
 
-# CA5392: Use DefaultDllImportSearchPaths - WinUI SDK generated P/Invoke code
+# CA5392: Use DefaultDllImportSearchPaths - WinUI SDK generated P/Invoke
 dotnet_diagnostic.CA5392.severity = none
 
-# CA2101: Specify marshaling for P/Invoke - WinUI SDK generated interop code
+# CA2101: Specify marshaling for P/Invoke - WinUI SDK generated interop
 dotnet_diagnostic.CA2101.severity = none
+
+# ── ViewModel / UI 层模式 suppress ──────────────────────────────────────────
+
+# CA1822: Mark member as static - localization getter properties must be instance
+#         members for XAML {x:Bind} to work
+dotnet_diagnostic.CA1822.severity = none
+
+# CA1031: Catch general exception - UI ViewModels must not crash on any failure
+dotnet_diagnostic.CA1031.severity = none
+
+# CA1062: Validate parameter is non-null - redundant with Nullable reference types enabled
+dotnet_diagnostic.CA1062.severity = none
+
+# CA1034: Nested types should not be visible - acceptable MVVM design pattern
+dotnet_diagnostic.CA1034.severity = none
+
+# CA1819: Properties should not return arrays - by design for observable collections
+dotnet_diagnostic.CA1819.severity = none
+
+# CA1815: Override Equals on value types - data-only structs without equality semantics
+dotnet_diagnostic.CA1815.severity = none
