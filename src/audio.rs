@@ -146,7 +146,7 @@ pub struct DetectResult {
 #[cfg(feature = "multichannel")]
 #[derive(Debug, Clone)]
 pub struct MultichannelDetectResult {
-    /// 各声道对的检测结果 (pair_index, pair_name, result)
+    /// 各声道对的检测结果 (`pair_index`, `pair_name`, `result`)
     pub pairs: Vec<(usize, String, Option<DetectResult>)>,
     /// 最佳结果 (置信度最高的一个)
     pub best: Option<DetectResult>,
@@ -243,6 +243,9 @@ impl Audio {
     }
 
     /// 创建 Audio 实例，自动搜索 audiowmark
+    ///
+    /// # Errors
+    /// 当无法定位或执行 `audiowmark` 二进制时返回错误。
     pub fn new() -> Result<Self> {
         Self::new_with_fallback_path(None)
     }
@@ -257,6 +260,9 @@ impl Audio {
     }
 
     /// 指定 audiowmark 路径创建实例
+    ///
+    /// # Errors
+    /// 当给定路径不存在时返回错误。
     pub fn with_binary<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         if !path.exists() {
@@ -301,6 +307,9 @@ impl Audio {
     /// - `input`: 输入音频路径
     /// - `output`: 输出音频路径
     /// - `message`: 16 字节消息
+    ///
+    /// # Errors
+    /// 当输入格式不支持、输出不是 `.wav`、外部 `audiowmark` 执行失败或 I/O 失败时返回错误。
     pub fn embed<P: AsRef<Path>>(
         &self,
         input: P,
@@ -314,6 +323,9 @@ impl Audio {
     }
 
     /// 便捷方法：编码消息并嵌入
+    ///
+    /// # Errors
+    /// 当消息编码失败，或底层嵌入失败时返回错误。
     pub fn embed_with_tag<P: AsRef<Path>>(
         &self,
         input: P,
@@ -334,6 +346,9 @@ impl Audio {
     ///
     /// # Returns
     /// 检测结果，如果没有检测到水印返回 None
+    ///
+    /// # Errors
+    /// 当输入格式不支持、外部 `audiowmark` 执行失败或输出解析异常时返回错误。
     pub fn detect<P: AsRef<Path>>(&self, input: P) -> Result<Option<DetectResult>> {
         let input = input.as_ref();
         let output = run_audiowmark_get_detect(self, input)?;
@@ -343,6 +358,9 @@ impl Audio {
     }
 
     /// 便捷方法：检测并解码消息
+    ///
+    /// # Errors
+    /// 当检测流程失败，或检测到的消息无法通过 HMAC 校验时返回错误。
     pub fn detect_and_decode<P: AsRef<Path>>(
         &self,
         input: P,
@@ -368,6 +386,9 @@ impl Audio {
     }
 
     /// 获取 audiowmark 版本
+    ///
+    /// # Errors
+    /// 当执行 `audiowmark --version` 失败时返回错误。
     pub fn version(&self) -> Result<String> {
         let output = self
             .audiowmark_command()
@@ -392,6 +413,9 @@ impl Audio {
     /// - `output`: 输出音频路径 (WAV)
     /// - `message`: 16 字节消息
     /// - `layout`: 可选的声道布局 (自动检测或手动指定，用于区分 7.1 和 5.1.2)
+    ///
+    /// # Errors
+    /// 当输入格式不支持、布局与声道数不匹配、输出不是 `.wav`、或任一路由步骤嵌入失败时返回错误。
     #[cfg(feature = "multichannel")]
     pub fn embed_multichannel<P: AsRef<Path>>(
         &self,
@@ -493,6 +517,9 @@ impl Audio {
     /// 多声道检测：从所有立体声对检测水印
     ///
     /// 返回每个声道对的检测结果，以及最佳结果
+    ///
+    /// # Errors
+    /// 当输入格式不支持、布局与声道数不匹配，或任一路由步骤检测失败时返回错误。
     #[cfg(feature = "multichannel")]
     pub fn detect_multichannel<P: AsRef<Path>>(
         &self,
@@ -614,6 +641,9 @@ impl Audio {
     }
 
     /// 便捷方法：多声道嵌入 (使用 Tag)
+    ///
+    /// # Errors
+    /// 当消息编码失败，或多声道嵌入流程失败时返回错误。
     #[cfg(feature = "multichannel")]
     pub fn embed_multichannel_with_tag<P: AsRef<Path>>(
         &self,
@@ -630,6 +660,9 @@ impl Audio {
     }
 
     /// 便捷方法：多声道检测并解码
+    ///
+    /// # Errors
+    /// 当多声道检测失败，或最佳候选消息无法通过 HMAC 校验时返回错误。
     #[cfg(feature = "multichannel")]
     pub fn detect_multichannel_and_decode<P: AsRef<Path>>(
         &self,
@@ -1280,7 +1313,7 @@ fn looks_like_wav_stream(bytes: &[u8]) -> bool {
 /// 修复大小字段，使返回的字节序列成为合法的标准 WAV，可被 hound 等工具直接读取。
 ///
 /// 注意：audiowmark 在 pipe 模式下会在奇数长度 data 末尾追加 1 字节 WAV 对齐填充。
-/// 必须从 fmt chunk 读取 block_align 并将 data size 截断到 block_align 的整数倍，
+/// 必须从 fmt chunk 读取 `block_align` 并将 data size 截断到 `block_align` 的整数倍，
 /// 否则 hound 会报 "data chunk length is not a multiple of sample size"。
 fn normalize_wav_pipe_output(mut bytes: Vec<u8>) -> Vec<u8> {
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {

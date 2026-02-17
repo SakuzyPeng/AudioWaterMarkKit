@@ -17,6 +17,8 @@ pub struct AudioProof {
 }
 
 #[allow(clippy::module_name_repetitions)]
+/// # Errors
+/// 当输入无法解码、样本不合法或指纹计算失败时返回错误。
 pub fn build_audio_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {
     let path = path.as_ref();
 

@@ -1,4 +1,4 @@
-//! FFmpeg 动态库解码后端
+//! `FFmpeg` 动态库解码后端
 
 use std::ffi::CString;
 use std::io::Write;

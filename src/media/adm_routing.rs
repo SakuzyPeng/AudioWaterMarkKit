@@ -1,4 +1,4 @@
-//! ADM Bed 声道路由：基于 axml speakerLabel 构建 RoutePlan
+//! ADM Bed 声道路由：基于 axml speakerLabel 构建 `RoutePlan`
 //!
 //! 支持两种标签体系：
 //! - ITU-R BS.2076 标准标签（`M+030`, `M-030`, `M+000`, `LFE1` …）
@@ -20,7 +20,7 @@ use crate::multichannel::{LfeMode, RouteMode, RoutePlan, RouteStep, SampleFormat
 
 // ─────────────────── 喇叭标签配对表 ───────────────────
 
-/// 已知立体声对：(left_label, right_label, route_step_name)
+/// 已知立体声对：(`left_label`, `right_label`, `route_step_name`)
 ///
 /// 按优先级排序：低序号先匹配。
 const SPEAKER_PAIRS: &[(&str, &str, &str)] = &[
@@ -361,12 +361,12 @@ pub fn build_route_plan_from_labels(
 /// ADM Object 声道嵌入/检测前调用，避免对静默声道浪费 audiowmark 调用。
 ///
 /// 阈值换算（`max_val / 10_000` ≈ -80 dBFS）：
-/// - `Int16`  : 32_767 / 10_000 = 3
-/// - `Int24`  : 8_388_607 / 10_000 = 838
-/// - `Int32` / `Float32` : i32::MAX / 10_000 = 214_748
+/// - `Int16`  : `32_767` / `10_000` = `3`
+/// - `Int24`  : `8_388_607` / `10_000` = `838`
+/// - `Int32` / `Float32` : `i32::MAX` / `10_000` = `214_748`
 ///
 /// 注意：`Float32` 样本在 [`MultichannelAudio`] 中同样以 i32 存储，
-/// 归一化值 [-1.0, 1.0] 转换后绝对值远低于 i32::MAX，因此阈值仍能
+/// 归一化值 [-1.0, 1.0] 转换后绝对值远低于 `i32::MAX`，因此阈值仍能
 /// 有效过滤真正静默的 Float32 声道。
 #[must_use]
 pub fn is_silent(samples: &[i32], format: SampleFormat) -> bool {

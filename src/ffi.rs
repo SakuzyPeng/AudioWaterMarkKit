@@ -625,7 +625,8 @@ pub unsafe extern "C" fn awm_audio_embed(
         return AWMError::InvalidUtf8 as i32;
     };
 
-    let msg: [u8; 16] = slice::from_raw_parts(message, 16).try_into().unwrap();
+    let mut msg = [0_u8; 16];
+    msg.copy_from_slice(slice::from_raw_parts(message, 16));
 
     match (*handle).inner.embed(input_str, output_str, &msg) {
         Ok(()) => AWMError::Success as i32,
@@ -1465,6 +1466,9 @@ pub unsafe extern "C" fn awm_db_evidence_remove_json(
 }
 
 /// 检查 audiowmark 是否可用
+///
+/// # Safety
+/// - `handle` 必须是有效的 Audio 句柄或空指针。
 #[no_mangle]
 pub unsafe extern "C" fn awm_audio_is_available(handle: *const AWMAudioHandle) -> bool {
     if handle.is_null() {
@@ -1837,7 +1841,7 @@ pub unsafe extern "C" fn awm_key_delete_slot(slot: u8, out_new_active_slot: *mut
 /// 获取全部槽位摘要（JSON）
 ///
 /// Two-step usage:
-/// 1) call with out = NULL and out_len = 0 to get out_required_len
+/// 1) call with out = NULL and `out_len` = 0 to get `out_required_len`
 /// 2) allocate buffer and call again to fetch JSON payload
 ///
 /// # Safety
@@ -2032,7 +2036,8 @@ pub unsafe extern "C" fn awm_audio_embed_multichannel(
         return AWMError::InvalidUtf8 as i32;
     };
 
-    let msg: [u8; 16] = slice::from_raw_parts(message, 16).try_into().unwrap();
+    let mut msg = [0_u8; 16];
+    msg.copy_from_slice(slice::from_raw_parts(message, 16));
     let rust_layout = layout.to_rust_layout();
 
     match (*handle)

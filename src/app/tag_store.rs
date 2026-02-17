@@ -22,6 +22,8 @@ pub struct TagStore {
 }
 
 impl TagStore {
+    /// # Errors
+    /// 当数据库路径解析、目录创建、`SQLite` 打开或初始读取失败时返回错误。
     pub fn load() -> Result<Self> {
         let path = db_path()?;
         let conn = open_db(&path)?;
@@ -55,6 +57,9 @@ impl TagStore {
     }
 
     /// Get mapping tag by username (case-insensitive).
+    ///
+    /// # Errors
+    /// 当用户名非法或 `SQLite` 查询失败时返回错误。
     pub fn lookup_tag_ci(&self, username: &str) -> Result<Option<String>> {
         let username = normalize_username(username)?;
         let tag = self
@@ -70,6 +75,9 @@ impl TagStore {
 
     /// Save only if username does not exist.
     /// Returns true when inserted, false when mapping already exists.
+    ///
+    /// # Errors
+    /// 当用户名非法、时间戳获取失败或 `SQLite` 写入失败时返回错误。
     pub fn save_if_absent(&mut self, username: &str, tag: &Tag) -> Result<bool> {
         let username = normalize_username(username)?;
         if self.lookup_tag_ci(&username)?.is_some() {
@@ -88,6 +96,8 @@ impl TagStore {
         self.entries.iter().any(|e| e.tag == tag)
     }
 
+    /// # Errors
+    /// 当用户名非法、时间戳获取失败、冲突未强制覆盖或 `SQLite` 写入失败时返回错误。
     pub fn save(&mut self, username: &str, tag: &Tag, force: bool) -> Result<()> {
         let username = normalize_username(username)?;
         let tag_str = tag.as_str().to_string();
@@ -127,6 +137,8 @@ impl TagStore {
         self.refresh_entries()
     }
 
+    /// # Errors
+    /// 当用户名非法、映射不存在或 `SQLite` 删除失败时返回错误。
     pub fn remove(&mut self, username: &str) -> Result<()> {
         let username = normalize_username(username)?;
         let affected = self.conn.execute(
@@ -139,6 +151,8 @@ impl TagStore {
         self.refresh_entries()
     }
 
+    /// # Errors
+    /// 当 `SQLite` 删除或刷新内存缓存失败时返回错误。
     pub fn clear(&mut self) -> Result<()> {
         self.conn.execute("DELETE FROM tag_mappings", [])?;
         self.refresh_entries()
@@ -146,6 +160,9 @@ impl TagStore {
 
     /// Remove multiple usernames (case-insensitive).
     /// Returns deleted row count.
+    ///
+    /// # Errors
+    /// 当任一用户名非法或 `SQLite` 删除失败时返回错误。
     pub fn remove_usernames(&mut self, usernames: &[String]) -> Result<usize> {
         let mut deleted = 0usize;
         for username in usernames {
@@ -167,6 +184,8 @@ impl TagStore {
         self.entries.len()
     }
 
+    /// # Errors
+    /// 当用户名非法或构造 `Tag` 失败时返回错误。
     pub fn suggest(username: &str) -> Result<Tag> {
         let username = normalize_username(username)?;
         let mut hasher = Sha256::new();

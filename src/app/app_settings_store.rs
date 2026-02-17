@@ -21,6 +21,9 @@ pub struct AppSettingsStore {
 
 impl AppSettingsStore {
     /// Open settings store at shared awmkit sqlite database.
+    ///
+    /// # Errors
+    /// 当数据库路径解析、目录创建或 `SQLite` 打开失败时返回错误。
     pub fn load() -> Result<Self> {
         let path = db_path()?;
         let conn = open_db(&path)?;
@@ -28,6 +31,9 @@ impl AppSettingsStore {
     }
 
     /// Read active key slot. Missing/invalid value falls back to 0.
+    ///
+    /// # Errors
+    /// 当读取 `SQLite` 配置失败时返回错误。
     pub fn active_key_slot(&self) -> Result<u8> {
         let mut stmt = self
             .conn
@@ -47,6 +53,9 @@ impl AppSettingsStore {
     }
 
     /// Persist active key slot.
+    ///
+    /// # Errors
+    /// 当槽位超出范围或 `SQLite` 写入失败时返回错误。
     pub fn set_active_key_slot(&self, slot: u8) -> Result<()> {
         validate_slot(slot)?;
         self.conn.execute(
@@ -61,6 +70,9 @@ impl AppSettingsStore {
     }
 
     /// Read UI language override. Missing/invalid value returns None.
+    ///
+    /// # Errors
+    /// 当读取 `SQLite` 配置失败时返回错误。
     pub fn ui_language(&self) -> Result<Option<String>> {
         let mut stmt = self
             .conn
@@ -79,6 +91,9 @@ impl AppSettingsStore {
     /// Persist UI language override.
     /// - `Some("zh-CN" | "en-US")`: set value
     /// - `None`: clear value (use system default on app side)
+    ///
+    /// # Errors
+    /// 当语言值不受支持或 `SQLite` 写入失败时返回错误。
     pub fn set_ui_language(&self, lang: Option<&str>) -> Result<()> {
         let now = now_ts()?;
         match lang {
@@ -109,6 +124,9 @@ impl AppSettingsStore {
     }
 
     /// Get human-readable label for a slot.
+    ///
+    /// # Errors
+    /// 当槽位超出范围或 `SQLite` 查询失败时返回错误。
     pub fn slot_label(&self, slot: u8) -> Result<Option<String>> {
         validate_slot(slot)?;
         let mut stmt = self
@@ -124,6 +142,9 @@ impl AppSettingsStore {
     }
 
     /// Set/replace human-readable label for a slot.
+    ///
+    /// # Errors
+    /// 当槽位超出范围、标签为空或 `SQLite` 写入失败时返回错误。
     pub fn set_slot_label(&self, slot: u8, label: &str) -> Result<()> {
         validate_slot(slot)?;
         let trimmed = label.trim();
@@ -143,6 +164,9 @@ impl AppSettingsStore {
     }
 
     /// Clear label from a slot.
+    ///
+    /// # Errors
+    /// 当槽位超出范围或 `SQLite` 删除失败时返回错误。
     pub fn clear_slot_label(&self, slot: u8) -> Result<()> {
         validate_slot(slot)?;
         self.conn.execute(
@@ -153,6 +177,9 @@ impl AppSettingsStore {
     }
 
     /// List all non-empty slot labels.
+    ///
+    /// # Errors
+    /// 当 `SQLite` 查询或迭代失败时返回错误。
     pub fn list_slot_labels(&self) -> Result<Vec<(u8, String)>> {
         let mut stmt = self.conn.prepare(
             "SELECT slot, label
@@ -191,6 +218,9 @@ fn normalize_ui_language(value: &str) -> Option<&'static str> {
 }
 
 /// Validate slot range.
+///
+/// # Errors
+/// 当槽位超出允许范围时返回错误。
 pub fn validate_slot(slot: u8) -> Result<()> {
     if is_valid_slot(slot) {
         Ok(())

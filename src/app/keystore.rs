@@ -52,6 +52,8 @@ pub struct KeyStore {
 }
 
 impl KeyStore {
+    /// # Errors
+    /// 当配置存储初始化、旧密钥迁移或平台密钥后端初始化失败时返回错误。
     pub fn new() -> Result<Self> {
         #[cfg(not(windows))]
         {
@@ -72,11 +74,15 @@ impl KeyStore {
         }
     }
 
+    /// # Errors
+    /// 当配置存储读取失败时返回错误。
     pub fn active_slot(&self) -> Result<u8> {
         let settings = AppSettingsStore::load()?;
         settings.active_key_slot()
     }
 
+    /// # Errors
+    /// 当槽位非法或配置写入失败时返回错误。
     pub fn set_active_slot(&self, slot: u8) -> Result<()> {
         validate_slot(slot)?;
         let settings = AppSettingsStore::load()?;
@@ -103,31 +109,43 @@ impl KeyStore {
             .collect()
     }
 
+    /// # Errors
+    /// 当当前活动槽位读取失败或该槽位密钥读取失败时返回错误。
     pub fn load(&self) -> Result<Vec<u8>> {
         let slot = self.active_slot()?;
         self.load_slot(slot)
     }
 
+    /// # Errors
+    /// 当槽位非法或底层密钥后端读取失败时返回错误。
     pub fn load_slot(&self, slot: u8) -> Result<Vec<u8>> {
         self.load_slot_with_backend(slot).map(|(key, _)| key)
     }
 
+    /// # Errors
+    /// 当活动槽位读取失败或密钥保存失败时返回错误。
     pub fn save(&self, key: &[u8]) -> Result<()> {
         let slot = self.active_slot()?;
         self.save_slot(slot, key)
     }
 
+    /// # Errors
+    /// 当槽位非法、密钥长度不合法或写入后端失败时返回错误。
     pub fn save_slot(&self, slot: u8, key: &[u8]) -> Result<()> {
         validate_slot(slot)?;
         validate_key_len(key.len())?;
         self.save_slot_raw(slot, key)
     }
 
+    /// # Errors
+    /// 当活动槽位读取失败或删除失败时返回错误。
     pub fn delete(&self) -> Result<()> {
         let slot = self.active_slot()?;
         self.delete_slot(slot)
     }
 
+    /// # Errors
+    /// 当槽位非法、对应密钥不存在或删除后端失败时返回错误。
     pub fn delete_slot(&self, slot: u8) -> Result<()> {
         validate_slot(slot)?;
         #[cfg(not(windows))]
@@ -152,6 +170,9 @@ impl KeyStore {
     /// Delete key material from a slot and reconcile active slot if needed.
     ///
     /// Returns the effective active slot after deletion.
+    ///
+    /// # Errors
+    /// 当槽位非法、删除失败或活动槽位重设失败时返回错误。
     pub fn delete_slot_and_reconcile_active(&self, slot: u8) -> Result<u8> {
         validate_slot(slot)?;
         let active_before = self.active_slot()?;
@@ -166,11 +187,15 @@ impl KeyStore {
         Ok(fallback_slot)
     }
 
+    /// # Errors
+    /// 当活动槽位读取失败或密钥后端读取失败时返回错误。
     pub fn load_with_backend(&self) -> Result<(Vec<u8>, KeyBackend)> {
         let slot = self.active_slot()?;
         self.load_slot_with_backend(slot)
     }
 
+    /// # Errors
+    /// 当槽位非法，且 keyring 与平台回退后端都读取失败时返回错误。
     pub fn load_slot_with_backend(&self, slot: u8) -> Result<(Vec<u8>, KeyBackend)> {
         validate_slot(slot)?;
         match Self::load_from_keyring_slot(slot) {
@@ -188,6 +213,9 @@ impl KeyStore {
     }
 
     /// Build full slot summaries for UI presentation.
+    ///
+    /// # Errors
+    /// 当任一槽位的配置、证据统计或密钥读取失败时返回错误。
     pub fn slot_summaries(&self) -> Result<Vec<KeySlotSummary>> {
         let active_slot = self.active_slot()?;
         let settings = AppSettingsStore::load()?;

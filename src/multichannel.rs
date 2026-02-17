@@ -363,6 +363,9 @@ pub struct MultichannelAudio {
 
 impl MultichannelAudio {
     /// 创建新的多声道音频
+    ///
+    /// # Errors
+    /// 当声道集合为空，或各声道样本长度不一致时返回错误。
     pub fn new(
         channels: Vec<Vec<i32>>,
         sample_rate: u32,
@@ -422,6 +425,9 @@ impl MultichannelAudio {
     }
 
     /// 从 WAV 文件加载
+    ///
+    /// # Errors
+    /// 当文件无法读取、WAV 头无效、样本格式不支持或样本解析失败时返回错误。
     #[cfg(feature = "multichannel")]
     pub fn from_wav<P: AsRef<Path>>(path: P) -> Result<Self> {
         use hound::WavReader;
@@ -474,6 +480,9 @@ impl MultichannelAudio {
     }
 
     /// 从 FLAC 文件加载
+    ///
+    /// # Errors
+    /// 当文件无法读取、FLAC 位深不支持或解码失败时返回错误。
     #[cfg(feature = "multichannel")]
     pub fn from_flac<P: AsRef<Path>>(path: P) -> Result<Self> {
         use claxon::FlacReader;
@@ -523,6 +532,9 @@ impl MultichannelAudio {
     }
 
     /// 从文件加载 (自动检测格式)
+    ///
+    /// # Errors
+    /// 当扩展名不支持，或底层 WAV/FLAC 读取失败时返回错误。
     #[cfg(feature = "multichannel")]
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
@@ -542,6 +554,9 @@ impl MultichannelAudio {
     }
 
     /// 序列化为 WAV 字节（不写文件，供内存管道使用）
+    ///
+    /// # Errors
+    /// 当 WAV 头字段溢出、样本超出目标位深范围或序列化失败时返回错误。
     #[cfg(feature = "multichannel")]
     pub fn to_wav_bytes(&self) -> Result<Vec<u8>> {
         let channels = self.num_channels();
@@ -632,6 +647,9 @@ impl MultichannelAudio {
     ///
     /// 自动处理 audiowmark `--output-format wav-pipe` 输出的 `RIFF ffffffff`
     /// 流式格式（hound 拒绝此格式，需先修复大小字段）。
+    ///
+    /// # Errors
+    /// 当字节流不是合法 WAV、样本格式不支持或样本解析失败时返回错误。
     #[cfg(feature = "multichannel")]
     pub fn from_wav_bytes(bytes: &[u8]) -> Result<Self> {
         use hound::WavReader;
@@ -682,6 +700,9 @@ impl MultichannelAudio {
     }
 
     /// 保存为 WAV 文件
+    ///
+    /// # Errors
+    /// 当输出文件无法创建/写入，或样本超出目标位深范围时返回错误。
     #[cfg(feature = "multichannel")]
     pub fn to_wav<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         use hound::{SampleFormat as HoundFormat, WavSpec, WavWriter};
@@ -815,6 +836,9 @@ impl MultichannelAudio {
     }
 
     /// 从立体声对合并
+    ///
+    /// # Errors
+    /// 当输入声道对为空，或合并后各声道样本长度不一致时返回错误。
     pub fn merge_stereo_pairs(
         pairs: &[(Vec<i32>, Vec<i32>)],
         sample_rate: u32,
@@ -831,6 +855,9 @@ impl MultichannelAudio {
     }
 
     /// 保存立体声对到临时 WAV 文件
+    ///
+    /// # Errors
+    /// 当 `pair_index` 越界、构造立体声对失败或写文件失败时返回错误。
     #[cfg(feature = "multichannel")]
     pub fn save_stereo_pair<P: AsRef<Path>>(&self, pair_index: usize, path: P) -> Result<()> {
         let pairs = self.split_stereo_pairs();
@@ -851,6 +878,9 @@ impl MultichannelAudio {
     }
 
     /// 从立体声 WAV 文件加载并替换指定声道对
+    ///
+    /// # Errors
+    /// 当 `pair_index` 越界、输入并非立体声 WAV，或读取失败时返回错误。
     #[cfg(feature = "multichannel")]
     pub fn load_stereo_pair<P: AsRef<Path>>(&mut self, pair_index: usize, path: P) -> Result<()> {
         let stereo = Self::from_wav(path)?;
@@ -880,7 +910,7 @@ impl MultichannelAudio {
 /// 若 RIFF size 不为 `0xFFFF_FFFF` 则直接借用原始切片，不做任何复制。
 ///
 /// 注意：audiowmark 在 pipe 模式下会在奇数长度 data 末尾追加 1 字节 WAV 对齐填充。
-/// 必须从 fmt chunk 读取 block_align 并将 data size 截断到 block_align 的整数倍。
+/// 必须从 fmt chunk 读取 `block_align` 并将 data size 截断到 `block_align` 的整数倍。
 #[cfg(feature = "multichannel")]
 fn normalize_wav_pipe_sizes(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {

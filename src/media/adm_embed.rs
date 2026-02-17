@@ -411,7 +411,7 @@ fn embed_single_audio_via_audiowmark(
     result
 }
 
-/// 从 MultichannelAudio 按索引提取子集声道（供外部模块调用）。
+/// 从 `MultichannelAudio` 按索引提取子集声道（供外部模块调用）。
 pub fn extract_bed_channels(
     audio: &MultichannelAudio,
     indices: &[usize],
@@ -419,7 +419,7 @@ pub fn extract_bed_channels(
     extract_channels(audio, indices)
 }
 
-/// 从 MultichannelAudio 按索引提取子集声道。
+/// 从 `MultichannelAudio` 按索引提取子集声道。
 fn extract_channels(audio: &MultichannelAudio, indices: &[usize]) -> Result<MultichannelAudio> {
     let mut channels = Vec::with_capacity(indices.len());
     for &idx in indices {

@@ -70,7 +70,7 @@ impl ChunkIndex {
 
 /// 解析 chna chunk，返回属于 Bed（DirectSpeakers）的 0-based 声道索引列表。
 ///
-/// packFormat ID 含 `_0001`（DirectSpeakers 类型）视为 Bed；
+/// packFormat ID 含 `_0001`（`DirectSpeakers` 类型）视为 Bed；
 /// 含 `_0003`（Objects 类型）视为 Object，排除在外。
 /// 若 chna 不存在或解析失败，返回 `None`（调用方应退回全声道路径）。
 pub fn parse_bed_channel_indices(path: &Path, index: &ChunkIndex) -> Result<Option<Vec<usize>>> {

@@ -1,4 +1,4 @@
-//! AWMKit CLI
+//! `AWMKit` CLI
 
 #[cfg(feature = "full-cli")]
 fn main() {

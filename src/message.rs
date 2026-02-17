@@ -2,8 +2,8 @@
 //!
 //! 消息格式 (16 bytes = 128 bit):
 //! - Version: 1 byte
-//! - Timestamp+Slot: 4 bytes (v1: UTC Unix minutes, v2: 27-bit minutes + 5-bit key_slot)
-//! - UserTagPacked: 5 bytes (8 × 5bit)
+//! - Timestamp+Slot: 4 bytes (v1: UTC Unix minutes, v2: 27-bit minutes + 5-bit `key_slot`)
+//! - `UserTagPacked`: 5 bytes (8 × 5bit)
 //! - HMAC: 6 bytes (HMAC-SHA256 前 6 字节)
 
 use hmac::{Hmac, Mac};
@@ -63,11 +63,17 @@ impl MessageResult {
 ///
 /// # Returns
 /// 16 bytes 消息
+///
+/// # Errors
+/// 当版本不支持、时间戳/槽位越界或 `Tag` 非法时返回错误。
 pub fn encode(version: u8, tag: &Tag, key: &[u8]) -> Result<[u8; MESSAGE_LEN]> {
     encode_with_timestamp_and_slot(version, tag, key, current_utc_minutes(), DEFAULT_KEY_SLOT)
 }
 
 /// 编码消息（指定时间戳）
+///
+/// # Errors
+/// 当版本不支持、时间戳越界或 `Tag` 非法时返回错误。
 pub fn encode_with_timestamp(
     version: u8,
     tag: &Tag,
@@ -78,6 +84,9 @@ pub fn encode_with_timestamp(
 }
 
 /// 编码消息（指定时间戳 + 槽位）
+///
+/// # Errors
+/// 当版本不支持、时间戳/槽位越界或 `Tag` 非法时返回错误。
 pub fn encode_with_timestamp_and_slot(
     version: u8,
     tag: &Tag,
@@ -117,6 +126,9 @@ pub fn encode_with_timestamp_and_slot(
 }
 
 /// 编码消息（使用当前时间戳 + 指定槽位）
+///
+/// # Errors
+/// 当版本不支持、槽位越界或 `Tag` 非法时返回错误。
 pub fn encode_with_slot(
     version: u8,
     tag: &Tag,
@@ -134,6 +146,9 @@ pub fn encode_with_slot(
 ///
 /// # Returns
 /// 解码结果，HMAC 验证失败返回错误
+///
+/// # Errors
+/// 当消息长度不正确、版本不支持、槽位非法或 HMAC 校验失败时返回错误。
 pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
     if data.len() != MESSAGE_LEN {
         return Err(Error::InvalidMessageLength(data.len()));
@@ -155,6 +170,9 @@ pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
 ///
 /// # Returns
 /// 解码结果；仅解析明文字段，不做 HMAC 校验
+///
+/// # Errors
+/// 当消息长度不正确、版本不支持或字段解析失败时返回错误。
 pub fn decode_unverified(data: &[u8]) -> Result<MessageResult> {
     if data.len() != MESSAGE_LEN {
         return Err(Error::InvalidMessageLength(data.len()));
@@ -175,6 +193,9 @@ pub fn verify(data: &[u8], key: &[u8]) -> bool {
 }
 
 /// 读取消息头中的版本与槽位（不校验 HMAC）
+///
+/// # Errors
+/// 当消息长度不正确、版本不支持或槽位非法时返回错误。
 pub fn peek_version_and_slot(data: &[u8]) -> Result<(u8, u8)> {
     if data.len() != MESSAGE_LEN {
         return Err(Error::InvalidMessageLength(data.len()));

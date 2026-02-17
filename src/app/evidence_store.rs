@@ -65,6 +65,8 @@ pub struct EvidenceSlotUsage {
 }
 
 impl EvidenceStore {
+    /// # Errors
+    /// 当数据库路径解析、目录创建或 `SQLite` 打开失败时返回错误。
     pub fn load() -> Result<Self> {
         let path = db_path()?;
         let conn = open_db(&path)?;
@@ -77,6 +79,8 @@ impl EvidenceStore {
         Ok(Self { path, conn })
     }
 
+    /// # Errors
+    /// 当字段转换溢出或 `SQLite` 写入失败时返回错误。
     pub fn insert(&self, input: &NewAudioEvidence) -> Result<bool> {
         let chromaprint_blob = encode_chromaprint_blob(&input.chromaprint);
         let fingerprint_len = i64::try_from(input.chromaprint.len())
@@ -147,10 +151,14 @@ impl EvidenceStore {
         Ok(promoted > 0)
     }
 
+    /// # Errors
+    /// 当 `SQLite` 查询失败时返回错误。
     pub fn list_candidates(&self, identity: &str, key_slot: u8) -> Result<Vec<AudioEvidence>> {
         self.list_candidates_limited(identity, key_slot, DEFAULT_CANDIDATE_LIMIT)
     }
 
+    /// # Errors
+    /// 当 `limit` 溢出或 `SQLite` 查询失败时返回错误。
     pub fn list_candidates_limited(
         &self,
         identity: &str,
@@ -160,6 +168,8 @@ impl EvidenceStore {
         self.list_filtered(Some(identity), None, Some(key_slot), limit)
     }
 
+    /// # Errors
+    /// 当 `limit` 溢出、`SQLite` 查询失败或记录反序列化失败时返回错误。
     pub fn list_filtered(
         &self,
         identity: Option<&str>,
@@ -193,6 +203,8 @@ impl EvidenceStore {
         Ok(out)
     }
 
+    /// # Errors
+    /// 当 `SQLite` 查询失败或记录反序列化失败时返回错误。
     pub fn get_by_id(&self, id: i64) -> Result<Option<AudioEvidence>> {
         let mut stmt = self.conn.prepare(
             "SELECT
@@ -211,6 +223,8 @@ impl EvidenceStore {
         Ok(Some(parse_audio_evidence_row(row)?))
     }
 
+    /// # Errors
+    /// 当 `SQLite` 删除失败时返回错误。
     pub fn remove_by_id(&self, id: i64) -> Result<bool> {
         let affected = self
             .conn
@@ -218,6 +232,8 @@ impl EvidenceStore {
         Ok(affected > 0)
     }
 
+    /// # Errors
+    /// 当 `SQLite` 删除失败时返回错误。
     pub fn clear_filtered(
         &self,
         identity: Option<&str>,
@@ -235,6 +251,8 @@ impl EvidenceStore {
         Ok(affected)
     }
 
+    /// # Errors
+    /// 当 `SQLite` 查询失败或计数值无效时返回错误。
     pub fn count_all(&self) -> Result<usize> {
         let mut stmt = self.conn.prepare("SELECT COUNT(*) FROM audio_evidence")?;
         let count: i64 = stmt
@@ -247,11 +265,17 @@ impl EvidenceStore {
     }
 
     /// Count evidence rows for one key slot.
+    ///
+    /// # Errors
+    /// 当 `SQLite` 查询失败或计数值无效时返回错误。
     pub fn count_by_slot(&self, key_slot: u8) -> Result<usize> {
         self.count_by_slot_with_key_id(key_slot, None)
     }
 
     /// Count evidence rows for one key slot + key id.
+    ///
+    /// # Errors
+    /// 当 `SQLite` 查询失败或计数值无效时返回错误。
     pub fn count_by_slot_and_key_id(&self, key_slot: u8, key_id: &str) -> Result<usize> {
         self.count_by_slot_with_key_id(key_slot, Some(key_id))
     }
@@ -270,11 +294,17 @@ impl EvidenceStore {
     }
 
     /// Usage stats for one key slot.
+    ///
+    /// # Errors
+    /// 当 `SQLite` 查询失败或计数值无效时返回错误。
     pub fn usage_by_slot(&self, key_slot: u8) -> Result<EvidenceSlotUsage> {
         self.usage_by_slot_with_key_id(key_slot, None)
     }
 
     /// Usage stats for one key slot + key id.
+    ///
+    /// # Errors
+    /// 当 `SQLite` 查询失败或计数值无效时返回错误。
     pub fn usage_by_slot_and_key_id(
         &self,
         key_slot: u8,
@@ -371,6 +401,8 @@ pub fn encode_chromaprint_blob(chromaprint: &[u32]) -> Vec<u8> {
     blob
 }
 
+/// # Errors
+/// 当输入 blob 长度不是 4 的倍数时返回错误。
 pub fn decode_chromaprint_blob(blob: &[u8]) -> Result<Vec<u32>> {
     if !blob.len().is_multiple_of(4) {
         return Err(AppError::Message(

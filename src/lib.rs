@@ -1,4 +1,4 @@
-//! AWMKit - Audio Watermark Kit
+//! `AWMKit` - Audio Watermark Kit
 //!
 //! 跨语言音频水印消息编解码库，提供 128-bit 自描述、可验证的水印消息格式。
 //!
@@ -77,11 +77,17 @@ impl Message {
     ///
     /// # Returns
     /// 16 bytes 消息
+    ///
+    /// # Errors
+    /// 当输入版本、`Tag` 或密钥参数不合法时返回错误。
     pub fn encode(version: u8, tag: &Tag, key: &[u8]) -> Result<[u8; 16]> {
         message::encode(version, tag, key)
     }
 
     /// 编码消息（指定时间戳）
+    ///
+    /// # Errors
+    /// 当输入版本、`Tag`、时间戳或密钥参数不合法时返回错误。
     pub fn encode_with_timestamp(
         version: u8,
         tag: &Tag,
@@ -92,6 +98,9 @@ impl Message {
     }
 
     /// 编码消息（指定时间戳 + 槽位）
+    ///
+    /// # Errors
+    /// 当输入版本、`Tag`、时间戳/槽位或密钥参数不合法时返回错误。
     pub fn encode_with_timestamp_and_slot(
         version: u8,
         tag: &Tag,
@@ -103,21 +112,33 @@ impl Message {
     }
 
     /// 编码消息（当前时间 + 槽位）
+    ///
+    /// # Errors
+    /// 当输入版本、`Tag`、槽位或密钥参数不合法时返回错误。
     pub fn encode_with_slot(version: u8, tag: &Tag, key: &[u8], key_slot: u8) -> Result<[u8; 16]> {
         message::encode_with_slot(version, tag, key, key_slot)
     }
 
     /// 解码消息
+    ///
+    /// # Errors
+    /// 当消息长度不正确、版本不支持或消息内容损坏时返回错误。
     pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
         message::decode(data, key)
     }
 
     /// 解码消息（不校验 HMAC）
+    ///
+    /// # Errors
+    /// 当消息长度不正确、版本不支持或消息内容损坏时返回错误。
     pub fn decode_unverified(data: &[u8]) -> Result<MessageResult> {
         message::decode_unverified(data)
     }
 
     /// 读取消息中的版本与槽位（不校验 HMAC）
+    ///
+    /// # Errors
+    /// 当消息长度不正确或版本字段无效时返回错误。
     pub fn peek_version_and_slot(data: &[u8]) -> Result<(u8, u8)> {
         message::peek_version_and_slot(data)
     }
