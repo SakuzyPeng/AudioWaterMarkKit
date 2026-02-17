@@ -1513,9 +1513,9 @@ pub unsafe extern "C" fn awm_audio_media_capabilities(
     (*result).backend.fill(0);
     copy_str_to_c_buf(&mut (*result).backend, caps.backend);
     (*result).eac3_decode = caps.eac3_decode;
-    (*result).container_mp4 = caps.container_mp4;
-    (*result).container_mkv = caps.container_mkv;
-    (*result).container_ts = caps.container_ts;
+    (*result).container_mp4 = caps.container_mp4();
+    (*result).container_mkv = caps.container_mkv();
+    (*result).container_ts = caps.container_ts();
     AWMError::Success as i32
 }
 

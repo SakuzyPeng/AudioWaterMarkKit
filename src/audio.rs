@@ -41,31 +41,83 @@ const MIN_PATTERN_SCORE: f32 = 1.0;
 
 /// 媒体解码能力摘要（用于 doctor/UI 状态）
 #[derive(Debug, Clone, Copy)]
+#[allow(clippy::module_name_repetitions)]
 pub struct AudioMediaCapabilities {
     /// 当前媒体后端名称
     pub backend: &'static str,
     /// 是否支持 E-AC-3 解码
     pub eac3_decode: bool,
-    /// 是否支持 MP4/M4A 容器解封装
-    pub container_mp4: bool,
-    /// 是否支持 MKV 容器解封装
-    pub container_mkv: bool,
-    /// 是否支持 MPEG-TS 容器解封装
-    pub container_ts: bool,
+    /// 容器解封装能力位图
+    pub containers: AudioContainerCapabilities,
+}
+
+/// 容器能力位图（3 个布尔能力压缩成位标记，避免结构体布尔字段过多）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AudioContainerCapabilities(u8);
+
+impl AudioContainerCapabilities {
+    const MP4_BIT: u8 = 1 << 0;
+    const MKV_BIT: u8 = 1 << 1;
+    const TS_BIT: u8 = 1 << 2;
+
+    #[must_use]
+    pub const fn from_flags(mp4: bool, mkv: bool, ts: bool) -> Self {
+        let mut bits = 0_u8;
+        if mp4 {
+            bits |= Self::MP4_BIT;
+        }
+        if mkv {
+            bits |= Self::MKV_BIT;
+        }
+        if ts {
+            bits |= Self::TS_BIT;
+        }
+        Self(bits)
+    }
+
+    #[must_use]
+    pub const fn has_mp4(self) -> bool {
+        (self.0 & Self::MP4_BIT) != 0
+    }
+
+    #[must_use]
+    pub const fn has_mkv(self) -> bool {
+        (self.0 & Self::MKV_BIT) != 0
+    }
+
+    #[must_use]
+    pub const fn has_ts(self) -> bool {
+        (self.0 & Self::TS_BIT) != 0
+    }
 }
 
 impl AudioMediaCapabilities {
+    #[must_use]
+    pub const fn container_mp4(self) -> bool {
+        self.containers.has_mp4()
+    }
+
+    #[must_use]
+    pub const fn container_mkv(self) -> bool {
+        self.containers.has_mkv()
+    }
+
+    #[must_use]
+    pub const fn container_ts(self) -> bool {
+        self.containers.has_ts()
+    }
+
     /// 以逗号分隔形式返回当前可用容器摘要。
     #[must_use]
     pub fn supported_containers_csv(&self) -> String {
         let mut containers = Vec::new();
-        if self.container_mp4 {
+        if self.container_mp4() {
             containers.push("mp4");
         }
-        if self.container_mkv {
+        if self.container_mkv() {
             containers.push("mkv");
         }
-        if self.container_ts {
+        if self.container_ts() {
             containers.push("ts");
         }
         if containers.is_empty() {
@@ -1937,9 +1989,7 @@ pub fn media_capabilities() -> AudioMediaCapabilities {
         AudioMediaCapabilities {
             backend: "ffmpeg",
             eac3_decode: false,
-            container_mp4: false,
-            container_mkv: false,
-            container_ts: false,
+            containers: AudioContainerCapabilities::from_flags(false, false, false),
         }
     }
 }
@@ -2190,11 +2240,11 @@ mod tests {
         let caps = media_capabilities();
         assert_eq!(caps.backend, "ffmpeg");
         if cfg!(feature = "ffmpeg-decode") {
-            assert!(caps.container_mp4);
-            assert!(caps.container_mkv);
+            assert!(caps.container_mp4());
+            assert!(caps.container_mkv());
         } else {
-            assert!(!caps.container_mp4);
-            assert!(!caps.container_mkv);
+            assert!(!caps.container_mp4());
+            assert!(!caps.container_mkv());
         }
     }
 
