@@ -253,6 +253,39 @@ impl Default for ProgressSnapshot {
 /// 进度回调类型.
 pub type ProgressCallback = Arc<dyn Fn(ProgressSnapshot) + Send + Sync + 'static>;
 
+/// 进度阶段参数描述符（供内部辅助方法使用，避免超长参数列表）.
+struct PhaseParams<'a> {
+    /// 当前阶段.
+    phase: ProgressPhase,
+    /// 阶段文本标签.
+    phase_label: &'a str,
+    /// 是否为确定进度.
+    determinate: bool,
+    /// 已完成单位数.
+    completed_units: u64,
+    /// 总单位数.
+    total_units: u64,
+    /// 当前步骤序号（1-based）.
+    step_index: u32,
+    /// 步骤总数.
+    step_total: u32,
+}
+
+impl<'a> PhaseParams<'a> {
+    /// 不确定进度的阶段过渡（determinate=false，数值字段全为 0）.
+    const fn indeterminate(phase: ProgressPhase, phase_label: &'a str) -> Self {
+        Self {
+            phase,
+            phase_label,
+            determinate: false,
+            completed_units: 0,
+            total_units: 0,
+            step_index: 0,
+            step_total: 0,
+        }
+    }
+}
+
 /// Internal struct.
 struct ProgressTracker {
     /// 最新快照（用于 polling）.
@@ -624,61 +657,42 @@ impl Audio {
     }
 
     /// Internal helper method.
-    fn progress_set_phase_for_op(
-        &self,
-        op_id: u64,
-        phase: ProgressPhase,
-        label: &str,
-        determinate: bool,
-        completed_units: u64,
-        total_units: u64,
-        step_index: u32,
-        step_total: u32,
-    ) {
+    fn progress_set_phase_for_op(&self, op_id: u64, p: &PhaseParams<'_>) {
         self.progress_tracker
             .update_for_op(op_id, false, |snapshot| {
-                let phase_changed = snapshot.phase != phase
-                    || snapshot.phase_label != label
-                    || snapshot.determinate != determinate
-                    || snapshot.step_index != step_index
-                    || snapshot.step_total != step_total;
-                snapshot.phase = phase;
+                let phase_changed = snapshot.phase != p.phase
+                    || snapshot.phase_label != p.phase_label
+                    || snapshot.determinate != p.determinate
+                    || snapshot.step_index != p.step_index
+                    || snapshot.step_total != p.step_total;
+                snapshot.phase = p.phase;
                 snapshot.phase_label.clear();
-                snapshot.phase_label.push_str(label);
-                snapshot.determinate = determinate;
-                snapshot.completed_units = completed_units;
-                snapshot.total_units = total_units;
-                snapshot.step_index = step_index;
-                snapshot.step_total = step_total;
+                snapshot.phase_label.push_str(p.phase_label);
+                snapshot.determinate = p.determinate;
+                snapshot.completed_units = p.completed_units;
+                snapshot.total_units = p.total_units;
+                snapshot.step_index = p.step_index;
+                snapshot.step_total = p.step_total;
                 phase_changed
             });
     }
 
     /// Internal helper method.
-    fn progress_set_current_phase(
-        &self,
-        phase: ProgressPhase,
-        label: &str,
-        determinate: bool,
-        completed_units: u64,
-        total_units: u64,
-        step_index: u32,
-        step_total: u32,
-    ) {
+    fn progress_set_current_phase(&self, p: &PhaseParams<'_>) {
         self.progress_tracker.update_current(false, |snapshot| {
-            let phase_changed = snapshot.phase != phase
-                || snapshot.phase_label != label
-                || snapshot.determinate != determinate
-                || snapshot.step_index != step_index
-                || snapshot.step_total != step_total;
-            snapshot.phase = phase;
+            let phase_changed = snapshot.phase != p.phase
+                || snapshot.phase_label != p.phase_label
+                || snapshot.determinate != p.determinate
+                || snapshot.step_index != p.step_index
+                || snapshot.step_total != p.step_total;
+            snapshot.phase = p.phase;
             snapshot.phase_label.clear();
-            snapshot.phase_label.push_str(label);
-            snapshot.determinate = determinate;
-            snapshot.completed_units = completed_units;
-            snapshot.total_units = total_units;
-            snapshot.step_index = step_index;
-            snapshot.step_total = step_total;
+            snapshot.phase_label.push_str(p.phase_label);
+            snapshot.determinate = p.determinate;
+            snapshot.completed_units = p.completed_units;
+            snapshot.total_units = p.total_units;
+            snapshot.step_index = p.step_index;
+            snapshot.step_total = p.step_total;
             phase_changed
         });
     }
@@ -720,13 +734,7 @@ impl Audio {
             let hex = bytes_to_hex(message);
             self.progress_set_phase_for_op(
                 op_id,
-                ProgressPhase::Core,
-                "embed_core",
-                false,
-                0,
-                0,
-                0,
-                0,
+                &PhaseParams::indeterminate(ProgressPhase::Core, "embed_core"),
             );
             run_audiowmark_add_prepared(self, &prepared.path, output.as_ref(), &hex)
         })();
@@ -767,13 +775,7 @@ impl Audio {
             let input = input.as_ref();
             self.progress_set_phase_for_op(
                 op_id,
-                ProgressPhase::Core,
-                "detect_core",
-                false,
-                0,
-                0,
-                0,
-                0,
+                &PhaseParams::indeterminate(ProgressPhase::Core, "detect_core"),
             );
             let output = run_audiowmark_get_detect(self, input)?;
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -860,13 +862,7 @@ impl Audio {
             if media::adm_bwav::probe_adm_bwf(input)?.is_some() {
                 self.progress_set_phase_for_op(
                     op_id,
-                    ProgressPhase::Core,
-                    "embed_adm",
-                    false,
-                    0,
-                    0,
-                    0,
-                    0,
+                    &PhaseParams::indeterminate(ProgressPhase::Core, "embed_adm"),
                 );
                 return media::adm_embed::embed_adm_multichannel(
                     self, input, output, message, layout,
@@ -890,13 +886,7 @@ impl Audio {
                         if a.num_channels() <= 2 {
                             self.progress_set_phase_for_op(
                                 op_id,
-                                ProgressPhase::Core,
-                                "embed_stereo_bytes",
-                                false,
-                                0,
-                                0,
-                                0,
-                                0,
+                                &PhaseParams::indeterminate(ProgressPhase::Core, "embed_stereo_bytes"),
                             );
                             let wav_bytes = a.to_wav_bytes()?;
                             let out_bytes =
@@ -949,13 +939,15 @@ impl Audio {
             let step_total = u32::try_from(executable_steps.len()).unwrap_or(u32::MAX);
             self.progress_set_phase_for_op(
                 op_id,
-                ProgressPhase::RouteStep,
-                "embed_route_steps",
-                true,
-                0,
-                u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
-                0,
-                step_total,
+                &PhaseParams {
+                    phase: ProgressPhase::RouteStep,
+                    phase_label: "embed_route_steps",
+                    determinate: true,
+                    completed_units: 0,
+                    total_units: u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
+                    step_index: 0,
+                    step_total,
+                },
             );
             let step_done = Arc::new(AtomicU64::new(0));
             let parallelism = compute_route_parallelism(executable_steps.len());
@@ -966,24 +958,28 @@ impl Audio {
                         let step_idx_u32 =
                             u32::try_from(step_idx.saturating_add(1)).unwrap_or(u32::MAX);
                         self.progress_set_current_phase(
-                            ProgressPhase::RouteStep,
-                            step.name.as_str(),
-                            true,
-                            step_done.load(Ordering::Relaxed),
-                            u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
-                            step_idx_u32,
-                            step_total,
+                            &PhaseParams {
+                                phase: ProgressPhase::RouteStep,
+                                phase_label: step.name.as_str(),
+                                determinate: true,
+                                completed_units: step_done.load(Ordering::Relaxed),
+                                total_units: u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
+                                step_index: step_idx_u32,
+                                step_total,
+                            },
                         );
                         let outcome = run_embed_step_task(self, &audio, step, message);
                         let done = step_done.fetch_add(1, Ordering::Relaxed).saturating_add(1);
                         self.progress_set_current_phase(
-                            ProgressPhase::RouteStep,
-                            step.name.as_str(),
-                            true,
-                            done,
-                            u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
-                            step_idx_u32,
-                            step_total,
+                            &PhaseParams {
+                                phase: ProgressPhase::RouteStep,
+                                phase_label: step.name.as_str(),
+                                determinate: true,
+                                completed_units: done,
+                                total_units: u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
+                                step_index: step_idx_u32,
+                                step_total,
+                            },
                         );
                         EmbedStepTaskResult {
                             step_idx: *step_idx,
@@ -996,26 +992,14 @@ impl Audio {
 
             self.progress_set_phase_for_op(
                 op_id,
-                ProgressPhase::Merge,
-                "merge_route",
-                false,
-                0,
-                0,
-                0,
-                0,
+                &PhaseParams::indeterminate(ProgressPhase::Merge, "merge_route"),
             );
             apply_embed_step_results(&mut audio, &mut step_results);
 
             // 当前仅支持输出 WAV（FLAC 输出已暂时下线）。
             self.progress_set_phase_for_op(
                 op_id,
-                ProgressPhase::Finalize,
-                "write_output",
-                false,
-                0,
-                0,
-                0,
-                0,
+                &PhaseParams::indeterminate(ProgressPhase::Finalize, "write_output"),
             );
             audio.to_wav(output)?;
 
@@ -1052,13 +1036,7 @@ impl Audio {
             if let Some(ref index) = media::adm_bwav::probe_adm_bwf(input)? {
                 self.progress_set_phase_for_op(
                     op_id,
-                    ProgressPhase::Core,
-                    "detect_adm",
-                    false,
-                    0,
-                    0,
-                    0,
-                    0,
+                    &PhaseParams::indeterminate(ProgressPhase::Core, "detect_adm"),
                 );
                 let full_audio = media::adm_embed::decode_pcm_audio(input, index)?;
 
@@ -1106,13 +1084,15 @@ impl Audio {
                         .collect();
                     self.progress_set_phase_for_op(
                         op_id,
-                        ProgressPhase::RouteStep,
-                        "detect_route_steps",
-                        true,
-                        0,
-                        u64::try_from(detect_steps.len()).unwrap_or(u64::MAX),
-                        0,
-                        u32::try_from(detect_steps.len()).unwrap_or(u32::MAX),
+                        &PhaseParams {
+                            phase: ProgressPhase::RouteStep,
+                            phase_label: "detect_route_steps",
+                            determinate: true,
+                            completed_units: 0,
+                            total_units: u64::try_from(detect_steps.len()).unwrap_or(u64::MAX),
+                            step_index: 0,
+                            step_total: u32::try_from(detect_steps.len()).unwrap_or(u32::MAX),
+                        },
                     );
                     let step_total_u64 = u64::try_from(detect_steps.len()).unwrap_or(u64::MAX);
                     let step_total_u32 = u32::try_from(detect_steps.len()).unwrap_or(u32::MAX);
@@ -1122,36 +1102,34 @@ impl Audio {
                             let step_index =
                                 u32::try_from(done.saturating_add(1)).unwrap_or(u32::MAX);
                             self.progress_set_current_phase(
-                                ProgressPhase::RouteStep,
-                                step.name.as_str(),
-                                true,
-                                done,
-                                step_total_u64,
-                                step_index,
-                                step_total_u32,
+                                &PhaseParams {
+                                    phase: ProgressPhase::RouteStep,
+                                    phase_label: step.name.as_str(),
+                                    determinate: true,
+                                    completed_units: done,
+                                    total_units: step_total_u64,
+                                    step_index,
+                                    step_total: step_total_u32,
+                                },
                             );
                             let outcome = run_detect_step_task(self, &full_audio, step);
                             done = done.saturating_add(1);
                             self.progress_set_current_phase(
-                                ProgressPhase::RouteStep,
-                                step.name.as_str(),
-                                true,
-                                done,
-                                step_total_u64,
-                                step_index,
-                                step_total_u32,
+                                &PhaseParams {
+                                    phase: ProgressPhase::RouteStep,
+                                    phase_label: step.name.as_str(),
+                                    determinate: true,
+                                    completed_units: done,
+                                    total_units: step_total_u64,
+                                    step_index,
+                                    step_total: step_total_u32,
+                                },
                             );
                             outcome
                         })?;
                     self.progress_set_phase_for_op(
                         op_id,
-                        ProgressPhase::Merge,
-                        "detect_merge",
-                        false,
-                        0,
-                        0,
-                        0,
-                        0,
+                        &PhaseParams::indeterminate(ProgressPhase::Merge, "detect_merge"),
                     );
                     return Ok(finalize_detect_step_results(step_results));
                 }
@@ -1209,13 +1187,7 @@ impl Audio {
 
             self.progress_set_phase_for_op(
                 op_id,
-                ProgressPhase::Core,
-                "detect_core",
-                false,
-                0,
-                0,
-                0,
-                0,
+                &PhaseParams::indeterminate(ProgressPhase::Core, "detect_core"),
             );
             detect_multichannel_from_audio(self, &audio, stereo_file.as_deref(), input, layout)
         })();
@@ -1340,7 +1312,15 @@ fn copy_with_progress<R: Read, W: Write>(
     total_bytes: Option<u64>,
 ) -> std::io::Result<u64> {
     let total = total_bytes.unwrap_or(0);
-    audio.progress_set_current_phase(phase, label, total_bytes.is_some(), 0, total, 0, 0);
+    audio.progress_set_current_phase(&PhaseParams {
+        phase,
+        phase_label: label,
+        determinate: total_bytes.is_some(),
+        completed_units: 0,
+        total_units: total,
+        step_index: 0,
+        step_total: 0,
+    });
 
     let mut copied = 0_u64;
     let mut buf = vec![0_u8; PIPE_BUF_SIZE];
@@ -1428,7 +1408,7 @@ fn run_audiowmark_add_file(
     output: &Path,
     message_hex: &str,
 ) -> Result<()> {
-    audio.progress_set_current_phase(ProgressPhase::Core, "embed_file", false, 0, 0, 0, 0);
+    audio.progress_set_current_phase(&PhaseParams::indeterminate(ProgressPhase::Core, "embed_file"));
     let mut cmd = audio.audiowmark_command();
     cmd.arg("add")
         .arg("--strength")
@@ -1451,7 +1431,7 @@ fn run_audiowmark_add_file(
 
 /// Internal helper function.
 fn run_audiowmark_get_file(audio: &Audio, prepared_input: &Path) -> Result<Output> {
-    audio.progress_set_current_phase(ProgressPhase::Core, "detect_file", false, 0, 0, 0, 0);
+    audio.progress_set_current_phase(&PhaseParams::indeterminate(ProgressPhase::Core, "detect_file"));
     let mut cmd = audio.audiowmark_command();
     cmd.arg("get");
 
@@ -2332,13 +2312,7 @@ fn detect_multichannel_from_audio(
     // 单声道或立体声：audiowmark 原生支持，无需多声道路由
     if num_channels <= 2 {
         audio_engine.progress_set_current_phase(
-            ProgressPhase::Core,
-            "detect_stereo",
-            false,
-            0,
-            0,
-            0,
-            0,
+            &PhaseParams::indeterminate(ProgressPhase::Core, "detect_stereo"),
         );
         if let Some(path) = stereo_file {
             let result = audio_engine.detect(path)?;
@@ -2372,48 +2346,48 @@ fn detect_multichannel_from_audio(
     let step_total_u64 = u64::try_from(detect_steps.len()).unwrap_or(u64::MAX);
     let step_total_u32 = u32::try_from(detect_steps.len()).unwrap_or(u32::MAX);
     audio_engine.progress_set_current_phase(
-        ProgressPhase::RouteStep,
-        "detect_route_steps",
-        true,
-        0,
-        step_total_u64,
-        0,
-        step_total_u32,
+        &PhaseParams {
+            phase: ProgressPhase::RouteStep,
+            phase_label: "detect_route_steps",
+            determinate: true,
+            completed_units: 0,
+            total_units: step_total_u64,
+            step_index: 0,
+            step_total: step_total_u32,
+        },
     );
     let mut done = 0_u64;
     let step_results = collect_detect_step_results_with_early_exit(&detect_steps, |step| {
         let step_index = u32::try_from(done.saturating_add(1)).unwrap_or(u32::MAX);
         audio_engine.progress_set_current_phase(
-            ProgressPhase::RouteStep,
-            step.name.as_str(),
-            true,
-            done,
-            step_total_u64,
-            step_index,
-            step_total_u32,
+            &PhaseParams {
+                phase: ProgressPhase::RouteStep,
+                phase_label: step.name.as_str(),
+                determinate: true,
+                completed_units: done,
+                total_units: step_total_u64,
+                step_index,
+                step_total: step_total_u32,
+            },
         );
         let outcome = run_detect_step_task(audio_engine, audio, step);
         done = done.saturating_add(1);
         audio_engine.progress_set_current_phase(
-            ProgressPhase::RouteStep,
-            step.name.as_str(),
-            true,
-            done,
-            step_total_u64,
-            step_index,
-            step_total_u32,
+            &PhaseParams {
+                phase: ProgressPhase::RouteStep,
+                phase_label: step.name.as_str(),
+                determinate: true,
+                completed_units: done,
+                total_units: step_total_u64,
+                step_index,
+                step_total: step_total_u32,
+            },
         );
         outcome
     })?;
 
     audio_engine.progress_set_current_phase(
-        ProgressPhase::Merge,
-        "detect_merge",
-        false,
-        0,
-        0,
-        0,
-        0,
+        &PhaseParams::indeterminate(ProgressPhase::Merge, "detect_merge"),
     );
     Ok(finalize_detect_step_results(step_results))
 }
