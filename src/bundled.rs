@@ -1,19 +1,27 @@
 use crate::error::{Error, Result};
+#[cfg(feature = "bundled")]
 use std::fs::{self, File};
+#[cfg(feature = "bundled")]
 use std::io::Write;
-use std::path::{Path, PathBuf};
+#[cfg(feature = "bundled")]
+use std::path::Path;
+use std::path::PathBuf;
 
 #[cfg(feature = "bundled")]
 use sha2::{Digest, Sha256};
 
-#[cfg(target_os = "windows")]
+#[cfg(all(feature = "bundled", target_os = "windows"))]
 const BIN_REL: &str = "bin/audiowmark.exe";
 
-#[cfg(target_os = "macos")]
+#[cfg(all(feature = "bundled", target_os = "macos"))]
 /// Internal constant.
 const BIN_REL: &str = "bin/audiowmark";
 
-#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+#[cfg(all(
+    feature = "bundled",
+    not(target_os = "windows"),
+    not(target_os = "macos")
+))]
 const BIN_REL: &str = "";
 
 #[cfg(all(
@@ -36,6 +44,7 @@ const BUNDLE_BYTES: &[u8] = include_bytes!(concat!(
 ));
 
 /// Internal helper function.
+#[cfg(feature = "bundled")]
 pub fn ensure_extracted() -> Result<PathBuf> {
     let cache_root = cache_root()?;
     let bin_path = cache_root.join(BIN_REL);
@@ -71,6 +80,7 @@ pub fn ensure_extracted() -> Result<PathBuf> {
 }
 
 /// Internal helper function.
+#[cfg(feature = "bundled")]
 fn bundle_hash() -> String {
     #[cfg(feature = "bundled")]
     {
@@ -109,48 +119,38 @@ pub fn cache_root() -> Result<PathBuf> {
 }
 
 /// Internal helper function.
+#[cfg(feature = "bundled")]
 fn extract_zip(dest: &Path) -> Result<()> {
-    #[cfg(not(feature = "bundled"))]
-    {
-        let _ = dest;
-        Err(Error::InvalidInput(
-            "bundled feature not enabled".to_string(),
-        ))
-    }
+    use std::io::{self, Cursor};
 
-    #[cfg(feature = "bundled")]
-    {
-        use std::io::{self, Cursor};
+    let reader = Cursor::new(BUNDLE_BYTES);
+    let mut archive = zip::ZipArchive::new(reader)
+        .map_err(|e| Error::InvalidInput(format!("zip open error: {e}")))?;
 
-        let reader = Cursor::new(BUNDLE_BYTES);
-        let mut archive = zip::ZipArchive::new(reader)
-            .map_err(|e| Error::InvalidInput(format!("zip open error: {e}")))?;
+    for i in 0..archive.len() {
+        let mut file = archive
+            .by_index(i)
+            .map_err(|e| Error::InvalidInput(format!("zip read error: {e}")))?;
+        let name = file.name().to_string();
+        let outpath = dest.join(&name);
 
-        for i in 0..archive.len() {
-            let mut file = archive
-                .by_index(i)
-                .map_err(|e| Error::InvalidInput(format!("zip read error: {e}")))?;
-            let name = file.name().to_string();
-            let outpath = dest.join(&name);
-
-            if file.is_dir() {
-                fs::create_dir_all(&outpath)?;
-                continue;
-            }
-
-            if let Some(parent) = outpath.parent() {
-                fs::create_dir_all(parent)?;
-            }
-
-            let mut outfile = File::create(&outpath)?;
-            io::copy(&mut file, &mut outfile)?;
+        if file.is_dir() {
+            fs::create_dir_all(&outpath)?;
+            continue;
         }
 
-        Ok(())
+        if let Some(parent) = outpath.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let mut outfile = File::create(&outpath)?;
+        io::copy(&mut file, &mut outfile)?;
     }
+
+    Ok(())
 }
 
-#[cfg(unix)]
+#[cfg(all(feature = "bundled", unix))]
 /// Internal helper function.
 fn ensure_executable(path: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;

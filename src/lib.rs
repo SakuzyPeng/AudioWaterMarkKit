@@ -37,6 +37,7 @@
 
 pub mod audio;
 /// Internal module.
+#[cfg(any(feature = "bundled", feature = "app"))]
 pub(crate) mod bundled;
 pub mod charset;
 pub mod error;
