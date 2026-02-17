@@ -727,75 +727,57 @@ struct DetectView: View {
 
     private func fieldValueColor(for semantic: FieldSemantic, record: DetectRecord?) -> Color {
         switch semantic {
-        case .generic:
-            return .primary
-        case .status:
-            guard let status = record?.status else { return .secondary }
-            switch status {
-            case "ok":
-                return DesignSystem.Colors.success
-            case "not_found":
-                return .secondary
-            case "invalid_hmac":
-                return DesignSystem.Colors.warning
-            case "error":
-                return DesignSystem.Colors.error
-            default:
-                return .secondary
-            }
-        case .matchFound:
-            guard let found = record?.matchFound else { return .secondary }
-            return found ? DesignSystem.Colors.success : .secondary
-        case .bitErrors:
-            guard let bitErrors = record?.bitErrors else { return .secondary }
-            if bitErrors == 0 {
-                return DesignSystem.Colors.success
-            }
-            if bitErrors <= 3 {
-                return DesignSystem.Colors.warning
-            }
-            return DesignSystem.Colors.error
-        case .detectScore:
-            guard let score = record?.detectScore else { return .secondary }
-            if score >= 1.30 {
-                return DesignSystem.Colors.success
-            }
-            if score >= 1.10 {
-                return DesignSystem.Colors.warning
-            }
-            if score >= 1.00 {
-                return Color.yellow
-            }
-            return DesignSystem.Colors.error
-        case .cloneCheck:
-            switch record?.cloneCheck {
-            case "exact":
-                return DesignSystem.Colors.success
-            case "likely":
-                return .blue
-            case "suspect":
-                return DesignSystem.Colors.warning
-            case "unavailable":
-                return .secondary
-            default:
-                return .secondary
-            }
-        case .fingerprintScore:
-            guard let score = record?.cloneScore else { return .secondary }
-            if score <= 1.0 {
-                return DesignSystem.Colors.success
-            }
-            if score <= 3.0 {
-                return .blue
-            }
-            if score <= 7.0 {
-                return DesignSystem.Colors.warning
-            }
-            return DesignSystem.Colors.error
-        case .error:
-            let value = errorDisplayValue(from: record)
-            return value == "-" ? .secondary : DesignSystem.Colors.error
+        case .generic:          return .primary
+        case .status:           return Self.colorForStatus(record?.status)
+        case .matchFound:       return (record?.matchFound).map { $0 ? DesignSystem.Colors.success : .secondary } ?? .secondary
+        case .bitErrors:        return Self.colorForBitErrors(record?.bitErrors)
+        case .detectScore:      return Self.colorForDetectScore(record?.detectScore)
+        case .cloneCheck:       return Self.colorForCloneCheck(record?.cloneCheck)
+        case .fingerprintScore: return Self.colorForFingerprintScore(record?.cloneScore)
+        case .error:            return errorDisplayValue(from: record) == "-" ? .secondary : DesignSystem.Colors.error
         }
+    }
+
+    nonisolated private static func colorForStatus(_ status: String?) -> Color {
+        guard let status else { return .secondary }
+        switch status {
+        case "ok":           return DesignSystem.Colors.success
+        case "invalid_hmac": return DesignSystem.Colors.warning
+        case "error":        return DesignSystem.Colors.error
+        default:             return .secondary
+        }
+    }
+
+    nonisolated private static func colorForBitErrors(_ bitErrors: UInt32?) -> Color {
+        guard let bitErrors else { return .secondary }
+        if bitErrors == 0 { return DesignSystem.Colors.success }
+        if bitErrors <= 3 { return DesignSystem.Colors.warning }
+        return DesignSystem.Colors.error
+    }
+
+    nonisolated private static func colorForDetectScore(_ score: Float?) -> Color {
+        guard let score else { return .secondary }
+        if score >= 1.30 { return DesignSystem.Colors.success }
+        if score >= 1.10 { return DesignSystem.Colors.warning }
+        if score >= 1.00 { return .yellow }
+        return DesignSystem.Colors.error
+    }
+
+    nonisolated private static func colorForCloneCheck(_ cloneCheck: String?) -> Color {
+        switch cloneCheck {
+        case "exact":   return DesignSystem.Colors.success
+        case "likely":  return .blue
+        case "suspect": return DesignSystem.Colors.warning
+        default:        return .secondary
+        }
+    }
+
+    nonisolated private static func colorForFingerprintScore(_ score: Double?) -> Color {
+        guard let score else { return .secondary }
+        if score <= 1.0 { return DesignSystem.Colors.success }
+        if score <= 3.0 { return .blue }
+        if score <= 7.0 { return DesignSystem.Colors.warning }
+        return DesignSystem.Colors.error
     }
 
     private func detailValue(from raw: String?) -> String {
