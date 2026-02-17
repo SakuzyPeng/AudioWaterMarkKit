@@ -291,10 +291,9 @@ fn pack_timestamp_v2(timestamp_minutes: u32, key_slot: u8) -> Result<u32> {
 }
 
 /// Internal helper function.
-const fn unpack_timestamp_v2(packed_timestamp: u32) -> (u32, u8) {
+fn unpack_timestamp_v2(packed_timestamp: u32) -> (u32, u8) {
     let timestamp_minutes = packed_timestamp >> KEY_SLOT_BITS;
-    #[allow(clippy::cast_possible_truncation)]
-    let key_slot = (packed_timestamp & KEY_SLOT_MASK) as u8;
+    let key_slot = u8::try_from(packed_timestamp & KEY_SLOT_MASK).unwrap_or_default();
     (timestamp_minutes, key_slot)
 }
 
@@ -304,9 +303,7 @@ fn current_utc_minutes() -> u32 {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| duration.as_secs());
-    #[allow(clippy::cast_possible_truncation)]
-    let minutes = (secs / 60) as u32;
-    minutes
+    u32::try_from(secs / 60).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]

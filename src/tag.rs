@@ -112,8 +112,7 @@ impl Tag {
 
         let mut chars = [0u8; 8];
         for i in (0..8).rev() {
-            #[allow(clippy::cast_possible_truncation)]
-            let idx = (bits & 0x1F) as u8;
+            let idx = u8::try_from(bits & 0x1F).unwrap_or_default();
             chars[i] = index_to_char(idx).ok_or(Error::InvalidChar(idx as char))?;
             bits >>= 5;
         }
@@ -143,8 +142,7 @@ impl Tag {
 
         let mut out = [0u8; 5];
         for i in (0..5).rev() {
-            #[allow(clippy::cast_possible_truncation)]
-            let byte = (bits & 0xFF) as u8;
+            let byte = u8::try_from(bits & 0xFF).unwrap_or_default();
             out[i] = byte;
             bits >>= 8;
         }
@@ -213,8 +211,7 @@ fn calc_checksum(tag7: [u8; 7]) -> u8 {
         })
         .sum();
 
-    #[allow(clippy::cast_possible_truncation)]
-    let index = (total % 32) as usize;
+    let index = usize::try_from(total % 32).unwrap_or_default();
     CHARSET[index]
 }
 
