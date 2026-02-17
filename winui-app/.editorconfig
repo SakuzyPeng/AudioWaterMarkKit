@@ -44,3 +44,7 @@ dotnet_diagnostic.CA1810.severity = none
 
 # CA1024: Use properties where appropriate - method semantics intentional for MVVM commands
 dotnet_diagnostic.CA1024.severity = none
+
+# CA2213: Disposable fields should be disposed - _appState is a shared singleton reference
+#         not owned by individual ViewModels; disposing it would break other consumers
+dotnet_diagnostic.CA2213.severity = none
