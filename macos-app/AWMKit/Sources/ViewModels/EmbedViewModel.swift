@@ -237,12 +237,12 @@ class EmbedViewModel: ObservableObject {
     private func appendFilesWithDedup(_ files: [URL]) {
         guard !files.isEmpty else { return }
 
-        var existing = Set(selectedFiles.map(Self.normalizedPathKey))
+        var existing = Set(selectedFiles.map(normalizedPathKey))
         var deduped: [URL] = []
         var duplicateCount = 0
 
         for file in files {
-            let key = Self.normalizedPathKey(file)
+            let key = normalizedPathKey(file)
             if existing.insert(key).inserted {
                 deduped.append(file)
             } else {
@@ -302,7 +302,7 @@ class EmbedViewModel: ObservableObject {
 
     private func logUnsupportedFiles(_ files: [URL], appState: AppState) {
         var seen = Set<String>()
-        let unique = files.map(Self.normalizedPathKey).filter { seen.insert($0).inserted }
+        let unique = files.map(normalizedPathKey).filter { seen.insert($0).inserted }
         guard !unique.isEmpty else { return }
 
         let preview = unique
@@ -343,9 +343,6 @@ class EmbedViewModel: ObservableObject {
         return url.hasDirectoryPath
     }
 
-    nonisolated private static func normalizedPathKey(_ url: URL) -> String {
-        url.standardizedFileURL.path(percentEncoded: false)
-    }
 
     // MARK: - 清空操作
 
@@ -478,7 +475,7 @@ class EmbedViewModel: ObservableObject {
 
             let initialQueue = selectedFiles
             let initialTotal = max(initialQueue.count, 1)
-            let weightByFile = Self.buildProgressWeights(for: initialQueue)
+            let weightByFile = buildProgressWeights(for: initialQueue)
             let totalWeight = max(weightByFile.values.reduce(0, +), 1)
             var doneWeight = 0.0
             let suffix = customSuffix.isEmpty ? "_wm" : customSuffix
@@ -490,8 +487,8 @@ class EmbedViewModel: ObservableObject {
             for _ in 0..<initialTotal {
                 if isCancelling { break }
                 guard let fileURL = selectedFiles.first else { break }
-                let fileKey = Self.normalizedPathKey(fileURL)
-                guard let queueIndex = selectedFiles.firstIndex(where: { Self.normalizedPathKey($0) == fileKey }) else { continue }
+                let fileKey = normalizedPathKey(fileURL)
+                guard let queueIndex = selectedFiles.firstIndex(where: { normalizedPathKey($0) == fileKey }) else { continue }
                 currentProcessingIndex = queueIndex
                 let fileWeight = weightByFile[fileKey] ?? 1
                 var fileProgress = 0.0
@@ -582,7 +579,7 @@ class EmbedViewModel: ObservableObject {
                     let outputDir = outputDirectory ?? fileURL.deletingLastPathComponent()
                     let outputURL = outputDir.appendingPathComponent("\(baseName)\(suffix).\(ext)")
                     audio.clearProgress()
-                    let pollTask = Self.startProgressPolling(
+                    let pollTask = startProgressPolling(
                         audio: audioBox,
                         expectedOperation: .embed,
                         profile: .embed,
@@ -649,7 +646,7 @@ class EmbedViewModel: ObservableObject {
                     )
                     failureCount += 1
                 }
-                if let indexToRemove = selectedFiles.firstIndex(where: { Self.normalizedPathKey($0) == fileKey }) {
+                if let indexToRemove = selectedFiles.firstIndex(where: { normalizedPathKey($0) == fileKey }) {
                     selectedFiles.remove(at: indexToRemove)
                 }
                 doneWeight += fileWeight
@@ -871,10 +868,6 @@ class EmbedViewModel: ObservableObject {
     }
 }
 
-private struct UnsafeAudioBox: @unchecked Sendable {
-    let audio: AWMAudio
-}
-
 private struct EmbedStepOutput: Sendable {
     let evidenceErrorDescription: String?
     let snrDb: Double?
@@ -882,119 +875,7 @@ private struct EmbedStepOutput: Sendable {
     let snrDetail: String?
 }
 
-private enum ProgressProfile {
-    case embed
-    case detect
-}
-
 private extension EmbedViewModel {
-    nonisolated static func buildProgressWeights(for files: [URL]) -> [String: Double] {
-        var weights: [String: Double] = [:]
-        for file in files {
-            let key = normalizedPathKey(file)
-            let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Double.init) ?? 1
-            weights[key] = max(size, 1)
-        }
-        return weights
-    }
-
-    nonisolated static func startProgressPolling(
-        audio: UnsafeAudioBox,
-        expectedOperation: AWMProgressOperationSwift,
-        profile: ProgressProfile,
-        base: Double,
-        span: Double,
-        initialProgress: Double,
-        onProgress: @escaping @MainActor (Double) -> Void
-    ) -> Task<Void, Never> {
-        Task.detached(priority: .userInitiated) {
-            var latest = min(max(initialProgress, 0), 1)
-            var lastPhase = AWMProgressPhaseSwift.idle
-
-            while !Task.isCancelled {
-                if let snapshot = audio.audio.progressSnapshot(),
-                   snapshot.operation == expectedOperation {
-                    let mapped = mapSnapshotProgress(
-                        snapshot,
-                        profile: profile,
-                        previous: latest,
-                        lastPhase: &lastPhase
-                    )
-                    if mapped > latest {
-                        latest = mapped
-                        let scaled = min(1, max(0, base + mapped * span))
-                        await MainActor.run {
-                            onProgress(scaled)
-                        }
-                    }
-                }
-
-                try? await Task.sleep(for: .milliseconds(50))
-            }
-        }
-    }
-
-    nonisolated static func mapSnapshotProgress(
-        _ snapshot: AWMProgressSnapshotSwift,
-        profile: ProgressProfile,
-        previous: Double,
-        lastPhase: inout AWMProgressPhaseSwift
-    ) -> Double {
-        if snapshot.state == .completed {
-            return 1
-        }
-
-        let phaseRange = phaseInterval(for: snapshot.phase, profile: profile)
-        if snapshot.determinate, snapshot.totalUnits > 0 {
-            let ratio = min(max(Double(snapshot.completedUnits) / Double(snapshot.totalUnits), 0), 1)
-            let mapped = phaseRange.lowerBound + (phaseRange.upperBound - phaseRange.lowerBound) * ratio
-            return min(1, max(previous, mapped))
-        }
-
-        let cap = max(
-            phaseRange.lowerBound,
-            phaseRange.upperBound - max((phaseRange.upperBound - phaseRange.lowerBound) * 0.08, 0.01)
-        )
-        let step = snapshot.phase == lastPhase ? 0.0035 : 0.0015
-        lastPhase = snapshot.phase
-        let baseline = max(previous, phaseRange.lowerBound)
-        return min(1, min(cap, baseline + step))
-    }
-
-    nonisolated static func phaseInterval(
-        for phase: AWMProgressPhaseSwift,
-        profile: ProgressProfile
-    ) -> ClosedRange<Double> {
-        switch profile {
-        case .embed:
-            switch phase {
-            case .prepareInput, .precheck:
-                return 0.00...0.15
-            case .core, .routeStep, .merge:
-                return 0.15...0.85
-            case .evidence, .cloneCheck:
-                return 0.85...0.95
-            case .finalize:
-                return 0.95...1.0
-            case .idle:
-                return 0.0...0.0
-            }
-        case .detect:
-            switch phase {
-            case .prepareInput, .precheck:
-                return 0.00...0.10
-            case .core, .routeStep, .merge:
-                return 0.10...0.80
-            case .evidence, .cloneCheck:
-                return 0.80...0.95
-            case .finalize:
-                return 0.95...1.0
-            case .idle:
-                return 0.0...0.0
-            }
-        }
-    }
-
     nonisolated static func performEmbedStep(
         audio: UnsafeAudioBox,
         fileURL: URL,
