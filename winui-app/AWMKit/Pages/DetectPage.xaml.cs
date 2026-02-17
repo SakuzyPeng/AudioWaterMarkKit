@@ -71,23 +71,23 @@ public sealed partial class DetectPage : Page
         switch (result)
         {
             case ContentDialogResult.Primary:
-            {
-                var path = await PickSingleAudioFileAsync();
-                if (!string.IsNullOrWhiteSpace(path))
                 {
-                    ViewModel.SetInputSource(path);
+                    var path = await PickSingleAudioFileAsync();
+                    if (!string.IsNullOrWhiteSpace(path))
+                    {
+                        ViewModel.SetInputSource(path);
+                    }
+                    break;
                 }
-                break;
-            }
             case ContentDialogResult.Secondary:
-            {
-                var path = await PickFolderAsync();
-                if (!string.IsNullOrWhiteSpace(path))
                 {
-                    ViewModel.SetInputSource(path);
+                    var path = await PickFolderAsync();
+                    if (!string.IsNullOrWhiteSpace(path))
+                    {
+                        ViewModel.SetInputSource(path);
+                    }
+                    break;
                 }
-                break;
-            }
         }
     }
 

@@ -894,18 +894,18 @@ public sealed partial class DetectViewModel : ObservableObject
         switch (record.Status)
         {
             case "ok":
-            {
-                var timeText = LocalTimestampDisplay(record);
-                AddLog(
-                    $"{L("成功", "Success")}: {fileName}",
-                    L($"标签: {record.Identity ?? "-"} | 时间: {timeText} | 克隆: {record.CloneCheck ?? "-"}", $"Identity: {record.Identity ?? "-"} | Time: {timeText} | Clone: {record.CloneCheck ?? "-"}"),
-                    true,
-                    false,
-                    record.Id,
-                    LogIconTone.Success,
-                    LogKind.ResultOk);
-                break;
-            }
+                {
+                    var timeText = LocalTimestampDisplay(record);
+                    AddLog(
+                        $"{L("成功", "Success")}: {fileName}",
+                        L($"标签: {record.Identity ?? "-"} | 时间: {timeText} | 克隆: {record.CloneCheck ?? "-"}", $"Identity: {record.Identity ?? "-"} | Time: {timeText} | Clone: {record.CloneCheck ?? "-"}"),
+                        true,
+                        false,
+                        record.Id,
+                        LogIconTone.Success,
+                        LogKind.ResultOk);
+                    break;
+                }
             case "not_found":
                 AddLog($"{L("无标记", "Not found")}: {fileName}", L("未检测到水印", "No watermark detected"), false, false, record.Id, LogIconTone.Warning, LogKind.ResultNotFound);
                 break;
