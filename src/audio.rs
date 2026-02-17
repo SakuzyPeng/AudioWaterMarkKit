@@ -40,7 +40,6 @@ const MIN_PATTERN_SCORE: f32 = 1.0;
 
 /// 媒体解码能力摘要（用于 doctor/UI 状态）.
 #[derive(Debug, Clone, Copy)]
-#[allow(clippy::module_name_repetitions)]
 pub struct MediaCapabilities {
     /// 当前媒体后端名称.
     pub backend: &'static str,

@@ -15,8 +15,6 @@ pub struct AudioProof {
     pub chromaprint: Vec<u32>,
     pub fp_config_id: u8,
 }
-
-#[allow(clippy::module_name_repetitions)]
 /// # Errors
 /// 当输入无法解码、样本不合法或指纹计算失败时返回错误。.
 pub fn build_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {

@@ -20,7 +20,6 @@ const SNR_MIN_OVERLAP_SAMPLES: usize = 4_800;
 static FFMPEG_INIT: OnceLock<std::result::Result<(), String>> = OnceLock::new();
 
 #[derive(Debug, Clone)]
-#[allow(clippy::module_name_repetitions)]
 pub struct Analysis {
     pub snr_db: Option<f64>,
     pub status: String,
@@ -53,8 +52,6 @@ impl Analysis {
         }
     }
 }
-
-#[allow(clippy::module_name_repetitions)]
 pub fn analyze<P: AsRef<Path>>(input: P, output: P) -> Analysis {
     #[cfg(not(feature = "ffmpeg-decode"))]
     {

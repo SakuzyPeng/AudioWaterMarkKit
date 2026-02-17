@@ -33,6 +33,8 @@
 //! println!("Time: {}", result.timestamp_utc);
 //! ```
 
+#![deny(clippy::module_name_repetitions)]
+
 pub mod audio;
 /// Internal module.
 pub(crate) mod bundled;

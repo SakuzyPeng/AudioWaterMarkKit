@@ -1,5 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
-
 pub mod audio_engine;
 pub mod audio_proof;
 pub mod error;

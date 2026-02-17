@@ -376,7 +376,6 @@ impl SampleFormat {
 
 /// 多声道音频数据.
 #[derive(Debug, Clone)]
-#[allow(clippy::module_name_repetitions)]
 pub struct AudioBuffer {
     /// 每个声道的样本数据 [channel][sample]
     /// 统一存储为 i32，便于处理.
