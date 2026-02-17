@@ -4,7 +4,6 @@
 
 // FFI 模块需要 unsafe 代码
 #![allow(unsafe_code)]
-#![allow(clippy::unwrap_used)]
 
 use std::ffi::{c_char, CStr};
 use std::ptr;

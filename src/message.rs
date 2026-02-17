@@ -126,7 +126,7 @@ pub fn encode_with_timestamp_and_slot(
     msg[5..10].copy_from_slice(&tag.to_packed());
 
     // HMAC (6 bytes)
-    let mac = compute_hmac(key, &msg[..10]);
+    let mac = compute_hmac(key, &msg[..10])?;
     msg[10..16].copy_from_slice(&mac);
 
     Ok(msg)
@@ -162,7 +162,7 @@ pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
     }
 
     // 验证 HMAC
-    let expected_mac = compute_hmac(key, &data[..10]);
+    let expected_mac = compute_hmac(key, &data[..10])?;
     if !constant_time_eq(&data[10..16], &expected_mac) {
         return Err(Error::HmacMismatch);
     }
@@ -195,7 +195,9 @@ pub fn verify(data: &[u8], key: &[u8]) -> bool {
         return false;
     }
 
-    let expected_mac = compute_hmac(key, &data[..10]);
+    let Ok(expected_mac) = compute_hmac(key, &data[..10]) else {
+        return false;
+    };
     constant_time_eq(&data[10..16], &expected_mac)
 }
 
@@ -250,16 +252,15 @@ fn parse_message_fields(data: &[u8]) -> Result<MessageResult> {
 }
 
 /// 计算 HMAC-SHA256 并截取前 6 字节.
-fn compute_hmac(key: &[u8], data: &[u8]) -> [u8; HMAC_LEN] {
-    // HMAC-SHA256 接受任意长度密钥，new_from_slice 不会失败
-    #[allow(clippy::expect_used)]
-    let mut mac = HmacSha256::new_from_slice(key).expect("HMAC accepts any key length");
+fn compute_hmac(key: &[u8], data: &[u8]) -> Result<[u8; HMAC_LEN]> {
+    let mut mac = HmacSha256::new_from_slice(key)
+        .map_err(|_| Error::InvalidInput("invalid HMAC key length".to_string()))?;
     mac.update(data);
     let result = mac.finalize().into_bytes();
 
     let mut out = [0u8; HMAC_LEN];
     out.copy_from_slice(&result[..HMAC_LEN]);
-    out
+    Ok(out)
 }
 
 /// 常量时间比较.
@@ -300,32 +301,39 @@ const fn unpack_timestamp_v2(packed_timestamp: u32) -> (u32, u8) {
 /// 获取当前 UTC Unix 分钟数.
 fn current_utc_minutes() -> u32 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    // 系统时间在 UNIX_EPOCH 之后是合理假设
-    #[allow(clippy::unwrap_used)]
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+        .map_or(0, |duration| duration.as_secs());
     #[allow(clippy::cast_possible_truncation)]
     let minutes = (secs / 60) as u32;
     minutes
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
     const TEST_KEY: &[u8] = b"test-key-32-bytes-for-hmac-test!";
 
+    macro_rules! ok_or_return {
+        ($expr:expr) => {{
+            let result = $expr;
+            assert!(result.is_ok());
+            let Ok(value) = result else {
+                return;
+            };
+            value
+        }};
+    }
+
     #[test]
     fn test_encode_decode() {
-        let tag = Tag::new("SAKUZY").unwrap();
-        let msg = encode(CURRENT_VERSION, &tag, TEST_KEY).unwrap();
+        let tag = ok_or_return!(Tag::new("SAKUZY"));
+        let msg = ok_or_return!(encode(CURRENT_VERSION, &tag, TEST_KEY));
 
         assert_eq!(msg.len(), 16);
 
-        let result = decode(&msg, TEST_KEY).unwrap();
+        let result = ok_or_return!(decode(&msg, TEST_KEY));
         assert_eq!(result.version, CURRENT_VERSION);
         assert_eq!(result.identity(), "SAKUZY");
         assert_eq!(result.key_slot, 0);
@@ -333,11 +341,16 @@ mod tests {
 
     #[test]
     fn test_fixed_timestamp() {
-        let tag = Tag::new("TEST").unwrap();
+        let tag = ok_or_return!(Tag::new("TEST"));
         let ts_minutes = 29_049_600_u32; // 2026-01-18 00:00 UTC
 
-        let msg = encode_with_timestamp(CURRENT_VERSION, &tag, TEST_KEY, ts_minutes).unwrap();
-        let result = decode(&msg, TEST_KEY).unwrap();
+        let msg = ok_or_return!(encode_with_timestamp(
+            CURRENT_VERSION,
+            &tag,
+            TEST_KEY,
+            ts_minutes
+        ));
+        let result = ok_or_return!(decode(&msg, TEST_KEY));
 
         assert_eq!(result.timestamp_minutes, ts_minutes);
         assert_eq!(result.timestamp_utc, u64::from(ts_minutes) * 60);
@@ -346,8 +359,8 @@ mod tests {
 
     #[test]
     fn test_wrong_key() {
-        let tag = Tag::new("SAKUZY").unwrap();
-        let msg = encode(CURRENT_VERSION, &tag, TEST_KEY).unwrap();
+        let tag = ok_or_return!(Tag::new("SAKUZY"));
+        let msg = ok_or_return!(encode(CURRENT_VERSION, &tag, TEST_KEY));
 
         let wrong_key = b"wrong-key-32-bytes-for-hmac!!!!";
         let result = decode(&msg, wrong_key);
@@ -357,10 +370,10 @@ mod tests {
 
     #[test]
     fn test_decode_unverified_with_wrong_key_message() {
-        let tag = Tag::new("SAKUZY").unwrap();
-        let msg = encode(CURRENT_VERSION, &tag, TEST_KEY).unwrap();
+        let tag = ok_or_return!(Tag::new("SAKUZY"));
+        let msg = ok_or_return!(encode(CURRENT_VERSION, &tag, TEST_KEY));
 
-        let result = decode_unverified(&msg).unwrap();
+        let result = ok_or_return!(decode_unverified(&msg));
         assert_eq!(result.version, CURRENT_VERSION);
         assert_eq!(result.identity(), "SAKUZY");
         assert_eq!(result.key_slot, 0);
@@ -368,8 +381,8 @@ mod tests {
 
     #[test]
     fn test_tampered_message() {
-        let tag = Tag::new("SAKUZY").unwrap();
-        let mut msg = encode(CURRENT_VERSION, &tag, TEST_KEY).unwrap();
+        let tag = ok_or_return!(Tag::new("SAKUZY"));
+        let mut msg = ok_or_return!(encode(CURRENT_VERSION, &tag, TEST_KEY));
 
         // 篡改 timestamp
         msg[2] ^= 0x01;
@@ -380,8 +393,8 @@ mod tests {
 
     #[test]
     fn test_verify() {
-        let tag = Tag::new("SAKUZY").unwrap();
-        let msg = encode(CURRENT_VERSION, &tag, TEST_KEY).unwrap();
+        let tag = ok_or_return!(Tag::new("SAKUZY"));
+        let msg = ok_or_return!(encode(CURRENT_VERSION, &tag, TEST_KEY));
 
         assert!(verify(&msg, TEST_KEY));
         assert!(!verify(&msg, b"wrong-key"));
@@ -389,10 +402,12 @@ mod tests {
 
     #[test]
     fn test_message_format_v1() {
-        let tag = Tag::new("ABCDEFG").unwrap();
+        let tag = ok_or_return!(Tag::new("ABCDEFG"));
         let ts_minutes = 0x0102_0304_u32;
 
-        let msg = encode_with_timestamp(VERSION_V1, &tag, TEST_KEY, ts_minutes).unwrap();
+        let msg = ok_or_return!(encode_with_timestamp(
+            VERSION_V1, &tag, TEST_KEY, ts_minutes
+        ));
 
         // 验证结构
         assert_eq!(msg[0], VERSION_V1); // version
@@ -403,10 +418,12 @@ mod tests {
 
     #[test]
     fn test_decode_v1_compat() {
-        let tag = Tag::new("SAKUZY").unwrap();
+        let tag = ok_or_return!(Tag::new("SAKUZY"));
         let ts_minutes = 12_345_678_u32;
-        let msg = encode_with_timestamp(VERSION_V1, &tag, TEST_KEY, ts_minutes).unwrap();
-        let result = decode(&msg, TEST_KEY).unwrap();
+        let msg = ok_or_return!(encode_with_timestamp(
+            VERSION_V1, &tag, TEST_KEY, ts_minutes
+        ));
+        let result = ok_or_return!(decode(&msg, TEST_KEY));
         assert_eq!(result.version, VERSION_V1);
         assert_eq!(result.timestamp_minutes, ts_minutes);
         assert_eq!(result.key_slot, 0);
@@ -414,7 +431,7 @@ mod tests {
 
     #[test]
     fn test_v2_timestamp_key_slot_pack_unpack() {
-        let packed = pack_timestamp_v2(0x07ff_ffff, 31).unwrap();
+        let packed = ok_or_return!(pack_timestamp_v2(0x07ff_ffff, 31));
         let (minutes, slot) = unpack_timestamp_v2(packed);
         assert_eq!(minutes, 0x07ff_ffff);
         assert_eq!(slot, 31);
@@ -422,11 +439,12 @@ mod tests {
 
     #[test]
     fn test_v2_encode_non_zero_key_slot() {
-        let tag = Tag::new("TEST").unwrap();
+        let tag = ok_or_return!(Tag::new("TEST"));
         let ts_minutes = 0x07ff_ffff;
-        let msg =
-            encode_with_timestamp_and_slot(VERSION_V2, &tag, TEST_KEY, ts_minutes, 31).unwrap();
-        let result = decode(&msg, TEST_KEY).unwrap();
+        let msg = ok_or_return!(encode_with_timestamp_and_slot(
+            VERSION_V2, &tag, TEST_KEY, ts_minutes, 31
+        ));
+        let result = ok_or_return!(decode(&msg, TEST_KEY));
         assert_eq!(result.version, VERSION_V2);
         assert_eq!(result.timestamp_minutes, ts_minutes);
         assert_eq!(result.key_slot, 31);
@@ -434,9 +452,12 @@ mod tests {
 
     #[test]
     fn test_v2_timestamp_range_limit() {
-        let tag = Tag::new("TEST").unwrap();
-        let err = encode_with_timestamp(VERSION_V2, &tag, TEST_KEY, MAX_TIMESTAMP_V2_MINUTES + 1)
-            .unwrap_err();
+        let tag = ok_or_return!(Tag::new("TEST"));
+        let err = encode_with_timestamp(VERSION_V2, &tag, TEST_KEY, MAX_TIMESTAMP_V2_MINUTES + 1);
+        assert!(err.is_err());
+        let Some(err) = err.err() else {
+            return;
+        };
         assert!(matches!(err, Error::InvalidInput(_)));
     }
 }

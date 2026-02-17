@@ -315,19 +315,28 @@ fn hash_to_identity(hash: &[u8]) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 
+    macro_rules! ok_or_return {
+        ($expr:expr) => {{
+            let result = $expr;
+            assert!(result.is_ok());
+            let Ok(value) = result else {
+                return;
+            };
+            value
+        }};
+    }
+
     fn temp_path() -> PathBuf {
         let mut path = std::env::temp_dir();
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
+            .map_or(0, |duration| duration.as_nanos());
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         path.push(format!("awmkit-tags-{nanos}-{id}.db"));
         path
@@ -336,18 +345,18 @@ mod tests {
     #[test]
     fn tag_store_save_list_remove_clear() {
         let path = temp_path();
-        let mut store = TagStore::load_at(path.clone()).unwrap();
-        let tag = TagStore::suggest("alice").unwrap();
-        store.save("alice", &tag, false).unwrap();
+        let mut store = ok_or_return!(TagStore::load_at(path.clone()));
+        let tag = ok_or_return!(TagStore::suggest("alice"));
+        assert!(store.save("alice", &tag, false).is_ok());
         assert_eq!(store.list().len(), 1);
 
-        store.remove("alice").unwrap();
+        assert!(store.remove("alice").is_ok());
         assert_eq!(store.list().len(), 0);
 
-        store.save("bob", &tag, false).unwrap();
+        assert!(store.save("bob", &tag, false).is_ok());
         assert_eq!(store.list().len(), 1);
 
-        store.clear().unwrap();
+        assert!(store.clear().is_ok());
         assert!(store.list().is_empty());
         let _ = fs::remove_file(path);
     }
@@ -355,12 +364,16 @@ mod tests {
     #[test]
     fn tag_store_detects_conflict() {
         let path = temp_path();
-        let mut store = TagStore::load_at(path.clone()).unwrap();
-        let tag1 = TagStore::suggest("alice").unwrap();
-        let tag2 = Tag::new("TESTA").unwrap();
+        let mut store = ok_or_return!(TagStore::load_at(path.clone()));
+        let tag1 = ok_or_return!(TagStore::suggest("alice"));
+        let tag2 = ok_or_return!(Tag::new("TESTA"));
 
-        store.save("alice", &tag1, false).unwrap();
-        let err = store.save("alice", &tag2, false).unwrap_err();
+        assert!(store.save("alice", &tag1, false).is_ok());
+        let err = store.save("alice", &tag2, false);
+        assert!(err.is_err());
+        let Some(err) = err.err() else {
+            return;
+        };
         assert!(matches!(err, AppError::MappingExists { .. }));
         let _ = fs::remove_file(path);
     }

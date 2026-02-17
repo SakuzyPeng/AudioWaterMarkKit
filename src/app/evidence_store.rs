@@ -494,19 +494,28 @@ fn now_ts() -> Result<u64> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 
+    macro_rules! ok_or_return {
+        ($expr:expr) => {{
+            let result = $expr;
+            assert!(result.is_ok());
+            let Ok(value) = result else {
+                return;
+            };
+            value
+        }};
+    }
+
     fn temp_db_path() -> PathBuf {
         let mut path = std::env::temp_dir();
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
+            .map_or(0, |duration| duration.as_nanos());
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         path.push(format!("awmkit-evidence-{nanos}-{id}.db"));
         path
@@ -538,20 +547,20 @@ mod tests {
     fn chromaprint_blob_roundtrip() {
         let src = vec![0u32, 1, 42, u32::MAX];
         let blob = encode_chromaprint_blob(&src);
-        let decoded = decode_chromaprint_blob(&blob).unwrap();
+        let decoded = ok_or_return!(decode_chromaprint_blob(&blob));
         assert_eq!(src, decoded);
     }
 
     #[test]
     fn unique_constraint_ignores_duplicates() {
         let db_path = temp_db_path();
-        let store = EvidenceStore::load_at(db_path.clone()).unwrap();
+        let store = ok_or_return!(EvidenceStore::load_at(db_path.clone()));
         let first = sample_evidence("TESTER", 0, "abc");
         let second = sample_evidence("TESTER", 0, "abc");
-        assert!(store.insert(&first).unwrap());
-        assert!(!store.insert(&second).unwrap());
+        assert!(ok_or_return!(store.insert(&first)));
+        assert!(!ok_or_return!(store.insert(&second)));
 
-        let candidates = store.list_candidates("TESTER", 0).unwrap();
+        let candidates = ok_or_return!(store.list_candidates("TESTER", 0));
         assert_eq!(candidates.len(), 1);
         let _ = fs::remove_file(db_path);
     }
@@ -559,15 +568,15 @@ mod tests {
     #[test]
     fn list_candidates_filters_by_identity_and_slot() {
         let db_path = temp_db_path();
-        let store = EvidenceStore::load_at(db_path.clone()).unwrap();
+        let store = ok_or_return!(EvidenceStore::load_at(db_path.clone()));
         let target = sample_evidence("TARGET", 2, "s1");
         let other_id = sample_evidence("OTHER", 2, "s2");
         let other_slot = sample_evidence("TARGET", 1, "s3");
-        store.insert(&target).unwrap();
-        store.insert(&other_id).unwrap();
-        store.insert(&other_slot).unwrap();
+        assert!(ok_or_return!(store.insert(&target)));
+        assert!(ok_or_return!(store.insert(&other_id)));
+        assert!(ok_or_return!(store.insert(&other_slot)));
 
-        let candidates = store.list_candidates("TARGET", 2).unwrap();
+        let candidates = ok_or_return!(store.list_candidates("TARGET", 2));
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].identity, "TARGET");
         assert_eq!(candidates[0].key_slot, 2);
@@ -577,22 +586,20 @@ mod tests {
     #[test]
     fn list_filtered_combines_identity_tag_and_slot() {
         let db_path = temp_db_path();
-        let store = EvidenceStore::load_at(db_path.clone()).unwrap();
+        let store = ok_or_return!(EvidenceStore::load_at(db_path.clone()));
 
         let mut target = sample_evidence("TARGET", 2, "a1");
         target.tag = "TAG_A".to_string();
-        store.insert(&target).unwrap();
+        assert!(ok_or_return!(store.insert(&target)));
 
         let mut other_tag = sample_evidence("TARGET", 2, "a2");
         other_tag.tag = "TAG_B".to_string();
-        store.insert(&other_tag).unwrap();
+        assert!(ok_or_return!(store.insert(&other_tag)));
 
         let other_slot = sample_evidence("TARGET", 1, "a3");
-        store.insert(&other_slot).unwrap();
+        assert!(ok_or_return!(store.insert(&other_slot)));
 
-        let list = store
-            .list_filtered(Some("TARGET"), Some("TAG_A"), Some(2), 50)
-            .unwrap();
+        let list = ok_or_return!(store.list_filtered(Some("TARGET"), Some("TAG_A"), Some(2), 50));
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].tag, "TAG_A");
         assert_eq!(list[0].key_slot, 2);
@@ -602,27 +609,27 @@ mod tests {
     #[test]
     fn get_and_remove_by_id_work() {
         let db_path = temp_db_path();
-        let store = EvidenceStore::load_at(db_path.clone()).unwrap();
+        let store = ok_or_return!(EvidenceStore::load_at(db_path.clone()));
         let one = sample_evidence("ONE", 0, "x1");
-        store.insert(&one).unwrap();
+        assert!(ok_or_return!(store.insert(&one)));
 
-        let listed = store.list_filtered(Some("ONE"), None, Some(0), 10).unwrap();
+        let listed = ok_or_return!(store.list_filtered(Some("ONE"), None, Some(0), 10));
         assert_eq!(listed.len(), 1);
         let id = listed[0].id;
 
-        let found = store.get_by_id(id).unwrap();
+        let found = ok_or_return!(store.get_by_id(id));
         assert!(found.is_some());
 
-        assert!(store.remove_by_id(id).unwrap());
-        assert!(!store.remove_by_id(id).unwrap());
-        assert!(store.get_by_id(id).unwrap().is_none());
+        assert!(ok_or_return!(store.remove_by_id(id)));
+        assert!(!ok_or_return!(store.remove_by_id(id)));
+        assert!(ok_or_return!(store.get_by_id(id)).is_none());
         let _ = fs::remove_file(db_path);
     }
 
     #[test]
     fn clear_filtered_and_count_all_work() {
         let db_path = temp_db_path();
-        let store = EvidenceStore::load_at(db_path.clone()).unwrap();
+        let store = ok_or_return!(EvidenceStore::load_at(db_path.clone()));
 
         let mut a = sample_evidence("A", 0, "c1");
         a.tag = "T1".to_string();
@@ -630,16 +637,16 @@ mod tests {
         b.tag = "T1".to_string();
         let mut c = sample_evidence("B", 0, "c3");
         c.tag = "T2".to_string();
-        store.insert(&a).unwrap();
-        store.insert(&b).unwrap();
-        store.insert(&c).unwrap();
+        assert!(ok_or_return!(store.insert(&a)));
+        assert!(ok_or_return!(store.insert(&b)));
+        assert!(ok_or_return!(store.insert(&c)));
 
-        assert_eq!(store.count_all().unwrap(), 3);
-        let removed = store.clear_filtered(Some("A"), Some("T1"), None).unwrap();
+        assert_eq!(ok_or_return!(store.count_all()), 3);
+        let removed = ok_or_return!(store.clear_filtered(Some("A"), Some("T1"), None));
         assert_eq!(removed, 2);
-        assert_eq!(store.count_all().unwrap(), 1);
+        assert_eq!(ok_or_return!(store.count_all()), 1);
 
-        let removed_none = store.clear_filtered(Some("A"), Some("T1"), None).unwrap();
+        let removed_none = ok_or_return!(store.clear_filtered(Some("A"), Some("T1"), None));
         assert_eq!(removed_none, 0);
         let _ = fs::remove_file(db_path);
     }
@@ -647,20 +654,20 @@ mod tests {
     #[test]
     fn usage_by_slot_and_key_id_filters_rows() {
         let db_path = temp_db_path();
-        let store = EvidenceStore::load_at(db_path.clone()).unwrap();
+        let store = ok_or_return!(EvidenceStore::load_at(db_path.clone()));
 
         let mut key_a = sample_evidence("TARGET", 0, "k1");
         key_a.key_id = "AAAAAAAAAA".to_string();
-        store.insert(&key_a).unwrap();
+        assert!(ok_or_return!(store.insert(&key_a)));
 
         let mut key_b = sample_evidence("TARGET", 0, "k2");
         key_b.key_id = "BBBBBBBBBB".to_string();
-        store.insert(&key_b).unwrap();
+        assert!(ok_or_return!(store.insert(&key_b)));
 
-        let only_a = store.usage_by_slot_and_key_id(0, "AAAAAAAAAA").unwrap();
+        let only_a = ok_or_return!(store.usage_by_slot_and_key_id(0, "AAAAAAAAAA"));
         assert_eq!(only_a.count, 1);
 
-        let all = store.usage_by_slot(0).unwrap();
+        let all = ok_or_return!(store.usage_by_slot(0));
         assert_eq!(all.count, 2);
         let _ = fs::remove_file(db_path);
     }
@@ -668,17 +675,17 @@ mod tests {
     #[test]
     fn duplicate_insert_can_promote_forced_flag() {
         let db_path = temp_db_path();
-        let store = EvidenceStore::load_at(db_path.clone()).unwrap();
+        let store = ok_or_return!(EvidenceStore::load_at(db_path.clone()));
 
         let mut normal = sample_evidence("PROMOTE", 3, "z1");
         normal.is_forced_embed = false;
-        assert!(store.insert(&normal).unwrap());
+        assert!(ok_or_return!(store.insert(&normal)));
 
         let mut forced = sample_evidence("PROMOTE", 3, "z1");
         forced.is_forced_embed = true;
-        assert!(store.insert(&forced).unwrap());
+        assert!(ok_or_return!(store.insert(&forced)));
 
-        let rows = store.list_candidates("PROMOTE", 3).unwrap();
+        let rows = ok_or_return!(store.list_candidates("PROMOTE", 3));
         assert_eq!(rows.len(), 1);
         assert!(rows[0].is_forced_embed);
 

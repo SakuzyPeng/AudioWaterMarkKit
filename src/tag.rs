@@ -13,6 +13,13 @@ pub struct Tag {
 }
 
 impl Tag {
+    /// Internal helper function.
+    const fn first_seven_chars(chars: [u8; 8]) -> [u8; 7] {
+        [
+            chars[0], chars[1], chars[2], chars[3], chars[4], chars[5], chars[6],
+        ]
+    }
+
     /// 从身份字符串创建 Tag（自动补齐 + 计算校验位）.
     ///
     /// # Example
@@ -59,8 +66,6 @@ impl Tag {
     /// # Errors
     /// 当长度不是 8、包含非法字符或校验位不匹配时返回错误。.
     ///
-    /// # Panics
-    /// 不会主动 panic；内部 `unwrap` 依赖固定长度切片不变式。.
     pub fn parse(s: &str) -> Result<Self> {
         let s = s.to_ascii_uppercase();
 
@@ -84,9 +89,7 @@ impl Tag {
 
         // 验证校验位
         if !tag.verify() {
-            // chars 长度固定为 8，切片 [..7] 必定成功
-            #[allow(clippy::unwrap_used)]
-            let expected = calc_checksum(chars[..7].try_into().unwrap());
+            let expected = calc_checksum(Self::first_seven_chars(chars));
             return Err(Error::ChecksumMismatch {
                 expected: expected as char,
                 got: chars[7] as char,
@@ -101,8 +104,6 @@ impl Tag {
     /// # Errors
     /// 当 packed 数据包含非法索引或校验位不匹配时返回错误。.
     ///
-    /// # Panics
-    /// 不会主动 panic；内部 `unwrap` 依赖固定长度切片不变式。.
     pub fn from_packed(data: &[u8; 5]) -> Result<Self> {
         let mut bits: u64 = 0;
         for &b in data {
@@ -120,9 +121,7 @@ impl Tag {
         let tag = Self { chars };
 
         if !tag.verify() {
-            // chars 长度固定为 8，切片 [..7] 必定成功
-            #[allow(clippy::unwrap_used)]
-            let expected = calc_checksum(chars[..7].try_into().unwrap());
+            let expected = calc_checksum(Self::first_seven_chars(chars));
             return Err(Error::ChecksumMismatch {
                 expected: expected as char,
                 got: chars[7] as char,
@@ -134,15 +133,11 @@ impl Tag {
 
     /// 编码为 5 bytes packed 数据.
     ///
-    /// # Panics
-    /// 不会主动 panic；内部 `unwrap` 依赖 `Tag` 已完成字符集校验的不变式。.
     #[must_use]
     pub fn to_packed(&self) -> [u8; 5] {
         let mut bits: u64 = 0;
         for &c in &self.chars {
-            // 字符已验证在 CHARSET 中，char_to_index 必定成功
-            #[allow(clippy::unwrap_used)]
-            let idx = u64::from(char_to_index(c).unwrap());
+            let idx = u64::from(char_to_index(c).unwrap_or(0));
             bits = (bits << 5) | idx;
         }
 
@@ -158,37 +153,28 @@ impl Tag {
 
     /// 验证校验位.
     ///
-    /// # Panics
-    /// 不会主动 panic；内部 `unwrap` 依赖固定长度切片不变式。.
     #[must_use]
     pub fn verify(&self) -> bool {
-        // chars 长度固定为 8，切片 [..7] 必定成功
-        #[allow(clippy::unwrap_used)]
-        let expected = calc_checksum(self.chars[..7].try_into().unwrap());
+        let expected = calc_checksum(Self::first_seven_chars(self.chars));
         self.chars[7] == expected
     }
 
     /// 获取身份部分（去除尾部 _）.
-    ///
-    /// # Panics
-    /// 不会主动 panic；内部 `from_utf8(...).unwrap()` 依赖 `Tag` 仅包含 ASCII 字符。.
     #[must_use]
     pub fn identity(&self) -> &str {
-        // 所有字符都是 ASCII，from_utf8 必定成功
-        #[allow(clippy::unwrap_used)]
-        let s = std::str::from_utf8(&self.chars[..7]).unwrap();
+        let Ok(s) = std::str::from_utf8(&self.chars[..7]) else {
+            return "";
+        };
         s.trim_end_matches('_')
     }
 
     /// 获取完整 8 字符 Tag.
-    ///
-    /// # Panics
-    /// 不会主动 panic；内部 `from_utf8(...).unwrap()` 依赖 `Tag` 仅包含 ASCII 字符。.
     #[must_use]
-    pub fn as_str(&self) -> &str {
-        // 所有字符都是 ASCII，from_utf8 必定成功
-        #[allow(clippy::unwrap_used)]
-        std::str::from_utf8(&self.chars).unwrap()
+    pub const fn as_str(&self) -> &str {
+        match std::str::from_utf8(&self.chars) {
+            Ok(s) => s,
+            Err(_) => "",
+        }
     }
 
     /// 获取字节数组.
@@ -233,13 +219,23 @@ fn calc_checksum(tag7: [u8; 7]) -> u8 {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
+    macro_rules! ok_or_return {
+        ($expr:expr) => {{
+            let result = $expr;
+            assert!(result.is_ok());
+            let Ok(value) = result else {
+                return;
+            };
+            value
+        }};
+    }
+
     #[test]
     fn test_tag_new() {
-        let tag = Tag::new("SAKUZY").unwrap();
+        let tag = ok_or_return!(Tag::new("SAKUZY"));
         assert_eq!(tag.identity(), "SAKUZY");
         assert_eq!(tag.chars[6], b'_'); // 自动补齐
         assert!(tag.verify());
@@ -247,22 +243,22 @@ mod tests {
 
     #[test]
     fn test_tag_new_short() {
-        let tag = Tag::new("AB").unwrap();
+        let tag = ok_or_return!(Tag::new("AB"));
         assert_eq!(tag.identity(), "AB");
         assert!(tag.verify());
     }
 
     #[test]
     fn test_tag_new_full() {
-        let tag = Tag::new("ABCDEFG").unwrap();
+        let tag = ok_or_return!(Tag::new("ABCDEFG"));
         assert_eq!(tag.identity(), "ABCDEFG");
         assert!(tag.verify());
     }
 
     #[test]
     fn test_tag_parse() {
-        let tag1 = Tag::new("SAKUZY").unwrap();
-        let tag2 = Tag::parse(tag1.as_str()).unwrap();
+        let tag1 = ok_or_return!(Tag::new("SAKUZY"));
+        let tag2 = ok_or_return!(Tag::parse(tag1.as_str()));
         assert_eq!(tag1, tag2);
     }
 
@@ -274,18 +270,18 @@ mod tests {
 
     #[test]
     fn test_case_insensitive() {
-        let tag1 = Tag::new("sakuzy").unwrap();
-        let tag2 = Tag::new("SAKUZY").unwrap();
+        let tag1 = ok_or_return!(Tag::new("sakuzy"));
+        let tag2 = ok_or_return!(Tag::new("SAKUZY"));
         assert_eq!(tag1, tag2);
     }
 
     #[test]
     fn test_packed_round_trip() {
-        let tag = Tag::new("SAKUZY").unwrap();
+        let tag = ok_or_return!(Tag::new("SAKUZY"));
         let packed = tag.to_packed();
         assert_eq!(packed.len(), 5);
 
-        let tag2 = Tag::from_packed(&packed).unwrap();
+        let tag2 = ok_or_return!(Tag::from_packed(&packed));
         assert_eq!(tag, tag2);
     }
 

@@ -366,7 +366,6 @@ fn normalize_layout(layout: ffmpeg::ChannelLayout, channels: u16) -> ffmpeg::Cha
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

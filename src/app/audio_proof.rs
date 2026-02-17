@@ -163,7 +163,6 @@ fn sample_to_i16(sample: i32, sample_format: SampleFormat) -> i16 {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::multichannel::SampleFormat;
@@ -189,7 +188,8 @@ mod tests {
         let mp3_like_path = unique_temp_path("proof_src.mp3");
 
         create_test_wav(&wav_path);
-        std::fs::copy(&wav_path, &mp3_like_path).unwrap();
+        let copied = std::fs::copy(&wav_path, &mp3_like_path);
+        assert!(copied.is_ok());
 
         match build_audio_proof(&mp3_like_path) {
             Ok(proof) => {
@@ -229,14 +229,18 @@ mod tests {
             bits_per_sample: 16,
             sample_format: hound::SampleFormat::Int,
         };
-        let mut writer = hound::WavWriter::create(path, spec).unwrap();
+        let writer = hound::WavWriter::create(path, spec);
+        assert!(writer.is_ok());
+        let Ok(mut writer) = writer else {
+            return;
+        };
         for i in 0..(44_100_i32 * 6) {
             let centered = (i % 1024) - 512;
             let sample = i16::try_from(centered * 48).unwrap_or(0);
-            writer.write_sample(sample).unwrap();
-            writer.write_sample(sample).unwrap();
+            assert!(writer.write_sample(sample).is_ok());
+            assert!(writer.write_sample(sample).is_ok());
         }
-        writer.finalize().unwrap();
+        assert!(writer.finalize().is_ok());
     }
 
     fn unique_temp_path(file_name: &str) -> PathBuf {
