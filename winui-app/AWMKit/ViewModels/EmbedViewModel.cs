@@ -640,7 +640,12 @@ public sealed partial class EmbedViewModel : ObservableObject
             false,
             LogIconTone.Info);
 
-        var initialTotal = Math.Max(SelectedFiles.Count, 1);
+        var initialQueue = SelectedFiles.ToList();
+        var initialTotal = Math.Max(initialQueue.Count, 1);
+        var weightByFile = BuildProgressWeights(initialQueue);
+        var totalWeight = Math.Max(weightByFile.Values.Sum(), 1.0);
+        var doneWeight = 0.0;
+        var uiContext = SynchronizationContext.Current;
         var successCount = 0;
         var failureCount = 0;
         var skippedFiles = new List<string>();
@@ -663,12 +668,39 @@ public sealed partial class EmbedViewModel : ObservableObject
 
             var inputPath = SelectedFiles[queueIndex];
             var inputKey = NormalizedPathKey(inputPath);
+            var fileWeight = weightByFile.TryGetValue(inputKey, out var resolvedWeight) ? resolvedWeight : 1.0;
+            var fileProgress = 0.0;
+            void UpdateFileProgress(double candidate)
+            {
+                var clamped = Math.Clamp(candidate, 0, 1);
+                if (clamped <= fileProgress)
+                {
+                    return;
+                }
+
+                fileProgress = clamped;
+                Progress = Math.Min(1, (doneWeight + (fileWeight * fileProgress)) / totalWeight);
+            }
+
+            void DispatchFileProgress(double candidate)
+            {
+                if (uiContext is null)
+                {
+                    UpdateFileProgress(candidate);
+                    return;
+                }
+
+                uiContext.Post(_ => UpdateFileProgress(candidate), null);
+            }
+
             CurrentProcessingFile = Path.GetFileName(inputPath);
             CurrentProcessingIndex = queueIndex;
+            UpdateFileProgress(0.02);
 
             (bool detected, AwmError error, bool admPrecheckSkipped) precheckResult;
             try
             {
+                UpdateFileProgress(0.06);
                 precheckResult = await RunCancelableNativeCallAsync(() =>
                 {
                     var detect = AwmBridge.DetectAudioMultichannelDetailed(inputPath, layout);
@@ -708,7 +740,8 @@ public sealed partial class EmbedViewModel : ObservableObject
                 {
                     SelectedFiles.RemoveAt(queueIndex);
                 }
-                Progress = (processed + 1) / (double)initialTotal;
+                doneWeight += fileWeight;
+                Progress = Math.Min(1, doneWeight / totalWeight);
                 await Task.Yield();
                 continue;
             }
@@ -727,7 +760,8 @@ public sealed partial class EmbedViewModel : ObservableObject
                 {
                     SelectedFiles.RemoveAt(queueIndex);
                 }
-                Progress = (processed + 1) / (double)initialTotal;
+                doneWeight += fileWeight;
+                Progress = Math.Min(1, doneWeight / totalWeight);
                 await Task.Yield();
                 continue;
             }
@@ -765,10 +799,13 @@ public sealed partial class EmbedViewModel : ObservableObject
                     false,
                     LogIconTone.Warning,
                     LogKind.ResultNotFound);
-                Progress = (processed + 1) / (double)initialTotal;
+                doneWeight += fileWeight;
+                Progress = Math.Min(1, doneWeight / totalWeight);
                 await Task.Yield();
                 continue;
             }
+
+            UpdateFileProgress(0.15);
 
             string outputPath;
             try
@@ -783,7 +820,8 @@ public sealed partial class EmbedViewModel : ObservableObject
                 {
                     SelectedFiles.RemoveAt(queueIndex);
                 }
-                Progress = (processed + 1) / (double)initialTotal;
+                doneWeight += fileWeight;
+                Progress = Math.Min(1, doneWeight / totalWeight);
                 await Task.Yield();
                 continue;
             }
@@ -791,6 +829,9 @@ public sealed partial class EmbedViewModel : ObservableObject
             (AwmError embedError, AwmError evidenceError, AwmBridge.EmbedEvidenceResult? snrResult) stepResult;
             try
             {
+                var progressLock = new object();
+                AwmProgressPhase lastPhase = AwmProgressPhase.Idle;
+                var callbackProgress = fileProgress;
                 stepResult = await RunCancelableNativeCallAsync(() =>
                 {
                     var embed = AwmBridge.EmbedAudioMultichannel(
@@ -798,7 +839,31 @@ public sealed partial class EmbedViewModel : ObservableObject
                         outputPath,
                         message,
                         layout,
-                        Strength);
+                        Strength,
+                        onProgress: snapshot =>
+                        {
+                            if (snapshot.Operation != AwmProgressOperation.Embed)
+                            {
+                                return;
+                            }
+
+                            double nextProgress;
+                            lock (progressLock)
+                            {
+                                nextProgress = MapSnapshotProgress(
+                                    snapshot,
+                                    ProgressProfile.Embed,
+                                    ref lastPhase,
+                                    callbackProgress);
+                                if (nextProgress <= callbackProgress)
+                                {
+                                    return;
+                                }
+                                callbackProgress = nextProgress;
+                            }
+
+                            DispatchFileProgress(nextProgress);
+                        });
 
                     var evidence = AwmError.Ok;
                     AwmBridge.EmbedEvidenceResult? snrResult = null;
@@ -841,7 +906,8 @@ public sealed partial class EmbedViewModel : ObservableObject
                     SelectedFiles.RemoveAt(removeOnException.Value);
                 }
 
-                Progress = (processed + 1) / (double)initialTotal;
+                doneWeight += fileWeight;
+                Progress = Math.Min(1, doneWeight / totalWeight);
                 await Task.Yield();
                 continue;
             }
@@ -905,7 +971,8 @@ public sealed partial class EmbedViewModel : ObservableObject
                 SelectedFiles.RemoveAt(removeIndex.Value);
             }
 
-            Progress = (processed + 1) / (double)initialTotal;
+            doneWeight += fileWeight;
+            Progress = Math.Min(1, doneWeight / totalWeight);
             await Task.Yield();
         }
 
@@ -1537,6 +1604,84 @@ public sealed partial class EmbedViewModel : ObservableObject
             ),
             _ => error.ToString(),
         };
+    }
+
+    private static Dictionary<string, double> BuildProgressWeights(IEnumerable<string> files)
+    {
+        var result = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in files)
+        {
+            var key = NormalizedPathKey(file);
+            double weight;
+            try
+            {
+                var info = new FileInfo(file);
+                weight = info.Exists ? Math.Max(info.Length, 1) : 1;
+            }
+            catch
+            {
+                weight = 1;
+            }
+
+            result[key] = weight;
+        }
+
+        return result;
+    }
+
+    private static double MapSnapshotProgress(
+        AwmBridge.ProgressSnapshot snapshot,
+        ProgressProfile profile,
+        ref AwmProgressPhase lastPhase,
+        double previous)
+    {
+        if (snapshot.State == AwmProgressState.Completed)
+        {
+            return 1;
+        }
+
+        var (rangeStart, rangeEnd) = PhaseInterval(snapshot.Phase, profile);
+        if (snapshot.Determinate && snapshot.TotalUnits > 0)
+        {
+            var ratio = Math.Clamp(snapshot.CompletedUnits / (double)snapshot.TotalUnits, 0, 1);
+            var mapped = rangeStart + ((rangeEnd - rangeStart) * ratio);
+            return Math.Clamp(Math.Max(previous, mapped), 0, 1);
+        }
+
+        var cap = Math.Max(rangeStart, rangeEnd - Math.Max((rangeEnd - rangeStart) * 0.08, 0.01));
+        var step = snapshot.Phase == lastPhase ? 0.0035 : 0.0015;
+        lastPhase = snapshot.Phase;
+        var baseline = Math.Max(previous, rangeStart);
+        return Math.Clamp(Math.Min(cap, baseline + step), 0, 1);
+    }
+
+    private static (double start, double end) PhaseInterval(AwmProgressPhase phase, ProgressProfile profile)
+    {
+        return profile switch
+        {
+            ProgressProfile.Embed => phase switch
+            {
+                AwmProgressPhase.PrepareInput or AwmProgressPhase.Precheck => (0.00, 0.15),
+                AwmProgressPhase.Core or AwmProgressPhase.RouteStep or AwmProgressPhase.Merge => (0.15, 0.85),
+                AwmProgressPhase.Evidence or AwmProgressPhase.CloneCheck => (0.85, 0.95),
+                AwmProgressPhase.Finalize => (0.95, 1.00),
+                _ => (0.0, 0.0),
+            },
+            _ => phase switch
+            {
+                AwmProgressPhase.PrepareInput or AwmProgressPhase.Precheck => (0.00, 0.10),
+                AwmProgressPhase.Core or AwmProgressPhase.RouteStep or AwmProgressPhase.Merge => (0.10, 0.80),
+                AwmProgressPhase.Evidence or AwmProgressPhase.CloneCheck => (0.80, 0.95),
+                AwmProgressPhase.Finalize => (0.95, 1.00),
+                _ => (0.0, 0.0),
+            },
+        };
+    }
+
+    private enum ProgressProfile
+    {
+        Embed,
+        Detect,
     }
 
     private static async Task<T> RunCancelableNativeCallAsync<T>(Func<T> operation, CancellationToken token)

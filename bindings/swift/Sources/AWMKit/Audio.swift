@@ -80,6 +80,44 @@ public struct AWMAudioMediaCapabilitiesSwift {
     public let containerTs: Bool
 }
 
+public enum AWMProgressOperationSwift: Int32 {
+    case none = 0
+    case embed = 1
+    case detect = 2
+}
+
+public enum AWMProgressPhaseSwift: Int32 {
+    case idle = 0
+    case prepareInput = 1
+    case precheck = 2
+    case core = 3
+    case routeStep = 4
+    case merge = 5
+    case evidence = 6
+    case cloneCheck = 7
+    case finalize = 8
+}
+
+public enum AWMProgressStateSwift: Int32 {
+    case idle = 0
+    case running = 1
+    case completed = 2
+    case failed = 3
+}
+
+public struct AWMProgressSnapshotSwift {
+    public let operation: AWMProgressOperationSwift
+    public let phase: AWMProgressPhaseSwift
+    public let state: AWMProgressStateSwift
+    public let determinate: Bool
+    public let completedUnits: UInt64
+    public let totalUnits: UInt64
+    public let stepIndex: UInt32
+    public let stepTotal: UInt32
+    public let opId: UInt64
+    public let phaseLabel: String
+}
+
 /// Single channel pair detection result
 public struct AWMPairResultSwift {
     /// Channel pair index (0-based)
@@ -151,6 +189,40 @@ public class AWMAudio {
         path.withCString { ptr in
             awm_audio_set_key_file(handle, ptr)
         }
+    }
+
+    public func progressSnapshot() -> AWMProgressSnapshotSwift? {
+        guard let handle = handle else { return nil }
+
+        var cSnapshot = AWMProgressSnapshot()
+        let code = awm_audio_progress_get(handle, &cSnapshot)
+        guard code == AWM_SUCCESS.rawValue else {
+            return nil
+        }
+
+        let phaseLabel = withUnsafePointer(to: cSnapshot.phase_label) { ptr in
+            ptr.withMemoryRebound(to: CChar.self, capacity: 64) { charPtr in
+                String(cString: charPtr)
+            }
+        }
+
+        return AWMProgressSnapshotSwift(
+            operation: AWMProgressOperationSwift(rawValue: Int32(cSnapshot.operation.rawValue)) ?? .none,
+            phase: AWMProgressPhaseSwift(rawValue: Int32(cSnapshot.phase.rawValue)) ?? .idle,
+            state: AWMProgressStateSwift(rawValue: Int32(cSnapshot.state.rawValue)) ?? .idle,
+            determinate: cSnapshot.determinate,
+            completedUnits: cSnapshot.completed_units,
+            totalUnits: cSnapshot.total_units,
+            stepIndex: cSnapshot.step_index,
+            stepTotal: cSnapshot.step_total,
+            opId: cSnapshot.op_id,
+            phaseLabel: phaseLabel
+        )
+    }
+
+    public func clearProgress() {
+        guard let handle = handle else { return }
+        awm_audio_progress_clear(handle)
     }
 
     /// Check if audiowmark is available

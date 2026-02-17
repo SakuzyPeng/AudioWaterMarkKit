@@ -633,7 +633,12 @@ public sealed partial class DetectViewModel : ObservableObject
                 null,
                 LogIconTone.Info);
 
-            var initialTotal = SelectedFiles.Count;
+            var initialQueue = SelectedFiles.ToList();
+            var initialTotal = Math.Max(initialQueue.Count, 1);
+            var weightByFile = BuildProgressWeights(initialQueue);
+            var totalWeight = Math.Max(weightByFile.Values.Sum(), 1.0);
+            var doneWeight = 0.0;
+            var uiContext = SynchronizationContext.Current;
             for (var processed = 0; processed < initialTotal; processed++)
             {
                 if (token.IsCancellationRequested || SelectedFiles.Count == 0)
@@ -642,14 +647,71 @@ public sealed partial class DetectViewModel : ObservableObject
                 }
 
                 var filePath = SelectedFiles[0];
+                var fileKey = NormalizedPathKey(filePath);
+                var fileWeight = weightByFile.TryGetValue(fileKey, out var resolvedWeight) ? resolvedWeight : 1.0;
+                var fileProgress = 0.0;
+                void UpdateFileProgress(double candidate)
+                {
+                    var clamped = Math.Clamp(candidate, 0, 1);
+                    if (clamped <= fileProgress)
+                    {
+                        return;
+                    }
+
+                    fileProgress = clamped;
+                    Progress = Math.Min(1, (doneWeight + (fileWeight * fileProgress)) / totalWeight);
+                }
+
+                void DispatchFileProgress(double candidate)
+                {
+                    if (uiContext is null)
+                    {
+                        UpdateFileProgress(candidate);
+                        return;
+                    }
+
+                    uiContext.Post(_ => UpdateFileProgress(candidate), null);
+                }
+
                 var fileName = Path.GetFileName(filePath);
                 CurrentProcessingFile = fileName;
                 CurrentProcessingIndex = 0;
+                UpdateFileProgress(0.02);
 
                 DetectRecord record;
                 try
                 {
-                    record = await Task.Run(() => DetectSingleFile(filePath, key, channelLayout), token);
+                    var progressLock = new object();
+                    AwmProgressPhase lastPhase = AwmProgressPhase.Idle;
+                    var callbackProgress = fileProgress;
+                    record = await Task.Run(() => DetectSingleFile(
+                        filePath,
+                        key,
+                        channelLayout,
+                        snapshot =>
+                        {
+                            if (snapshot.Operation != AwmProgressOperation.Detect)
+                            {
+                                return;
+                            }
+
+                            double nextProgress;
+                            lock (progressLock)
+                            {
+                                nextProgress = MapSnapshotProgress(
+                                    snapshot,
+                                    ProgressProfile.Detect,
+                                    ref lastPhase,
+                                    callbackProgress);
+                                if (nextProgress <= callbackProgress)
+                                {
+                                    return;
+                                }
+                                callbackProgress = nextProgress;
+                            }
+
+                            DispatchFileProgress(nextProgress);
+                        }), token);
                 }
                 catch (Exception ex)
                 {
@@ -680,7 +742,8 @@ public sealed partial class DetectViewModel : ObservableObject
                     SelectedFiles.RemoveAt(0);
                 }
 
-                Progress = (processed + 1) / (double)initialTotal;
+                doneWeight += fileWeight;
+                Progress = Math.Min(1, doneWeight / totalWeight);
                 await Task.Yield();
             }
 
@@ -720,9 +783,13 @@ public sealed partial class DetectViewModel : ObservableObject
         }
     }
 
-    private DetectRecord DetectSingleFile(string filePath, byte[]? key, AwmChannelLayout layout)
+    private DetectRecord DetectSingleFile(
+        string filePath,
+        byte[]? key,
+        AwmChannelLayout layout,
+        Action<AwmBridge.ProgressSnapshot>? onProgress = null)
     {
-        var (mcDetected, detectError) = AwmBridge.DetectAudioMultichannelDetailed(filePath, layout);
+        var (mcDetected, detectError) = AwmBridge.DetectAudioMultichannelDetailed(filePath, layout, onProgress);
         if (detectError == AwmError.Ok && mcDetected is AwmBridge.MultichannelDetectAudioResult mcResult)
         {
             var (singleDetected, singleDetectError) = AwmBridge.DetectAudioDetailed(filePath);
@@ -1567,6 +1634,84 @@ public sealed partial class DetectViewModel : ObservableObject
         OnPropertyChanged(nameof(DetectActionAccessibility));
         OnPropertyChanged(nameof(ClearQueueAccessibility));
         OnPropertyChanged(nameof(ClearLogsAccessibility));
+    }
+
+    private static Dictionary<string, double> BuildProgressWeights(IEnumerable<string> files)
+    {
+        var result = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in files)
+        {
+            var key = NormalizedPathKey(file);
+            double weight;
+            try
+            {
+                var info = new FileInfo(file);
+                weight = info.Exists ? Math.Max(info.Length, 1) : 1;
+            }
+            catch
+            {
+                weight = 1;
+            }
+
+            result[key] = weight;
+        }
+
+        return result;
+    }
+
+    private static double MapSnapshotProgress(
+        AwmBridge.ProgressSnapshot snapshot,
+        ProgressProfile profile,
+        ref AwmProgressPhase lastPhase,
+        double previous)
+    {
+        if (snapshot.State == AwmProgressState.Completed)
+        {
+            return 1;
+        }
+
+        var (rangeStart, rangeEnd) = PhaseInterval(snapshot.Phase, profile);
+        if (snapshot.Determinate && snapshot.TotalUnits > 0)
+        {
+            var ratio = Math.Clamp(snapshot.CompletedUnits / (double)snapshot.TotalUnits, 0, 1);
+            var mapped = rangeStart + ((rangeEnd - rangeStart) * ratio);
+            return Math.Clamp(Math.Max(previous, mapped), 0, 1);
+        }
+
+        var cap = Math.Max(rangeStart, rangeEnd - Math.Max((rangeEnd - rangeStart) * 0.08, 0.01));
+        var step = snapshot.Phase == lastPhase ? 0.0035 : 0.0015;
+        lastPhase = snapshot.Phase;
+        var baseline = Math.Max(previous, rangeStart);
+        return Math.Clamp(Math.Min(cap, baseline + step), 0, 1);
+    }
+
+    private static (double start, double end) PhaseInterval(AwmProgressPhase phase, ProgressProfile profile)
+    {
+        return profile switch
+        {
+            ProgressProfile.Embed => phase switch
+            {
+                AwmProgressPhase.PrepareInput or AwmProgressPhase.Precheck => (0.00, 0.15),
+                AwmProgressPhase.Core or AwmProgressPhase.RouteStep or AwmProgressPhase.Merge => (0.15, 0.85),
+                AwmProgressPhase.Evidence or AwmProgressPhase.CloneCheck => (0.85, 0.95),
+                AwmProgressPhase.Finalize => (0.95, 1.00),
+                _ => (0.0, 0.0),
+            },
+            _ => phase switch
+            {
+                AwmProgressPhase.PrepareInput or AwmProgressPhase.Precheck => (0.00, 0.10),
+                AwmProgressPhase.Core or AwmProgressPhase.RouteStep or AwmProgressPhase.Merge => (0.10, 0.80),
+                AwmProgressPhase.Evidence or AwmProgressPhase.CloneCheck => (0.80, 0.95),
+                AwmProgressPhase.Finalize => (0.95, 1.00),
+                _ => (0.0, 0.0),
+            },
+        };
+    }
+
+    private enum ProgressProfile
+    {
+        Embed,
+        Detect,
     }
 
     private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;

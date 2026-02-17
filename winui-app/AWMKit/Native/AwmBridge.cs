@@ -51,6 +51,24 @@ public static class AwmBridge
         bool ContainerTs
     );
 
+    public readonly record struct ProgressSnapshot(
+        AwmProgressOperation Operation,
+        AwmProgressPhase Phase,
+        AwmProgressState State,
+        bool Determinate,
+        ulong CompletedUnits,
+        ulong TotalUnits,
+        uint StepIndex,
+        uint StepTotal,
+        ulong OpId,
+        string PhaseLabel
+    );
+
+    private sealed class ProgressCallbackContext
+    {
+        public required Action<ProgressSnapshot> Handler { get; init; }
+    }
+
     /// <summary>
     /// Gets the current message format version.
     /// </summary>
@@ -256,10 +274,93 @@ public static class AwmBridge
         }
     }
 
+    private static ProgressSnapshot ToProgressSnapshot(AWMProgressSnapshot native)
+    {
+        return new ProgressSnapshot(
+            native.Operation,
+            native.Phase,
+            native.State,
+            native.Determinate,
+            native.CompletedUnits,
+            native.TotalUnits,
+            native.StepIndex,
+            native.StepTotal,
+            native.OpId,
+            native.GetPhaseLabel()
+        );
+    }
+
+    private static (AwmNative.AwmProgressCallback? callback, GCHandle contextHandle, bool enabled) TryInstallProgressCallback(
+        IntPtr handle,
+        Action<ProgressSnapshot>? onProgress)
+    {
+        if (onProgress is null)
+        {
+            return (null, default, false);
+        }
+
+        var context = new ProgressCallbackContext { Handler = onProgress };
+        var contextHandle = GCHandle.Alloc(context);
+        AwmNative.AwmProgressCallback callback = (snapshotPtr, userData) =>
+        {
+            if (snapshotPtr == IntPtr.Zero || userData == IntPtr.Zero)
+            {
+                return;
+            }
+
+            var callbackHandle = GCHandle.FromIntPtr(userData);
+            if (callbackHandle.Target is not ProgressCallbackContext callbackContext)
+            {
+                return;
+            }
+
+            var nativeSnapshot = Marshal.PtrToStructure<AWMProgressSnapshot>(snapshotPtr);
+            callbackContext.Handler(ToProgressSnapshot(nativeSnapshot));
+        };
+
+        try
+        {
+            int code = AwmNative.awm_audio_progress_set_callback(
+                handle,
+                callback,
+                GCHandle.ToIntPtr(contextHandle));
+            if (code != 0)
+            {
+                contextHandle.Free();
+                return (null, default, false);
+            }
+
+            return (callback, contextHandle, true);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            contextHandle.Free();
+            return (null, default, false);
+        }
+    }
+
+    private static void ClearProgressCallback(IntPtr handle)
+    {
+        try
+        {
+            AwmNative.awm_audio_progress_set_callback(handle, null, IntPtr.Zero);
+            AwmNative.awm_audio_progress_clear(handle);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            // Ignore when running on older native libraries.
+        }
+    }
+
     /// <summary>
     /// Embeds a watermark into an audio file.
     /// </summary>
-    public static AwmError EmbedAudio(string inputPath, string outputPath, byte[] message, int strength = 10)
+    public static AwmError EmbedAudio(
+        string inputPath,
+        string outputPath,
+        byte[] message,
+        int strength = 10,
+        Action<ProgressSnapshot>? onProgress = null)
     {
         if (message.Length != MessageLength)
         {
@@ -272,13 +373,15 @@ public static class AwmBridge
             return AwmError.AudiowmarkNotFound;
         }
 
+        var nativeHandle = handle.DangerousGetHandle();
+        var (progressCallback, progressContextHandle, progressEnabled) = TryInstallProgressCallback(nativeHandle, onProgress);
         AwmNative.awm_audio_set_strength(handle.DangerousGetHandle(), (byte)strength);
 
         var messageHandle = GCHandle.Alloc(message, GCHandleType.Pinned);
         try
         {
             int code = AwmNative.awm_audio_embed(
-                handle.DangerousGetHandle(),
+                nativeHandle,
                 inputPath,
                 outputPath,
                 messageHandle.AddrOfPinnedObject());
@@ -288,6 +391,15 @@ public static class AwmBridge
         finally
         {
             messageHandle.Free();
+            if (progressEnabled)
+            {
+                ClearProgressCallback(nativeHandle);
+            }
+            if (progressContextHandle.IsAllocated)
+            {
+                progressContextHandle.Free();
+            }
+            GC.KeepAlive(progressCallback);
         }
     }
 
@@ -299,7 +411,8 @@ public static class AwmBridge
         string outputPath,
         byte[] message,
         AwmChannelLayout layout,
-        int strength = 10)
+        int strength = 10,
+        Action<ProgressSnapshot>? onProgress = null)
     {
         if (message.Length != MessageLength)
         {
@@ -312,13 +425,15 @@ public static class AwmBridge
             return AwmError.AudiowmarkNotFound;
         }
 
+        var nativeHandle = handle.DangerousGetHandle();
+        var (progressCallback, progressContextHandle, progressEnabled) = TryInstallProgressCallback(nativeHandle, onProgress);
         AwmNative.awm_audio_set_strength(handle.DangerousGetHandle(), (byte)strength);
 
         var messageHandle = GCHandle.Alloc(message, GCHandleType.Pinned);
         try
         {
             int code = AwmNative.awm_audio_embed_multichannel(
-                handle.DangerousGetHandle(),
+                nativeHandle,
                 inputPath,
                 outputPath,
                 messageHandle.AddrOfPinnedObject(),
@@ -328,11 +443,20 @@ public static class AwmBridge
         }
         catch (EntryPointNotFoundException)
         {
-            return EmbedAudio(inputPath, outputPath, message, strength);
+            return EmbedAudio(inputPath, outputPath, message, strength, onProgress);
         }
         finally
         {
             messageHandle.Free();
+            if (progressEnabled)
+            {
+                ClearProgressCallback(nativeHandle);
+            }
+            if (progressContextHandle.IsAllocated)
+            {
+                progressContextHandle.Free();
+            }
+            GC.KeepAlive(progressCallback);
         }
     }
 
@@ -353,7 +477,9 @@ public static class AwmBridge
     /// <summary>
     /// Detects a watermark from an audio file (extended result).
     /// </summary>
-    public static (DetectAudioResult? result, AwmError error) DetectAudioDetailed(string inputPath)
+    public static (DetectAudioResult? result, AwmError error) DetectAudioDetailed(
+        string inputPath,
+        Action<ProgressSnapshot>? onProgress = null)
     {
         using var handle = AwmAudioHandle.CreateNew();
         if (handle.IsInvalid)
@@ -361,11 +487,13 @@ public static class AwmBridge
             return (null, AwmError.AudiowmarkNotFound);
         }
 
+        var nativeHandle = handle.DangerousGetHandle();
+        var (progressCallback, progressContextHandle, progressEnabled) = TryInstallProgressCallback(nativeHandle, onProgress);
         var resultPtr = Marshal.AllocHGlobal(Marshal.SizeOf<AWMDetectResult>());
         try
         {
             int code = AwmNative.awm_audio_detect(
-                handle.DangerousGetHandle(),
+                nativeHandle,
                 inputPath,
                 resultPtr);
 
@@ -387,6 +515,15 @@ public static class AwmBridge
         finally
         {
             Marshal.FreeHGlobal(resultPtr);
+            if (progressEnabled)
+            {
+                ClearProgressCallback(nativeHandle);
+            }
+            if (progressContextHandle.IsAllocated)
+            {
+                progressContextHandle.Free();
+            }
+            GC.KeepAlive(progressCallback);
         }
     }
 
@@ -395,7 +532,8 @@ public static class AwmBridge
     /// </summary>
     public static (MultichannelDetectAudioResult? result, AwmError error) DetectAudioMultichannelDetailed(
         string inputPath,
-        AwmChannelLayout layout)
+        AwmChannelLayout layout,
+        Action<ProgressSnapshot>? onProgress = null)
     {
         using var handle = AwmAudioHandle.CreateNew();
         if (handle.IsInvalid)
@@ -403,11 +541,13 @@ public static class AwmBridge
             return (null, AwmError.AudiowmarkNotFound);
         }
 
+        var nativeHandle = handle.DangerousGetHandle();
+        var (progressCallback, progressContextHandle, progressEnabled) = TryInstallProgressCallback(nativeHandle, onProgress);
         var resultPtr = Marshal.AllocHGlobal(Marshal.SizeOf<AWMMultichannelDetectResult>());
         try
         {
             int code = AwmNative.awm_audio_detect_multichannel(
-                handle.DangerousGetHandle(),
+                nativeHandle,
                 inputPath,
                 layout,
                 resultPtr);
@@ -436,7 +576,7 @@ public static class AwmBridge
         }
         catch (EntryPointNotFoundException)
         {
-            var (fallback, fallbackError) = DetectAudioDetailed(inputPath);
+            var (fallback, fallbackError) = DetectAudioDetailed(inputPath, onProgress);
             if (fallbackError != AwmError.Ok || fallback is null)
             {
                 return (null, fallbackError);
@@ -453,6 +593,15 @@ public static class AwmBridge
         finally
         {
             Marshal.FreeHGlobal(resultPtr);
+            if (progressEnabled)
+            {
+                ClearProgressCallback(nativeHandle);
+            }
+            if (progressContextHandle.IsAllocated)
+            {
+                progressContextHandle.Free();
+            }
+            GC.KeepAlive(progressCallback);
         }
     }
 
