@@ -70,32 +70,39 @@ func startProgressPolling(
     }
 }
 
-/// Maps a progress snapshot to a `[0, 1]` fraction, never decreasing from `previous`.
+/// Maps a progress snapshot to a `[0, 0.98]` fraction, never decreasing from `previous`.
+///
+/// Capped at 0.98 so that 1.0 (100%) is reached only via the explicit `updateFileProgress(1)`
+/// call after the Swift async operation has fully returned — preventing the progress bar from
+/// showing 100% while post-processing (e.g. evidence recording) is still running.
 func mapSnapshotProgress(
     _ snapshot: AWMProgressSnapshotSwift,
     profile: ProgressProfile,
     previous: Double,
     lastPhase: inout AWMProgressPhaseSwift
 ) -> Double {
+    // Reserve the final 2% for confirmed Swift-side completion.
+    let pollCap = 0.98
+
     if snapshot.state == .completed {
-        return 1
+        return pollCap
     }
 
     let phaseRange = phaseInterval(for: snapshot.phase, profile: profile)
     if snapshot.determinate, snapshot.totalUnits > 0 {
         let ratio = min(max(Double(snapshot.completedUnits) / Double(snapshot.totalUnits), 0), 1)
         let mapped = phaseRange.lowerBound + (phaseRange.upperBound - phaseRange.lowerBound) * ratio
-        return min(1, max(previous, mapped))
+        return min(pollCap, max(previous, mapped))
     }
 
     let cap = max(
         phaseRange.lowerBound,
-        phaseRange.upperBound - max((phaseRange.upperBound - phaseRange.lowerBound) * 0.08, 0.01)
+        min(pollCap, phaseRange.upperBound - max((phaseRange.upperBound - phaseRange.lowerBound) * 0.08, 0.01))
     )
     let step = snapshot.phase == lastPhase ? 0.0035 : 0.0015
     lastPhase = snapshot.phase
     let baseline = max(previous, phaseRange.lowerBound)
-    return min(1, min(cap, baseline + step))
+    return min(pollCap, min(cap, baseline + step))
 }
 
 /// Returns the `[0, 1]` sub-range assigned to a given phase under a given profile.
