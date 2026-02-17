@@ -476,12 +476,9 @@ class EmbedViewModel: ObservableObject {
             let initialTotal = max(initialQueue.count, 1)
             let weightByFile = buildProgressWeights(for: initialQueue)
             let totalWeight = max(weightByFile.values.reduce(0, +), 1)
-            var doneWeight = 0.0
             let suffix = customSuffix.isEmpty ? "_wm" : customSuffix
-            var successCount = 0
-            var failureCount = 0
-            var skippedFiles: [URL] = []
-            var skippedKeys = Set<String>()
+            var doneWeight = 0.0
+            var state = EmbedLoopState()
 
             for _ in 0..<initialTotal {
                 if isCancelling { break }
@@ -499,152 +496,32 @@ class EmbedViewModel: ObservableObject {
                 }
                 updateFileProgress(0.02)
 
-                do {
-                    updateFileProgress(0.06)
-                    let hasWatermark = try await Self.performPrecheckStep(
-                        audio: audioBox,
-                        fileURL: fileURL
-                    )
-                    updateFileProgress(0.15)
-                    if hasWatermark {
-                        if queueIndex < selectedFiles.count {
-                            selectedFiles.remove(at: queueIndex)
-                        }
-                        if skippedKeys.insert(fileKey).inserted {
-                            skippedFiles.append(fileURL)
-                        }
-                        log(
-                            localized("检测到已有水印", "Existing watermark detected"),
-                            detail: localized(
-                                "\(fileURL.lastPathComponent) 已跳过",
-                                "\(fileURL.lastPathComponent) skipped"
-                            ),
-                            isSuccess: false,
-                            kind: .resultNotFound
-                        )
-                        doneWeight += fileWeight
-                        progress = min(1, doneWeight / totalWeight)
-                        await Task.yield()
-                        continue
-                    }
-                } catch let awmError as AWMError {
-                    if case .admUnsupported = awmError {
-                        log(
-                            localized("预检已跳过", "Precheck skipped"),
-                            detail: localized(
-                                "ADM/BWF 检测暂不支持，已跳过预检并继续嵌入",
-                                "ADM/BWF detect is not supported yet; precheck was skipped and embed continues"
-                            ),
-                            isSuccess: false,
-                            kind: .evidenceWarning,
-                            isEphemeral: true
-                        )
-                    } else {
-                        log(
-                            "\(localized("失败", "Failed")): \(fileURL.lastPathComponent)",
-                            detail: localized("预检失败", "Precheck failed") + ": \(awmError.localizedDescription)",
-                            isSuccess: false,
-                            kind: .resultError
-                        )
-                        failureCount += 1
-                        if queueIndex < selectedFiles.count {
-                            selectedFiles.remove(at: queueIndex)
-                        }
-                        doneWeight += fileWeight
-                        progress = min(1, doneWeight / totalWeight)
-                        await Task.yield()
-                        continue
-                    }
-                } catch {
-                    log(
-                        "\(localized("失败", "Failed")): \(fileURL.lastPathComponent)",
-                        detail: localized("预检失败", "Precheck failed") + ": \(error.localizedDescription)",
-                        isSuccess: false,
-                        kind: .resultError
-                    )
-                    failureCount += 1
-                    if queueIndex < selectedFiles.count {
-                        selectedFiles.remove(at: queueIndex)
-                    }
+                if await runPrecheckPhase(
+                    audioBox: audioBox,
+                    fileURL: fileURL,
+                    fileKey: fileKey,
+                    queueIndex: queueIndex,
+                    updateFileProgress: updateFileProgress,
+                    state: &state
+                ) {
                     doneWeight += fileWeight
                     progress = min(1, doneWeight / totalWeight)
                     await Task.yield()
                     continue
                 }
 
-                do {
-                    let baseName = fileURL.deletingPathExtension().lastPathComponent
-                    let ext = normalizedOutputExtension(from: fileURL.pathExtension)
-                    let outputDir = outputDirectory ?? fileURL.deletingLastPathComponent()
-                    let outputURL = outputDir.appendingPathComponent("\(baseName)\(suffix).\(ext)")
-                    audio.clearProgress()
-                    let pollTask = startProgressPolling(
-                        audio: audioBox,
-                        expectedOperation: .embed,
-                        profile: .embed,
-                        base: 0,
-                        span: 1,
-                        initialProgress: fileProgress,
-                        onProgress: updateFileProgress
-                    )
-                    let step: EmbedStepOutput
-                    do {
-                        step = try await Self.performEmbedStep(
-                            audio: audioBox,
-                            fileURL: fileURL,
-                            outputURL: outputURL,
-                            tagValue: resolvedTag,
-                            key: key,
-                            keySlot: activeKeySlot,
-                            strength: UInt8(strength)
-                        )
-                    } catch {
-                        pollTask.cancel()
-                        _ = await pollTask.result
-                        throw error
-                    }
-                    pollTask.cancel()
-                    _ = await pollTask.result
-                    updateFileProgress(1)
-                    if let evidenceError = step.evidenceErrorDescription {
-                        log(
-                            localized("证据记录失败", "Evidence record failed"),
-                            detail: "\(outputURL.lastPathComponent): \(evidenceError)",
-                            isSuccess: false,
-                            kind: .evidenceWarning,
-                            isEphemeral: true
-                        )
-                    }
-
-                    var successDetail = "→ \(outputURL.lastPathComponent)"
-                    if step.snrStatus == "ok", let snrDb = step.snrDb {
-                        successDetail += String(format: " · SNR %.2f dB", snrDb)
-                    } else if let snrStatus = step.snrStatus, snrStatus != "ok" {
-                        let reason = step.snrDetail ?? snrStatus
-                        log(
-                            localized("SNR 不可用", "SNR unavailable"),
-                            detail: reason,
-                            isSuccess: false,
-                            kind: .evidenceWarning,
-                            isEphemeral: true
-                        )
-                    }
-
-                    log(
-                        "\(localized("成功", "Success")): \(fileURL.lastPathComponent)",
-                        detail: successDetail,
-                        kind: .resultOk
-                    )
-                    successCount += 1
-                } catch {
-                    log(
-                        "\(localized("失败", "Failed")): \(fileURL.lastPathComponent)",
-                        detail: error.localizedDescription,
-                        isSuccess: false,
-                        kind: .resultError
-                    )
-                    failureCount += 1
-                }
+                await runEmbedPhase(
+                    audio: audio,
+                    audioBox: audioBox,
+                    fileURL: fileURL,
+                    resolvedTag: resolvedTag,
+                    key: key,
+                    activeKeySlot: activeKeySlot,
+                    suffix: suffix,
+                    fileProgress: fileProgress,
+                    updateFileProgress: updateFileProgress,
+                    state: &state
+                )
                 if let indexToRemove = selectedFiles.firstIndex(where: { normalizedPathKey($0) == fileKey }) {
                     selectedFiles.remove(at: indexToRemove)
                 }
@@ -657,8 +534,8 @@ class EmbedViewModel: ObservableObject {
                 log(
                     localized("已取消", "Cancelled"),
                     detail: localized(
-                        "已完成 \(successCount + failureCount) / \(initialTotal) 个文件",
-                        "Completed \(successCount + failureCount) / \(initialTotal) files"
+                        "已完成 \(state.successCount + state.failureCount) / \(initialTotal) 个文件",
+                        "Completed \(state.successCount + state.failureCount) / \(initialTotal) files"
                     ),
                     isSuccess: false,
                     kind: .processCancelled
@@ -666,12 +543,12 @@ class EmbedViewModel: ObservableObject {
             } else {
                 log(
                     localized("处理完成", "Processing finished"),
-                    detail: localized("成功: \(successCount), 失败: \(failureCount)", "Success: \(successCount), Failed: \(failureCount)"),
+                    detail: localized("成功: \(state.successCount), 失败: \(state.failureCount)", "Success: \(state.successCount), Failed: \(state.failureCount)"),
                     kind: .processFinished
                 )
             }
 
-            if successCount > 0 {
+            if state.successCount > 0 {
                 do {
                     let saveResult = try EmbedTagMappingStore.saveIfAbsent(
                         username: normalizedUsername,
@@ -701,13 +578,13 @@ class EmbedViewModel: ObservableObject {
             isCancelling = false
             scheduleProgressResetIfNeeded()
 
-            if !isCancelling, !skippedFiles.isEmpty {
-                skippedWatermarkedFiles = skippedFiles
+            if !isCancelling, !state.skippedFiles.isEmpty {
+                skippedWatermarkedFiles = state.skippedFiles
                 log(
                     localized("已跳过含水印文件", "Skipped watermarked files"),
                     detail: localized(
-                        "共跳过 \(skippedFiles.count) 个已含水印文件",
-                        "Skipped \(skippedFiles.count) already-watermarked files"
+                        "共跳过 \(state.skippedFiles.count) 个已含水印文件",
+                        "Skipped \(state.skippedFiles.count) already-watermarked files"
                     ),
                     isSuccess: false,
                     kind: .resultNotFound
@@ -874,6 +751,13 @@ private struct EmbedStepOutput: Sendable {
     let snrDetail: String?
 }
 
+private struct EmbedLoopState {
+    var successCount: Int = 0
+    var failureCount: Int = 0
+    var skippedFiles: [URL] = []
+    var skippedKeys: Set<String> = []
+}
+
 private extension EmbedViewModel {
     nonisolated static func performEmbedStep(
         audio: UnsafeAudioBox,
@@ -926,6 +810,164 @@ private extension EmbedViewModel {
                 return false
             }
         }.value
+    }
+
+    /// 预检阶段：检测已有水印。返回 true 表示此文件应跳过（caller 负责更新 doneWeight 并 continue）。
+    func runPrecheckPhase(
+        audioBox: UnsafeAudioBox,
+        fileURL: URL,
+        fileKey: String,
+        queueIndex: Int,
+        updateFileProgress: @escaping (Double) -> Void,
+        state: inout EmbedLoopState
+    ) async -> Bool {
+        do {
+            updateFileProgress(0.06)
+            let hasWatermark = try await Self.performPrecheckStep(audio: audioBox, fileURL: fileURL)
+            updateFileProgress(0.15)
+            if hasWatermark {
+                if queueIndex < selectedFiles.count {
+                    selectedFiles.remove(at: queueIndex)
+                }
+                if state.skippedKeys.insert(fileKey).inserted {
+                    state.skippedFiles.append(fileURL)
+                }
+                log(
+                    localized("检测到已有水印", "Existing watermark detected"),
+                    detail: localized(
+                        "\(fileURL.lastPathComponent) 已跳过",
+                        "\(fileURL.lastPathComponent) skipped"
+                    ),
+                    isSuccess: false,
+                    kind: .resultNotFound
+                )
+                return true
+            }
+        } catch let awmError as AWMError {
+            if case .admUnsupported = awmError {
+                log(
+                    localized("预检已跳过", "Precheck skipped"),
+                    detail: localized(
+                        "ADM/BWF 检测暂不支持，已跳过预检并继续嵌入",
+                        "ADM/BWF detect is not supported yet; precheck was skipped and embed continues"
+                    ),
+                    isSuccess: false,
+                    kind: .evidenceWarning,
+                    isEphemeral: true
+                )
+            } else {
+                log(
+                    "\(localized("失败", "Failed")): \(fileURL.lastPathComponent)",
+                    detail: localized("预检失败", "Precheck failed") + ": \(awmError.localizedDescription)",
+                    isSuccess: false,
+                    kind: .resultError
+                )
+                state.failureCount += 1
+                if queueIndex < selectedFiles.count {
+                    selectedFiles.remove(at: queueIndex)
+                }
+                return true
+            }
+        } catch {
+            log(
+                "\(localized("失败", "Failed")): \(fileURL.lastPathComponent)",
+                detail: localized("预检失败", "Precheck failed") + ": \(error.localizedDescription)",
+                isSuccess: false,
+                kind: .resultError
+            )
+            state.failureCount += 1
+            if queueIndex < selectedFiles.count {
+                selectedFiles.remove(at: queueIndex)
+            }
+            return true
+        }
+        return false
+    }
+
+    /// 嵌入阶段：进度轮询 + 嵌入 + SNR 日志。成功/失败均在内部记录日志并更新 state。
+    func runEmbedPhase(
+        audio: AWMAudio,
+        audioBox: UnsafeAudioBox,
+        fileURL: URL,
+        resolvedTag: String,
+        key: Data,
+        activeKeySlot: UInt8,
+        suffix: String,
+        fileProgress: Double,
+        updateFileProgress: @escaping (Double) -> Void,
+        state: inout EmbedLoopState
+    ) async {
+        do {
+            let baseName = fileURL.deletingPathExtension().lastPathComponent
+            let ext = normalizedOutputExtension(from: fileURL.pathExtension)
+            let outputDir = outputDirectory ?? fileURL.deletingLastPathComponent()
+            let outputURL = outputDir.appendingPathComponent("\(baseName)\(suffix).\(ext)")
+            audio.clearProgress()
+            let pollTask = startProgressPolling(
+                audio: audioBox,
+                expectedOperation: .embed,
+                profile: .embed,
+                base: 0,
+                span: 1,
+                initialProgress: fileProgress,
+                onProgress: updateFileProgress
+            )
+            let step: EmbedStepOutput
+            do {
+                step = try await Self.performEmbedStep(
+                    audio: audioBox,
+                    fileURL: fileURL,
+                    outputURL: outputURL,
+                    tagValue: resolvedTag,
+                    key: key,
+                    keySlot: activeKeySlot,
+                    strength: UInt8(strength)
+                )
+            } catch {
+                pollTask.cancel()
+                _ = await pollTask.result
+                throw error
+            }
+            pollTask.cancel()
+            _ = await pollTask.result
+            updateFileProgress(1)
+            if let evidenceError = step.evidenceErrorDescription {
+                log(
+                    localized("证据记录失败", "Evidence record failed"),
+                    detail: "\(outputURL.lastPathComponent): \(evidenceError)",
+                    isSuccess: false,
+                    kind: .evidenceWarning,
+                    isEphemeral: true
+                )
+            }
+            var successDetail = "→ \(outputURL.lastPathComponent)"
+            if step.snrStatus == "ok", let snrDb = step.snrDb {
+                successDetail += String(format: " · SNR %.2f dB", snrDb)
+            } else if let snrStatus = step.snrStatus, snrStatus != "ok" {
+                let reason = step.snrDetail ?? snrStatus
+                log(
+                    localized("SNR 不可用", "SNR unavailable"),
+                    detail: reason,
+                    isSuccess: false,
+                    kind: .evidenceWarning,
+                    isEphemeral: true
+                )
+            }
+            log(
+                "\(localized("成功", "Success")): \(fileURL.lastPathComponent)",
+                detail: successDetail,
+                kind: .resultOk
+            )
+            state.successCount += 1
+        } catch {
+            log(
+                "\(localized("失败", "Failed")): \(fileURL.lastPathComponent)",
+                detail: error.localizedDescription,
+                isSuccess: false,
+                kind: .resultError
+            )
+            state.failureCount += 1
+        }
     }
 }
 
