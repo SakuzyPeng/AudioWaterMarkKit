@@ -18,11 +18,13 @@ use crate::tag::Tag;
 
 #[cfg(feature = "multichannel")]
 use crate::multichannel::{
-    build_smart_route_plan, ChannelLayout, MultichannelAudio, RouteMode, RouteStep,
-    DEFAULT_LFE_MODE,
+    build_smart_route_plan, effective_lfe_mode, ChannelLayout, MultichannelAudio, RouteMode,
+    RouteStep,
 };
 #[cfg(feature = "multichannel")]
 use rayon::prelude::*;
+#[cfg(all(test, feature = "multichannel"))]
+use crate::multichannel::DEFAULT_LFE_MODE;
 
 /// audiowmark 默认搜索路径（无官方包，仅供开发者本地编译后使用）
 #[cfg(not(feature = "bundled"))]
@@ -408,7 +410,7 @@ impl Audio {
         // 确定声道布局
         let layout = layout.unwrap_or_else(|| audio.layout());
         validate_layout_channels(layout, num_channels)?;
-        let route_plan = build_smart_route_plan(layout, num_channels, DEFAULT_LFE_MODE);
+        let route_plan = build_smart_route_plan(layout, num_channels, effective_lfe_mode());
         log_route_warnings("embed", input, &route_plan.warnings);
 
         let executable_steps: Vec<(usize, RouteStep)> = route_plan
@@ -469,7 +471,7 @@ impl Audio {
             if has_valid_labels {
                 let bed_plan = media::adm_routing::build_route_plan_from_labels(
                     &speaker_labels,
-                    DEFAULT_LFE_MODE,
+                    effective_lfe_mode(),
                 );
                 for w in &bed_plan.warnings {
                     eprintln!("[awmkit] ADM detect routing warning: {w}");
@@ -1591,7 +1593,7 @@ fn detect_multichannel_from_audio(
 
     let layout = layout.unwrap_or_else(|| audio.layout());
     validate_layout_channels(layout, num_channels)?;
-    let route_plan = build_smart_route_plan(layout, num_channels, DEFAULT_LFE_MODE);
+    let route_plan = build_smart_route_plan(layout, num_channels, effective_lfe_mode());
     log_route_warnings("detect", input_for_log, &route_plan.warnings);
 
     let detect_steps: Vec<(usize, RouteStep)> = route_plan

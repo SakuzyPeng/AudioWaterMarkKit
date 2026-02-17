@@ -84,11 +84,6 @@ impl AdmMaps {
         let ac_id = self.stream_to_chan.get(as_id)?;
         self.chan_to_label.get(ac_id).map(String::as_str)
     }
-
-    /// 是否完全没有解析到任何链路（axml 缺失或解析失败）。
-    pub(crate) fn is_empty(&self) -> bool {
-        self.track_to_stream.is_empty() && self.chan_to_label.is_empty()
-    }
 }
 
 /// 从 axml 字节流（UTF-8 XML）解析三张 ADM 映射表。
@@ -500,7 +495,7 @@ mod tests {
         use crate::multichannel::SampleFormat;
         let threshold = 8_388_607_i32 / 10_000; // 838
         // 样本峰值 = threshold - 1 → 静默
-        let quiet = vec![(threshold - 1); 50];
+        let quiet = vec![threshold - 1; 50];
         assert!(is_silent(&quiet, SampleFormat::Int24));
         // 样本峰值 = threshold → 非静默
         let loud = vec![threshold; 50];
@@ -511,7 +506,7 @@ mod tests {
     fn is_silent_int32_threshold() {
         use crate::multichannel::SampleFormat;
         let threshold = i32::MAX / 10_000; // 214_748
-        let quiet = vec![(threshold - 1); 10];
+        let quiet = vec![threshold - 1; 10];
         assert!(is_silent(&quiet, SampleFormat::Int32));
         let loud = vec![threshold; 10];
         assert!(!is_silent(&loud, SampleFormat::Int32));

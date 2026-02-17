@@ -36,6 +36,25 @@ pub(crate) enum LfeMode {
 
 pub(crate) const DEFAULT_LFE_MODE: LfeMode = LfeMode::Skip;
 
+/// 运行时 LFE 路由模式（默认 `skip`）。
+///
+/// 可通过环境变量 `AWMKIT_LFE_MODE` 覆盖：
+/// - `skip`（默认）
+/// - `mono`
+/// - `pair`
+#[must_use]
+pub(crate) fn effective_lfe_mode() -> LfeMode {
+    let Ok(raw) = std::env::var("AWMKIT_LFE_MODE") else {
+        return DEFAULT_LFE_MODE;
+    };
+    let normalized = raw.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "mono" => LfeMode::Mono,
+        "pair" => LfeMode::Pair,
+        _ => DEFAULT_LFE_MODE,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum RouteMode {
     Pair(usize, usize),

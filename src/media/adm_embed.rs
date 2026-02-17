@@ -227,9 +227,9 @@ fn embed_bed_by_speaker_labels(
     message: &[u8; MESSAGE_LEN],
     speaker_labels: &[(usize, String)],
 ) -> Result<MultichannelAudio> {
-    use crate::multichannel::{RouteMode, DEFAULT_LFE_MODE};
+    use crate::multichannel::{effective_lfe_mode, RouteMode};
 
-    let plan = build_route_plan_from_labels(speaker_labels, DEFAULT_LFE_MODE);
+    let plan = build_route_plan_from_labels(speaker_labels, effective_lfe_mode());
 
     // 打印 fallback 警告（未识别标签）
     for w in &plan.warnings {

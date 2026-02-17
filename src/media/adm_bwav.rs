@@ -17,8 +17,8 @@ const FMT_SIG: [u8; 4] = *b"fmt ";
 const DATA_SIG: [u8; 4] = *b"data";
 const AXML_SIG: [u8; 4] = *b"axml";
 const CHNA_SIG: [u8; 4] = *b"chna";
+#[cfg(test)]
 const BEXT_SIG: [u8; 4] = *b"bext";
-const IXML_SIG: [u8; 4] = *b"iXML";
 const U32_MAX_U64: u64 = 0xFFFF_FFFF;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,15 +48,11 @@ pub(crate) struct PcmFormat {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ChunkIndex {
-    pub container: WaveContainer,
-    pub file_size: u64,
     pub chunks: Vec<ChunkEntry>,
     pub fmt: PcmFormat,
     pub data_chunk: ChunkEntry,
-    pub has_bext: bool,
     pub has_axml: bool,
     pub has_chna: bool,
-    pub has_ixml: bool,
 }
 
 impl ChunkIndex {
@@ -429,16 +425,15 @@ pub(crate) fn parse_chunk_index(path: &Path) -> Result<Option<ChunkIndex>> {
         )));
     }
 
+    let has_axml = chunks.iter().any(|c| c.id == AXML_SIG);
+    let has_chna = chunks.iter().any(|c| c.id == CHNA_SIG);
+
     Ok(Some(ChunkIndex {
-        container,
-        file_size,
-        chunks: chunks.clone(),
+        chunks,
         fmt,
         data_chunk,
-        has_bext: chunks.iter().any(|c| c.id == BEXT_SIG),
-        has_axml: chunks.iter().any(|c| c.id == AXML_SIG),
-        has_chna: chunks.iter().any(|c| c.id == CHNA_SIG),
-        has_ixml: chunks.iter().any(|c| c.id == IXML_SIG),
+        has_axml,
+        has_chna,
     }))
 }
 
@@ -702,10 +697,9 @@ mod tests {
             return;
         };
 
-        assert_eq!(index.container, WaveContainer::Riff);
         assert!(index.has_axml);
         assert!(index.has_chna);
-        assert!(index.has_bext);
+        assert!(index.chunks.iter().any(|c| c.id == BEXT_SIG));
         assert_eq!(index.fmt.channels, 2);
         assert_eq!(index.fmt.bits_per_sample, 24);
         assert_eq!(index.data_chunk.size, 12);
@@ -856,7 +850,14 @@ mod tests {
             let _ = fs::remove_file(&path);
             return;
         };
-        assert_eq!(index.container, WaveContainer::Bw64);
+        let header = fs::read(&path);
+        assert!(header.is_ok());
+        let Ok(header) = header else {
+            let _ = fs::remove_file(&path);
+            return;
+        };
+        assert!(header.len() >= 4);
+        assert_eq!(&header[0..4], b"BW64");
         assert_eq!(index.data_chunk.size, 12);
         assert!(index.data_chunk.padded_size >= index.data_chunk.size);
 
