@@ -2598,11 +2598,11 @@ mod tests {
             return;
         };
 
-        let before_lfe = source.channel_samples(3).map(|s| s.to_vec());
+        let before_lfe = source.channel_samples(3).map(<[i32]>::to_vec);
         assert!(before_lfe.is_ok());
         let apply = apply_processed_route_step(&mut source, &step, &processed);
         assert!(apply.is_ok());
-        let after_lfe = source.channel_samples(3).map(|s| s.to_vec());
+        let after_lfe = source.channel_samples(3).map(<[i32]>::to_vec);
         assert!(after_lfe.is_ok());
         assert_eq!(
             before_lfe.unwrap_or_default(),

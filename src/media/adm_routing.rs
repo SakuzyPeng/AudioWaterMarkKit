@@ -441,17 +441,11 @@ mod tests {
         // FL+FR
         assert!(matches!(modes[0], RouteMode::Pair(0, 1)));
         // Centre mono
-        assert!(matches!(
-            modes.iter().find(|m| matches!(m, RouteMode::Mono(2))),
-            Some(_)
-        ));
+        assert!(modes.iter().any(|m| matches!(&m, RouteMode::Mono(2))));
         // LFE skip
-        assert!(matches!(
-            modes
-                .iter()
-                .find(|m| matches!(m, RouteMode::Skip { channel: 3, .. })),
-            Some(_)
-        ));
+        assert!(modes
+            .iter()
+            .any(|m| matches!(&m, RouteMode::Skip { channel: 3, .. })));
     }
 
     #[test]
@@ -485,8 +479,10 @@ mod tests {
         let labels = label_vec(&["M+030", "M-030", "M+000", "LFE1", "M+110", "M-110"]);
         let plan = build_route_plan_from_labels(&labels, LfeMode::Mono);
         let lfe_step = plan.steps.iter().find(|s| s.name.contains("LFE1"));
-        assert!(lfe_step.is_some());
-        assert!(matches!(lfe_step.unwrap().mode, RouteMode::Mono(3)));
+        assert!(matches!(
+            lfe_step.map(|step| &step.mode),
+            Some(RouteMode::Mono(3))
+        ));
     }
 
     #[test]

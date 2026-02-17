@@ -834,9 +834,9 @@ mod tests {
         let _ = fs::remove_file(&path);
     }
 
-    /// 构建指定 packFormatIDRef 的 40 字节 chna entry。
+    /// 构建指定 packFormatIDRef 的 40 字节 chna entry。.
     ///
-    /// 仅填写 trackIndex（bytes 0-1）和 packFormatIDRef（bytes 26-36），其余全零。
+    /// 仅填写 trackIndex（bytes 0-1）和 packFormatIDRef（bytes 26-36），其余全零。.
     fn make_chna_entry(track_idx: u16, pack_fmt: &[u8; 11]) -> [u8; 40] {
         let mut entry = [0u8; 40];
         let [lo, hi] = track_idx.to_le_bytes();
@@ -909,7 +909,7 @@ mod tests {
         fmt.extend_from_slice(&1u16.to_le_bytes()); // PCM
         fmt.extend_from_slice(&1u16.to_le_bytes()); // 1 channel
         fmt.extend_from_slice(&48_000u32.to_le_bytes());
-        fmt.extend_from_slice(&(48_000u32 * 1 * 3).to_le_bytes());
+        fmt.extend_from_slice(&(48_000u32 * 3).to_le_bytes());
         fmt.extend_from_slice(&3u16.to_le_bytes()); // block align
         fmt.extend_from_slice(&24u16.to_le_bytes()); // bps
 

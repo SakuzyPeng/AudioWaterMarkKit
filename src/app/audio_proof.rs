@@ -196,17 +196,26 @@ mod tests {
                 assert!(proof.channels > 0);
                 assert!(proof.sample_rate > 0);
             }
-            Err(AppError::Awmkit(
-                crate::Error::FfmpegLibraryNotFound(_)
-                | crate::Error::FfmpegDecodeFailed(_)
-                | crate::Error::FfmpegContainerUnsupported(_),
-            )) => {
-                // Some local test environments miss FFmpeg runtime support.
-                // Ensure the baseline WAV path still works in this case.
-                let fallback = build_audio_proof(&wav_path);
-                assert!(fallback.is_ok());
+            Err(err) => {
+                let is_ffmpeg_runtime_issue = matches!(
+                    err,
+                    AppError::Awmkit(
+                        crate::Error::FfmpegLibraryNotFound(_)
+                            | crate::Error::FfmpegDecodeFailed(_)
+                            | crate::Error::FfmpegContainerUnsupported(_),
+                    )
+                );
+                assert!(
+                    is_ffmpeg_runtime_issue,
+                    "unexpected proof build error: {err}"
+                );
+                if is_ffmpeg_runtime_issue {
+                    // Some local test environments miss FFmpeg runtime support.
+                    // Ensure the baseline WAV path still works in this case.
+                    let fallback = build_audio_proof(&wav_path);
+                    assert!(fallback.is_ok());
+                }
             }
-            Err(err) => panic!("unexpected proof build error: {err}"),
         }
 
         let _ = std::fs::remove_file(&wav_path);

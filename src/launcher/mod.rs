@@ -191,13 +191,16 @@ mod tests {
             OsString::from("--db"),
             OsString::from("--yes"),
         ];
-        let parsed = parse_command(&args).expect("parse should succeed");
-        let LauncherCommand::CacheClean {
-            delete_db,
-            confirmed,
-        } = parsed
-        else {
-            panic!("unexpected command");
+        let parsed = parse_command(&args);
+        assert!(parsed.is_ok());
+        let parsed = parsed.ok();
+        assert!(matches!(parsed, Some(LauncherCommand::CacheClean { .. })));
+        let (delete_db, confirmed) = match parsed {
+            Some(LauncherCommand::CacheClean {
+                delete_db,
+                confirmed,
+            }) => (delete_db, confirmed),
+            _ => (false, false),
         };
         assert!(delete_db);
         assert!(confirmed);
