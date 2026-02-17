@@ -742,6 +742,7 @@ public sealed partial class DetectViewModel : ObservableObject
                     SelectedFiles.RemoveAt(0);
                 }
 
+                UpdateFileProgress(1);
                 doneWeight += fileWeight;
                 Progress = Math.Min(1, doneWeight / totalWeight);
                 await Task.Yield();
@@ -1665,9 +1666,14 @@ public sealed partial class DetectViewModel : ObservableObject
         ref AwmProgressPhase lastPhase,
         double previous)
     {
+        // Reserve the final 2% for confirmed completion. The Rust engine marks Completed
+        // when the core operation finishes, but the caller may still run post-processing.
+        // UpdateFileProgress(1) is the only path to 1.0 so 100% appears only when fully done.
+        const double PollCap = 0.98;
+
         if (snapshot.State == AwmProgressState.Completed)
         {
-            return 1;
+            return PollCap;
         }
 
         var (rangeStart, rangeEnd) = PhaseInterval(snapshot.Phase, profile);
@@ -1675,14 +1681,14 @@ public sealed partial class DetectViewModel : ObservableObject
         {
             var ratio = Math.Clamp(snapshot.CompletedUnits / (double)snapshot.TotalUnits, 0, 1);
             var mapped = rangeStart + ((rangeEnd - rangeStart) * ratio);
-            return Math.Clamp(Math.Max(previous, mapped), 0, 1);
+            return Math.Clamp(Math.Max(previous, mapped), 0, PollCap);
         }
 
-        var cap = Math.Max(rangeStart, rangeEnd - Math.Max((rangeEnd - rangeStart) * 0.08, 0.01));
+        var cap = Math.Max(rangeStart, Math.Min(PollCap, rangeEnd - Math.Max((rangeEnd - rangeStart) * 0.08, 0.01)));
         var step = snapshot.Phase == lastPhase ? 0.0035 : 0.0015;
         lastPhase = snapshot.Phase;
         var baseline = Math.Max(previous, rangeStart);
-        return Math.Clamp(Math.Min(cap, baseline + step), 0, 1);
+        return Math.Clamp(Math.Min(cap, baseline + step), 0, PollCap);
     }
 
     private static (double start, double end) PhaseInterval(AwmProgressPhase phase, ProgressProfile profile)
