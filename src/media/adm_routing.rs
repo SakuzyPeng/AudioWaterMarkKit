@@ -1,11 +1,11 @@
-//! ADM Bed 声道路由：基于 axml speakerLabel 构建 `RoutePlan`
+//! ADM Bed 声道路由：基于 axml speakerLabel 构建 `RoutePlan`.
 //!
-//! 支持两种标签体系：
+//! 支持两种标签体系：.
 //! - ITU-R BS.2076 标准标签（`M+030`, `M-030`, `M+000`, `LFE1` …）
 //! - Dolby Room-Centric 标签（`RC_L`, `RC_R`, `RC_C`, `RC_LFE` …）
 //! - 简单 L/R/C/LFE 标签
 //!
-//! 链路：
+//! 链路：.
 //! ```text
 //! chna: trackIndex → AT_xxxxxxxx (audioTrackFormatIDRef)
 //! axml: AT_xxxxxxxx_01 → AS_xxxxxxxx → AC_xxxxxxxx → speakerLabel
@@ -20,9 +20,9 @@ use crate::multichannel::{LfeMode, RouteMode, RoutePlan, RouteStep, SampleFormat
 
 // ─────────────────── 喇叭标签配对表 ───────────────────
 
-/// 已知立体声对：(`left_label`, `right_label`, `route_step_name`)
+/// 已知立体声对：(`left_label`, `right_label`, `route_step_name`).
 ///
-/// 按优先级排序：低序号先匹配。
+/// 按优先级排序：低序号先匹配。.
 const SPEAKER_PAIRS: &[(&str, &str, &str)] = &[
     // ── ITU-R BS.2076 标准 ──
     ("M+030", "M-030", "FL+FR"),
@@ -55,15 +55,15 @@ const SPEAKER_PAIRS: &[(&str, &str, &str)] = &[
     ("Lts", "Rts", "TFL+TFR"),
 ];
 
-/// Centre 类单声道标签
+/// Centre 类单声道标签.
 const CENTRE_LABELS: &[&str] = &["M+000", "U+000", "T+000", "RC_C", "C"];
 
-/// LFE 标签
+/// LFE 标签.
 const LFE_LABELS: &[&str] = &["LFE1", "LFE2", "LFE", "LFE+000", "RC_LFE"];
 
 // ─────────────────── axml 映射解析 ───────────────────
 
-/// ADM XML 三张映射表
+/// ADM XML 三张映射表.
 ///
 /// - `track_to_stream`: `AT_xxxxxxxx` → `AS_xxxxxxxx`
 /// - `stream_to_chan`:  `AS_xxxxxxxx` → `AC_xxxxxxxx`
@@ -79,9 +79,9 @@ pub struct AdmMaps {
 }
 
 impl AdmMaps {
-    /// 通过 `AT_xxxxxxxx` 解析到 speakerLabel。
+    /// 通过 `AT_xxxxxxxx` 解析到 speakerLabel。.
     ///
-    /// 解析链路：`AT` → `AS` → `AC` → label。
+    /// 解析链路：`AT` → `AS` → `AC` → label。.
     pub(crate) fn resolve_at_to_label(&self, at_id: &str) -> Option<&str> {
         let stream_id = self.track_to_stream.get(at_id)?;
         let channel_id = self.stream_to_chan.get(stream_id)?;
@@ -89,9 +89,9 @@ impl AdmMaps {
     }
 }
 
-/// 从 axml 字节流（UTF-8 XML）解析三张 ADM 映射表。
+/// 从 axml 字节流（UTF-8 XML）解析三张 ADM 映射表。.
 ///
-/// 遇到解析错误时提前退出，已解析部分仍可用。
+/// 遇到解析错误时提前退出，已解析部分仍可用。.
 pub fn parse_adm_maps(xml_bytes: &[u8]) -> AdmMaps {
     let mut maps = AdmMaps::default();
 
@@ -198,7 +198,7 @@ pub fn parse_adm_maps(xml_bytes: &[u8]) -> AdmMaps {
     maps
 }
 
-/// 从 XML 元素中提取属性值。
+/// 从 XML 元素中提取属性值。.
 fn get_attr(e: &quick_xml::events::BytesStart<'_>, attr_name: &str) -> Option<String> {
     e.attributes()
         .filter_map(std::result::Result::ok)
@@ -213,7 +213,7 @@ fn get_attr(e: &quick_xml::events::BytesStart<'_>, attr_name: &str) -> Option<St
         })
 }
 
-/// `AT_00011001_01` → `AT_00011001`（去掉末尾的 `_XX` index 后缀）。
+/// `AT_00011001_01` → `AT_00011001`（去掉末尾的 `_XX` index 后缀）。.
 fn strip_track_fmt_suffix(id: &str) -> String {
     if let Some(pos) = id.rfind('_') {
         let suffix = &id[pos + 1..];
@@ -231,11 +231,11 @@ fn strip_track_fmt_suffix(id: &str) -> String {
 
 // ─────────────────── RoutePlan 构建 ───────────────────
 
-/// 基于 speakerLabel 构建 [`RoutePlan`]。
+/// 基于 speakerLabel 构建 [`RoutePlan`]。.
 ///
-/// `channel_labels`: `(channelIndex, speakerLabel)` 列表，**仅包含 Bed 声道**。
+/// `channel_labels`: `(channelIndex, speakerLabel)` 列表，**仅包含 Bed 声道**。.
 ///
-/// `lfe_mode` 控制 LFE 声道处理方式（Skip / Mono / Pair）。
+/// `lfe_mode` 控制 LFE 声道处理方式（Skip / Mono / Pair）。.
 pub fn build_route_plan_from_labels(
     channel_labels: &[(usize, String)],
     lfe_mode: LfeMode,
@@ -359,18 +359,18 @@ pub fn build_route_plan_from_labels(
 
 // ─────────────────── 静默检测 ─────────────────────────
 
-/// 静默检测：声道峰值低于约 -80 dBFS 时返回 `true`。
+/// 静默检测：声道峰值低于约 -80 dBFS 时返回 `true`。.
 ///
-/// ADM Object 声道嵌入/检测前调用，避免对静默声道浪费 audiowmark 调用。
+/// ADM Object 声道嵌入/检测前调用，避免对静默声道浪费 audiowmark 调用。.
 ///
-/// 阈值换算（`max_val / 10_000` ≈ -80 dBFS）：
+/// 阈值换算（`max_val / 10_000` ≈ -80 dBFS）：.
 /// - `Int16`  : `32_767` / `10_000` = `3`
 /// - `Int24`  : `8_388_607` / `10_000` = `838`
 /// - `Int32` / `Float32` : `i32::MAX` / `10_000` = `214_748`
 ///
 /// 注意：`Float32` 样本在 [`MultichannelAudio`] 中同样以 i32 存储，
 /// 归一化值 [-1.0, 1.0] 转换后绝对值远低于 `i32::MAX`，因此阈值仍能
-/// 有效过滤真正静默的 Float32 声道。
+/// 有效过滤真正静默的 Float32 声道。.
 #[must_use]
 pub fn is_silent(samples: &[i32], format: SampleFormat) -> bool {
     let max_val: i32 = match format {

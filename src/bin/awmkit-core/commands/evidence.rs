@@ -7,39 +7,39 @@ use serde::Serialize;
 #[derive(Subcommand)]
 /// Internal enum.
 pub enum Command {
-    /// List evidence records
+    /// List evidence records.
     List(ListArgs),
 
-    /// Show one evidence record by id
+    /// Show one evidence record by id.
     Show(ShowArgs),
 
-    /// Remove one evidence record by id
+    /// Remove one evidence record by id.
     Remove(RemoveArgs),
 
-    /// Clear evidence records by filters
+    /// Clear evidence records by filters.
     Clear(ClearArgs),
 }
 
 #[derive(Args)]
 /// Internal struct.
 pub struct ListArgs {
-    /// Filter by identity
+    /// Filter by identity.
     #[arg(long, value_name = "IDENTITY")]
     pub identity: Option<String>,
 
-    /// Filter by tag
+    /// Filter by tag.
     #[arg(long, value_name = "TAG")]
     pub tag: Option<String>,
 
-    /// Filter by key slot
+    /// Filter by key slot.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u8).range(0..=31))]
     pub key_slot: Option<u8>,
 
-    /// Max rows to return
+    /// Max rows to return.
     #[arg(long, value_name = "N", default_value_t = 200, value_parser = clap::value_parser!(u16).range(1..=5000))]
     pub limit: u16,
 
-    /// Output as JSON
+    /// Output as JSON.
     #[arg(long)]
     pub json: bool,
 }
@@ -47,10 +47,10 @@ pub struct ListArgs {
 #[derive(Args)]
 /// Internal struct.
 pub struct ShowArgs {
-    /// Evidence id
+    /// Evidence id.
     pub id: i64,
 
-    /// Output as JSON
+    /// Output as JSON.
     #[arg(long)]
     pub json: bool,
 }
@@ -58,10 +58,10 @@ pub struct ShowArgs {
 #[derive(Args)]
 /// Internal struct.
 pub struct RemoveArgs {
-    /// Evidence id
+    /// Evidence id.
     pub id: i64,
 
-    /// Confirm removal
+    /// Confirm removal.
     #[arg(long)]
     pub yes: bool,
 }
@@ -69,19 +69,19 @@ pub struct RemoveArgs {
 #[derive(Args)]
 /// Internal struct.
 pub struct ClearArgs {
-    /// Filter by identity
+    /// Filter by identity.
     #[arg(long, value_name = "IDENTITY")]
     pub identity: Option<String>,
 
-    /// Filter by tag
+    /// Filter by tag.
     #[arg(long, value_name = "TAG")]
     pub tag: Option<String>,
 
-    /// Filter by key slot
+    /// Filter by key slot.
     #[arg(long, value_name = "N", value_parser = clap::value_parser!(u8).range(0..=31))]
     pub key_slot: Option<u8>,
 
-    /// Confirm clear action
+    /// Confirm clear action.
     #[arg(long)]
     pub yes: bool,
 }

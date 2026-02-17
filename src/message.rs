@@ -1,4 +1,4 @@
-//! 消息编解码
+//! 消息编解码.
 //!
 //! 消息格式 (16 bytes = 128 bit):
 //! - Version: 1 byte
@@ -15,13 +15,13 @@ use crate::tag::Tag;
 /// Internal type alias.
 type HmacSha256 = Hmac<Sha256>;
 
-/// 消息长度 (bytes)
+/// 消息长度 (bytes).
 pub const MESSAGE_LEN: usize = 16;
 
-/// HMAC 长度 (bytes)
+/// HMAC 长度 (bytes).
 pub const HMAC_LEN: usize = 6;
 
-/// 当前协议版本
+/// 当前协议版本.
 pub const CURRENT_VERSION: u8 = 2;
 
 /// Internal constant.
@@ -37,31 +37,31 @@ const MAX_TIMESTAMP_V2_MINUTES: u32 = (1 << (32 - KEY_SLOT_BITS)) - 1;
 /// Internal constant.
 const DEFAULT_KEY_SLOT: u8 = 0;
 
-/// 解码后的消息结果
+/// 解码后的消息结果.
 #[derive(Debug, Clone)]
 #[allow(clippy::module_name_repetitions)]
 pub struct MessageResult {
-    /// 协议版本
+    /// 协议版本.
     pub version: u8,
-    /// UTC Unix 时间戳 (秒)
+    /// UTC Unix 时间戳 (秒).
     pub timestamp_utc: u64,
-    /// UTC Unix 分钟数 (原始值)
+    /// UTC Unix 分钟数 (原始值).
     pub timestamp_minutes: u32,
-    /// 密钥槽位 (v1 固定为 0，v2 为 0-31)
+    /// 密钥槽位 (v1 固定为 0，v2 为 0-31).
     pub key_slot: u8,
-    /// 解码的 Tag
+    /// 解码的 Tag.
     pub tag: Tag,
 }
 
 impl MessageResult {
-    /// 获取身份字符串
+    /// 获取身份字符串.
     #[must_use]
     pub fn identity(&self) -> &str {
         self.tag.identity()
     }
 }
 
-/// 编码消息
+/// 编码消息.
 ///
 /// # Arguments
 /// - `version`: 协议版本 (当前为 2)
@@ -69,18 +69,18 @@ impl MessageResult {
 /// - `key`: HMAC 密钥 (建议 32 bytes)
 ///
 /// # Returns
-/// 16 bytes 消息
+/// 16 bytes 消息.
 ///
 /// # Errors
-/// 当版本不支持、时间戳/槽位越界或 `Tag` 非法时返回错误。
+/// 当版本不支持、时间戳/槽位越界或 `Tag` 非法时返回错误。.
 pub fn encode(version: u8, tag: &Tag, key: &[u8]) -> Result<[u8; MESSAGE_LEN]> {
     encode_with_timestamp_and_slot(version, tag, key, current_utc_minutes(), DEFAULT_KEY_SLOT)
 }
 
-/// 编码消息（指定时间戳）
+/// 编码消息（指定时间戳）.
 ///
 /// # Errors
-/// 当版本不支持、时间戳越界或 `Tag` 非法时返回错误。
+/// 当版本不支持、时间戳越界或 `Tag` 非法时返回错误。.
 pub fn encode_with_timestamp(
     version: u8,
     tag: &Tag,
@@ -90,10 +90,10 @@ pub fn encode_with_timestamp(
     encode_with_timestamp_and_slot(version, tag, key, timestamp_minutes, DEFAULT_KEY_SLOT)
 }
 
-/// 编码消息（指定时间戳 + 槽位）
+/// 编码消息（指定时间戳 + 槽位）.
 ///
 /// # Errors
-/// 当版本不支持、时间戳/槽位越界或 `Tag` 非法时返回错误。
+/// 当版本不支持、时间戳/槽位越界或 `Tag` 非法时返回错误。.
 pub fn encode_with_timestamp_and_slot(
     version: u8,
     tag: &Tag,
@@ -132,10 +132,10 @@ pub fn encode_with_timestamp_and_slot(
     Ok(msg)
 }
 
-/// 编码消息（使用当前时间戳 + 指定槽位）
+/// 编码消息（使用当前时间戳 + 指定槽位）.
 ///
 /// # Errors
-/// 当版本不支持、槽位越界或 `Tag` 非法时返回错误。
+/// 当版本不支持、槽位越界或 `Tag` 非法时返回错误。.
 pub fn encode_with_slot(
     version: u8,
     tag: &Tag,
@@ -145,17 +145,17 @@ pub fn encode_with_slot(
     encode_with_timestamp_and_slot(version, tag, key, current_utc_minutes(), key_slot)
 }
 
-/// 解码消息
+/// 解码消息.
 ///
 /// # Arguments
 /// - `data`: 16 bytes 消息
 /// - `key`: HMAC 密钥
 ///
 /// # Returns
-/// 解码结果，HMAC 验证失败返回错误
+/// 解码结果，HMAC 验证失败返回错误.
 ///
 /// # Errors
-/// 当消息长度不正确、版本不支持、槽位非法或 HMAC 校验失败时返回错误。
+/// 当消息长度不正确、版本不支持、槽位非法或 HMAC 校验失败时返回错误。.
 pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
     if data.len() != MESSAGE_LEN {
         return Err(Error::InvalidMessageLength(data.len()));
@@ -170,16 +170,16 @@ pub fn decode(data: &[u8], key: &[u8]) -> Result<MessageResult> {
     parse_message_fields(data)
 }
 
-/// 解码消息（不验证 HMAC）
+/// 解码消息（不验证 HMAC）.
 ///
 /// # Arguments
 /// - `data`: 16 bytes 消息
 ///
 /// # Returns
-/// 解码结果；仅解析明文字段，不做 HMAC 校验
+/// 解码结果；仅解析明文字段，不做 HMAC 校验.
 ///
 /// # Errors
-/// 当消息长度不正确、版本不支持或字段解析失败时返回错误。
+/// 当消息长度不正确、版本不支持或字段解析失败时返回错误。.
 pub fn decode_unverified(data: &[u8]) -> Result<MessageResult> {
     if data.len() != MESSAGE_LEN {
         return Err(Error::InvalidMessageLength(data.len()));
@@ -188,7 +188,7 @@ pub fn decode_unverified(data: &[u8]) -> Result<MessageResult> {
     parse_message_fields(data)
 }
 
-/// 仅验证 HMAC（不解析内容）
+/// 仅验证 HMAC（不解析内容）.
 #[must_use]
 pub fn verify(data: &[u8], key: &[u8]) -> bool {
     if data.len() != MESSAGE_LEN {
@@ -199,10 +199,10 @@ pub fn verify(data: &[u8], key: &[u8]) -> bool {
     constant_time_eq(&data[10..16], &expected_mac)
 }
 
-/// 读取消息头中的版本与槽位（不校验 HMAC）
+/// 读取消息头中的版本与槽位（不校验 HMAC）.
 ///
 /// # Errors
-/// 当消息长度不正确、版本不支持或槽位非法时返回错误。
+/// 当消息长度不正确、版本不支持或槽位非法时返回错误。.
 pub fn peek_version_and_slot(data: &[u8]) -> Result<(u8, u8)> {
     if data.len() != MESSAGE_LEN {
         return Err(Error::InvalidMessageLength(data.len()));
@@ -249,7 +249,7 @@ fn parse_message_fields(data: &[u8]) -> Result<MessageResult> {
     })
 }
 
-/// 计算 HMAC-SHA256 并截取前 6 字节
+/// 计算 HMAC-SHA256 并截取前 6 字节.
 fn compute_hmac(key: &[u8], data: &[u8]) -> [u8; HMAC_LEN] {
     // HMAC-SHA256 接受任意长度密钥，new_from_slice 不会失败
     #[allow(clippy::expect_used)]
@@ -262,7 +262,7 @@ fn compute_hmac(key: &[u8], data: &[u8]) -> [u8; HMAC_LEN] {
     out
 }
 
-/// 常量时间比较
+/// 常量时间比较.
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
@@ -297,7 +297,7 @@ const fn unpack_timestamp_v2(packed_timestamp: u32) -> (u32, u8) {
     (timestamp_minutes, key_slot)
 }
 
-/// 获取当前 UTC Unix 分钟数
+/// 获取当前 UTC Unix 分钟数.
 fn current_utc_minutes() -> u32 {
     use std::time::{SystemTime, UNIX_EPOCH};
     // 系统时间在 UNIX_EPOCH 之后是合理假设

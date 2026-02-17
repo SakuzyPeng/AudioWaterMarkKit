@@ -9,40 +9,40 @@ use serde::Serialize;
 #[derive(Subcommand)]
 /// Internal enum.
 pub enum Command {
-    /// Suggest a tag from a username (deterministic, no storage)
+    /// Suggest a tag from a username (deterministic, no storage).
     Suggest(SuggestArgs),
 
-    /// Save a username -> tag mapping
+    /// Save a username -> tag mapping.
     Save(SaveArgs),
 
-    /// List saved mappings
+    /// List saved mappings.
     List(ListArgs),
 
-    /// Remove a saved mapping
+    /// Remove a saved mapping.
     Remove(RemoveArgs),
 
-    /// Clear all mappings
+    /// Clear all mappings.
     Clear,
 }
 
 #[derive(Args)]
 /// Internal struct.
 pub struct SuggestArgs {
-    /// Username to map
+    /// Username to map.
     pub username: String,
 }
 
 #[derive(Args)]
 /// Internal struct.
 pub struct SaveArgs {
-    /// Username to map
+    /// Username to map.
     pub username: String,
 
-    /// Use a specific tag (default: deterministic suggestion)
+    /// Use a specific tag (default: deterministic suggestion).
     #[arg(long, value_name = "TAG")]
     pub tag: Option<String>,
 
-    /// Overwrite existing mapping
+    /// Overwrite existing mapping.
     #[arg(long)]
     pub force: bool,
 }
@@ -50,7 +50,7 @@ pub struct SaveArgs {
 #[derive(Args)]
 /// Internal struct.
 pub struct ListArgs {
-    /// Output as JSON
+    /// Output as JSON.
     #[arg(long)]
     pub json: bool,
 }
@@ -58,7 +58,7 @@ pub struct ListArgs {
 #[derive(Args)]
 /// Internal struct.
 pub struct RemoveArgs {
-    /// Username to remove
+    /// Username to remove.
     pub username: String,
 }
 

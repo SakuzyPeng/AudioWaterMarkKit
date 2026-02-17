@@ -19,23 +19,23 @@ const EMBED_PROGRESS_TEMPLATE: &str = "{prefix} [{bar:40}] {pos}/{len}";
 #[derive(Args)]
 /// Internal struct.
 pub struct CmdArgs {
-    /// Tag (1-7 identity or full 8-char tag)
+    /// Tag (1-7 identity or full 8-char tag).
     #[arg(long)]
     pub tag: String,
 
-    /// Watermark strength (1-30)
+    /// Watermark strength (1-30).
     #[arg(long, default_value_t = 10)]
     pub strength: u8,
 
-    /// Channel layout (default: auto)
+    /// Channel layout (default: auto).
     #[arg(long, value_enum, default_value_t = CliLayout::Auto)]
     pub layout: CliLayout,
 
-    /// Output file path (single input only)
+    /// Output file path (single input only).
     #[arg(long, value_name = "PATH")]
     pub output: Option<PathBuf>,
 
-    /// Input files (supports glob)
+    /// Input files (supports glob).
     #[arg(value_name = "INPUT")]
     pub inputs: Vec<String>,
 }

@@ -1,6 +1,6 @@
-//! 音频水印嵌入/检测
+//! 音频水印嵌入/检测.
 //!
-//! 封装 audiowmark 命令行工具
+//! 封装 audiowmark 命令行工具.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -30,28 +30,28 @@ use rayon::prelude::*;
 #[cfg(not(feature = "bundled"))]
 const DEFAULT_SEARCH_PATHS: &[&str] = &["audiowmark"];
 
-/// 管道 I/O 的用户态缓冲区大小。
+/// 管道 I/O 的用户态缓冲区大小。.
 ///
 /// Windows 匿名管道内核缓冲区默认只有 4 KB，直接用 `io::copy` 的 8 KB 块写会频繁
 /// 触发系统调用切换。用 `BufWriter`/`BufReader` 在用户态积累更大的块，可显著减少
-/// Windows 上的上下文切换次数；在 macOS/Linux 上也能减少 syscall 开销。
+/// Windows 上的上下文切换次数；在 macOS/Linux 上也能减少 syscall 开销。.
 const PIPE_BUF_SIZE: usize = 256 * 1024;
-/// audiowmark 0.6.x 候选分数阈值（低于此值通常为伪命中）
+/// audiowmark 0.6.x 候选分数阈值（低于此值通常为伪命中）.
 const MIN_PATTERN_SCORE: f32 = 1.0;
 
-/// 媒体解码能力摘要（用于 doctor/UI 状态）
+/// 媒体解码能力摘要（用于 doctor/UI 状态）.
 #[derive(Debug, Clone, Copy)]
 #[allow(clippy::module_name_repetitions)]
 pub struct AudioMediaCapabilities {
-    /// 当前媒体后端名称
+    /// 当前媒体后端名称.
     pub backend: &'static str,
-    /// 是否支持 E-AC-3 解码
+    /// 是否支持 E-AC-3 解码.
     pub eac3_decode: bool,
-    /// 容器解封装能力位图
+    /// 容器解封装能力位图.
     pub containers: ContainerCapabilities,
 }
 
-/// 容器能力位图（3 个布尔能力压缩成位标记，避免结构体布尔字段过多）。
+/// 容器能力位图（3 个布尔能力压缩成位标记，避免结构体布尔字段过多）。.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ContainerCapabilities(u8);
 
@@ -110,7 +110,7 @@ impl AudioMediaCapabilities {
         self.containers.has_ts()
     }
 
-    /// 以逗号分隔形式返回当前可用容器摘要。
+    /// 以逗号分隔形式返回当前可用容器摘要。.
     #[must_use]
     pub fn supported_containers_csv(&self) -> String {
         let mut containers = Vec::new();
@@ -130,39 +130,39 @@ impl AudioMediaCapabilities {
     }
 }
 
-/// 水印嵌入/检测结果
+/// 水印嵌入/检测结果.
 #[derive(Debug, Clone)]
 pub struct DetectResult {
-    /// 提取的原始消息 (16 bytes)
+    /// 提取的原始消息 (16 bytes).
     pub raw_message: [u8; MESSAGE_LEN],
-    /// 检测模式 (all/single)
+    /// 检测模式 (all/single).
     pub pattern: String,
-    /// audiowmark 候选分数（仅新输出格式可用）
+    /// audiowmark 候选分数（仅新输出格式可用）.
     pub detect_score: Option<f32>,
-    /// 比特错误数
+    /// 比特错误数.
     pub bit_errors: u32,
-    /// 是否匹配
+    /// 是否匹配.
     pub match_found: bool,
 }
 
-/// 多声道检测结果
+/// 多声道检测结果.
 #[cfg(feature = "multichannel")]
 #[derive(Debug, Clone)]
 pub struct MultichannelDetectResult {
-    /// 各声道对的检测结果 (`pair_index`, `pair_name`, `result`)
+    /// 各声道对的检测结果 (`pair_index`, `pair_name`, `result`).
     pub pairs: Vec<(usize, String, Option<DetectResult>)>,
-    /// 最佳结果 (置信度最高的一个)
+    /// 最佳结果 (置信度最高的一个).
     pub best: Option<DetectResult>,
 }
 
-/// 音频水印操作器
+/// 音频水印操作器.
 #[derive(Debug, Clone)]
 pub struct Audio {
-    /// audiowmark 二进制路径
+    /// audiowmark 二进制路径.
     binary_path: PathBuf,
-    /// 水印强度 (1-30, 默认 10)
+    /// 水印强度 (1-30, 默认 10).
     strength: u8,
-    /// 密钥文件路径 (可选)
+    /// 密钥文件路径 (可选).
     key_file: Option<PathBuf>,
 }
 
@@ -279,10 +279,10 @@ impl Audio {
         Command::new(&self.binary_path)
     }
 
-    /// 创建 Audio 实例，自动搜索 audiowmark
+    /// 创建 Audio 实例，自动搜索 audiowmark.
     ///
     /// # Errors
-    /// 当无法定位或执行 `audiowmark` 二进制时返回错误。
+    /// 当无法定位或执行 `audiowmark` 二进制时返回错误。.
     pub fn new() -> Result<Self> {
         Self::new_with_fallback_path(None)
     }
@@ -297,10 +297,10 @@ impl Audio {
         })
     }
 
-    /// 指定 audiowmark 路径创建实例
+    /// 指定 audiowmark 路径创建实例.
     ///
     /// # Errors
-    /// 当给定路径不存在时返回错误。
+    /// 当给定路径不存在时返回错误。.
     pub fn with_binary<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         if !path.exists() {
@@ -313,33 +313,33 @@ impl Audio {
         })
     }
 
-    /// 设置水印强度 (1-30)
+    /// 设置水印强度 (1-30).
     #[must_use]
     pub fn strength(mut self, strength: u8) -> Self {
         self.strength = strength.clamp(1, 30);
         self
     }
 
-    /// 设置密钥文件
+    /// 设置密钥文件.
     #[must_use]
     pub fn key_file<P: AsRef<Path>>(mut self, path: P) -> Self {
         self.key_file = Some(path.as_ref().to_path_buf());
         self
     }
 
-    /// 返回 audiowmark 二进制路径
+    /// 返回 audiowmark 二进制路径.
     #[must_use]
     pub fn binary_path(&self) -> &Path {
         &self.binary_path
     }
 
-    /// 返回当前媒体解码能力摘要。
+    /// 返回当前媒体解码能力摘要。.
     #[must_use]
     pub fn media_capabilities(&self) -> AudioMediaCapabilities {
         media_capabilities()
     }
 
-    /// 嵌入水印消息到音频
+    /// 嵌入水印消息到音频.
     ///
     /// # Arguments
     /// - `input`: 输入音频路径
@@ -347,7 +347,7 @@ impl Audio {
     /// - `message`: 16 字节消息
     ///
     /// # Errors
-    /// 当输入格式不支持、输出不是 `.wav`、外部 `audiowmark` 执行失败或 I/O 失败时返回错误。
+    /// 当输入格式不支持、输出不是 `.wav`、外部 `audiowmark` 执行失败或 I/O 失败时返回错误。.
     pub fn embed<P: AsRef<Path>>(
         &self,
         input: P,
@@ -360,10 +360,10 @@ impl Audio {
         run_audiowmark_add_prepared(self, &prepared.path, output.as_ref(), &hex)
     }
 
-    /// 便捷方法：编码消息并嵌入
+    /// 便捷方法：编码消息并嵌入.
     ///
     /// # Errors
-    /// 当消息编码失败，或底层嵌入失败时返回错误。
+    /// 当消息编码失败，或底层嵌入失败时返回错误。.
     pub fn embed_with_tag<P: AsRef<Path>>(
         &self,
         input: P,
@@ -377,16 +377,16 @@ impl Audio {
         Ok(message)
     }
 
-    /// 从音频检测/提取水印
+    /// 从音频检测/提取水印.
     ///
     /// # Arguments
     /// - `input`: 音频文件路径
     ///
     /// # Returns
-    /// 检测结果，如果没有检测到水印返回 None
+    /// 检测结果，如果没有检测到水印返回 None.
     ///
     /// # Errors
-    /// 当输入格式不支持、外部 `audiowmark` 执行失败或输出解析异常时返回错误。
+    /// 当输入格式不支持、外部 `audiowmark` 执行失败或输出解析异常时返回错误。.
     pub fn detect<P: AsRef<Path>>(&self, input: P) -> Result<Option<DetectResult>> {
         let input = input.as_ref();
         let output = run_audiowmark_get_detect(self, input)?;
@@ -395,10 +395,10 @@ impl Audio {
         Ok(parse_detect_output(&stdout, &stderr))
     }
 
-    /// 便捷方法：检测并解码消息
+    /// 便捷方法：检测并解码消息.
     ///
     /// # Errors
-    /// 当检测流程失败，或检测到的消息无法通过 HMAC 校验时返回错误。
+    /// 当检测流程失败，或检测到的消息无法通过 HMAC 校验时返回错误。.
     pub fn detect_and_decode<P: AsRef<Path>>(
         &self,
         input: P,
@@ -413,7 +413,7 @@ impl Audio {
         }
     }
 
-    /// 检查 audiowmark 是否可用
+    /// 检查 audiowmark 是否可用.
     #[must_use]
     pub fn is_available(&self) -> bool {
         self.audiowmark_command()
@@ -423,10 +423,10 @@ impl Audio {
             .unwrap_or(false)
     }
 
-    /// 获取 audiowmark 版本
+    /// 获取 audiowmark 版本.
     ///
     /// # Errors
-    /// 当执行 `audiowmark --version` 失败时返回错误。
+    /// 当执行 `audiowmark --version` 失败时返回错误。.
     pub fn version(&self) -> Result<String> {
         let output = self
             .audiowmark_command()
@@ -438,9 +438,9 @@ impl Audio {
         Ok(stdout.trim().to_string())
     }
 
-    /// 多声道嵌入：将水印嵌入所有立体声对
+    /// 多声道嵌入：将水印嵌入所有立体声对.
     ///
-    /// 流程：
+    /// 流程：.
     /// 1. 加载多声道音频
     /// 2. 拆分为立体声对
     /// 3. 对每个立体声对嵌入相同的水印
@@ -453,7 +453,7 @@ impl Audio {
     /// - `layout`: 可选的声道布局 (自动检测或手动指定，用于区分 7.1 和 5.1.2)
     ///
     /// # Errors
-    /// 当输入格式不支持、布局与声道数不匹配、输出不是 `.wav`、或任一路由步骤嵌入失败时返回错误。
+    /// 当输入格式不支持、布局与声道数不匹配、输出不是 `.wav`、或任一路由步骤嵌入失败时返回错误。.
     #[cfg(feature = "multichannel")]
     pub fn embed_multichannel<P: AsRef<Path>>(
         &self,
@@ -552,12 +552,12 @@ impl Audio {
         Ok(())
     }
 
-    /// 多声道检测：从所有立体声对检测水印
+    /// 多声道检测：从所有立体声对检测水印.
     ///
-    /// 返回每个声道对的检测结果，以及最佳结果
+    /// 返回每个声道对的检测结果，以及最佳结果.
     ///
     /// # Errors
-    /// 当输入格式不支持、布局与声道数不匹配，或任一路由步骤检测失败时返回错误。
+    /// 当输入格式不支持、布局与声道数不匹配，或任一路由步骤检测失败时返回错误。.
     #[cfg(feature = "multichannel")]
     pub fn detect_multichannel<P: AsRef<Path>>(
         &self,
@@ -678,10 +678,10 @@ impl Audio {
         detect_multichannel_from_audio(self, &audio, stereo_file.as_deref(), input, layout)
     }
 
-    /// 便捷方法：多声道嵌入 (使用 Tag)
+    /// 便捷方法：多声道嵌入 (使用 Tag).
     ///
     /// # Errors
-    /// 当消息编码失败，或多声道嵌入流程失败时返回错误。
+    /// 当消息编码失败，或多声道嵌入流程失败时返回错误。.
     #[cfg(feature = "multichannel")]
     pub fn embed_multichannel_with_tag<P: AsRef<Path>>(
         &self,
@@ -697,10 +697,10 @@ impl Audio {
         Ok(message)
     }
 
-    /// 便捷方法：多声道检测并解码
+    /// 便捷方法：多声道检测并解码.
     ///
     /// # Errors
-    /// 当多声道检测失败，或最佳候选消息无法通过 HMAC 校验时返回错误。
+    /// 当多声道检测失败，或最佳候选消息无法通过 HMAC 校验时返回错误。.
     #[cfg(feature = "multichannel")]
     pub fn detect_multichannel_and_decode<P: AsRef<Path>>(
         &self,
@@ -1369,11 +1369,11 @@ fn looks_like_wav_stream(bytes: &[u8]) -> bool {
 }
 
 /// audiowmark `--output-format wav-pipe` 输出 RIFF/data chunk size 为 `0xFFFF_FFFF`。
-/// 修复大小字段，使返回的字节序列成为合法的标准 WAV，可被 hound 等工具直接读取。
+/// 修复大小字段，使返回的字节序列成为合法的标准 WAV，可被 hound 等工具直接读取。.
 ///
 /// 注意：audiowmark 在 pipe 模式下会在奇数长度 data 末尾追加 1 字节 WAV 对齐填充。
 /// 必须从 fmt chunk 读取 `block_align` 并将 data size 截断到 `block_align` 的整数倍，
-/// 否则 hound 会报 "data chunk length is not a multiple of sample size"。
+/// 否则 hound 会报 "data chunk length is not a multiple of sample size"。.
 fn normalize_wav_pipe_output(mut bytes: Vec<u8>) -> Vec<u8> {
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
         return bytes;
@@ -1713,7 +1713,7 @@ where
     Ok(step_results)
 }
 
-/// 从已加载的 [`MultichannelAudio`] 执行检测路由。
+/// 从已加载的 [`MultichannelAudio`] 执行检测路由。.
 ///
 /// - `stereo_file`: `Some(p)` → 立体声时直接用文件路径调用 `detect()`（性能更优）；
 ///   `None` → 将立体声编码为内存 WAV 字节后检测（ADM 或纯内存路径）。
@@ -1829,7 +1829,7 @@ fn apply_processed_route_step(
     }
 }
 
-/// 解析 audiowmark get 输出
+/// 解析 audiowmark get 输出.
 fn parse_detect_output(stdout: &str, stderr: &str) -> Option<DetectResult> {
     // 查找 pattern 行
     // 格式: "pattern  all 0101c1d05978131b57f7deb8e22a0b78"
@@ -2105,7 +2105,7 @@ fn decode_media_to_wav_pipe(input: &Path, writer: &mut dyn Write) -> Result<()> 
     media::decode_media_to_wav_pipe(input, writer)
 }
 
-/// 当前构建可用的媒体能力摘要。
+/// 当前构建可用的媒体能力摘要。.
 #[must_use]
 pub fn media_capabilities() -> AudioMediaCapabilities {
     #[cfg(feature = "ffmpeg-decode")]
@@ -2123,10 +2123,10 @@ pub fn media_capabilities() -> AudioMediaCapabilities {
     }
 }
 
-/// 直接从已解码的 PCM 数据构建 `MultichannelAudio`，跳过"写临时 WAV → 再读回"的冗余 I/O。
+/// 直接从已解码的 PCM 数据构建 `MultichannelAudio`，跳过"写临时 WAV → 再读回"的冗余 I/O。.
 ///
 /// `decode_to_wav` 路径：`DecodedPcm`（内存） → 磁盘 → `from_wav`（内存）
-/// 本函数路径：`DecodedPcm`（内存） → `MultichannelAudio`（内存），无磁盘接触。
+/// 本函数路径：`DecodedPcm`（内存） → `MultichannelAudio`（内存），无磁盘接触。.
 #[cfg(feature = "multichannel")]
 fn decoded_pcm_into_multichannel(decoded: DecodedPcm) -> Result<MultichannelAudio> {
     use crate::multichannel::SampleFormat;
@@ -2171,7 +2171,7 @@ fn clamp_sample_to_bits(sample: i32, bits_per_sample: u16) -> i32 {
     i32::try_from(clamped).unwrap_or(if clamped < 0 { i32::MIN } else { i32::MAX })
 }
 
-/// 字节数组转 hex 字符串
+/// 字节数组转 hex 字符串.
 fn bytes_to_hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(bytes.len() * 2);
@@ -2182,7 +2182,7 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
     out
 }
 
-/// hex 字符串转字节数组
+/// hex 字符串转字节数组.
 fn hex_to_bytes(hex: &str) -> Option<[u8; MESSAGE_LEN]> {
     if hex.len() != MESSAGE_LEN * 2 {
         return None;

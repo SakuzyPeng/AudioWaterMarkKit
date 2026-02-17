@@ -1,14 +1,14 @@
-//! 字符集定义
+//! 字符集定义.
 //!
-//! 32 字符 Base32 变体，排除易混淆字符 O/0/I/1/L
+//! 32 字符 Base32 变体，排除易混淆字符 O/0/I/1/L.
 
-/// 字符集：A-Z (去掉 O, I, L) + 2-9 + _
+/// 字符集：A-Z (去掉 O, I, L) + 2-9 + _.
 pub const CHARSET: &[u8; 32] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789_";
 
-/// 校验位计算用素数
+/// 校验位计算用素数.
 pub const PRIMES: [u32; 7] = [3, 5, 7, 11, 13, 17, 19];
 
-/// 字符转索引 (0-31)，无效字符返回 None
+/// 字符转索引 (0-31)，无效字符返回 None.
 #[inline]
 #[must_use]
 pub fn char_to_index(c: u8) -> Option<u8> {
@@ -19,14 +19,14 @@ pub fn char_to_index(c: u8) -> Option<u8> {
         .and_then(|i| u8::try_from(i).ok())
 }
 
-/// 索引转字符
+/// 索引转字符.
 #[inline]
 #[must_use]
 pub fn index_to_char(i: u8) -> Option<u8> {
     CHARSET.get(i as usize).copied()
 }
 
-/// 验证字符是否在字符集内
+/// 验证字符是否在字符集内.
 #[inline]
 #[must_use]
 pub fn is_valid_char(c: u8) -> bool {

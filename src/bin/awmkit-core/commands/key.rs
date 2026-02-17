@@ -19,7 +19,7 @@ pub struct ShowArgs {
     #[arg(long, value_name = "N", value_parser = parse_slot_arg)]
     pub slot: Option<u8>,
 
-    /// JSON output
+    /// JSON output.
     #[arg(long)]
     pub json: bool,
 }
@@ -27,7 +27,7 @@ pub struct ShowArgs {
 #[derive(Args)]
 /// Internal struct.
 pub struct ImportArgs {
-    /// Key file path (binary)
+    /// Key file path (binary).
     pub file: PathBuf,
 
     /// Target slot (0..31). Defaults to active slot.
@@ -38,10 +38,10 @@ pub struct ImportArgs {
 #[derive(Args)]
 /// Internal struct.
 pub struct ExportArgs {
-    /// Output file path (binary)
+    /// Output file path (binary).
     pub file: PathBuf,
 
-    /// Overwrite if exists
+    /// Overwrite if exists.
     #[arg(long)]
     pub force: bool,
 
@@ -103,7 +103,7 @@ pub enum SlotLabelCommand {
 #[derive(Args)]
 /// Internal struct.
 pub struct SlotUseArgs {
-    /// Slot id (0..31)
+    /// Slot id (0..31).
     #[arg(value_parser = parse_slot_arg)]
     pub slot: u8,
 }
@@ -111,7 +111,7 @@ pub struct SlotUseArgs {
 #[derive(Args)]
 /// Internal struct.
 pub struct SlotListArgs {
-    /// JSON output
+    /// JSON output.
     #[arg(long)]
     pub json: bool,
 }
@@ -119,17 +119,17 @@ pub struct SlotListArgs {
 #[derive(Args)]
 /// Internal struct.
 pub struct SlotLabelSetArgs {
-    /// Slot id (0..31)
+    /// Slot id (0..31).
     #[arg(value_parser = parse_slot_arg)]
     pub slot: u8,
-    /// Human-readable label
+    /// Human-readable label.
     pub label: String,
 }
 
 #[derive(Args)]
 /// Internal struct.
 pub struct SlotLabelClearArgs {
-    /// Slot id (0..31)
+    /// Slot id (0..31).
     #[arg(value_parser = parse_slot_arg)]
     pub slot: u8,
 }

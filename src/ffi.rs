@@ -1,6 +1,6 @@
-//! C FFI 导出
+//! C FFI 导出.
 //!
-//! 提供 C ABI 接口供 ObjC/Swift/其他语言调用
+//! 提供 C ABI 接口供 ObjC/Swift/其他语言调用.
 
 // FFI 模块需要 unsafe 代码
 #![allow(unsafe_code)]
@@ -25,7 +25,7 @@ use serde::Serialize;
 #[cfg(feature = "app")]
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-/// FFI 错误码
+/// FFI 错误码.
 #[repr(i32)]
 pub enum AWMError {
     Success = 0,
@@ -45,7 +45,7 @@ pub enum AWMError {
     AdmPcmFormatUnsupported = -14,
 }
 
-/// 解码结果结构体
+/// 解码结果结构体.
 #[repr(C)]
 pub struct AWMResult {
     pub version: u8,
@@ -92,6 +92,7 @@ fn ensure_sigpipe_ignored_once() {
     ONCE.call_once(|| {
         // FFI host process (Swift/ObjC/.NET) should never be terminated by SIGPIPE.
         // Convert broken pipe to regular EPIPE so Rust fallback logic can run.
+        // SAFETY: `signal` is called with valid constants and is process-global idempotent here.
         unsafe {
             libc::signal(libc::SIGPIPE, libc::SIG_IGN);
         }
@@ -132,7 +133,7 @@ unsafe fn write_string_with_required(
     AWMError::Success as i32
 }
 
-/// 创建 Tag（从身份字符串，自动补齐 + 计算校验位）
+/// 创建 Tag（从身份字符串，自动补齐 + 计算校验位）.
 ///
 /// # Safety
 /// - `identity` 必须是有效的 C 字符串
@@ -155,7 +156,7 @@ pub unsafe extern "C" fn awm_tag_new(identity: *const c_char, out: *mut c_char) 
     })
 }
 
-/// 验证 Tag 校验位
+/// 验证 Tag 校验位.
 ///
 /// # Safety
 /// - `tag` 必须是有效的 8 字符 C 字符串
@@ -172,7 +173,7 @@ pub unsafe extern "C" fn awm_tag_verify(tag: *const c_char) -> bool {
     Tag::parse(tag_str).is_ok()
 }
 
-/// 获取 Tag 的身份部分
+/// 获取 Tag 的身份部分.
 ///
 /// # Safety
 /// - `tag` 必须是有效的 8 字符 C 字符串
@@ -195,7 +196,7 @@ pub unsafe extern "C" fn awm_tag_identity(tag: *const c_char, out: *mut c_char) 
     })
 }
 
-/// 编码消息
+/// 编码消息.
 ///
 /// # Safety
 /// - `tag` 必须是有效的 8 字符 C 字符串
@@ -229,7 +230,7 @@ pub unsafe extern "C" fn awm_message_encode(
     })
 }
 
-/// 编码消息（指定槽位）
+/// 编码消息（指定槽位）.
 ///
 /// # Safety
 /// - `tag` 必须是有效的 8 字符 C 字符串
@@ -267,7 +268,7 @@ pub unsafe extern "C" fn awm_message_encode_with_slot(
     )
 }
 
-/// 编码消息（指定时间戳）
+/// 编码消息（指定时间戳）.
 ///
 /// # Safety
 /// - `tag` 必须是有效的 8 字符 C 字符串
@@ -305,7 +306,7 @@ pub unsafe extern "C" fn awm_message_encode_with_timestamp(
     )
 }
 
-/// 解码消息
+/// 解码消息.
 ///
 /// # Safety
 /// - `data` 必须指向 16 字节
@@ -336,7 +337,7 @@ pub unsafe extern "C" fn awm_message_decode(
     }
 }
 
-/// 解码消息（不验证 HMAC）
+/// 解码消息（不验证 HMAC）.
 ///
 /// # Safety
 /// - `data` 必须指向 16 字节
@@ -362,7 +363,7 @@ pub unsafe extern "C" fn awm_message_decode_unverified(
     }
 }
 
-/// 仅验证消息 HMAC
+/// 仅验证消息 HMAC.
 ///
 /// # Safety
 /// - `data` 必须指向 16 字节
@@ -383,7 +384,7 @@ pub unsafe extern "C" fn awm_message_verify(
     message::verify(data_slice, key_slice)
 }
 
-/// 获取当前版本号
+/// 获取当前版本号.
 #[no_mangle]
 pub const extern "C" fn awm_current_version() -> u8 {
     CURRENT_VERSION
@@ -411,7 +412,7 @@ unsafe fn fill_awm_result(result: *mut AWMResult, r: &crate::message::MessageRes
     (*result).identity[identity.len()] = 0;
 }
 
-/// 获取消息长度
+/// 获取消息长度.
 #[no_mangle]
 pub const extern "C" fn awm_message_length() -> usize {
     MESSAGE_LEN
@@ -423,45 +424,45 @@ pub const extern "C" fn awm_message_length() -> usize {
 
 use crate::audio::Audio;
 
-/// 不透明的 Audio 句柄
+/// 不透明的 Audio 句柄.
 pub struct AWMAudioHandle {
     /// Internal field.
     inner: Audio,
 }
 
-/// 检测结果结构体
+/// 检测结果结构体.
 #[repr(C)]
 pub struct AWMDetectResult {
-    /// 是否检测到水印
+    /// 是否检测到水印.
     pub found: bool,
-    /// 原始消息 (16 bytes)
+    /// 原始消息 (16 bytes).
     pub raw_message: [u8; 16],
-    /// 检测模式 (null-terminated)
+    /// 检测模式 (null-terminated).
     pub pattern: [c_char; 16],
-    /// 是否包含检测分数
+    /// 是否包含检测分数.
     pub has_detect_score: bool,
-    /// 检测分数（audiowmark 候选分数）
+    /// 检测分数（audiowmark 候选分数）.
     pub detect_score: f32,
-    /// 比特错误数
+    /// 比特错误数.
     pub bit_errors: u32,
 }
 
-/// 媒体能力结果
+/// 媒体能力结果.
 #[repr(C)]
 pub struct AWMAudioMediaCapabilities {
-    /// 后端名称
+    /// 后端名称.
     pub backend: [c_char; 16],
-    /// 是否支持 E-AC-3 解码
+    /// 是否支持 E-AC-3 解码.
     pub eac3_decode: bool,
-    /// 是否支持 MP4/M4A 容器
+    /// 是否支持 MP4/M4A 容器.
     pub container_mp4: bool,
-    /// 是否支持 MKV 容器
+    /// 是否支持 MKV 容器.
     pub container_mkv: bool,
-    /// 是否支持 MPEG-TS 容器
+    /// 是否支持 MPEG-TS 容器.
     pub container_ts: bool,
 }
 
-/// 克隆校验结果类型
+/// 克隆校验结果类型.
 #[repr(i32)]
 #[derive(Clone, Copy)]
 pub enum AWMCloneCheckKind {
@@ -471,24 +472,24 @@ pub enum AWMCloneCheckKind {
     Unavailable = 3,
 }
 
-/// 克隆校验结果
+/// 克隆校验结果.
 #[repr(C)]
 pub struct AWMCloneCheckResult {
-    /// 校验类型
+    /// 校验类型.
     pub kind: AWMCloneCheckKind,
-    /// 是否有指纹分数
+    /// 是否有指纹分数.
     pub has_score: bool,
-    /// 指纹匹配分数（越小越像）
+    /// 指纹匹配分数（越小越像）.
     pub score: f64,
-    /// 是否有匹配时长
+    /// 是否有匹配时长.
     pub has_match_seconds: bool,
-    /// 匹配时长（秒）
+    /// 匹配时长（秒）.
     pub match_seconds: f32,
-    /// 是否有关联证据 ID
+    /// 是否有关联证据 ID.
     pub has_evidence_id: bool,
-    /// 关联证据 ID
+    /// 关联证据 ID.
     pub evidence_id: i64,
-    /// 原因文本（null-terminated）
+    /// 原因文本（null-terminated）.
     pub reason: [c_char; 128],
 }
 
@@ -506,16 +507,16 @@ impl AWMCloneCheckResult {
     }
 }
 
-/// 嵌入证据记录结果（含 SNR）
+/// 嵌入证据记录结果（含 SNR）.
 #[repr(C)]
 pub struct AWMEmbedEvidenceResult {
-    /// 是否有 SNR 数值
+    /// 是否有 SNR 数值.
     pub has_snr_db: bool,
-    /// SNR（dB）
+    /// SNR（dB）.
     pub snr_db: f64,
-    /// SNR 状态（ok / unavailable / error）
+    /// SNR 状态（ok / unavailable / error）.
     pub snr_status: [c_char; 16],
-    /// SNR 详情（失败原因）
+    /// SNR 详情（失败原因）.
     pub snr_detail: [c_char; 128],
 }
 
@@ -530,10 +531,8 @@ impl AWMEmbedEvidenceResult {
     }
 }
 
-/// 创建 Audio 实例（自动搜索 audiowmark）
-///
-/// # Safety
-/// 返回的指针需要通过 `awm_audio_free` 释放
+/// 创建 Audio 实例（自动搜索 audiowmark）.
+/// 返回的指针需要通过 `awm_audio_free` 释放.
 #[no_mangle]
 pub extern "C" fn awm_audio_new() -> *mut AWMAudioHandle {
     ensure_sigpipe_ignored_once();
@@ -542,7 +541,7 @@ pub extern "C" fn awm_audio_new() -> *mut AWMAudioHandle {
     })
 }
 
-/// 创建 Audio 实例（指定 audiowmark 路径）
+/// 创建 Audio 实例（指定 audiowmark 路径）.
 ///
 /// # Safety
 /// - `binary_path` 必须是有效的 C 字符串
@@ -565,7 +564,7 @@ pub unsafe extern "C" fn awm_audio_new_with_binary(
     })
 }
 
-/// 释放 Audio 实例
+/// 释放 Audio 实例.
 ///
 /// # Safety
 /// - `handle` 必须是 `awm_audio_new*` 返回的有效指针
@@ -576,7 +575,7 @@ pub unsafe extern "C" fn awm_audio_free(handle: *mut AWMAudioHandle) {
     }
 }
 
-/// 设置水印强度
+/// 设置水印强度.
 ///
 /// # Safety
 /// - `handle` 必须是有效的 Audio 句柄
@@ -588,7 +587,7 @@ pub unsafe extern "C" fn awm_audio_set_strength(handle: *mut AWMAudioHandle, str
     }
 }
 
-/// 设置密钥文件
+/// 设置密钥文件.
 ///
 /// # Safety
 /// - `handle` 必须是有效的 Audio 句柄
@@ -610,7 +609,7 @@ pub unsafe extern "C" fn awm_audio_set_key_file(
     *audio = std::mem::take(audio).key_file(path_str);
 }
 
-/// 嵌入水印到音频
+/// 嵌入水印到音频.
 ///
 /// # Safety
 /// - `handle` 必须是有效的 Audio 句柄
@@ -649,7 +648,7 @@ pub unsafe extern "C" fn awm_audio_embed(
     }
 }
 
-/// 从音频检测水印
+/// 从音频检测水印.
 ///
 /// # Safety
 /// - `handle` 必须是有效的 Audio 句柄
@@ -794,7 +793,7 @@ fn evaluate_clone_check(
     Ok(output)
 }
 
-/// 评估克隆校验结果（优先 SHA256，其次指纹匹配）
+/// 评估克隆校验结果（优先 SHA256，其次指纹匹配）.
 ///
 /// # Safety
 /// - `input` 与 `identity` 必须是有效 C 字符串
@@ -845,7 +844,7 @@ pub unsafe extern "C" fn awm_clone_check_for_file(
     }
 }
 
-/// 对水印输出文件生成证据并写入数据库
+/// 对水印输出文件生成证据并写入数据库.
 ///
 /// # Safety
 /// - `file_path` 必须是有效 C 字符串
@@ -869,7 +868,7 @@ pub unsafe extern "C" fn awm_evidence_record_file(
     )
 }
 
-/// 对水印输出文件生成证据并写入数据库（可标记为强行嵌入）
+/// 对水印输出文件生成证据并写入数据库（可标记为强行嵌入）.
 ///
 /// # Safety
 /// - `file_path` 必须是有效 C 字符串
@@ -894,7 +893,7 @@ pub unsafe extern "C" fn awm_evidence_record_file_ex(
     )
 }
 
-/// 对嵌入结果文件生成证据并计算 SNR
+/// 对嵌入结果文件生成证据并计算 SNR.
 ///
 /// # Safety
 /// - `input_path` / `output_path` 必须是有效 C 字符串
@@ -1499,7 +1498,7 @@ pub unsafe extern "C" fn awm_db_evidence_remove_json(
     }
 }
 
-/// 检查 audiowmark 是否可用
+/// 检查 audiowmark 是否可用.
 ///
 /// # Safety
 /// - `handle` 必须是有效的 Audio 句柄或空指针。
@@ -1511,7 +1510,7 @@ pub unsafe extern "C" fn awm_audio_is_available(handle: *const AWMAudioHandle) -
     (*handle).inner.is_available()
 }
 
-/// 获取 audiowmark 二进制路径
+/// 获取 audiowmark 二进制路径.
 ///
 /// # Safety
 /// - `handle` 必须是有效的 Audio 句柄
@@ -1536,7 +1535,7 @@ pub unsafe extern "C" fn awm_audio_binary_path(
     AWMError::Success as i32
 }
 
-/// 获取媒体能力摘要（FFmpeg 解码能力）
+/// 获取媒体能力摘要（FFmpeg 解码能力）.
 ///
 /// # Safety
 /// - `handle` 必须是有效的 Audio 句柄
@@ -1564,7 +1563,7 @@ pub unsafe extern "C" fn awm_audio_media_capabilities(
 // Key Management (requires "app" feature)
 // ============================================================================
 
-/// 检查密钥是否已存在
+/// 检查密钥是否已存在.
 #[no_mangle]
 pub extern "C" fn awm_key_exists() -> bool {
     #[cfg(feature = "app")]
@@ -1577,9 +1576,9 @@ pub extern "C" fn awm_key_exists() -> bool {
     }
 }
 
-/// 获取当前生效的密钥存储后端标签
+/// 获取当前生效的密钥存储后端标签.
 ///
-/// 返回值说明：
+/// 返回值说明：.
 /// - "keyring (service: ...)"：通过 keyring 读取
 /// - "dpapi (...)"：通过 DPAPI 回退文件读取（Windows）
 /// - "none"：当前未配置密钥
@@ -1615,7 +1614,7 @@ pub unsafe extern "C" fn awm_key_backend_label(out: *mut c_char, out_len: usize)
     }
 }
 
-/// 加载密钥到输出缓冲区
+/// 加载密钥到输出缓冲区.
 ///
 /// # Safety
 /// - `out_key` 必须指向至少 `out_key_cap` 字节的缓冲区
@@ -1648,7 +1647,7 @@ pub unsafe extern "C" fn awm_key_load(out_key: *mut u8, out_key_cap: usize) -> i
     }
 }
 
-/// 生成新密钥并保存，返回密钥内容
+/// 生成新密钥并保存，返回密钥内容.
 ///
 /// # Safety
 /// - `out_key` 必须指向至少 `out_key_cap` 字节的缓冲区
@@ -1692,7 +1691,7 @@ pub unsafe extern "C" fn awm_key_generate_and_save(out_key: *mut u8, out_key_cap
     }
 }
 
-/// 获取当前激活槽位
+/// 获取当前激活槽位.
 ///
 /// # Safety
 /// - `out_slot` 必须是有效指针
@@ -1719,7 +1718,7 @@ pub unsafe extern "C" fn awm_key_active_slot_get(out_slot: *mut u8) -> i32 {
     }
 }
 
-/// 设置当前激活槽位
+/// 设置当前激活槽位.
 #[no_mangle]
 pub extern "C" fn awm_key_active_slot_set(slot: u8) -> i32 {
     #[cfg(feature = "app")]
@@ -1736,7 +1735,7 @@ pub extern "C" fn awm_key_active_slot_set(slot: u8) -> i32 {
     }
 }
 
-/// 设置指定槽位的人类可读标签
+/// 设置指定槽位的人类可读标签.
 ///
 /// # Safety
 /// - `label` 必须是有效 C 字符串
@@ -1768,7 +1767,7 @@ pub unsafe extern "C" fn awm_key_slot_label_set(slot: u8, label: *const c_char) 
     }
 }
 
-/// 清除指定槽位的人类可读标签
+/// 清除指定槽位的人类可读标签.
 #[no_mangle]
 pub extern "C" fn awm_key_slot_label_clear(slot: u8) -> i32 {
     #[cfg(feature = "app")]
@@ -1787,7 +1786,7 @@ pub extern "C" fn awm_key_slot_label_clear(slot: u8) -> i32 {
     }
 }
 
-/// 检查指定槽位是否存在密钥
+/// 检查指定槽位是否存在密钥.
 #[no_mangle]
 pub extern "C" fn awm_key_exists_slot(slot: u8) -> bool {
     #[cfg(feature = "app")]
@@ -1801,7 +1800,7 @@ pub extern "C" fn awm_key_exists_slot(slot: u8) -> bool {
     }
 }
 
-/// 生成并保存指定槽位密钥
+/// 生成并保存指定槽位密钥.
 ///
 /// # Safety
 /// - `out_key` 必须指向至少 `out_key_cap` 字节的缓冲区
@@ -1846,7 +1845,7 @@ pub unsafe extern "C" fn awm_key_generate_and_save_slot(
     }
 }
 
-/// 删除指定槽位密钥，并返回删除后激活槽位
+/// 删除指定槽位密钥，并返回删除后激活槽位.
 ///
 /// # Safety
 /// - `out_new_active_slot` 必须是有效指针
@@ -1872,7 +1871,7 @@ pub unsafe extern "C" fn awm_key_delete_slot(slot: u8, out_new_active_slot: *mut
     }
 }
 
-/// 获取全部槽位摘要（JSON）
+/// 获取全部槽位摘要（JSON）.
 ///
 /// Two-step usage:
 /// 1) call with out = NULL and `out_len` = 0 to get `out_required_len`
@@ -1911,7 +1910,7 @@ pub unsafe extern "C" fn awm_key_slot_summaries_json(
     }
 }
 
-/// 删除已保存的密钥
+/// 删除已保存的密钥.
 #[no_mangle]
 pub extern "C" fn awm_key_delete() -> i32 {
     #[cfg(feature = "app")]
@@ -1935,7 +1934,7 @@ pub extern "C" fn awm_key_delete() -> i32 {
 // Tag Suggestion (requires "app" feature)
 // ============================================================================
 
-/// 从用户名生成推荐标签（SHA256 哈希 → Base32 编码）
+/// 从用户名生成推荐标签（SHA256 哈希 → Base32 编码）.
 ///
 /// # Safety
 /// - `username` 必须是有效的 C 字符串
@@ -1974,23 +1973,23 @@ pub unsafe extern "C" fn awm_tag_suggest(username: *const c_char, out_tag: *mut 
 #[cfg(feature = "multichannel")]
 use crate::multichannel::ChannelLayout;
 
-/// 声道布局枚举
+/// 声道布局枚举.
 #[repr(i32)]
 #[derive(Clone, Copy)]
 pub enum AWMChannelLayout {
-    /// 立体声 (2ch)
+    /// 立体声 (2ch).
     Stereo = 0,
-    /// 5.1 环绕 (6ch)
+    /// 5.1 环绕 (6ch).
     Surround51 = 1,
-    /// 5.1.2 (8ch)
+    /// 5.1.2 (8ch).
     Surround512 = 2,
-    /// 7.1 环绕 (8ch)
+    /// 7.1 环绕 (8ch).
     Surround71 = 3,
-    /// 7.1.4 Atmos (12ch)
+    /// 7.1.4 Atmos (12ch).
     Surround714 = 4,
-    /// 9.1.6 Atmos (16ch)
+    /// 9.1.6 Atmos (16ch).
     Surround916 = 5,
-    /// 自动检测
+    /// 自动检测.
     Auto = -1,
 }
 
@@ -2010,41 +2009,41 @@ impl AWMChannelLayout {
     }
 }
 
-/// 多声道检测结果 - 单个声道对
+/// 多声道检测结果 - 单个声道对.
 #[repr(C)]
 pub struct AWMPairResult {
-    /// 声道对索引
+    /// 声道对索引.
     pub pair_index: u32,
-    /// 是否检测到水印
+    /// 是否检测到水印.
     pub found: bool,
-    /// 原始消息 (16 bytes)
+    /// 原始消息 (16 bytes).
     pub raw_message: [u8; 16],
-    /// 比特错误数
+    /// 比特错误数.
     pub bit_errors: u32,
 }
 
-/// 多声道检测结果
+/// 多声道检测结果.
 #[repr(C)]
 pub struct AWMMultichannelDetectResult {
-    /// 声道对数量
+    /// 声道对数量.
     pub pair_count: u32,
-    /// 各声道对结果 (最多 8 对)
+    /// 各声道对结果 (最多 8 对).
     pub pairs: [AWMPairResult; 8],
-    /// 是否有最佳结果
+    /// 是否有最佳结果.
     pub has_best: bool,
-    /// 最佳结果的原始消息
+    /// 最佳结果的原始消息.
     pub best_raw_message: [u8; 16],
-    /// 最佳结果的检测模式
+    /// 最佳结果的检测模式.
     pub best_pattern: [c_char; 16],
-    /// 最佳结果是否包含检测分数
+    /// 最佳结果是否包含检测分数.
     pub has_best_detect_score: bool,
-    /// 最佳结果检测分数
+    /// 最佳结果检测分数.
     pub best_detect_score: f32,
-    /// 最佳结果的比特错误数
+    /// 最佳结果的比特错误数.
     pub best_bit_errors: u32,
 }
 
-/// 多声道嵌入水印
+/// 多声道嵌入水印.
 ///
 /// # Safety
 /// - `handle` 必须是有效的 Audio 句柄
@@ -2089,7 +2088,7 @@ pub unsafe extern "C" fn awm_audio_embed_multichannel(
     }
 }
 
-/// 多声道检测水印
+/// 多声道检测水印.
 ///
 /// # Safety
 /// - `handle` 必须是有效的 Audio 句柄
@@ -2169,7 +2168,7 @@ pub unsafe extern "C" fn awm_audio_detect_multichannel(
     }
 }
 
-/// 获取声道布局的声道数
+/// 获取声道布局的声道数.
 #[no_mangle]
 pub const extern "C" fn awm_channel_layout_channels(layout: AWMChannelLayout) -> u32 {
     match layout {

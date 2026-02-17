@@ -11,14 +11,14 @@ pub struct AppSettings {
 
 impl AppSettings {
     /// # Errors
-    /// 当配置路径解析或配置文件读取/解析失败时返回错误。
+    /// 当配置路径解析或配置文件读取/解析失败时返回错误。.
     pub fn load() -> Result<Self> {
         let path = config_path()?;
         load_from(&path)
     }
 
     /// # Errors
-    /// 当配置路径解析或配置文件写入失败时返回错误。
+    /// 当配置路径解析或配置文件写入失败时返回错误。.
     pub fn save_language(lang: &str) -> Result<()> {
         let path = config_path()?;
         let mut settings = load_from(&path).unwrap_or_default();
@@ -27,7 +27,7 @@ impl AppSettings {
     }
 
     /// # Errors
-    /// 当配置路径解析或文件删除失败时返回错误。
+    /// 当配置路径解析或文件删除失败时返回错误。.
     pub fn remove_config() -> Result<()> {
         let path = config_path()?;
         if path.exists() {
@@ -61,7 +61,7 @@ fn load_from(path: &Path) -> Result<AppSettings> {
 }
 
 /// # Errors
-/// 当运行环境缺少必要目录环境变量时返回错误。
+/// 当运行环境缺少必要目录环境变量时返回错误。.
 pub fn config_path() -> Result<PathBuf> {
     #[cfg(target_os = "windows")]
     {

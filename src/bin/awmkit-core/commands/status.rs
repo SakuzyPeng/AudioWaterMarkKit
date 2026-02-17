@@ -8,7 +8,7 @@ use fluent_bundle::FluentArgs;
 #[derive(Args)]
 /// Internal struct.
 pub struct CmdArgs {
-    /// Run extended diagnostics
+    /// Run extended diagnostics.
     #[arg(long)]
     pub doctor: bool,
 }

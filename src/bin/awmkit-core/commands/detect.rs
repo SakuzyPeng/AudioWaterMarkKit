@@ -20,15 +20,15 @@ const DETECT_PROGRESS_TEMPLATE: &str = "{prefix} [{bar:40}] {pos}/{len}";
 #[derive(Args)]
 /// Internal struct.
 pub struct CmdArgs {
-    /// JSON output
+    /// JSON output.
     #[arg(long)]
     pub json: bool,
 
-    /// Channel layout (default: auto)
+    /// Channel layout (default: auto).
     #[arg(long, value_enum, default_value_t = CliLayout::Auto)]
     pub layout: CliLayout,
 
-    /// Input files (supports glob)
+    /// Input files (supports glob).
     #[arg(value_name = "INPUT")]
     pub inputs: Vec<String>,
 }

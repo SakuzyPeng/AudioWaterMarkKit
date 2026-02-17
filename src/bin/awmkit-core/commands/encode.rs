@@ -8,15 +8,15 @@ use clap::Args;
 #[derive(Args)]
 /// Internal struct.
 pub struct CmdArgs {
-    /// Tag (1-7 identity or full 8-char tag)
+    /// Tag (1-7 identity or full 8-char tag).
     #[arg(long)]
     pub tag: String,
 
-    /// Protocol version
+    /// Protocol version.
     #[arg(long, default_value_t = CURRENT_VERSION)]
     pub version: u8,
 
-    /// Timestamp (UTC Unix minutes)
+    /// Timestamp (UTC Unix minutes).
     #[arg(long)]
     pub timestamp: Option<u32>,
 }

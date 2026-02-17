@@ -40,7 +40,7 @@ enum LauncherCommand {
 }
 
 /// # Errors
-/// 当运行时解包、核心进程拉起、参数解析或缓存清理失败时返回错误。
+/// 当运行时解包、核心进程拉起、参数解析或缓存清理失败时返回错误。.
 pub fn run() -> Result<i32, String> {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
     match parse_command(&args)? {

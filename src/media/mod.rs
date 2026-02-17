@@ -1,4 +1,4 @@
-//! 媒体解码后端
+//! 媒体解码后端.
 
 #[cfg(feature = "multichannel")]
 pub mod adm_bwav;

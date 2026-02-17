@@ -1,4 +1,4 @@
-//! ADM/BWF (RIFF/RF64/BW64) 探测与 chunk 索引
+//! ADM/BWF (RIFF/RF64/BW64) 探测与 chunk 索引.
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
@@ -90,22 +90,22 @@ pub struct ChunkIndex {
 }
 
 impl ChunkIndex {
-    /// 文件是否需要 ADM 专用路径处理。
+    /// 文件是否需要 ADM 专用路径处理。.
     ///
     /// 仅有 `bext` 的普通 BWF 文件不需要此路径——audiowmark 可以直接
     /// 处理其 PCM 数据，而无需精确保留 ADM 对象元数据。
-    /// 真正的 ADM 文件需要有 `axml`（对象路由 XML）或 `chna`（声道编号）chunk。
+    /// 真正的 ADM 文件需要有 `axml`（对象路由 XML）或 `chna`（声道编号）chunk。.
     #[must_use]
     pub const fn is_adm_or_bwf(&self) -> bool {
         self.has_axml || self.has_chna
     }
 }
 
-/// 解析 chna chunk，返回属于 Bed（DirectSpeakers）的 0-based 声道索引列表。
+/// 解析 chna chunk，返回属于 Bed（DirectSpeakers）的 0-based 声道索引列表。.
 ///
 /// packFormat ID 含 `_0001`（`DirectSpeakers` 类型）视为 Bed；
 /// 含 `_0003`（Objects 类型）视为 Object，排除在外。
-/// 若 chna 不存在或解析失败，返回 `None`（调用方应退回全声道路径）。
+/// 若 chna 不存在或解析失败，返回 `None`（调用方应退回全声道路径）。.
 pub fn parse_bed_channel_indices(path: &Path, index: &ChunkIndex) -> Result<Option<Vec<usize>>> {
     let Some(chna_entry) = index.chunks.iter().find(|c| c.id == CHNA_SIG) else {
         return Ok(None);
@@ -154,14 +154,14 @@ pub fn parse_bed_channel_indices(path: &Path, index: &ChunkIndex) -> Result<Opti
     }
 }
 
-/// 解析 chna + axml，返回 Bed 声道的 `(channelIndex, speakerLabel)` 列表。
+/// 解析 chna + axml，返回 Bed 声道的 `(channelIndex, speakerLabel)` 列表。.
 ///
-/// 同时返回 [`AdmMaps`] 供调用方进一步使用。
+/// 同时返回 [`AdmMaps`] 供调用方进一步使用。.
 ///
 /// 解析链路（参见 [`adm_routing`] 模块文档）：
-/// `chna trackIndex → AT_xxx → (axml) AS_xxx → AC_xxx → speakerLabel`
+/// `chna trackIndex → AT_xxx → (axml) AS_xxx → AC_xxx → speakerLabel`.
 ///
-/// 若 chna/axml 缺失、解析失败或没有任何 Bed 声道，返回空 `Vec`。
+/// 若 chna/axml 缺失、解析失败或没有任何 Bed 声道，返回空 `Vec`。.
 pub fn parse_bed_channel_speaker_labels(
     path: &Path,
     index: &ChunkIndex,
@@ -235,11 +235,11 @@ pub fn parse_bed_channel_speaker_labels(
     Ok(result)
 }
 
-/// 解析 chna chunk，返回属于 Object（TypeDefinition: Objects，`_0003` 类型）的 0-based 声道索引列表。
+/// 解析 chna chunk，返回属于 Object（TypeDefinition: Objects，`_0003` 类型）的 0-based 声道索引列表。.
 ///
 /// packFormatIDRef 含 `_0003`（Objects 类型）视为 Object；
 /// 含 `_0001`（DirectSpeakers）视为 Bed，排除在外。
-/// 若 chna 不存在或无 Object 声道，返回空 Vec。
+/// 若 chna 不存在或无 Object 声道，返回空 Vec。.
 pub fn parse_object_channel_indices(path: &Path, index: &ChunkIndex) -> Result<Vec<usize>> {
     let Some(chna_entry) = index.chunks.iter().find(|c| c.id == CHNA_SIG) else {
         return Ok(Vec::new());
@@ -282,7 +282,7 @@ pub fn parse_object_channel_indices(path: &Path, index: &ChunkIndex) -> Result<V
     Ok(obj_indices)
 }
 
-/// `&[u8]` → ASCII 字符串（截止 NUL 或非 ASCII）。
+/// `&[u8]` → ASCII 字符串（截止 NUL 或非 ASCII）。.
 fn bytes_to_ascii_str(b: &[u8]) -> String {
     b.iter()
         .take_while(|&&c| c != 0 && c.is_ascii())
@@ -290,7 +290,7 @@ fn bytes_to_ascii_str(b: &[u8]) -> String {
         .collect()
 }
 
-/// DirectSpeakers（Bed）packFormat 判断：ID 含 `_0001`，不含 `_0003`（Objects）。
+/// DirectSpeakers（Bed）packFormat 判断：ID 含 `_0001`，不含 `_0003`（Objects）。.
 fn is_bed_pack_format(pack_fmt: &str) -> bool {
     pack_fmt.contains("_0001") && !pack_fmt.contains("_0003")
 }

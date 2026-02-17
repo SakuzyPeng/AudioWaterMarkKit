@@ -71,7 +71,7 @@ pub fn env_language() -> Option<String> {
 }
 
 /// # Errors
-/// 当语言标识符非法、语言包加载失败或 fallback 加载失败时返回错误。
+/// 当语言标识符非法、语言包加载失败或 fallback 加载失败时返回错误。.
 pub fn set_language(lang: Option<&str>) -> Result<()> {
     let requested = if let Some(lang) = lang {
         vec![LanguageIdentifier::from_str(lang)

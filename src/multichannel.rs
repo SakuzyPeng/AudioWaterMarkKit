@@ -1,29 +1,29 @@
-//! 多声道音频处理
+//! 多声道音频处理.
 //!
-//! 支持将多声道音频拆分为立体声对，便于 audiowmark 处理
+//! 支持将多声道音频拆分为立体声对，便于 audiowmark 处理.
 
 use std::path::Path;
 
 use crate::error::{Error, Result};
 
-/// 声道布局
+/// 声道布局.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChannelLayout {
-    /// 立体声 (2ch): FL FR
+    /// 立体声 (2ch): FL FR.
     Stereo,
-    /// 5.1 环绕 (6ch): FL FR FC LFE BL BR
+    /// 5.1 环绕 (6ch): FL FR FC LFE BL BR.
     Surround51,
-    /// 5.1.2 (8ch): FL FR FC LFE BL BR TFL TFR
+    /// 5.1.2 (8ch): FL FR FC LFE BL BR TFL TFR.
     Surround512,
-    /// 7.1 环绕 (8ch): FL FR FC LFE BL BR SL SR
+    /// 7.1 环绕 (8ch): FL FR FC LFE BL BR SL SR.
     Surround71,
-    /// 7.1.2 Atmos Bed (10ch): FL FR FC LFE BL BR SL SR Lts Rts
+    /// 7.1.2 Atmos Bed (10ch): FL FR FC LFE BL BR SL SR Lts Rts.
     Surround712,
-    /// 7.1.4 Atmos (12ch): FL FR FC LFE BL BR SL SR TFL TFR TBL TBR
+    /// 7.1.4 Atmos (12ch): FL FR FC LFE BL BR SL SR TFL TFR TBL TBR.
     Surround714,
-    /// 9.1.6 Atmos (16ch): FL FR FC LFE BL BR SL SR FLC FRC TFL TFR TBL TBR TSL TSR
+    /// 9.1.6 Atmos (16ch): FL FR FC LFE BL BR SL SR FLC FRC TFL TFR TBL TBR TSL TSR.
     Surround916,
-    /// 自定义声道数 (必须为偶数)
+    /// 自定义声道数 (必须为偶数).
     Custom(u16),
 }
 
@@ -41,9 +41,9 @@ pub(crate) enum LfeMode {
 /// Internal constant.
 pub(crate) const DEFAULT_LFE_MODE: LfeMode = LfeMode::Skip;
 
-/// 运行时 LFE 路由模式（默认 `skip`）。
+/// 运行时 LFE 路由模式（默认 `skip`）。.
 ///
-/// 可通过环境变量 `AWMKIT_LFE_MODE` 覆盖：
+/// 可通过环境变量 `AWMKIT_LFE_MODE` 覆盖：.
 /// - `skip`（默认）
 /// - `mono`
 /// - `pair`
@@ -266,7 +266,7 @@ fn skip_step(channel: usize, name: &str, reason: &'static str) -> RouteStep {
 }
 
 impl ChannelLayout {
-    /// 获取声道数
+    /// 获取声道数.
     #[must_use]
     pub const fn channels(&self) -> u16 {
         match self {
@@ -280,13 +280,13 @@ impl ChannelLayout {
         }
     }
 
-    /// 获取立体声对数量
+    /// 获取立体声对数量.
     #[must_use]
     pub const fn stereo_pairs(&self) -> u16 {
         self.channels() / 2
     }
 
-    /// 从声道数推断布局 (默认选择)
+    /// 从声道数推断布局 (默认选择).
     #[must_use]
     pub const fn from_channels(channels: u16) -> Self {
         match channels {
@@ -300,7 +300,7 @@ impl ChannelLayout {
         }
     }
 
-    /// 从声道数推断布局，无已知匹配时返回 `None`（不产生 `Custom` 兜底）。
+    /// 从声道数推断布局，无已知匹配时返回 `None`（不产生 `Custom` 兜底）。.
     #[must_use]
     pub const fn from_channels_opt(channels: usize) -> Option<Self> {
         match channels {
@@ -314,7 +314,7 @@ impl ChannelLayout {
         }
     }
 
-    /// 获取各立体声对的名称
+    /// 获取各立体声对的名称.
     #[must_use]
     pub fn pair_names(&self) -> Vec<&'static str> {
         match self {
@@ -349,21 +349,21 @@ impl ChannelLayout {
     }
 }
 
-/// 样本格式
+/// 样本格式.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SampleFormat {
-    /// 16-bit 整数
+    /// 16-bit 整数.
     Int16,
-    /// 24-bit 整数
+    /// 24-bit 整数.
     Int24,
-    /// 32-bit 整数
+    /// 32-bit 整数.
     Int32,
-    /// 32-bit 浮点
+    /// 32-bit 浮点.
     Float32,
 }
 
 impl SampleFormat {
-    /// 每样本的位数
+    /// 每样本的位数.
     #[must_use]
     pub const fn bits_per_sample(&self) -> u16 {
         match self {
@@ -374,24 +374,24 @@ impl SampleFormat {
     }
 }
 
-/// 多声道音频数据
+/// 多声道音频数据.
 #[derive(Debug, Clone)]
 #[allow(clippy::module_name_repetitions)]
 pub struct MultichannelAudio {
     /// 每个声道的样本数据 [channel][sample]
-    /// 统一存储为 i32，便于处理
+    /// 统一存储为 i32，便于处理.
     channels: Vec<Vec<i32>>,
-    /// 采样率
+    /// 采样率.
     sample_rate: u32,
-    /// 原始样本格式
+    /// 原始样本格式.
     sample_format: SampleFormat,
 }
 
 impl MultichannelAudio {
-    /// 创建新的多声道音频
+    /// 创建新的多声道音频.
     ///
     /// # Errors
-    /// 当声道集合为空，或各声道样本长度不一致时返回错误。
+    /// 当声道集合为空，或各声道样本长度不一致时返回错误。.
     pub fn new(
         channels: Vec<Vec<i32>>,
         sample_rate: u32,
@@ -419,41 +419,41 @@ impl MultichannelAudio {
         })
     }
 
-    /// 获取声道数
+    /// 获取声道数.
     #[must_use]
     pub const fn num_channels(&self) -> usize {
         self.channels.len()
     }
 
-    /// 获取每声道样本数
+    /// 获取每声道样本数.
     #[must_use]
     pub fn num_samples(&self) -> usize {
         self.channels.first().map_or(0, Vec::len)
     }
 
-    /// 获取采样率
+    /// 获取采样率.
     #[must_use]
     pub const fn sample_rate(&self) -> u32 {
         self.sample_rate
     }
 
-    /// 获取样本格式
+    /// 获取样本格式.
     #[must_use]
     pub const fn sample_format(&self) -> SampleFormat {
         self.sample_format
     }
 
-    /// 获取推断的声道布局
+    /// 获取推断的声道布局.
     #[must_use]
     pub fn layout(&self) -> ChannelLayout {
         let channels = u16::try_from(self.num_channels()).unwrap_or(u16::MAX);
         ChannelLayout::from_channels(channels)
     }
 
-    /// 从 WAV 文件加载
+    /// 从 WAV 文件加载.
     ///
     /// # Errors
-    /// 当文件无法读取、WAV 头无效、样本格式不支持或样本解析失败时返回错误。
+    /// 当文件无法读取、WAV 头无效、样本格式不支持或样本解析失败时返回错误。.
     #[cfg(feature = "multichannel")]
     pub fn from_wav<P: AsRef<Path>>(path: P) -> Result<Self> {
         use hound::WavReader;
@@ -505,10 +505,10 @@ impl MultichannelAudio {
         Self::new(channels, sample_rate, sample_format)
     }
 
-    /// 从 FLAC 文件加载
+    /// 从 FLAC 文件加载.
     ///
     /// # Errors
-    /// 当文件无法读取、FLAC 位深不支持或解码失败时返回错误。
+    /// 当文件无法读取、FLAC 位深不支持或解码失败时返回错误。.
     #[cfg(feature = "multichannel")]
     pub fn from_flac<P: AsRef<Path>>(path: P) -> Result<Self> {
         use claxon::FlacReader;
@@ -557,10 +557,10 @@ impl MultichannelAudio {
         Self::new(channels, sample_rate, sample_format)
     }
 
-    /// 从文件加载 (自动检测格式)
+    /// 从文件加载 (自动检测格式).
     ///
     /// # Errors
-    /// 当扩展名不支持，或底层 WAV/FLAC 读取失败时返回错误。
+    /// 当扩展名不支持，或底层 WAV/FLAC 读取失败时返回错误。.
     #[cfg(feature = "multichannel")]
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
@@ -579,10 +579,10 @@ impl MultichannelAudio {
         }
     }
 
-    /// 序列化为 WAV 字节（不写文件，供内存管道使用）
+    /// 序列化为 WAV 字节（不写文件，供内存管道使用）.
     ///
     /// # Errors
-    /// 当 WAV 头字段溢出、样本超出目标位深范围或序列化失败时返回错误。
+    /// 当 WAV 头字段溢出、样本超出目标位深范围或序列化失败时返回错误。.
     #[cfg(feature = "multichannel")]
     pub fn to_wav_bytes(&self) -> Result<Vec<u8>> {
         let channels = self.num_channels();
@@ -669,13 +669,13 @@ impl MultichannelAudio {
         Ok(buf)
     }
 
-    /// 从 WAV 字节反序列化（不读文件，供内存管道使用）
+    /// 从 WAV 字节反序列化（不读文件，供内存管道使用）.
     ///
     /// 自动处理 audiowmark `--output-format wav-pipe` 输出的 `RIFF ffffffff`
-    /// 流式格式（hound 拒绝此格式，需先修复大小字段）。
+    /// 流式格式（hound 拒绝此格式，需先修复大小字段）。.
     ///
     /// # Errors
-    /// 当字节流不是合法 WAV、样本格式不支持或样本解析失败时返回错误。
+    /// 当字节流不是合法 WAV、样本格式不支持或样本解析失败时返回错误。.
     #[cfg(feature = "multichannel")]
     pub fn from_wav_bytes(bytes: &[u8]) -> Result<Self> {
         use hound::WavReader;
@@ -725,10 +725,10 @@ impl MultichannelAudio {
         Self::new(channels, sample_rate, sample_format)
     }
 
-    /// 保存为 WAV 文件
+    /// 保存为 WAV 文件.
     ///
     /// # Errors
-    /// 当输出文件无法创建/写入，或样本超出目标位深范围时返回错误。
+    /// 当输出文件无法创建/写入，或样本超出目标位深范围时返回错误。.
     #[cfg(feature = "multichannel")]
     pub fn to_wav<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         use hound::{SampleFormat as HoundFormat, WavSpec, WavWriter};
@@ -796,9 +796,9 @@ impl MultichannelAudio {
         Ok(())
     }
 
-    /// 获取交错格式的样本数据 (用于 FLAC 编码等)
+    /// 获取交错格式的样本数据 (用于 FLAC 编码等).
     ///
-    /// 返回 `[L0, R0, L1, R1, ...]` 格式的样本
+    /// 返回 `[L0, R0, L1, R1, ...]` 格式的样本.
     #[must_use]
     pub fn interleaved_samples(&self) -> Vec<i32> {
         let num_samples = self.num_samples();
@@ -814,9 +814,9 @@ impl MultichannelAudio {
         result
     }
 
-    /// 拆分为立体声对
+    /// 拆分为立体声对.
     ///
-    /// 返回 `(left_channel, right_channel)` 的向量
+    /// 返回 `(left_channel, right_channel)` 的向量.
     #[must_use]
     pub fn split_stereo_pairs(&self) -> Vec<(Vec<i32>, Vec<i32>)> {
         self.channels
@@ -863,10 +863,10 @@ impl MultichannelAudio {
         Ok(())
     }
 
-    /// 从立体声对合并
+    /// 从立体声对合并.
     ///
     /// # Errors
-    /// 当输入声道对为空，或合并后各声道样本长度不一致时返回错误。
+    /// 当输入声道对为空，或合并后各声道样本长度不一致时返回错误。.
     pub fn merge_stereo_pairs(
         pairs: &[(Vec<i32>, Vec<i32>)],
         sample_rate: u32,
@@ -882,10 +882,10 @@ impl MultichannelAudio {
         Self::new(channels, sample_rate, sample_format)
     }
 
-    /// 保存立体声对到临时 WAV 文件
+    /// 保存立体声对到临时 WAV 文件.
     ///
     /// # Errors
-    /// 当 `pair_index` 越界、构造立体声对失败或写文件失败时返回错误。
+    /// 当 `pair_index` 越界、构造立体声对失败或写文件失败时返回错误。.
     #[cfg(feature = "multichannel")]
     pub fn save_stereo_pair<P: AsRef<Path>>(&self, pair_index: usize, path: P) -> Result<()> {
         let pairs = self.split_stereo_pairs();
@@ -905,10 +905,10 @@ impl MultichannelAudio {
         stereo.to_wav(path)
     }
 
-    /// 从立体声 WAV 文件加载并替换指定声道对
+    /// 从立体声 WAV 文件加载并替换指定声道对.
     ///
     /// # Errors
-    /// 当 `pair_index` 越界、输入并非立体声 WAV，或读取失败时返回错误。
+    /// 当 `pair_index` 越界、输入并非立体声 WAV，或读取失败时返回错误。.
     #[cfg(feature = "multichannel")]
     pub fn load_stereo_pair<P: AsRef<Path>>(&mut self, pair_index: usize, path: P) -> Result<()> {
         let stereo = Self::from_wav(path)?;
@@ -933,12 +933,12 @@ impl MultichannelAudio {
 }
 
 /// audiowmark `--output-format wav-pipe` 输出 RIFF/data chunk 大小为 `0xFFFF_FFFF`（流式未知长度）。
-/// hound 拒绝此格式；将大小字段修复为实际值后再交给 hound 解析。
+/// hound 拒绝此格式；将大小字段修复为实际值后再交给 hound 解析。.
 ///
-/// 若 RIFF size 不为 `0xFFFF_FFFF` 则直接借用原始切片，不做任何复制。
+/// 若 RIFF size 不为 `0xFFFF_FFFF` 则直接借用原始切片，不做任何复制。.
 ///
 /// 注意：audiowmark 在 pipe 模式下会在奇数长度 data 末尾追加 1 字节 WAV 对齐填充。
-/// 必须从 fmt chunk 读取 `block_align` 并将 data size 截断到 `block_align` 的整数倍。
+/// 必须从 fmt chunk 读取 `block_align` 并将 data size 截断到 `block_align` 的整数倍。.
 #[cfg(feature = "multichannel")]
 fn normalize_wav_pipe_sizes(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {

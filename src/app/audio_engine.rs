@@ -27,7 +27,7 @@ pub enum DetectOutcome {
 
 impl AudioEngine {
     /// # Errors
-    /// 当初始化底层 `Audio` 失败时返回错误。
+    /// 当初始化底层 `Audio` 失败时返回错误。.
     pub fn new(config: &AppConfig) -> Result<Self> {
         let audio = Audio::new_with_fallback_path(config.audiowmark_override.as_deref())
             .map_err(AppError::from)?;
@@ -35,7 +35,7 @@ impl AudioEngine {
     }
 
     /// # Errors
-    /// 当消息编码或底层音频嵌入流程失败时返回错误。
+    /// 当消息编码或底层音频嵌入流程失败时返回错误。.
     pub fn embed<P: AsRef<Path>>(
         &self,
         input: P,
@@ -52,7 +52,7 @@ impl AudioEngine {
     }
 
     /// # Errors
-    /// 当底层检测流程失败时返回错误。
+    /// 当底层检测流程失败时返回错误。.
     pub fn detect<P: AsRef<Path>>(&self, input: P, key: &[u8]) -> Result<DetectOutcome> {
         match self.audio.detect(input).map_err(AppError::from)? {
             None => Ok(DetectOutcome::NotFound),
@@ -73,7 +73,7 @@ impl AudioEngine {
 }
 
 /// # Errors
-/// 当输入路径无效或输出路径会覆盖输入文件时返回错误。
+/// 当输入路径无效或输出路径会覆盖输入文件时返回错误。.
 pub fn default_output_path(input: &Path) -> Result<PathBuf> {
     let stem = input
         .file_stem()

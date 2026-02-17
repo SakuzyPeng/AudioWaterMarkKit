@@ -1,4 +1,4 @@
-//! ADM/BWF 保真嵌入：仅替换 data chunk，保留其他 chunk 原字节
+//! ADM/BWF 保真嵌入：仅替换 data chunk，保留其他 chunk 原字节.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -169,7 +169,7 @@ where
     })
 }
 
-/// ADM Bed-only 嵌入：仅对 Bed 声道打水印，Object 声道原样保留。
+/// ADM Bed-only 嵌入：仅对 Bed 声道打水印，Object 声道原样保留。.
 ///
 /// - `bed_indices`: 仅声道索引（无位置信息），用于 fallback 路径。
 /// - `speaker_labels`: `Some(&[(channelIndex, label)])` 时使用 axml 位置感知路由；
@@ -223,9 +223,9 @@ fn embed_adm_bed_only(
     Ok(result)
 }
 
-/// 路径 A：使用 axml speakerLabel 构建 RoutePlan，按位置配对嵌入 Bed 声道。
+/// 路径 A：使用 axml speakerLabel 构建 RoutePlan，按位置配对嵌入 Bed 声道。.
 ///
-/// `speaker_labels`: `(channelIndex, speakerLabel)` 列表，仅含 Bed 声道。
+/// `speaker_labels`: `(channelIndex, speakerLabel)` 列表，仅含 Bed 声道。.
 fn embed_bed_by_speaker_labels(
     audio_engine: &Audio,
     source_audio: &MultichannelAudio,
@@ -328,9 +328,9 @@ fn embed_bed_by_speaker_labels(
     Ok(result)
 }
 
-/// 对 ADM Object 声道列表依序嵌入水印（真单声道，各自独立）。
+/// 对 ADM Object 声道列表依序嵌入水印（真单声道，各自独立）。.
 ///
-/// 处理流程（对每个 `obj_idx`）：
+/// 处理流程（对每个 `obj_idx`）：.
 /// 1. 越界检查 → 跳过并警告
 /// 2. 静默检测（~-80 dBFS）→ 跳过并提示
 /// 3. 构建 1ch [`MultichannelAudio`] → audiowmark → 写回原声道
@@ -389,9 +389,9 @@ fn embed_object_channels_into_audio(
     Ok(())
 }
 
-/// 对单个 [`MultichannelAudio`]（1ch mono 或 2ch stereo）执行 audiowmark 嵌入。
+/// 对单个 [`MultichannelAudio`]（1ch mono 或 2ch stereo）执行 audiowmark 嵌入。.
 ///
-/// 写临时文件 → audiowmark → 读回。
+/// 写临时文件 → audiowmark → 读回。.
 fn embed_single_audio_via_audiowmark(
     audio_engine: &Audio,
     audio: &MultichannelAudio,
@@ -413,7 +413,7 @@ fn embed_single_audio_via_audiowmark(
     result
 }
 
-/// 从 `MultichannelAudio` 按索引提取子集声道（供外部模块调用）。
+/// 从 `MultichannelAudio` 按索引提取子集声道（供外部模块调用）。.
 pub fn extract_bed_channels(
     audio: &MultichannelAudio,
     indices: &[usize],
@@ -421,7 +421,7 @@ pub fn extract_bed_channels(
     extract_channels(audio, indices)
 }
 
-/// 从 `MultichannelAudio` 按索引提取子集声道。
+/// 从 `MultichannelAudio` 按索引提取子集声道。.
 fn extract_channels(audio: &MultichannelAudio, indices: &[usize]) -> Result<MultichannelAudio> {
     let mut channels = Vec::with_capacity(indices.len());
     for &idx in indices {

@@ -1,19 +1,19 @@
-//! Tag 编解码与校验
+//! Tag 编解码与校验.
 //!
-//! Tag 结构: 7 字符身份 + 1 校验位 = 8 字符 = 40 bit (5-bit packed)
+//! Tag 结构: 7 字符身份 + 1 校验位 = 8 字符 = 40 bit (5-bit packed).
 
 use crate::charset::{char_to_index, index_to_char, is_valid_char, CHARSET, PRIMES};
 use crate::error::{Error, Result};
 
-/// 8 字符 Tag，包含 7 字符身份 + 1 校验位
+/// 8 字符 Tag，包含 7 字符身份 + 1 校验位.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tag {
-    /// 8 字符 ASCII (大写)
+    /// 8 字符 ASCII (大写).
     chars: [u8; 8],
 }
 
 impl Tag {
-    /// 从身份字符串创建 Tag（自动补齐 + 计算校验位）
+    /// 从身份字符串创建 Tag（自动补齐 + 计算校验位）.
     ///
     /// # Example
     /// ```
@@ -24,7 +24,7 @@ impl Tag {
     /// ```
     ///
     /// # Errors
-    /// 当身份长度不在 1..=7 或包含非法字符时返回错误。
+    /// 当身份长度不在 1..=7 或包含非法字符时返回错误。.
     pub fn new(identity: &str) -> Result<Self> {
         let identity = identity.to_ascii_uppercase();
         let len = identity.len();
@@ -54,13 +54,13 @@ impl Tag {
         Ok(Self { chars })
     }
 
-    /// 解析 8 字符 Tag 字符串（验证校验位）
+    /// 解析 8 字符 Tag 字符串（验证校验位）.
     ///
     /// # Errors
-    /// 当长度不是 8、包含非法字符或校验位不匹配时返回错误。
+    /// 当长度不是 8、包含非法字符或校验位不匹配时返回错误。.
     ///
     /// # Panics
-    /// 不会主动 panic；内部 `unwrap` 依赖固定长度切片不变式。
+    /// 不会主动 panic；内部 `unwrap` 依赖固定长度切片不变式。.
     pub fn parse(s: &str) -> Result<Self> {
         let s = s.to_ascii_uppercase();
 
@@ -96,13 +96,13 @@ impl Tag {
         Ok(tag)
     }
 
-    /// 从 5 bytes packed 数据解码
+    /// 从 5 bytes packed 数据解码.
     ///
     /// # Errors
-    /// 当 packed 数据包含非法索引或校验位不匹配时返回错误。
+    /// 当 packed 数据包含非法索引或校验位不匹配时返回错误。.
     ///
     /// # Panics
-    /// 不会主动 panic；内部 `unwrap` 依赖固定长度切片不变式。
+    /// 不会主动 panic；内部 `unwrap` 依赖固定长度切片不变式。.
     pub fn from_packed(data: &[u8; 5]) -> Result<Self> {
         let mut bits: u64 = 0;
         for &b in data {
@@ -132,10 +132,10 @@ impl Tag {
         Ok(tag)
     }
 
-    /// 编码为 5 bytes packed 数据
+    /// 编码为 5 bytes packed 数据.
     ///
     /// # Panics
-    /// 不会主动 panic；内部 `unwrap` 依赖 `Tag` 已完成字符集校验的不变式。
+    /// 不会主动 panic；内部 `unwrap` 依赖 `Tag` 已完成字符集校验的不变式。.
     #[must_use]
     pub fn to_packed(&self) -> [u8; 5] {
         let mut bits: u64 = 0;
@@ -156,10 +156,10 @@ impl Tag {
         out
     }
 
-    /// 验证校验位
+    /// 验证校验位.
     ///
     /// # Panics
-    /// 不会主动 panic；内部 `unwrap` 依赖固定长度切片不变式。
+    /// 不会主动 panic；内部 `unwrap` 依赖固定长度切片不变式。.
     #[must_use]
     pub fn verify(&self) -> bool {
         // chars 长度固定为 8，切片 [..7] 必定成功
@@ -168,10 +168,10 @@ impl Tag {
         self.chars[7] == expected
     }
 
-    /// 获取身份部分（去除尾部 _）
+    /// 获取身份部分（去除尾部 _）.
     ///
     /// # Panics
-    /// 不会主动 panic；内部 `from_utf8(...).unwrap()` 依赖 `Tag` 仅包含 ASCII 字符。
+    /// 不会主动 panic；内部 `from_utf8(...).unwrap()` 依赖 `Tag` 仅包含 ASCII 字符。.
     #[must_use]
     pub fn identity(&self) -> &str {
         // 所有字符都是 ASCII，from_utf8 必定成功
@@ -180,10 +180,10 @@ impl Tag {
         s.trim_end_matches('_')
     }
 
-    /// 获取完整 8 字符 Tag
+    /// 获取完整 8 字符 Tag.
     ///
     /// # Panics
-    /// 不会主动 panic；内部 `from_utf8(...).unwrap()` 依赖 `Tag` 仅包含 ASCII 字符。
+    /// 不会主动 panic；内部 `from_utf8(...).unwrap()` 依赖 `Tag` 仅包含 ASCII 字符。.
     #[must_use]
     pub fn as_str(&self) -> &str {
         // 所有字符都是 ASCII，from_utf8 必定成功
@@ -191,7 +191,7 @@ impl Tag {
         std::str::from_utf8(&self.chars).unwrap()
     }
 
-    /// 获取字节数组
+    /// 获取字节数组.
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8; 8] {
         &self.chars
@@ -216,7 +216,7 @@ impl std::str::FromStr for Tag {
     }
 }
 
-/// 计算 7 字符的校验位
+/// 计算 7 字符的校验位.
 fn calc_checksum(tag7: [u8; 7]) -> u8 {
     let total: u32 = tag7
         .iter()

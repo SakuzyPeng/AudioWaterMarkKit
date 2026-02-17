@@ -1,4 +1,4 @@
-//! `AWMKit` CLI
+//! `AWMKit` CLI.
 
 #[cfg(feature = "full-cli")]
 fn main() {
@@ -50,19 +50,19 @@ use std::path::PathBuf;
 )]
 /// Internal struct.
 struct Cli {
-    /// Verbose output
+    /// Verbose output.
     #[arg(short, long, global = true)]
     verbose: bool,
 
-    /// Quiet mode (only errors)
+    /// Quiet mode (only errors).
     #[arg(short, long, global = true)]
     quiet: bool,
 
-    /// Fallback audiowmark path (used when bundled binary is unavailable)
+    /// Fallback audiowmark path (used when bundled binary is unavailable).
     #[arg(long, global = true, value_name = "PATH")]
     audiowmark: Option<PathBuf>,
 
-    /// Language (e.g. zh-CN, en-US)
+    /// Language (e.g. zh-CN, en-US).
     #[arg(long, global = true, value_name = "LANG")]
     lang: Option<String>,
 
@@ -75,43 +75,43 @@ struct Cli {
 #[derive(Subcommand)]
 /// Internal enum.
 enum Commands {
-    /// Initialize key storage
+    /// Initialize key storage.
     Init,
 
-    /// Tag mapping helpers
+    /// Tag mapping helpers.
     Tag {
         #[command(subcommand)]
         /// Internal field.
         command: commands::tag::Command,
     },
 
-    /// Key management
+    /// Key management.
     Key {
         #[command(subcommand)]
         /// Internal field.
         command: KeyCommand,
     },
 
-    /// Encode a watermark message
+    /// Encode a watermark message.
     Encode(commands::encode::CmdArgs),
 
-    /// Decode a watermark message
+    /// Decode a watermark message.
     Decode(commands::decode::CmdArgs),
 
-    /// Embed watermark into audio files
+    /// Embed watermark into audio files.
     Embed(commands::embed::CmdArgs),
 
-    /// Detect watermark from audio files
+    /// Detect watermark from audio files.
     Detect(commands::detect::CmdArgs),
 
-    /// Query and manage evidence records
+    /// Query and manage evidence records.
     Evidence {
         #[command(subcommand)]
         /// Internal field.
         command: commands::evidence::Command,
     },
 
-    /// Show system status
+    /// Show system status.
     Status(commands::status::CmdArgs),
 }
 
@@ -119,22 +119,22 @@ enum Commands {
 #[derive(Subcommand)]
 /// Internal enum.
 enum KeyCommand {
-    /// Show key info (no key material)
+    /// Show key info (no key material).
     Show(commands::key::ShowArgs),
 
-    /// Import key from file (binary)
+    /// Import key from file (binary).
     Import(commands::key::ImportArgs),
 
-    /// Export key to file (binary)
+    /// Export key to file (binary).
     Export(commands::key::ExportArgs),
 
-    /// Rotate key
+    /// Rotate key.
     Rotate(commands::key::RotateArgs),
 
-    /// Delete key in one slot
+    /// Delete key in one slot.
     Delete(commands::key::DeleteArgs),
 
-    /// Slot management
+    /// Slot management.
     Slot {
         #[command(subcommand)]
         /// Internal field.
