@@ -126,7 +126,7 @@ public sealed partial class DateTimeConverter : IValueConverter
     {
         if (value is DateTime dt)
         {
-            return dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+            return dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
         }
         return string.Empty;
     }

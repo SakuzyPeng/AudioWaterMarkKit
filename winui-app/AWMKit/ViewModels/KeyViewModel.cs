@@ -103,7 +103,7 @@ public sealed partial class KeyViewModel : ObservableObject
     public string ActiveSummaryEvidenceLine => L($"证据: {ActiveKeySummary?.EvidenceCount ?? 0}", $"Evidence: {ActiveKeySummary?.EvidenceCount ?? 0}");
     public int ConfiguredSlotCount => _allSlotSummaries.Count(item => item.HasKey);
     public bool ShowConfiguredSlotCount => ConfiguredSlotCount > 0;
-    public string ConfiguredSlotCountText => ConfiguredSlotCount.ToString();
+    public string ConfiguredSlotCountText => ConfiguredSlotCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
     public string KeyPageTitle => L("密钥管理", "Key management");
     public string KeyStatusFieldLabel => L("密钥状态", "Key status");
     public string KeySourceFieldLabel => L("密钥来源", "Key source");
@@ -442,7 +442,7 @@ public sealed partial class KeyViewModel : ObservableObject
     private void ApplySlotFilter()
     {
         var keyword = SlotSearchText?.Trim();
-        var query = string.IsNullOrWhiteSpace(keyword) ? null : keyword.ToLowerInvariant();
+        var query = string.IsNullOrWhiteSpace(keyword) ? null : keyword;
         var filtered = query is null
             ? _allSlotSummaries
             : _allSlotSummaries.Where(item =>
@@ -456,8 +456,8 @@ public sealed partial class KeyViewModel : ObservableObject
                     item.StatusText,
                     $"evidence {item.EvidenceCount}",
                     $"证据 {item.EvidenceCount}"
-                }).ToLowerInvariant();
-                return fields.Contains(query, StringComparison.Ordinal);
+                });
+                return fields.Contains(query, StringComparison.OrdinalIgnoreCase);
             }).ToList();
 
         FilteredSlotSummaries.Clear();

@@ -17,7 +17,7 @@ namespace AWMKit.ViewModels;
 /// Application-level view model managing global state (key, engine, database).
 /// Singleton instance shared across all pages.
 /// </summary>
-public sealed partial class AppViewModel : ObservableObject
+public sealed partial class AppViewModel : ObservableObject, IDisposable
 {
     private static AppViewModel? _instance;
     public static AppViewModel Instance => _instance ??= new AppViewModel();
@@ -705,4 +705,9 @@ public sealed partial class AppViewModel : ObservableObject
     }
 
     private string L(string zh, string en) => IsEnglishLanguage ? en : zh;
+
+    public void Dispose()
+    {
+        _database.Dispose();
+    }
 }

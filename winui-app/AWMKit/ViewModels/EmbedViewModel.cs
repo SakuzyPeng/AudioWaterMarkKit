@@ -21,7 +21,7 @@ namespace AWMKit.ViewModels;
 /// <summary>
 /// Embed page state model aligned with macOS behavior.
 /// </summary>
-public sealed partial class EmbedViewModel : ObservableObject
+public sealed partial class EmbedViewModel : ObservableObject, IDisposable
 {
     private const int MaxLogCount = 200;
     private static readonly char[] SuggestedIdentityCharset = "ABCDEFGHJKMNPQRSTUVWXYZ23456789_".ToCharArray();
@@ -571,7 +571,7 @@ public sealed partial class EmbedViewModel : ObservableObject
     {
         if (IsProcessing)
         {
-            _embedCts?.Cancel();
+            await (_embedCts?.CancelAsync() ?? Task.CompletedTask);
             IsCancelling = true;
             AddLog(L("嵌入已停止", "Embedding stopped"), L("用户手动停止", "Stopped by user"), false, true, LogIconTone.Warning);
             return;
@@ -621,7 +621,7 @@ public sealed partial class EmbedViewModel : ObservableObject
             return;
         }
 
-        _progressResetCts?.Cancel();
+        await (_progressResetCts?.CancelAsync() ?? Task.CompletedTask);
         _embedCts = new CancellationTokenSource();
         var token = _embedCts.Token;
 
@@ -1196,7 +1196,7 @@ public sealed partial class EmbedViewModel : ObservableObject
                 $"Select a {extText} file or directory containing these files");
     }
 
-    private void LogUnsupportedDroppedFiles(IReadOnlyList<string> unsupported)
+    private void LogUnsupportedDroppedFiles(List<string> unsupported)
     {
         if (unsupported.Count == 0)
         {
@@ -1695,5 +1695,11 @@ public sealed partial class EmbedViewModel : ObservableObject
     {
         var callTask = Task.Run(operation);
         return await callTask.WaitAsync(token);
+    }
+
+    public void Dispose()
+    {
+        _embedCts?.Dispose();
+        _progressResetCts?.Dispose();
     }
 }

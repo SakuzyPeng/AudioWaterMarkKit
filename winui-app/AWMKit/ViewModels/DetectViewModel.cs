@@ -19,7 +19,7 @@ namespace AWMKit.ViewModels;
 /// <summary>
 /// Detect page state model aligned with macOS behavior.
 /// </summary>
-public sealed partial class DetectViewModel : ObservableObject
+public sealed partial class DetectViewModel : ObservableObject, IDisposable
 {
     private const int MaxLogCount = 200;
 
@@ -360,13 +360,13 @@ public sealed partial class DetectViewModel : ObservableObject
 
     public string DisplayIdentity => DetailValue(DisplayedRecord?.Identity);
 
-    public string DisplayVersion => DisplayedRecord?.Version is byte version ? version.ToString() : "-";
+    public string DisplayVersion => DisplayedRecord?.Version is byte version ? version.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-";
 
     public string DisplayDetectTime => LocalTimestampDisplay(DisplayedRecord);
 
-    public string DisplayKeySlot => DisplayedRecord?.KeySlot is byte keySlot ? keySlot.ToString() : "-";
+    public string DisplayKeySlot => DisplayedRecord?.KeySlot is byte keySlot ? keySlot.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-";
 
-    public string DisplayBitErrors => DisplayedRecord?.BitErrors is uint bitErrors ? bitErrors.ToString() : "-";
+    public string DisplayBitErrors => DisplayedRecord?.BitErrors is uint bitErrors ? bitErrors.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-";
 
     public string DisplayDetectScore => DisplayedRecord?.DetectScore is float score ? $"{score:0.000}" : "-";
 
@@ -562,7 +562,7 @@ public sealed partial class DetectViewModel : ObservableObject
         {
             if (IsProcessing)
             {
-                _detectCts?.Cancel();
+                await (_detectCts?.CancelAsync() ?? Task.CompletedTask);
                 AddLog(L("检测已停止", "Detection stopped"), L("用户手动停止", "Stopped by user"), false, true, null, LogIconTone.Warning);
                 return;
             }
@@ -616,7 +616,7 @@ public sealed partial class DetectViewModel : ObservableObject
             _detectCts = new CancellationTokenSource();
             var token = _detectCts.Token;
 
-            _progressResetCts?.Cancel();
+            await (_progressResetCts?.CancelAsync() ?? Task.CompletedTask);
             IsProcessing = true;
             Progress = 0;
             CurrentProcessingIndex = 0;
@@ -1062,7 +1062,7 @@ public sealed partial class DetectViewModel : ObservableObject
                 $"Select a {extText} file or directory containing these files");
     }
 
-    private void LogUnsupportedDroppedFiles(IReadOnlyList<string> unsupported)
+    private void LogUnsupportedDroppedFiles(List<string> unsupported)
     {
         if (unsupported.Count == 0)
         {
@@ -1452,7 +1452,7 @@ public sealed partial class DetectViewModel : ObservableObject
         }
 
         var dt = DateTimeOffset.FromUnixTimeSeconds((long)utcSeconds).ToLocalTime().DateTime;
-        return dt.ToString("yyyy-MM-dd HH:mm");
+        return dt.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private enum FieldSemantic
@@ -1744,5 +1744,11 @@ public sealed partial class DetectViewModel : ObservableObject
             ),
             _ => error.ToString(),
         };
+    }
+
+    public void Dispose()
+    {
+        _detectCts?.Dispose();
+        _progressResetCts?.Dispose();
     }
 }

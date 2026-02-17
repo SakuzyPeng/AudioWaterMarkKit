@@ -35,3 +35,12 @@ dotnet_diagnostic.CA1819.severity = none
 
 # CA1815: Override Equals on value types - data-only structs without equality semantics
 dotnet_diagnostic.CA1815.severity = none
+
+# CA1308: Normalize strings to uppercase - ToLowerInvariant used only for UI display, not comparisons
+dotnet_diagnostic.CA1308.severity = none
+
+# CA1810: Initialize static fields inline - static constructor required for complex DLL setup
+dotnet_diagnostic.CA1810.severity = none
+
+# CA1024: Use properties where appropriate - method semantics intentional for MVVM commands
+dotnet_diagnostic.CA1024.severity = none

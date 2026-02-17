@@ -6,7 +6,9 @@ namespace AWMKit.Native;
 public enum AwmError
 {
     Ok = 0,
-    Success = 0, // Alias for Ok
+#pragma warning disable CA1069 // Success is an intentional alias for Ok
+    Success = 0,
+#pragma warning restore CA1069
     InvalidTag = -1,
     InvalidMessageLength = -2,
     HmacMismatch = -3,

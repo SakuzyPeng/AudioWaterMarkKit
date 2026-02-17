@@ -11,8 +11,6 @@ namespace AWMKit.Native;
 public static class AwmBridge
 {
     private const int MessageLength = 16;
-    private const int TagLength = 8;
-    private const int IdentityMaxLength = 7;
 
     public readonly record struct DetectAudioResult(
         byte[] RawMessage,
@@ -343,7 +341,9 @@ public static class AwmBridge
     {
         try
         {
+#pragma warning disable CA1806 // HRESULT from progress cleanup is intentionally ignored
             AwmNative.awm_audio_progress_set_callback(handle, null, IntPtr.Zero);
+#pragma warning restore CA1806
             AwmNative.awm_audio_progress_clear(handle);
         }
         catch (EntryPointNotFoundException)
