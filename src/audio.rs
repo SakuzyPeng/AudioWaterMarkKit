@@ -829,6 +829,77 @@ impl Audio {
         Ok(stdout.trim().to_string())
     }
 
+    /// Internal helper: execute pre-built route steps and write the result to `output`.
+    #[cfg(feature = "multichannel")]
+    fn embed_via_route_plan(
+        &self,
+        op_id: u64,
+        mut audio: AudioBuffer,
+        output: &Path,
+        message: &[u8; MESSAGE_LEN],
+        executable_steps: &[(usize, RouteStep)],
+        step_total: u32,
+    ) -> Result<()> {
+        self.progress_set_phase_for_op(
+            op_id,
+            &PhaseParams {
+                phase: ProgressPhase::RouteStep,
+                phase_label: "embed_route_steps",
+                determinate: true,
+                completed_units: 0,
+                total_units: u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
+                step_index: 0,
+                step_total,
+            },
+        );
+        let step_done = Arc::new(AtomicU64::new(0));
+        let parallelism = compute_route_parallelism(executable_steps.len());
+        let mut step_results = with_route_thread_pool(parallelism, || {
+            executable_steps
+                .par_iter()
+                .map(|(step_idx, step)| {
+                    let step_idx_u32 =
+                        u32::try_from(step_idx.saturating_add(1)).unwrap_or(u32::MAX);
+                    self.progress_set_current_phase(&PhaseParams {
+                        phase: ProgressPhase::RouteStep,
+                        phase_label: step.name.as_str(),
+                        determinate: true,
+                        completed_units: step_done.load(Ordering::Relaxed),
+                        total_units: u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
+                        step_index: step_idx_u32,
+                        step_total,
+                    });
+                    let outcome = run_embed_step_task(self, &audio, step, message);
+                    let done = step_done.fetch_add(1, Ordering::Relaxed).saturating_add(1);
+                    self.progress_set_current_phase(&PhaseParams {
+                        phase: ProgressPhase::RouteStep,
+                        phase_label: step.name.as_str(),
+                        determinate: true,
+                        completed_units: done,
+                        total_units: u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
+                        step_index: step_idx_u32,
+                        step_total,
+                    });
+                    EmbedStepTaskResult {
+                        step_idx: *step_idx,
+                        step: step.clone(),
+                        outcome,
+                    }
+                })
+                .collect::<Vec<_>>()
+        })?;
+        self.progress_set_phase_for_op(
+            op_id,
+            &PhaseParams::indeterminate(ProgressPhase::Merge, "merge_route"),
+        );
+        apply_embed_step_results(&mut audio, &mut step_results);
+        self.progress_set_phase_for_op(
+            op_id,
+            &PhaseParams::indeterminate(ProgressPhase::Finalize, "write_output"),
+        );
+        audio.to_wav(output)
+    }
+
     /// 多声道嵌入：将水印嵌入所有立体声对.
     ///
     /// 流程：.
@@ -875,7 +946,7 @@ impl Audio {
             // 优先尝试原始输入，避免对可直接读取的 WAV/FLAC 先做不必要的临时解码。
             // 若失败则先尝试内存解码管线（DecodedPcm → AudioBuffer，无临时文件）；
             // 仍失败则 prepare/临时文件兜底；最终失败回退到立体声路径。
-            let mut audio = match AudioBuffer::from_file(input) {
+            let audio = match AudioBuffer::from_file(input) {
                 Ok(a) => a,
                 Err(Error::InvalidInput(_)) => {
                     // 内存管线：decode → AudioBuffer，跳过临时文件
@@ -937,76 +1008,103 @@ impl Audio {
                 .map(|(idx, step)| (idx, step.clone()))
                 .collect();
             let step_total = u32::try_from(executable_steps.len()).unwrap_or(u32::MAX);
-            self.progress_set_phase_for_op(
-                op_id,
-                &PhaseParams {
-                    phase: ProgressPhase::RouteStep,
-                    phase_label: "embed_route_steps",
-                    determinate: true,
-                    completed_units: 0,
-                    total_units: u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
-                    step_index: 0,
-                    step_total,
-                },
-            );
-            let step_done = Arc::new(AtomicU64::new(0));
-            let parallelism = compute_route_parallelism(executable_steps.len());
-            let mut step_results = with_route_thread_pool(parallelism, || {
-                executable_steps
-                    .par_iter()
-                    .map(|(step_idx, step)| {
-                        let step_idx_u32 =
-                            u32::try_from(step_idx.saturating_add(1)).unwrap_or(u32::MAX);
-                        self.progress_set_current_phase(
-                            &PhaseParams {
-                                phase: ProgressPhase::RouteStep,
-                                phase_label: step.name.as_str(),
-                                determinate: true,
-                                completed_units: step_done.load(Ordering::Relaxed),
-                                total_units: u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
-                                step_index: step_idx_u32,
-                                step_total,
-                            },
-                        );
-                        let outcome = run_embed_step_task(self, &audio, step, message);
-                        let done = step_done.fetch_add(1, Ordering::Relaxed).saturating_add(1);
-                        self.progress_set_current_phase(
-                            &PhaseParams {
-                                phase: ProgressPhase::RouteStep,
-                                phase_label: step.name.as_str(),
-                                determinate: true,
-                                completed_units: done,
-                                total_units: u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
-                                step_index: step_idx_u32,
-                                step_total,
-                            },
-                        );
-                        EmbedStepTaskResult {
-                            step_idx: *step_idx,
-                            step: step.clone(),
-                            outcome,
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            })?;
-
-            self.progress_set_phase_for_op(
-                op_id,
-                &PhaseParams::indeterminate(ProgressPhase::Merge, "merge_route"),
-            );
-            apply_embed_step_results(&mut audio, &mut step_results);
-
-            // 当前仅支持输出 WAV（FLAC 输出已暂时下线）。
-            self.progress_set_phase_for_op(
-                op_id,
-                &PhaseParams::indeterminate(ProgressPhase::Finalize, "write_output"),
-            );
-            audio.to_wav(output)?;
-
-            Ok(())
+            self.embed_via_route_plan(op_id, audio, output, message, &executable_steps, step_total)
         })();
         self.progress_finish_operation(op_id, result.is_ok(), "embed_done");
         result
+    }
+
+    /// Internal helper: run ADM Path A detection (axml-aware Bed + Object routing).
+    ///
+    /// Called when axml speaker labels are present and all labels are recognised.
+    #[cfg(feature = "multichannel")]
+    fn detect_adm_path_a(
+        &self,
+        op_id: u64,
+        input: &Path,
+        index: &media::adm_bwav::ChunkIndex,
+        full_audio: &AudioBuffer,
+        speaker_labels: &[(usize, String)],
+    ) -> Result<MultichannelDetectResult> {
+        let bed_plan = media::adm_routing::build_route_plan_from_labels(
+            speaker_labels,
+            effective_lfe_mode(),
+        );
+        for w in &bed_plan.warnings {
+            eprintln!("[awmkit] ADM detect routing warning: {w}");
+        }
+        let mut all_steps = bed_plan.steps;
+
+        // Object 声道：静默过滤后添加 Mono 步骤
+        let obj_indices = media::adm_bwav::parse_object_channel_indices(input, index)
+            .unwrap_or_default();
+        let sf = full_audio.sample_format();
+        for obj_idx in obj_indices {
+            if let Ok(samples) = full_audio.channel_samples(obj_idx) {
+                if media::adm_routing::is_silent(samples, sf) {
+                    eprintln!(
+                        "[awmkit] ADM detect: Object ch{obj_idx} silent (~-80 dBFS), skip"
+                    );
+                    continue;
+                }
+                all_steps.push(RouteStep {
+                    name: format!("obj_ch{obj_idx}"),
+                    mode: RouteMode::Mono(obj_idx),
+                });
+            }
+        }
+
+        // 排除 Skip 步骤后构建带索引的检测列表
+        let detect_steps: Vec<(usize, RouteStep)> = all_steps
+            .into_iter()
+            .enumerate()
+            .filter(|(_, s)| !matches!(s.mode, RouteMode::Skip { .. }))
+            .collect();
+        self.progress_set_phase_for_op(
+            op_id,
+            &PhaseParams {
+                phase: ProgressPhase::RouteStep,
+                phase_label: "detect_route_steps",
+                determinate: true,
+                completed_units: 0,
+                total_units: u64::try_from(detect_steps.len()).unwrap_or(u64::MAX),
+                step_index: 0,
+                step_total: u32::try_from(detect_steps.len()).unwrap_or(u32::MAX),
+            },
+        );
+        let step_total_u64 = u64::try_from(detect_steps.len()).unwrap_or(u64::MAX);
+        let step_total_u32 = u32::try_from(detect_steps.len()).unwrap_or(u32::MAX);
+        let mut done = 0_u64;
+        let step_results =
+            collect_detect_step_results_with_early_exit(&detect_steps, |step| {
+                let step_index = u32::try_from(done.saturating_add(1)).unwrap_or(u32::MAX);
+                self.progress_set_current_phase(&PhaseParams {
+                    phase: ProgressPhase::RouteStep,
+                    phase_label: step.name.as_str(),
+                    determinate: true,
+                    completed_units: done,
+                    total_units: step_total_u64,
+                    step_index,
+                    step_total: step_total_u32,
+                });
+                let outcome = run_detect_step_task(self, full_audio, step);
+                done = done.saturating_add(1);
+                self.progress_set_current_phase(&PhaseParams {
+                    phase: ProgressPhase::RouteStep,
+                    phase_label: step.name.as_str(),
+                    determinate: true,
+                    completed_units: done,
+                    total_units: step_total_u64,
+                    step_index,
+                    step_total: step_total_u32,
+                });
+                outcome
+            })?;
+        self.progress_set_phase_for_op(
+            op_id,
+            &PhaseParams::indeterminate(ProgressPhase::Merge, "detect_merge"),
+        );
+        Ok(finalize_detect_step_results(step_results))
     }
 
     /// 多声道检测：从所有立体声对检测水印.
@@ -1048,90 +1146,7 @@ impl Audio {
                     && speaker_labels.iter().all(|(_, l)| !l.starts_with('?'));
 
                 if has_valid_labels {
-                    let bed_plan = media::adm_routing::build_route_plan_from_labels(
-                        &speaker_labels,
-                        effective_lfe_mode(),
-                    );
-                    for w in &bed_plan.warnings {
-                        eprintln!("[awmkit] ADM detect routing warning: {w}");
-                    }
-                    let mut all_steps = bed_plan.steps;
-
-                    // Object 声道：静默过滤后添加 Mono 步骤
-                    let obj_indices = media::adm_bwav::parse_object_channel_indices(input, index)
-                        .unwrap_or_default();
-                    let sf = full_audio.sample_format();
-                    for obj_idx in obj_indices {
-                        if let Ok(samples) = full_audio.channel_samples(obj_idx) {
-                            if media::adm_routing::is_silent(samples, sf) {
-                                eprintln!(
-                                    "[awmkit] ADM detect: Object ch{obj_idx} silent (~-80 dBFS), skip"
-                                );
-                                continue;
-                            }
-                            all_steps.push(RouteStep {
-                                name: format!("obj_ch{obj_idx}"),
-                                mode: RouteMode::Mono(obj_idx),
-                            });
-                        }
-                    }
-
-                    // 排除 Skip 步骤后构建带索引的检测列表
-                    let detect_steps: Vec<(usize, RouteStep)> = all_steps
-                        .into_iter()
-                        .enumerate()
-                        .filter(|(_, s)| !matches!(s.mode, RouteMode::Skip { .. }))
-                        .collect();
-                    self.progress_set_phase_for_op(
-                        op_id,
-                        &PhaseParams {
-                            phase: ProgressPhase::RouteStep,
-                            phase_label: "detect_route_steps",
-                            determinate: true,
-                            completed_units: 0,
-                            total_units: u64::try_from(detect_steps.len()).unwrap_or(u64::MAX),
-                            step_index: 0,
-                            step_total: u32::try_from(detect_steps.len()).unwrap_or(u32::MAX),
-                        },
-                    );
-                    let step_total_u64 = u64::try_from(detect_steps.len()).unwrap_or(u64::MAX);
-                    let step_total_u32 = u32::try_from(detect_steps.len()).unwrap_or(u32::MAX);
-                    let mut done = 0_u64;
-                    let step_results =
-                        collect_detect_step_results_with_early_exit(&detect_steps, |step| {
-                            let step_index =
-                                u32::try_from(done.saturating_add(1)).unwrap_or(u32::MAX);
-                            self.progress_set_current_phase(
-                                &PhaseParams {
-                                    phase: ProgressPhase::RouteStep,
-                                    phase_label: step.name.as_str(),
-                                    determinate: true,
-                                    completed_units: done,
-                                    total_units: step_total_u64,
-                                    step_index,
-                                    step_total: step_total_u32,
-                                },
-                            );
-                            let outcome = run_detect_step_task(self, &full_audio, step);
-                            done = done.saturating_add(1);
-                            self.progress_set_current_phase(
-                                &PhaseParams {
-                                    phase: ProgressPhase::RouteStep,
-                                    phase_label: step.name.as_str(),
-                                    determinate: true,
-                                    completed_units: done,
-                                    total_units: step_total_u64,
-                                    step_index,
-                                    step_total: step_total_u32,
-                                },
-                            );
-                            outcome
-                        })?;
-                    self.progress_set_phase_for_op(
-                        op_id,
-                        &PhaseParams::indeterminate(ProgressPhase::Merge, "detect_merge"),
-                    );
-                    return Ok(finalize_detect_step_results(step_results));
+                    return self.detect_adm_path_a(op_id, input, index, &full_audio, &speaker_labels);
                 }
 
                 // ── Path B：退回路径（现有行为不变）──
