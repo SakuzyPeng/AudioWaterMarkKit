@@ -239,6 +239,49 @@ typedef struct {
     bool container_ts;         // supports mpegts container
 } AWMAudioMediaCapabilities;
 
+typedef enum {
+    AWM_PROGRESS_OP_NONE = 0,
+    AWM_PROGRESS_OP_EMBED = 1,
+    AWM_PROGRESS_OP_DETECT = 2,
+} AWMProgressOperation;
+
+typedef enum {
+    AWM_PROGRESS_PHASE_IDLE = 0,
+    AWM_PROGRESS_PHASE_PREPARE_INPUT = 1,
+    AWM_PROGRESS_PHASE_PRECHECK = 2,
+    AWM_PROGRESS_PHASE_CORE = 3,
+    AWM_PROGRESS_PHASE_ROUTE_STEP = 4,
+    AWM_PROGRESS_PHASE_MERGE = 5,
+    AWM_PROGRESS_PHASE_EVIDENCE = 6,
+    AWM_PROGRESS_PHASE_CLONE_CHECK = 7,
+    AWM_PROGRESS_PHASE_FINALIZE = 8,
+} AWMProgressPhase;
+
+typedef enum {
+    AWM_PROGRESS_STATE_IDLE = 0,
+    AWM_PROGRESS_STATE_RUNNING = 1,
+    AWM_PROGRESS_STATE_COMPLETED = 2,
+    AWM_PROGRESS_STATE_FAILED = 3,
+} AWMProgressState;
+
+typedef struct {
+    AWMProgressOperation operation;
+    AWMProgressPhase phase;
+    AWMProgressState state;
+    bool determinate;
+    uint64_t completed_units;
+    uint64_t total_units;
+    uint32_t step_index;
+    uint32_t step_total;
+    uint64_t op_id;
+    char phase_label[64];
+} AWMProgressSnapshot;
+
+typedef void (*AWMProgressCallback)(
+    const AWMProgressSnapshot* snapshot,
+    void* user_data
+);
+
 /**
  * Multichannel layout
  */
@@ -338,6 +381,30 @@ void awm_audio_set_strength(AWMAudioHandle* handle, uint8_t strength);
  * @param key_file  Path to key file
  */
 void awm_audio_set_key_file(AWMAudioHandle* handle, const char* key_file);
+
+/**
+ * Set progress callback (push mode).
+ *
+ * Callback may be triggered on worker threads.
+ */
+int32_t awm_audio_progress_set_callback(
+    AWMAudioHandle* handle,
+    AWMProgressCallback callback,
+    void* user_data
+);
+
+/**
+ * Get latest progress snapshot (poll mode).
+ */
+int32_t awm_audio_progress_get(
+    const AWMAudioHandle* handle,
+    AWMProgressSnapshot* result
+);
+
+/**
+ * Clear current progress state back to idle.
+ */
+void awm_audio_progress_clear(AWMAudioHandle* handle);
 
 /**
  * Embed watermark into audio file

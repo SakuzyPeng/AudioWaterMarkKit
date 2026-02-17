@@ -12,6 +12,9 @@ namespace AWMKit.Native;
 /// </summary>
 internal static class AwmNative
 {
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void AwmProgressCallback(IntPtr snapshot, IntPtr userData);
+
     private const string Lib = "awmkit_native.dll";
     private const string NativeLoadLogFileName = "native-load.log";
     private static readonly string[] FfmpegDependencyOrder =
@@ -419,6 +422,20 @@ internal static class AwmNative
 
     [DllImport(Lib, EntryPoint = "awm_audio_set_key_file", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern void awm_audio_set_key_file(IntPtr handle, [MarshalAs(UnmanagedType.LPUTF8Str)] string keyFile);
+
+    [DllImport(Lib, EntryPoint = "awm_audio_progress_set_callback", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_audio_progress_set_callback(
+        IntPtr handle,
+        AwmProgressCallback? callback,
+        IntPtr userData);
+
+    [DllImport(Lib, EntryPoint = "awm_audio_progress_get", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_audio_progress_get(
+        IntPtr handle,
+        IntPtr result);
+
+    [DllImport(Lib, EntryPoint = "awm_audio_progress_clear", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern void awm_audio_progress_clear(IntPtr handle);
 
     [DllImport(Lib, EntryPoint = "awm_audio_embed", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_audio_embed(

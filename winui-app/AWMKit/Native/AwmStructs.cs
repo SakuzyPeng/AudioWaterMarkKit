@@ -35,6 +35,37 @@ public enum AwmChannelLayout : int
     Auto = -1,
 }
 
+/// <summary>Progress operation kind.</summary>
+public enum AwmProgressOperation : int
+{
+    None = 0,
+    Embed = 1,
+    Detect = 2,
+}
+
+/// <summary>Progress phase.</summary>
+public enum AwmProgressPhase : int
+{
+    Idle = 0,
+    PrepareInput = 1,
+    Precheck = 2,
+    Core = 3,
+    RouteStep = 4,
+    Merge = 5,
+    Evidence = 6,
+    CloneCheck = 7,
+    Finalize = 8,
+}
+
+/// <summary>Progress state.</summary>
+public enum AwmProgressState : int
+{
+    Idle = 0,
+    Running = 1,
+    Completed = 2,
+    Failed = 3,
+}
+
 /// <summary>Decoded watermark message.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct AWMResult
@@ -111,6 +142,34 @@ public struct AWMAudioMediaCapabilities
         int len = Array.IndexOf(Backend, (byte)0);
         if (len < 0) len = Backend.Length;
         return System.Text.Encoding.UTF8.GetString(Backend, 0, len);
+    }
+}
+
+/// <summary>Progress snapshot for polling/callback payload.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct AWMProgressSnapshot
+{
+    public AwmProgressOperation Operation;
+    public AwmProgressPhase Phase;
+    public AwmProgressState State;
+
+    [MarshalAs(UnmanagedType.U1)]
+    public bool Determinate;
+
+    public ulong CompletedUnits;
+    public ulong TotalUnits;
+    public uint StepIndex;
+    public uint StepTotal;
+    public ulong OpId;
+
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 64)]
+    public byte[] PhaseLabel;
+
+    public string GetPhaseLabel()
+    {
+        int len = Array.IndexOf(PhaseLabel, (byte)0);
+        if (len < 0) len = PhaseLabel.Length;
+        return System.Text.Encoding.UTF8.GetString(PhaseLabel, 0, len);
     }
 }
 

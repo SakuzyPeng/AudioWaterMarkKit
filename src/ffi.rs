@@ -5,7 +5,7 @@
 // FFI 模块需要 unsafe 代码
 #![allow(unsafe_code)]
 
-use std::ffi::{c_char, CStr};
+use std::ffi::{c_char, c_void, CStr};
 use std::ptr;
 use std::slice;
 
@@ -421,7 +421,7 @@ pub const extern "C" fn awm_message_length() -> usize {
 // Audio Operations
 // ============================================================================
 
-use crate::audio::Audio;
+use crate::audio::{Audio, ProgressOperation, ProgressPhase, ProgressSnapshot, ProgressState};
 
 /// 不透明的 Audio 句柄.
 pub struct AWMAudioHandle {
@@ -460,6 +460,86 @@ pub struct AWMAudioMediaCapabilities {
     /// 是否支持 MPEG-TS 容器.
     pub container_ts: bool,
 }
+
+/// 进度操作类型.
+#[repr(i32)]
+#[derive(Clone, Copy)]
+pub enum AWMProgressOperation {
+    None = 0,
+    Embed = 1,
+    Detect = 2,
+}
+
+/// 进度阶段.
+#[repr(i32)]
+#[derive(Clone, Copy)]
+pub enum AWMProgressPhase {
+    Idle = 0,
+    PrepareInput = 1,
+    Precheck = 2,
+    Core = 3,
+    RouteStep = 4,
+    Merge = 5,
+    Evidence = 6,
+    CloneCheck = 7,
+    Finalize = 8,
+}
+
+/// 进度状态.
+#[repr(i32)]
+#[derive(Clone, Copy)]
+pub enum AWMProgressState {
+    Idle = 0,
+    Running = 1,
+    Completed = 2,
+    Failed = 3,
+}
+
+/// 进度快照.
+#[repr(C)]
+pub struct AWMProgressSnapshot {
+    /// 当前操作.
+    pub operation: AWMProgressOperation,
+    /// 当前阶段.
+    pub phase: AWMProgressPhase,
+    /// 当前状态.
+    pub state: AWMProgressState,
+    /// 是否为确定进度.
+    pub determinate: bool,
+    /// 已完成单位数.
+    pub completed_units: u64,
+    /// 总单位数.
+    pub total_units: u64,
+    /// 当前步骤（1-based，未知为 0）.
+    pub step_index: u32,
+    /// 步骤总数（未知为 0）.
+    pub step_total: u32,
+    /// 当前操作 id.
+    pub op_id: u64,
+    /// 阶段标签.
+    pub phase_label: [c_char; 64],
+}
+
+impl Default for AWMProgressSnapshot {
+    fn default() -> Self {
+        Self {
+            operation: AWMProgressOperation::None,
+            phase: AWMProgressPhase::Idle,
+            state: AWMProgressState::Idle,
+            determinate: false,
+            completed_units: 0,
+            total_units: 0,
+            step_index: 0,
+            step_total: 0,
+            op_id: 0,
+            phase_label: [0; 64],
+        }
+    }
+}
+
+/// 进度回调（可能在工作线程触发，宿主需自行切回 UI 线程）.
+pub type AWMProgressCallback =
+    Option<unsafe extern "C" fn(snapshot: *const AWMProgressSnapshot, user_data: *mut c_void)>;
 
 /// 克隆校验结果类型.
 #[repr(i32)]
@@ -528,6 +608,54 @@ impl AWMEmbedEvidenceResult {
         self.snr_detail.fill(0);
         copy_str_to_c_buf(&mut self.snr_status, FFI_SNR_STATUS_UNAVAILABLE);
     }
+}
+
+/// Internal helper function.
+const fn to_ffi_progress_operation(value: ProgressOperation) -> AWMProgressOperation {
+    match value {
+        ProgressOperation::None => AWMProgressOperation::None,
+        ProgressOperation::Embed => AWMProgressOperation::Embed,
+        ProgressOperation::Detect => AWMProgressOperation::Detect,
+    }
+}
+
+/// Internal helper function.
+const fn to_ffi_progress_phase(value: ProgressPhase) -> AWMProgressPhase {
+    match value {
+        ProgressPhase::Idle => AWMProgressPhase::Idle,
+        ProgressPhase::PrepareInput => AWMProgressPhase::PrepareInput,
+        ProgressPhase::Precheck => AWMProgressPhase::Precheck,
+        ProgressPhase::Core => AWMProgressPhase::Core,
+        ProgressPhase::RouteStep => AWMProgressPhase::RouteStep,
+        ProgressPhase::Merge => AWMProgressPhase::Merge,
+        ProgressPhase::Evidence => AWMProgressPhase::Evidence,
+        ProgressPhase::CloneCheck => AWMProgressPhase::CloneCheck,
+        ProgressPhase::Finalize => AWMProgressPhase::Finalize,
+    }
+}
+
+/// Internal helper function.
+const fn to_ffi_progress_state(value: ProgressState) -> AWMProgressState {
+    match value {
+        ProgressState::Idle => AWMProgressState::Idle,
+        ProgressState::Running => AWMProgressState::Running,
+        ProgressState::Completed => AWMProgressState::Completed,
+        ProgressState::Failed => AWMProgressState::Failed,
+    }
+}
+
+/// Internal helper function.
+fn fill_progress_snapshot(dst: &mut AWMProgressSnapshot, src: &ProgressSnapshot) {
+    dst.operation = to_ffi_progress_operation(src.operation);
+    dst.phase = to_ffi_progress_phase(src.phase);
+    dst.state = to_ffi_progress_state(src.state);
+    dst.determinate = src.determinate;
+    dst.completed_units = src.completed_units;
+    dst.total_units = src.total_units;
+    dst.step_index = src.step_index;
+    dst.step_total = src.step_total;
+    dst.op_id = src.op_id;
+    copy_str_to_c_buf(&mut dst.phase_label, &src.phase_label);
 }
 
 /// 创建 Audio 实例（自动搜索 audiowmark）.
@@ -606,6 +734,73 @@ pub unsafe extern "C" fn awm_audio_set_key_file(
 
     let audio = &mut (*handle).inner;
     *audio = std::mem::take(audio).key_file(path_str);
+}
+
+/// 设置进度回调（push）。
+///
+/// # Safety
+/// - `handle` 必须是有效句柄
+/// - `callback` 可为 NULL；非 NULL 时允许在工作线程触发
+/// - `user_data` 由宿主自管生命周期
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_progress_set_callback(
+    handle: *mut AWMAudioHandle,
+    callback: AWMProgressCallback,
+    user_data: *mut c_void,
+) -> i32 {
+    if handle.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    let audio = &(*handle).inner;
+    if let Some(cb) = callback {
+        let user_data_ptr = user_data as usize;
+        let wrapped: crate::audio::ProgressCallback = std::sync::Arc::new(move |snapshot| {
+            let mut ffi_snapshot = AWMProgressSnapshot::default();
+            fill_progress_snapshot(&mut ffi_snapshot, &snapshot);
+            // SAFETY: callback/user_data contract is provided by FFI caller.
+            unsafe {
+                cb(
+                    &ffi_snapshot as *const AWMProgressSnapshot,
+                    user_data_ptr as *mut c_void,
+                );
+            }
+        });
+        audio.set_progress_callback(Some(wrapped));
+    } else {
+        audio.set_progress_callback(None);
+    }
+
+    AWMError::Success as i32
+}
+
+/// 拉取当前进度快照（polling）。
+///
+/// # Safety
+/// - `handle` 与 `result` 必须是有效指针
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_progress_get(
+    handle: *const AWMAudioHandle,
+    result: *mut AWMProgressSnapshot,
+) -> i32 {
+    if handle.is_null() || result.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+    let snapshot = (*handle).inner.progress_snapshot();
+    fill_progress_snapshot(&mut *result, &snapshot);
+    AWMError::Success as i32
+}
+
+/// 清空进度状态（回到 idle）。
+///
+/// # Safety
+/// - `handle` 必须是有效句柄
+#[no_mangle]
+pub unsafe extern "C" fn awm_audio_progress_clear(handle: *mut AWMAudioHandle) {
+    if handle.is_null() {
+        return;
+    }
+    (*handle).inner.clear_progress();
 }
 
 /// 嵌入水印到音频.

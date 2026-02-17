@@ -4,6 +4,9 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, RwLock};
+use std::time::{Duration, Instant};
 use std::{
     fs,
     fs::File,
@@ -37,6 +40,8 @@ const DEFAULT_SEARCH_PATHS: &[&str] = &["audiowmark"];
 const PIPE_BUF_SIZE: usize = 256 * 1024;
 /// audiowmark 0.6.x 候选分数阈值（低于此值通常为伪命中）.
 const MIN_PATTERN_SCORE: f32 = 1.0;
+/// 进度事件节流间隔（20Hz）.
+const PROGRESS_THROTTLE: Duration = Duration::from_millis(50);
 
 /// 媒体解码能力摘要（用于 doctor/UI 状态）.
 #[derive(Debug, Clone, Copy)]
@@ -153,6 +158,260 @@ pub struct MultichannelDetectResult {
     pub best: Option<DetectResult>,
 }
 
+/// 进度所属操作类型.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ProgressOperation {
+    /// 无操作（空闲）.
+    None = 0,
+    /// 嵌入.
+    Embed = 1,
+    /// 检测.
+    Detect = 2,
+}
+
+/// 进度阶段.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ProgressPhase {
+    /// 空闲.
+    Idle = 0,
+    /// 输入准备.
+    PrepareInput = 1,
+    /// 预检.
+    Precheck = 2,
+    /// 核心执行（audiowmark/route step）.
+    Core = 3,
+    /// 多声道路由步骤.
+    RouteStep = 4,
+    /// 结果合并.
+    Merge = 5,
+    /// 证据记录.
+    Evidence = 6,
+    /// 克隆校验.
+    CloneCheck = 7,
+    /// 收尾.
+    Finalize = 8,
+}
+
+/// 进度状态.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ProgressState {
+    /// 空闲.
+    Idle = 0,
+    /// 运行中.
+    Running = 1,
+    /// 成功完成.
+    Completed = 2,
+    /// 失败结束.
+    Failed = 3,
+}
+
+/// 跨端通用进度快照.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProgressSnapshot {
+    /// 当前操作（嵌入/检测）.
+    pub operation: ProgressOperation,
+    /// 当前阶段.
+    pub phase: ProgressPhase,
+    /// 当前状态.
+    pub state: ProgressState,
+    /// 是否为确定进度（可给出 total）.
+    pub determinate: bool,
+    /// 已完成单位数（字节或步骤）.
+    pub completed_units: u64,
+    /// 总单位数（未知时为 0）.
+    pub total_units: u64,
+    /// 当前步骤序号（1-based；未知为 0）.
+    pub step_index: u32,
+    /// 步骤总数（未知为 0）.
+    pub step_total: u32,
+    /// 当前操作 id（每次新任务递增）.
+    pub op_id: u64,
+    /// 阶段文本标签（供 UI/CLI 展示）.
+    pub phase_label: String,
+}
+
+impl Default for ProgressSnapshot {
+    fn default() -> Self {
+        Self {
+            operation: ProgressOperation::None,
+            phase: ProgressPhase::Idle,
+            state: ProgressState::Idle,
+            determinate: false,
+            completed_units: 0,
+            total_units: 0,
+            step_index: 0,
+            step_total: 0,
+            op_id: 0,
+            phase_label: String::new(),
+        }
+    }
+}
+
+/// 进度回调类型.
+pub type ProgressCallback = Arc<dyn Fn(ProgressSnapshot) + Send + Sync + 'static>;
+
+/// Internal struct.
+struct ProgressTracker {
+    /// 最新快照（用于 polling）.
+    snapshot: RwLock<ProgressSnapshot>,
+    /// 回调（用于 push）。
+    callback: RwLock<Option<ProgressCallback>>,
+    /// 节流时间戳.
+    last_emit: Mutex<Option<Instant>>,
+    /// 递增操作 id.
+    op_seq: AtomicU64,
+}
+
+impl std::fmt::Debug for ProgressTracker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProgressTracker")
+            .field("snapshot", &self.snapshot())
+            .finish()
+    }
+}
+
+impl ProgressTracker {
+    /// Internal associated function.
+    fn new() -> Self {
+        Self {
+            snapshot: RwLock::new(ProgressSnapshot::default()),
+            callback: RwLock::new(None),
+            last_emit: Mutex::new(None),
+            op_seq: AtomicU64::new(0),
+        }
+    }
+
+    /// Internal helper method.
+    fn set_callback(&self, callback: Option<ProgressCallback>) {
+        let mut guard = self.callback.write().unwrap_or_else(|e| e.into_inner());
+        *guard = callback;
+    }
+
+    /// Internal helper method.
+    fn snapshot(&self) -> ProgressSnapshot {
+        self.snapshot
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Internal helper method.
+    fn clear(&self) {
+        {
+            let mut guard = self.snapshot.write().unwrap_or_else(|e| e.into_inner());
+            *guard = ProgressSnapshot::default();
+        }
+        self.emit(true);
+    }
+
+    /// Internal helper method.
+    fn begin(&self, operation: ProgressOperation, phase: ProgressPhase, label: &str) -> u64 {
+        let op_id = self
+            .op_seq
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
+        {
+            let mut snapshot = self.snapshot.write().unwrap_or_else(|e| e.into_inner());
+            snapshot.operation = operation;
+            snapshot.phase = phase;
+            snapshot.state = ProgressState::Running;
+            snapshot.determinate = false;
+            snapshot.completed_units = 0;
+            snapshot.total_units = 0;
+            snapshot.step_index = 0;
+            snapshot.step_total = 0;
+            snapshot.op_id = op_id;
+            snapshot.phase_label.clear();
+            snapshot.phase_label.push_str(label);
+        }
+        self.emit(true);
+        op_id
+    }
+
+    /// Internal helper method.
+    fn update_current<F>(&self, force: bool, mutator: F)
+    where
+        F: FnOnce(&mut ProgressSnapshot) -> bool,
+    {
+        let mut immediate = force;
+        {
+            let mut snapshot = self.snapshot.write().unwrap_or_else(|e| e.into_inner());
+            if snapshot.state != ProgressState::Running || snapshot.op_id == 0 {
+                return;
+            }
+            if mutator(&mut snapshot) {
+                immediate = true;
+            }
+        }
+        self.emit(immediate);
+    }
+
+    /// Internal helper method.
+    fn update_for_op<F>(&self, op_id: u64, force: bool, mutator: F)
+    where
+        F: FnOnce(&mut ProgressSnapshot) -> bool,
+    {
+        let mut immediate = force;
+        {
+            let mut snapshot = self.snapshot.write().unwrap_or_else(|e| e.into_inner());
+            if snapshot.op_id != op_id || snapshot.state != ProgressState::Running {
+                return;
+            }
+            if mutator(&mut snapshot) {
+                immediate = true;
+            }
+        }
+        self.emit(immediate);
+    }
+
+    /// Internal helper method.
+    fn finish(&self, op_id: u64, ok: bool, label: &str) {
+        {
+            let mut snapshot = self.snapshot.write().unwrap_or_else(|e| e.into_inner());
+            if snapshot.op_id != op_id {
+                return;
+            }
+            snapshot.phase = ProgressPhase::Finalize;
+            snapshot.phase_label.clear();
+            snapshot.phase_label.push_str(label);
+            snapshot.state = if ok {
+                ProgressState::Completed
+            } else {
+                ProgressState::Failed
+            };
+        }
+        self.emit(true);
+    }
+
+    /// Internal helper method.
+    fn emit(&self, force: bool) {
+        if !force {
+            let mut gate = self.last_emit.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(last) = *gate {
+                if last.elapsed() < PROGRESS_THROTTLE {
+                    return;
+                }
+            }
+            *gate = Some(Instant::now());
+        } else {
+            let mut gate = self.last_emit.lock().unwrap_or_else(|e| e.into_inner());
+            *gate = Some(Instant::now());
+        }
+
+        let callback = self
+            .callback
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if let Some(cb) = callback {
+            cb(self.snapshot());
+        }
+    }
+}
+
 /// 音频水印操作器.
 #[derive(Debug, Clone)]
 pub struct Audio {
@@ -162,6 +421,8 @@ pub struct Audio {
     strength: u8,
     /// 密钥文件路径 (可选).
     key_file: Option<PathBuf>,
+    /// 进度追踪器（callback + polling 共享源）.
+    progress_tracker: Arc<ProgressTracker>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -292,6 +553,7 @@ impl Audio {
             binary_path,
             strength: 10,
             key_file: None,
+            progress_tracker: Arc::new(ProgressTracker::new()),
         })
     }
 
@@ -308,6 +570,7 @@ impl Audio {
             binary_path: path,
             strength: 10,
             key_file: None,
+            progress_tracker: Arc::new(ProgressTracker::new()),
         })
     }
 
@@ -337,6 +600,103 @@ impl Audio {
         media_capabilities()
     }
 
+    /// 读取当前进度快照（供 polling）。
+    #[must_use]
+    pub fn progress_snapshot(&self) -> ProgressSnapshot {
+        self.progress_tracker.snapshot()
+    }
+
+    /// 清空进度状态（回到 idle）。
+    pub fn clear_progress(&self) {
+        self.progress_tracker.clear();
+    }
+
+    /// 设置进度回调（供 push）。
+    pub fn set_progress_callback(&self, callback: Option<ProgressCallback>) {
+        self.progress_tracker.set_callback(callback);
+    }
+
+    /// Internal helper method.
+    fn progress_begin_operation(&self, operation: ProgressOperation, label: &str) -> u64 {
+        self.progress_tracker
+            .begin(operation, ProgressPhase::PrepareInput, label)
+    }
+
+    /// Internal helper method.
+    fn progress_set_phase_for_op(
+        &self,
+        op_id: u64,
+        phase: ProgressPhase,
+        label: &str,
+        determinate: bool,
+        completed_units: u64,
+        total_units: u64,
+        step_index: u32,
+        step_total: u32,
+    ) {
+        self.progress_tracker
+            .update_for_op(op_id, false, |snapshot| {
+                let phase_changed = snapshot.phase != phase
+                    || snapshot.phase_label != label
+                    || snapshot.determinate != determinate
+                    || snapshot.step_index != step_index
+                    || snapshot.step_total != step_total;
+                snapshot.phase = phase;
+                snapshot.phase_label.clear();
+                snapshot.phase_label.push_str(label);
+                snapshot.determinate = determinate;
+                snapshot.completed_units = completed_units;
+                snapshot.total_units = total_units;
+                snapshot.step_index = step_index;
+                snapshot.step_total = step_total;
+                phase_changed
+            });
+    }
+
+    /// Internal helper method.
+    fn progress_set_current_phase(
+        &self,
+        phase: ProgressPhase,
+        label: &str,
+        determinate: bool,
+        completed_units: u64,
+        total_units: u64,
+        step_index: u32,
+        step_total: u32,
+    ) {
+        self.progress_tracker.update_current(false, |snapshot| {
+            let phase_changed = snapshot.phase != phase
+                || snapshot.phase_label != label
+                || snapshot.determinate != determinate
+                || snapshot.step_index != step_index
+                || snapshot.step_total != step_total;
+            snapshot.phase = phase;
+            snapshot.phase_label.clear();
+            snapshot.phase_label.push_str(label);
+            snapshot.determinate = determinate;
+            snapshot.completed_units = completed_units;
+            snapshot.total_units = total_units;
+            snapshot.step_index = step_index;
+            snapshot.step_total = step_total;
+            phase_changed
+        });
+    }
+
+    /// Internal helper method.
+    fn progress_update_current_units(&self, completed_units: u64, total_units: Option<u64>) {
+        self.progress_tracker.update_current(false, |snapshot| {
+            snapshot.completed_units = completed_units;
+            snapshot.total_units = total_units.unwrap_or(0);
+            snapshot.determinate = total_units.is_some();
+            false
+        });
+    }
+
+    /// Internal helper method.
+    fn progress_finish_operation(&self, op_id: u64, ok: bool, label: &str) {
+        self.progress_tracker.finish(op_id, ok, label);
+    }
+
     /// 嵌入水印消息到音频.
     ///
     /// # Arguments
@@ -352,10 +712,25 @@ impl Audio {
         output: P,
         message: &[u8; MESSAGE_LEN],
     ) -> Result<()> {
-        validate_embed_output_path(output.as_ref())?;
-        let prepared = prepare_input_for_audiowmark(input.as_ref(), "embed_input")?;
-        let hex = bytes_to_hex(message);
-        run_audiowmark_add_prepared(self, &prepared.path, output.as_ref(), &hex)
+        let op_id = self.progress_begin_operation(ProgressOperation::Embed, "prepare_input");
+        let result = (|| {
+            validate_embed_output_path(output.as_ref())?;
+            let prepared = prepare_input_for_audiowmark(input.as_ref(), "embed_input")?;
+            let hex = bytes_to_hex(message);
+            self.progress_set_phase_for_op(
+                op_id,
+                ProgressPhase::Core,
+                "embed_core",
+                false,
+                0,
+                0,
+                0,
+                0,
+            );
+            run_audiowmark_add_prepared(self, &prepared.path, output.as_ref(), &hex)
+        })();
+        self.progress_finish_operation(op_id, result.is_ok(), "embed_done");
+        result
     }
 
     /// 便捷方法：编码消息并嵌入.
@@ -386,11 +761,26 @@ impl Audio {
     /// # Errors
     /// 当输入格式不支持、外部 `audiowmark` 执行失败或输出解析异常时返回错误。.
     pub fn detect<P: AsRef<Path>>(&self, input: P) -> Result<Option<DetectResult>> {
-        let input = input.as_ref();
-        let output = run_audiowmark_get_detect(self, input)?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Ok(parse_detect_output(&stdout, &stderr))
+        let op_id = self.progress_begin_operation(ProgressOperation::Detect, "prepare_input");
+        let result = (|| {
+            let input = input.as_ref();
+            self.progress_set_phase_for_op(
+                op_id,
+                ProgressPhase::Core,
+                "detect_core",
+                false,
+                0,
+                0,
+                0,
+                0,
+            );
+            let output = run_audiowmark_get_detect(self, input)?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Ok(parse_detect_output(&stdout, &stderr))
+        })();
+        self.progress_finish_operation(op_id, result.is_ok(), "detect_done");
+        result
     }
 
     /// 便捷方法：检测并解码消息.
@@ -460,94 +850,178 @@ impl Audio {
         message: &[u8; MESSAGE_LEN],
         layout: Option<ChannelLayout>,
     ) -> Result<()> {
-        let input = input.as_ref();
-        let output = output.as_ref();
-        validate_embed_output_path(output)?;
+        let op_id = self.progress_begin_operation(ProgressOperation::Embed, "prepare_input");
+        let result = (|| {
+            let input = input.as_ref();
+            let output = output.as_ref();
+            validate_embed_output_path(output)?;
 
-        if media::adm_bwav::probe_adm_bwf(input)?.is_some() {
-            return media::adm_embed::embed_adm_multichannel(self, input, output, message, layout);
-        }
+            if media::adm_bwav::probe_adm_bwf(input)?.is_some() {
+                self.progress_set_phase_for_op(
+                    op_id,
+                    ProgressPhase::Core,
+                    "embed_adm",
+                    false,
+                    0,
+                    0,
+                    0,
+                    0,
+                );
+                return media::adm_embed::embed_adm_multichannel(
+                    self, input, output, message, layout,
+                );
+            }
 
-        let mut prepared_fallback: Option<PreparedInput> = None;
+            let mut prepared_fallback: Option<PreparedInput> = None;
 
-        // 加载多声道音频以检测声道数。
-        // 优先尝试原始输入，避免对可直接读取的 WAV/FLAC 先做不必要的临时解码。
-        // 若失败则先尝试内存解码管线（DecodedPcm → AudioBuffer，无临时文件）；
-        // 仍失败则 prepare/临时文件兜底；最终失败回退到立体声路径。
-        let mut audio = match AudioBuffer::from_file(input) {
-            Ok(a) => a,
-            Err(Error::InvalidInput(_)) => {
-                // 内存管线：decode → AudioBuffer，跳过临时文件
-                if let Ok(a) =
-                    decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel)
-                {
-                    // 单声道或立体声：字节管线直接完成，无需继续路由
-                    if a.num_channels() <= 2 {
-                        let wav_bytes = a.to_wav_bytes()?;
-                        let out_bytes =
-                            run_audiowmark_add_bytes(self, wav_bytes, &bytes_to_hex(message))?;
-                        return AudioBuffer::from_wav_bytes(&out_bytes)?.to_wav(output);
-                    }
-                    a
-                } else {
-                    // 兜底：传统临时文件路径
-                    let prepared = prepare_input_for_audiowmark(input, "embed_multichannel_input")?;
-                    match AudioBuffer::from_file(&prepared.path) {
-                        Ok(a) => {
-                            prepared_fallback = Some(prepared);
-                            a
+            // 加载多声道音频以检测声道数。
+            // 优先尝试原始输入，避免对可直接读取的 WAV/FLAC 先做不必要的临时解码。
+            // 若失败则先尝试内存解码管线（DecodedPcm → AudioBuffer，无临时文件）；
+            // 仍失败则 prepare/临时文件兜底；最终失败回退到立体声路径。
+            let mut audio = match AudioBuffer::from_file(input) {
+                Ok(a) => a,
+                Err(Error::InvalidInput(_)) => {
+                    // 内存管线：decode → AudioBuffer，跳过临时文件
+                    if let Ok(a) =
+                        decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel)
+                    {
+                        // 单声道或立体声：字节管线直接完成，无需继续路由
+                        if a.num_channels() <= 2 {
+                            self.progress_set_phase_for_op(
+                                op_id,
+                                ProgressPhase::Core,
+                                "embed_stereo_bytes",
+                                false,
+                                0,
+                                0,
+                                0,
+                                0,
+                            );
+                            let wav_bytes = a.to_wav_bytes()?;
+                            let out_bytes =
+                                run_audiowmark_add_bytes(self, wav_bytes, &bytes_to_hex(message))?;
+                            return AudioBuffer::from_wav_bytes(&out_bytes)?.to_wav(output);
                         }
-                        Err(Error::InvalidInput(_)) => {
-                            return self.embed(prepared.path.as_path(), output, message);
+                        a
+                    } else {
+                        // 兜底：传统临时文件路径
+                        let prepared =
+                            prepare_input_for_audiowmark(input, "embed_multichannel_input")?;
+                        match AudioBuffer::from_file(&prepared.path) {
+                            Ok(a) => {
+                                prepared_fallback = Some(prepared);
+                                a
+                            }
+                            Err(Error::InvalidInput(_)) => {
+                                return self.embed(prepared.path.as_path(), output, message);
+                            }
+                            Err(e) => return Err(e),
                         }
-                        Err(e) => return Err(e),
                     }
                 }
+                Err(e) => return Err(e),
+            };
+            let num_channels = audio.num_channels();
+            // stereo_input 仅用于 prepared_fallback 路径的单声道/立体声兜底
+            let stereo_input = prepared_fallback
+                .as_ref()
+                .map_or(input, |prepared| prepared.path.as_path());
+
+            // 单声道或立体声（来自 prepared_fallback 路径），直接使用普通方法
+            if num_channels <= 2 {
+                return self.embed(stereo_input, output, message);
             }
-            Err(e) => return Err(e),
-        };
-        let num_channels = audio.num_channels();
-        // stereo_input 仅用于 prepared_fallback 路径的单声道/立体声兜底
-        let stereo_input = prepared_fallback
-            .as_ref()
-            .map_or(input, |prepared| prepared.path.as_path());
 
-        // 单声道或立体声（来自 prepared_fallback 路径），直接使用普通方法
-        if num_channels <= 2 {
-            return self.embed(stereo_input, output, message);
-        }
+            // 确定声道布局
+            let layout = layout.unwrap_or_else(|| audio.layout());
+            validate_layout_channels(layout, num_channels)?;
+            let route_plan = build_smart_route_plan(layout, num_channels, effective_lfe_mode());
+            log_route_warnings("embed", input, &route_plan.warnings);
 
-        // 确定声道布局
-        let layout = layout.unwrap_or_else(|| audio.layout());
-        validate_layout_channels(layout, num_channels)?;
-        let route_plan = build_smart_route_plan(layout, num_channels, effective_lfe_mode());
-        log_route_warnings("embed", input, &route_plan.warnings);
+            let executable_steps: Vec<(usize, RouteStep)> = route_plan
+                .steps
+                .iter()
+                .enumerate()
+                .filter(|(_, step)| !matches!(step.mode, RouteMode::Skip { .. }))
+                .map(|(idx, step)| (idx, step.clone()))
+                .collect();
+            let step_total = u32::try_from(executable_steps.len()).unwrap_or(u32::MAX);
+            self.progress_set_phase_for_op(
+                op_id,
+                ProgressPhase::RouteStep,
+                "embed_route_steps",
+                true,
+                0,
+                u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
+                0,
+                step_total,
+            );
+            let step_done = Arc::new(AtomicU64::new(0));
+            let parallelism = compute_route_parallelism(executable_steps.len());
+            let mut step_results = with_route_thread_pool(parallelism, || {
+                executable_steps
+                    .par_iter()
+                    .map(|(step_idx, step)| {
+                        let step_idx_u32 =
+                            u32::try_from(step_idx.saturating_add(1)).unwrap_or(u32::MAX);
+                        self.progress_set_current_phase(
+                            ProgressPhase::RouteStep,
+                            step.name.as_str(),
+                            true,
+                            step_done.load(Ordering::Relaxed),
+                            u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
+                            step_idx_u32,
+                            step_total,
+                        );
+                        let outcome = run_embed_step_task(self, &audio, step, message);
+                        let done = step_done.fetch_add(1, Ordering::Relaxed).saturating_add(1);
+                        self.progress_set_current_phase(
+                            ProgressPhase::RouteStep,
+                            step.name.as_str(),
+                            true,
+                            done,
+                            u64::try_from(executable_steps.len()).unwrap_or(u64::MAX),
+                            step_idx_u32,
+                            step_total,
+                        );
+                        EmbedStepTaskResult {
+                            step_idx: *step_idx,
+                            step: step.clone(),
+                            outcome,
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })?;
 
-        let executable_steps: Vec<(usize, RouteStep)> = route_plan
-            .steps
-            .iter()
-            .enumerate()
-            .filter(|(_, step)| !matches!(step.mode, RouteMode::Skip { .. }))
-            .map(|(idx, step)| (idx, step.clone()))
-            .collect();
-        let parallelism = compute_route_parallelism(executable_steps.len());
-        let mut step_results = with_route_thread_pool(parallelism, || {
-            executable_steps
-                .par_iter()
-                .map(|(step_idx, step)| EmbedStepTaskResult {
-                    step_idx: *step_idx,
-                    step: step.clone(),
-                    outcome: run_embed_step_task(self, &audio, step, message),
-                })
-                .collect::<Vec<_>>()
-        })?;
+            self.progress_set_phase_for_op(
+                op_id,
+                ProgressPhase::Merge,
+                "merge_route",
+                false,
+                0,
+                0,
+                0,
+                0,
+            );
+            apply_embed_step_results(&mut audio, &mut step_results);
 
-        apply_embed_step_results(&mut audio, &mut step_results);
+            // 当前仅支持输出 WAV（FLAC 输出已暂时下线）。
+            self.progress_set_phase_for_op(
+                op_id,
+                ProgressPhase::Finalize,
+                "write_output",
+                false,
+                0,
+                0,
+                0,
+                0,
+            );
+            audio.to_wav(output)?;
 
-        // 当前仅支持输出 WAV（FLAC 输出已暂时下线）。
-        audio.to_wav(output)?;
-
-        Ok(())
+            Ok(())
+        })();
+        self.progress_finish_operation(op_id, result.is_ok(), "embed_done");
+        result
     }
 
     /// 多声道检测：从所有立体声对检测水印.
@@ -562,118 +1036,190 @@ impl Audio {
         input: P,
         layout: Option<ChannelLayout>,
     ) -> Result<MultichannelDetectResult> {
-        let input = input.as_ref();
+        let op_id = self.progress_begin_operation(ProgressOperation::Detect, "prepare_input");
+        let result = (|| {
+            let input = input.as_ref();
 
-        // ADM/BWF 路径：直接从 data chunk 读 PCM，跳过 FFmpeg 解码，保留所有非音频 chunk 语义。
-        //
-        // Path A（axml 可用，speakerLabel 全部识别）：
-        //   用 axml speakerLabel 构建 Bed 路由步骤，并附加 Object 声道的 Mono 步骤，
-        //   合并后统一运行检测。
-        //
-        // Path B（无 axml 或标签无法识别，退回）：
-        //   与旧行为相同，仅提取 Bed 声道按声道数量推断布局后检测。
-        if let Some(ref index) = media::adm_bwav::probe_adm_bwf(input)? {
-            let full_audio = media::adm_embed::decode_pcm_audio(input, index)?;
-
-            // ── Path A：axml 位置感知路由（Bed + Object）──
-            let speaker_labels =
-                media::adm_bwav::parse_bed_channel_speaker_labels(input, index).unwrap_or_default();
-            let has_valid_labels = !speaker_labels.is_empty()
-                && speaker_labels.iter().all(|(_, l)| !l.starts_with('?'));
-
-            if has_valid_labels {
-                let bed_plan = media::adm_routing::build_route_plan_from_labels(
-                    &speaker_labels,
-                    effective_lfe_mode(),
+            // ADM/BWF 路径：直接从 data chunk 读 PCM，跳过 FFmpeg 解码，保留所有非音频 chunk 语义。
+            //
+            // Path A（axml 可用，speakerLabel 全部识别）：
+            //   用 axml speakerLabel 构建 Bed 路由步骤，并附加 Object 声道的 Mono 步骤，
+            //   合并后统一运行检测。
+            //
+            // Path B（无 axml 或标签无法识别，退回）：
+            //   与旧行为相同，仅提取 Bed 声道按声道数量推断布局后检测。
+            if let Some(ref index) = media::adm_bwav::probe_adm_bwf(input)? {
+                self.progress_set_phase_for_op(
+                    op_id,
+                    ProgressPhase::Core,
+                    "detect_adm",
+                    false,
+                    0,
+                    0,
+                    0,
+                    0,
                 );
-                for w in &bed_plan.warnings {
-                    eprintln!("[awmkit] ADM detect routing warning: {w}");
-                }
-                let mut all_steps = bed_plan.steps;
+                let full_audio = media::adm_embed::decode_pcm_audio(input, index)?;
 
-                // Object 声道：静默过滤后添加 Mono 步骤
-                let obj_indices =
-                    media::adm_bwav::parse_object_channel_indices(input, index).unwrap_or_default();
-                let sf = full_audio.sample_format();
-                for obj_idx in obj_indices {
-                    if let Ok(samples) = full_audio.channel_samples(obj_idx) {
-                        if media::adm_routing::is_silent(samples, sf) {
-                            eprintln!(
-                                "[awmkit] ADM detect: Object ch{obj_idx} silent (~-80 dBFS), skip"
-                            );
-                            continue;
-                        }
-                        all_steps.push(RouteStep {
-                            name: format!("obj_ch{obj_idx}"),
-                            mode: RouteMode::Mono(obj_idx),
-                        });
+                // ── Path A：axml 位置感知路由（Bed + Object）──
+                let speaker_labels =
+                    media::adm_bwav::parse_bed_channel_speaker_labels(input, index)
+                        .unwrap_or_default();
+                let has_valid_labels = !speaker_labels.is_empty()
+                    && speaker_labels.iter().all(|(_, l)| !l.starts_with('?'));
+
+                if has_valid_labels {
+                    let bed_plan = media::adm_routing::build_route_plan_from_labels(
+                        &speaker_labels,
+                        effective_lfe_mode(),
+                    );
+                    for w in &bed_plan.warnings {
+                        eprintln!("[awmkit] ADM detect routing warning: {w}");
                     }
+                    let mut all_steps = bed_plan.steps;
+
+                    // Object 声道：静默过滤后添加 Mono 步骤
+                    let obj_indices = media::adm_bwav::parse_object_channel_indices(input, index)
+                        .unwrap_or_default();
+                    let sf = full_audio.sample_format();
+                    for obj_idx in obj_indices {
+                        if let Ok(samples) = full_audio.channel_samples(obj_idx) {
+                            if media::adm_routing::is_silent(samples, sf) {
+                                eprintln!(
+                                    "[awmkit] ADM detect: Object ch{obj_idx} silent (~-80 dBFS), skip"
+                                );
+                                continue;
+                            }
+                            all_steps.push(RouteStep {
+                                name: format!("obj_ch{obj_idx}"),
+                                mode: RouteMode::Mono(obj_idx),
+                            });
+                        }
+                    }
+
+                    // 排除 Skip 步骤后构建带索引的检测列表
+                    let detect_steps: Vec<(usize, RouteStep)> = all_steps
+                        .into_iter()
+                        .enumerate()
+                        .filter(|(_, s)| !matches!(s.mode, RouteMode::Skip { .. }))
+                        .collect();
+                    self.progress_set_phase_for_op(
+                        op_id,
+                        ProgressPhase::RouteStep,
+                        "detect_route_steps",
+                        true,
+                        0,
+                        u64::try_from(detect_steps.len()).unwrap_or(u64::MAX),
+                        0,
+                        u32::try_from(detect_steps.len()).unwrap_or(u32::MAX),
+                    );
+                    let step_total_u64 = u64::try_from(detect_steps.len()).unwrap_or(u64::MAX);
+                    let step_total_u32 = u32::try_from(detect_steps.len()).unwrap_or(u32::MAX);
+                    let mut done = 0_u64;
+                    let step_results =
+                        collect_detect_step_results_with_early_exit(&detect_steps, |step| {
+                            let step_index =
+                                u32::try_from(done.saturating_add(1)).unwrap_or(u32::MAX);
+                            self.progress_set_current_phase(
+                                ProgressPhase::RouteStep,
+                                step.name.as_str(),
+                                true,
+                                done,
+                                step_total_u64,
+                                step_index,
+                                step_total_u32,
+                            );
+                            let outcome = run_detect_step_task(self, &full_audio, step);
+                            done = done.saturating_add(1);
+                            self.progress_set_current_phase(
+                                ProgressPhase::RouteStep,
+                                step.name.as_str(),
+                                true,
+                                done,
+                                step_total_u64,
+                                step_index,
+                                step_total_u32,
+                            );
+                            outcome
+                        })?;
+                    self.progress_set_phase_for_op(
+                        op_id,
+                        ProgressPhase::Merge,
+                        "detect_merge",
+                        false,
+                        0,
+                        0,
+                        0,
+                        0,
+                    );
+                    return Ok(finalize_detect_step_results(step_results));
                 }
 
-                // 排除 Skip 步骤后构建带索引的检测列表
-                let detect_steps: Vec<(usize, RouteStep)> = all_steps
-                    .into_iter()
-                    .enumerate()
-                    .filter(|(_, s)| !matches!(s.mode, RouteMode::Skip { .. }))
-                    .collect();
-                let step_results =
-                    collect_detect_step_results_with_early_exit(&detect_steps, |step| {
-                        run_detect_step_task(self, &full_audio, step)
-                    })?;
-                return Ok(finalize_detect_step_results(step_results));
+                // ── Path B：退回路径（现有行为不变）──
+                eprintln!(
+                    "[awmkit] ADM detect: axml speaker labels unavailable or unresolved; \
+                     falling back to channel-count-based bed routing"
+                );
+                let bed_indices = media::adm_bwav::parse_bed_channel_indices(input, index)?;
+                let (bed_audio, bed_layout) = if let Some(ref indices) = bed_indices {
+                    let extracted = media::adm_embed::extract_bed_channels(&full_audio, indices)
+                        .unwrap_or(full_audio);
+                    let detected_layout =
+                        ChannelLayout::from_channels_opt(extracted.num_channels());
+                    (extracted, detected_layout.or(layout))
+                } else {
+                    (full_audio, layout)
+                };
+                return detect_multichannel_from_audio(self, &bed_audio, None, input, bed_layout);
             }
 
-            // ── Path B：退回路径（现有行为不变）──
-            eprintln!(
-                "[awmkit] ADM detect: axml speaker labels unavailable or unresolved; \
-                 falling back to channel-count-based bed routing"
-            );
-            let bed_indices = media::adm_bwav::parse_bed_channel_indices(input, index)?;
-            let (bed_audio, bed_layout) = if let Some(ref indices) = bed_indices {
-                let extracted = media::adm_embed::extract_bed_channels(&full_audio, indices)
-                    .unwrap_or(full_audio);
-                let detected_layout = ChannelLayout::from_channels_opt(extracted.num_channels());
-                (extracted, detected_layout.or(layout))
-            } else {
-                (full_audio, layout)
-            };
-            return detect_multichannel_from_audio(self, &bed_audio, None, input, bed_layout);
-        }
-
-        // 加载多声道音频以检测声道数。
-        // 优先尝试原始输入，避免对可直接读取的 WAV/FLAC 先做不必要的临时解码。
-        // 若失败则先尝试内存解码管线（DecodedPcm → AudioBuffer，无临时文件）；
-        // 仍失败则 prepare/临时文件兜底；最终失败回退到立体声路径。
-        let (audio, stereo_file): (AudioBuffer, Option<PathBuf>) =
-            match AudioBuffer::from_file(input) {
-                Ok(a) => (a, Some(input.to_path_buf())),
-                Err(Error::InvalidInput(_)) => {
-                    // 内存管线：decode → AudioBuffer，跳过临时文件
-                    if let Ok(a) =
-                        decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel)
-                    {
-                        (a, None)
-                    } else {
-                        // 兜底：传统临时文件路径
-                        let prepared =
-                            prepare_input_for_audiowmark(input, "detect_multichannel_input")?;
-                        match AudioBuffer::from_file(&prepared.path) {
-                            Ok(a) => (a, Some(prepared.path)),
-                            Err(Error::InvalidInput(_)) => {
-                                let result = self.detect(prepared.path.as_path())?;
-                                return Ok(MultichannelDetectResult {
-                                    pairs: vec![(0, "FL+FR".to_string(), result.clone())],
-                                    best: result,
-                                });
+            // 加载多声道音频以检测声道数。
+            // 优先尝试原始输入，避免对可直接读取的 WAV/FLAC 先做不必要的临时解码。
+            // 若失败则先尝试内存解码管线（DecodedPcm → AudioBuffer，无临时文件）；
+            // 仍失败则 prepare/临时文件兜底；最终失败回退到立体声路径。
+            let (audio, stereo_file): (AudioBuffer, Option<PathBuf>) =
+                match AudioBuffer::from_file(input) {
+                    Ok(a) => (a, Some(input.to_path_buf())),
+                    Err(Error::InvalidInput(_)) => {
+                        // 内存管线：decode → AudioBuffer，跳过临时文件
+                        if let Ok(a) =
+                            decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel)
+                        {
+                            (a, None)
+                        } else {
+                            // 兜底：传统临时文件路径
+                            let prepared =
+                                prepare_input_for_audiowmark(input, "detect_multichannel_input")?;
+                            match AudioBuffer::from_file(&prepared.path) {
+                                Ok(a) => (a, Some(prepared.path)),
+                                Err(Error::InvalidInput(_)) => {
+                                    let result = self.detect(prepared.path.as_path())?;
+                                    return Ok(MultichannelDetectResult {
+                                        pairs: vec![(0, "FL+FR".to_string(), result.clone())],
+                                        best: result,
+                                    });
+                                }
+                                Err(e) => return Err(e),
                             }
-                            Err(e) => return Err(e),
                         }
                     }
-                }
-                Err(e) => return Err(e),
-            };
+                    Err(e) => return Err(e),
+                };
 
-        detect_multichannel_from_audio(self, &audio, stereo_file.as_deref(), input, layout)
+            self.progress_set_phase_for_op(
+                op_id,
+                ProgressPhase::Core,
+                "detect_core",
+                false,
+                0,
+                0,
+                0,
+                0,
+            );
+            detect_multichannel_from_audio(self, &audio, stereo_file.as_deref(), input, layout)
+        })();
+        self.progress_finish_operation(op_id, result.is_ok(), "detect_done");
+        result
     }
 
     /// 便捷方法：多声道嵌入 (使用 Tag).
@@ -778,8 +1324,37 @@ impl Default for Audio {
             binary_path: PathBuf::from("audiowmark"),
             strength: 10,
             key_file: None,
+            progress_tracker: Arc::new(ProgressTracker::new()),
         })
     }
+}
+
+/// Internal helper function.
+fn copy_with_progress<R: Read, W: Write>(
+    audio: &Audio,
+    reader: &mut R,
+    writer: &mut W,
+    phase: ProgressPhase,
+    label: &str,
+    total_bytes: Option<u64>,
+) -> std::io::Result<u64> {
+    let total = total_bytes.unwrap_or(0);
+    audio.progress_set_current_phase(phase, label, total_bytes.is_some(), 0, total, 0, 0);
+
+    let mut copied = 0_u64;
+    let mut buf = vec![0_u8; PIPE_BUF_SIZE];
+    loop {
+        let read = reader.read(&mut buf)?;
+        if read == 0 {
+            break;
+        }
+        writer.write_all(&buf[..read])?;
+        copied = copied.saturating_add(u64::try_from(read).unwrap_or(u64::MAX));
+        audio.progress_update_current_units(copied, total_bytes);
+    }
+    writer.flush()?;
+    audio.progress_update_current_units(copied, total_bytes);
+    Ok(copied)
 }
 
 /// Internal helper function.
@@ -852,6 +1427,7 @@ fn run_audiowmark_add_file(
     output: &Path,
     message_hex: &str,
 ) -> Result<()> {
+    audio.progress_set_current_phase(ProgressPhase::Core, "embed_file", false, 0, 0, 0, 0);
     let mut cmd = audio.audiowmark_command();
     cmd.arg("add")
         .arg("--strength")
@@ -874,6 +1450,7 @@ fn run_audiowmark_add_file(
 
 /// Internal helper function.
 fn run_audiowmark_get_file(audio: &Audio, prepared_input: &Path) -> Result<Output> {
+    audio.progress_set_current_phase(ProgressPhase::Core, "detect_file", false, 0, 0, 0, 0);
     let mut cmd = audio.audiowmark_command();
     cmd.arg("get");
 
@@ -925,7 +1502,7 @@ fn run_audiowmark_add_bytes_pipe(
     }
 
     cmd.arg("-").arg("-").arg(message_hex);
-    let process_output = run_command_with_stdin(&mut cmd, input_bytes)?;
+    let process_output = run_command_with_stdin(audio, &mut cmd, input_bytes)?;
     if !process_output.status.success() {
         let stderr = String::from_utf8_lossy(&process_output.stderr);
         return Err(Error::AudiowmarkExec(stderr.to_string()));
@@ -965,7 +1542,7 @@ fn run_audiowmark_get_bytes_pipe(audio: &Audio, input_bytes: &[u8]) -> Result<Ou
     }
 
     cmd.arg("-");
-    let output = run_command_with_stdin(&mut cmd, input_bytes)?;
+    let output = run_command_with_stdin(audio, &mut cmd, input_bytes)?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         if is_pipe_compatibility_error(&stderr) {
@@ -1024,7 +1601,7 @@ fn run_audiowmark_get_pipe(audio: &Audio, prepared_input: &Path) -> Result<Outpu
     }
 
     cmd.arg("-");
-    run_command_with_stdin_from_file(&mut cmd, prepared_input)
+    run_command_with_stdin_from_file(audio, &mut cmd, prepared_input)
 }
 
 #[cfg(feature = "ffmpeg-decode")]
@@ -1144,20 +1721,33 @@ fn run_audiowmark_add_pipe_streaming(
         .take()
         .ok_or_else(|| Error::AudiowmarkExec("failed to take stderr handle".to_string()))?;
     let input_file = File::open(prepared_input)?;
+    let input_total_bytes = input_file.metadata().ok().map(|m| m.len());
     let output_file = File::create(output)?;
 
     let (status, stdin_result, stdout_result, stderr_result) = std::thread::scope(|scope| {
         let stdin_writer = scope.spawn(move || -> std::io::Result<u64> {
             let mut input_file = input_file;
             let mut stdin = BufWriter::with_capacity(PIPE_BUF_SIZE, stdin);
-            let n = std::io::copy(&mut input_file, &mut stdin)?;
-            stdin.flush()?;
-            Ok(n)
+            copy_with_progress(
+                audio,
+                &mut input_file,
+                &mut stdin,
+                ProgressPhase::Core,
+                "pipe_stdin",
+                input_total_bytes,
+            )
         });
         let stdout_reader = scope.spawn(move || {
             let mut stdout = BufReader::with_capacity(PIPE_BUF_SIZE, stdout);
             let mut output_file = output_file;
-            std::io::copy(&mut stdout, &mut output_file)
+            copy_with_progress(
+                audio,
+                &mut stdout,
+                &mut output_file,
+                ProgressPhase::Core,
+                "pipe_stdout",
+                None,
+            )
         });
         let stderr_reader = scope.spawn(move || -> std::io::Result<Vec<u8>> {
             let mut stderr = stderr;
@@ -1201,7 +1791,7 @@ fn run_audiowmark_add_pipe_streaming(
 }
 
 /// Internal helper function.
-fn run_command_with_stdin(cmd: &mut Command, stdin_data: &[u8]) -> Result<Output> {
+fn run_command_with_stdin(audio: &Audio, cmd: &mut Command, stdin_data: &[u8]) -> Result<Output> {
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1226,9 +1816,14 @@ fn run_command_with_stdin(cmd: &mut Command, stdin_data: &[u8]) -> Result<Output
         let writer = scope.spawn(move || -> std::io::Result<u64> {
             let mut src = std::io::Cursor::new(stdin_data);
             let mut stdin = BufWriter::with_capacity(PIPE_BUF_SIZE, stdin);
-            let n = std::io::copy(&mut src, &mut stdin)?;
-            stdin.flush()?;
-            Ok(n)
+            copy_with_progress(
+                audio,
+                &mut src,
+                &mut stdin,
+                ProgressPhase::Core,
+                "pipe_stdin",
+                Some(u64::try_from(stdin_data.len()).unwrap_or(u64::MAX)),
+            )
         });
         let stdout_reader = scope.spawn(move || -> std::io::Result<Vec<u8>> {
             let mut stdout = BufReader::with_capacity(PIPE_BUF_SIZE, stdout);
@@ -1270,7 +1865,11 @@ fn run_command_with_stdin(cmd: &mut Command, stdin_data: &[u8]) -> Result<Output
 }
 
 /// Internal helper function.
-fn run_command_with_stdin_from_file(cmd: &mut Command, input_path: &Path) -> Result<Output> {
+fn run_command_with_stdin_from_file(
+    audio: &Audio,
+    cmd: &mut Command,
+    input_path: &Path,
+) -> Result<Output> {
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -1290,14 +1889,20 @@ fn run_command_with_stdin_from_file(cmd: &mut Command, input_path: &Path) -> Res
         .take()
         .ok_or_else(|| Error::AudiowmarkExec("failed to take stderr handle".to_string()))?;
     let input_file = File::open(input_path)?;
+    let input_total_bytes = input_file.metadata().ok().map(|m| m.len());
 
     let (status, stdin_result, stdout_result, stderr_result) = std::thread::scope(|scope| {
         let writer = scope.spawn(move || -> std::io::Result<u64> {
             let mut input_file = input_file;
             let mut stdin = BufWriter::with_capacity(PIPE_BUF_SIZE, stdin);
-            let n = std::io::copy(&mut input_file, &mut stdin)?;
-            stdin.flush()?;
-            Ok(n)
+            copy_with_progress(
+                audio,
+                &mut input_file,
+                &mut stdin,
+                ProgressPhase::Core,
+                "pipe_stdin",
+                input_total_bytes,
+            )
         });
         let stdout_reader = scope.spawn(move || -> std::io::Result<Vec<u8>> {
             let mut stdout = BufReader::with_capacity(PIPE_BUF_SIZE, stdout);
@@ -1725,6 +2330,15 @@ fn detect_multichannel_from_audio(
 
     // 单声道或立体声：audiowmark 原生支持，无需多声道路由
     if num_channels <= 2 {
+        audio_engine.progress_set_current_phase(
+            ProgressPhase::Core,
+            "detect_stereo",
+            false,
+            0,
+            0,
+            0,
+            0,
+        );
         if let Some(path) = stereo_file {
             let result = audio_engine.detect(path)?;
             return Ok(MultichannelDetectResult {
@@ -1754,10 +2368,52 @@ fn detect_multichannel_from_audio(
         .map(|(idx, step)| (idx, step.clone()))
         .collect();
 
+    let step_total_u64 = u64::try_from(detect_steps.len()).unwrap_or(u64::MAX);
+    let step_total_u32 = u32::try_from(detect_steps.len()).unwrap_or(u32::MAX);
+    audio_engine.progress_set_current_phase(
+        ProgressPhase::RouteStep,
+        "detect_route_steps",
+        true,
+        0,
+        step_total_u64,
+        0,
+        step_total_u32,
+    );
+    let mut done = 0_u64;
     let step_results = collect_detect_step_results_with_early_exit(&detect_steps, |step| {
-        run_detect_step_task(audio_engine, audio, step)
+        let step_index = u32::try_from(done.saturating_add(1)).unwrap_or(u32::MAX);
+        audio_engine.progress_set_current_phase(
+            ProgressPhase::RouteStep,
+            step.name.as_str(),
+            true,
+            done,
+            step_total_u64,
+            step_index,
+            step_total_u32,
+        );
+        let outcome = run_detect_step_task(audio_engine, audio, step);
+        done = done.saturating_add(1);
+        audio_engine.progress_set_current_phase(
+            ProgressPhase::RouteStep,
+            step.name.as_str(),
+            true,
+            done,
+            step_total_u64,
+            step_index,
+            step_total_u32,
+        );
+        outcome
     })?;
 
+    audio_engine.progress_set_current_phase(
+        ProgressPhase::Merge,
+        "detect_merge",
+        false,
+        0,
+        0,
+        0,
+        0,
+    );
     Ok(finalize_detect_step_results(step_results))
 }
 
