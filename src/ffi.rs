@@ -736,7 +736,7 @@ pub unsafe extern "C" fn awm_audio_set_key_file(
     *audio = std::mem::take(audio).key_file(path_str);
 }
 
-/// 设置进度回调（push）。
+/// 设置进度回调（push）.
 ///
 /// # Safety
 /// - `handle` 必须是有效句柄
@@ -761,7 +761,7 @@ pub unsafe extern "C" fn awm_audio_progress_set_callback(
             // SAFETY: callback/user_data contract is provided by FFI caller.
             unsafe {
                 cb(
-                    &ffi_snapshot as *const AWMProgressSnapshot,
+                    &raw const ffi_snapshot,
                     user_data_ptr as *mut c_void,
                 );
             }
@@ -774,7 +774,7 @@ pub unsafe extern "C" fn awm_audio_progress_set_callback(
     AWMError::Success as i32
 }
 
-/// 拉取当前进度快照（polling）。
+/// 拉取当前进度快照（polling）.
 ///
 /// # Safety
 /// - `handle` 与 `result` 必须是有效指针
@@ -791,7 +791,7 @@ pub unsafe extern "C" fn awm_audio_progress_get(
     AWMError::Success as i32
 }
 
-/// 清空进度状态（回到 idle）。
+/// 清空进度状态（回到 idle）.
 ///
 /// # Safety
 /// - `handle` 必须是有效句柄

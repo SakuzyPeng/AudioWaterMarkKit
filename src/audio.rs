@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 use std::{
     fs,
@@ -257,7 +257,7 @@ pub type ProgressCallback = Arc<dyn Fn(ProgressSnapshot) + Send + Sync + 'static
 struct ProgressTracker {
     /// 最新快照（用于 polling）.
     snapshot: RwLock<ProgressSnapshot>,
-    /// 回调（用于 push）。
+    /// 回调（用于 push）.
     callback: RwLock<Option<ProgressCallback>>,
     /// 节流时间戳.
     last_emit: Mutex<Option<Instant>>,
@@ -286,7 +286,7 @@ impl ProgressTracker {
 
     /// Internal helper method.
     fn set_callback(&self, callback: Option<ProgressCallback>) {
-        let mut guard = self.callback.write().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.callback.write().unwrap_or_else(PoisonError::into_inner);
         *guard = callback;
     }
 
@@ -294,14 +294,14 @@ impl ProgressTracker {
     fn snapshot(&self) -> ProgressSnapshot {
         self.snapshot
             .read()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(PoisonError::into_inner)
             .clone()
     }
 
     /// Internal helper method.
     fn clear(&self) {
         {
-            let mut guard = self.snapshot.write().unwrap_or_else(|e| e.into_inner());
+            let mut guard = self.snapshot.write().unwrap_or_else(PoisonError::into_inner);
             *guard = ProgressSnapshot::default();
         }
         self.emit(true);
@@ -314,7 +314,7 @@ impl ProgressTracker {
             .fetch_add(1, Ordering::Relaxed)
             .saturating_add(1);
         {
-            let mut snapshot = self.snapshot.write().unwrap_or_else(|e| e.into_inner());
+            let mut snapshot = self.snapshot.write().unwrap_or_else(PoisonError::into_inner);
             snapshot.operation = operation;
             snapshot.phase = phase;
             snapshot.state = ProgressState::Running;
@@ -338,7 +338,7 @@ impl ProgressTracker {
     {
         let mut immediate = force;
         {
-            let mut snapshot = self.snapshot.write().unwrap_or_else(|e| e.into_inner());
+            let mut snapshot = self.snapshot.write().unwrap_or_else(PoisonError::into_inner);
             if snapshot.state != ProgressState::Running || snapshot.op_id == 0 {
                 return;
             }
@@ -356,7 +356,7 @@ impl ProgressTracker {
     {
         let mut immediate = force;
         {
-            let mut snapshot = self.snapshot.write().unwrap_or_else(|e| e.into_inner());
+            let mut snapshot = self.snapshot.write().unwrap_or_else(PoisonError::into_inner);
             if snapshot.op_id != op_id || snapshot.state != ProgressState::Running {
                 return;
             }
@@ -370,7 +370,7 @@ impl ProgressTracker {
     /// Internal helper method.
     fn finish(&self, op_id: u64, ok: bool, label: &str) {
         {
-            let mut snapshot = self.snapshot.write().unwrap_or_else(|e| e.into_inner());
+            let mut snapshot = self.snapshot.write().unwrap_or_else(PoisonError::into_inner);
             if snapshot.op_id != op_id {
                 return;
             }
@@ -388,23 +388,22 @@ impl ProgressTracker {
 
     /// Internal helper method.
     fn emit(&self, force: bool) {
-        if !force {
-            let mut gate = self.last_emit.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(last) = *gate {
-                if last.elapsed() < PROGRESS_THROTTLE {
-                    return;
+        {
+            let mut gate = self.last_emit.lock().unwrap_or_else(PoisonError::into_inner);
+            if !force {
+                if let Some(last) = *gate {
+                    if last.elapsed() < PROGRESS_THROTTLE {
+                        return;
+                    }
                 }
             }
-            *gate = Some(Instant::now());
-        } else {
-            let mut gate = self.last_emit.lock().unwrap_or_else(|e| e.into_inner());
             *gate = Some(Instant::now());
         }
 
         let callback = self
             .callback
             .read()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(PoisonError::into_inner)
             .clone();
         if let Some(cb) = callback {
             cb(self.snapshot());
@@ -600,18 +599,18 @@ impl Audio {
         media_capabilities()
     }
 
-    /// 读取当前进度快照（供 polling）。
+    /// 读取当前进度快照（供 polling）.
     #[must_use]
     pub fn progress_snapshot(&self) -> ProgressSnapshot {
         self.progress_tracker.snapshot()
     }
 
-    /// 清空进度状态（回到 idle）。
+    /// 清空进度状态（回到 idle）.
     pub fn clear_progress(&self) {
         self.progress_tracker.clear();
     }
 
-    /// 设置进度回调（供 push）。
+    /// 设置进度回调（供 push）.
     pub fn set_progress_callback(&self, callback: Option<ProgressCallback>) {
         self.progress_tracker.set_callback(callback);
     }

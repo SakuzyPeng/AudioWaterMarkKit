@@ -167,10 +167,7 @@ fn print_embed_intro(ctx: &Context) {
 
 /// Internal helper function.
 fn resolve_output_path(output_arg: Option<&PathBuf>, input: &std::path::Path) -> Result<PathBuf> {
-    match output_arg {
-        Some(path) => Ok(path.clone()),
-        None => default_output_path(input),
-    }
+    output_arg.map_or_else(|| default_output_path(input), |path| Ok(path.clone()))
 }
 
 /// Internal helper function.
