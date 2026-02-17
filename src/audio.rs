@@ -340,6 +340,7 @@ impl ProgressTracker {
         {
             let mut snapshot = self.snapshot.write().unwrap_or_else(PoisonError::into_inner);
             if snapshot.state != ProgressState::Running || snapshot.op_id == 0 {
+                drop(snapshot);
                 return;
             }
             if mutator(&mut snapshot) {
@@ -358,6 +359,7 @@ impl ProgressTracker {
         {
             let mut snapshot = self.snapshot.write().unwrap_or_else(PoisonError::into_inner);
             if snapshot.op_id != op_id || snapshot.state != ProgressState::Running {
+                drop(snapshot);
                 return;
             }
             if mutator(&mut snapshot) {
