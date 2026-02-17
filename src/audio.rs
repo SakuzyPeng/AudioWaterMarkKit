@@ -56,8 +56,11 @@ pub struct AudioMediaCapabilities {
 pub struct ContainerCapabilities(u8);
 
 impl ContainerCapabilities {
+    /// Internal associated constant.
     const MP4_BIT: u8 = 1 << 0;
+    /// Internal associated constant.
     const MKV_BIT: u8 = 1 << 1;
+    /// Internal associated constant.
     const TS_BIT: u8 = 1 << 2;
 
     #[must_use]
@@ -164,39 +167,61 @@ pub struct Audio {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Internal enum.
 enum InputAudioFormat {
+    /// Internal variant.
     Wav,
+    /// Internal variant.
     Flac,
+    /// Internal variant.
     Mp3,
+    /// Internal variant.
     Ogg,
+    /// Internal variant.
     M4a,
+    /// Internal variant.
     Alac,
+    /// Internal variant.
     Mp4,
+    /// Internal variant.
     Mkv,
+    /// Internal variant.
     Ts,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Internal enum.
 enum InputPrepareStrategy {
+    /// Internal variant.
     Direct,
+    /// Internal variant.
     DecodeToWav,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Internal enum.
 enum AwmIoMode {
+    /// Internal variant.
     Pipe,
+    /// Internal variant.
     File,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Internal enum.
 enum PipeInputSource {
+    /// Internal variant.
     FileDirect,
     #[cfg(feature = "ffmpeg-decode")]
+    /// Internal variant.
     DecodeToWavStream,
+    /// Internal variant.
     FallbackToPreparedFile,
 }
 
+/// Internal struct.
 struct TempDirGuard {
+    /// Internal field.
     path: PathBuf,
 }
 
@@ -206,24 +231,35 @@ impl Drop for TempDirGuard {
     }
 }
 
+/// Internal struct.
 struct PreparedInput {
+    /// Internal field.
     path: PathBuf,
+    /// Internal field.
     _guard: Option<TempDirGuard>,
 }
 
 #[cfg(feature = "multichannel")]
 #[derive(Debug)]
+/// Internal struct.
 struct EmbedStepTaskResult {
+    /// Internal field.
     step_idx: usize,
+    /// Internal field.
     step: RouteStep,
+    /// Internal field.
     outcome: Result<MultichannelAudio>,
 }
 
 #[cfg(feature = "multichannel")]
 #[derive(Debug)]
+/// Internal struct.
 struct DetectStepTaskResult {
+    /// Internal field.
     step_idx: usize,
+    /// Internal field.
     step: RouteStep,
+    /// Internal field.
     outcome: Option<DetectResult>,
 }
 
@@ -238,6 +274,7 @@ impl Audio {
     }
 
     #[cfg(not(windows))]
+    /// Internal helper method.
     fn audiowmark_command(&self) -> Command {
         Command::new(&self.binary_path)
     }
@@ -250,6 +287,7 @@ impl Audio {
         Self::new_with_fallback_path(None)
     }
 
+    /// Internal associated function.
     pub(crate) fn new_with_fallback_path(fallback_path: Option<&Path>) -> Result<Self> {
         let binary_path = Self::resolve_binary(fallback_path)?;
         Ok(Self {
@@ -715,6 +753,7 @@ impl Audio {
     }
 
     #[cfg(feature = "bundled")]
+    /// Internal associated function.
     fn resolve_binary(_fallback_path: Option<&Path>) -> Result<PathBuf> {
         crate::bundled::ensure_extracted()
     }
@@ -745,6 +784,7 @@ impl Default for Audio {
     }
 }
 
+/// Internal helper function.
 fn run_audiowmark_add_prepared(
     audio: &Audio,
     prepared_input: &Path,
@@ -764,11 +804,13 @@ fn run_audiowmark_add_prepared(
     }
 }
 
+/// Internal helper function.
 fn run_audiowmark_get_file_with_prepare(audio: &Audio, input: &Path) -> Result<Output> {
     let prepared = prepare_input_for_audiowmark(input, "detect_input")?;
     run_audiowmark_get_file(audio, &prepared.path)
 }
 
+/// Internal helper function.
 fn run_audiowmark_get_detect(audio: &Audio, input: &Path) -> Result<Output> {
     if matches!(effective_awmiomode(), AwmIoMode::File) {
         return run_audiowmark_get_file_with_prepare(audio, input);
@@ -805,6 +847,7 @@ fn run_audiowmark_get_detect(audio: &Audio, input: &Path) -> Result<Output> {
     }
 }
 
+/// Internal helper function.
 fn run_audiowmark_add_file(
     audio: &Audio,
     prepared_input: &Path,
@@ -831,6 +874,7 @@ fn run_audiowmark_add_file(
     Ok(())
 }
 
+/// Internal helper function.
 fn run_audiowmark_get_file(audio: &Audio, prepared_input: &Path) -> Result<Output> {
     let mut cmd = audio.audiowmark_command();
     cmd.arg("get");
@@ -844,6 +888,7 @@ fn run_audiowmark_get_file(audio: &Audio, prepared_input: &Path) -> Result<Outpu
         .map_err(|e| Error::AudiowmarkExec(e.to_string()))
 }
 
+/// Internal helper function.
 fn run_audiowmark_add_bytes(
     audio: &Audio,
     input_bytes: Vec<u8>,
@@ -862,6 +907,7 @@ fn run_audiowmark_add_bytes(
     }
 }
 
+/// Internal helper function.
 fn run_audiowmark_add_bytes_pipe(
     audio: &Audio,
     input_bytes: &[u8],
@@ -896,6 +942,7 @@ fn run_audiowmark_add_bytes_pipe(
     Ok(normalize_wav_pipe_output(process_output.stdout))
 }
 
+/// Internal helper function.
 fn run_audiowmark_get_bytes(audio: &Audio, input_bytes: Vec<u8>) -> Result<Output> {
     if matches!(effective_awmiomode(), AwmIoMode::File) {
         return run_audiowmark_get_bytes_file(audio, input_bytes);
@@ -910,6 +957,7 @@ fn run_audiowmark_get_bytes(audio: &Audio, input_bytes: Vec<u8>) -> Result<Outpu
     }
 }
 
+/// Internal helper function.
 fn run_audiowmark_get_bytes_pipe(audio: &Audio, input_bytes: &[u8]) -> Result<Output> {
     let mut cmd = audio.audiowmark_command();
     cmd.arg("get");
@@ -929,6 +977,7 @@ fn run_audiowmark_get_bytes_pipe(audio: &Audio, input_bytes: &[u8]) -> Result<Ou
     Ok(output)
 }
 
+/// Internal helper function.
 fn run_audiowmark_add_bytes_file(
     audio: &Audio,
     input_bytes: Vec<u8>,
@@ -946,6 +995,7 @@ fn run_audiowmark_add_bytes_file(
     Ok(output_bytes)
 }
 
+/// Internal helper function.
 fn run_audiowmark_get_bytes_file(audio: &Audio, input_bytes: Vec<u8>) -> Result<Output> {
     let temp_dir = create_temp_dir("awmkit_get_bytes_file")?;
     let _guard = TempDirGuard {
@@ -956,6 +1006,7 @@ fn run_audiowmark_get_bytes_file(audio: &Audio, input_bytes: Vec<u8>) -> Result<
     run_audiowmark_get_file(audio, &input_path)
 }
 
+/// Internal helper function.
 fn run_audiowmark_add_pipe(
     audio: &Audio,
     prepared_input: &Path,
@@ -965,6 +1016,7 @@ fn run_audiowmark_add_pipe(
     run_audiowmark_add_pipe_streaming(audio, prepared_input, output, message_hex)
 }
 
+/// Internal helper function.
 fn run_audiowmark_get_pipe(audio: &Audio, prepared_input: &Path) -> Result<Output> {
     let mut cmd = audio.audiowmark_command();
     cmd.arg("get");
@@ -978,6 +1030,7 @@ fn run_audiowmark_get_pipe(audio: &Audio, prepared_input: &Path) -> Result<Outpu
 }
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal helper function.
 fn run_audiowmark_get_pipe_decoded_streaming(audio: &Audio, input: &Path) -> Result<Output> {
     let mut cmd = audio.audiowmark_command();
     cmd.arg("get");
@@ -1053,6 +1106,7 @@ fn run_audiowmark_get_pipe_decoded_streaming(audio: &Audio, input: &Path) -> Res
     })
 }
 
+/// Internal helper function.
 fn run_audiowmark_add_pipe_streaming(
     audio: &Audio,
     prepared_input: &Path,
@@ -1148,6 +1202,7 @@ fn run_audiowmark_add_pipe_streaming(
     Ok(())
 }
 
+/// Internal helper function.
 fn run_command_with_stdin(cmd: &mut Command, stdin_data: &[u8]) -> Result<Output> {
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -1216,6 +1271,7 @@ fn run_command_with_stdin(cmd: &mut Command, stdin_data: &[u8]) -> Result<Output
     })
 }
 
+/// Internal helper function.
 fn run_command_with_stdin_from_file(cmd: &mut Command, input_path: &Path) -> Result<Output> {
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -1284,6 +1340,7 @@ fn run_command_with_stdin_from_file(cmd: &mut Command, input_path: &Path) -> Res
     })
 }
 
+/// Internal helper function.
 fn effective_awmiomode() -> AwmIoMode {
     if std::env::var("AWMKIT_DISABLE_PIPE_IO")
         .ok()
@@ -1295,11 +1352,13 @@ fn effective_awmiomode() -> AwmIoMode {
     }
 }
 
+/// Internal helper function.
 fn parse_env_flag(value: &str) -> bool {
     let normalized = value.trim().to_ascii_lowercase();
     matches!(normalized.as_str(), "1" | "true" | "yes" | "on")
 }
 
+/// Internal helper function.
 fn looks_like_wav_stream(bytes: &[u8]) -> bool {
     if bytes.len() < 12 {
         return false;
@@ -1370,6 +1429,7 @@ fn normalize_wav_pipe_output(mut bytes: Vec<u8>) -> Vec<u8> {
     bytes
 }
 
+/// Internal helper function.
 fn validate_wav_output_file(path: &Path) -> Result<()> {
     let mut file = File::open(path)?;
     let mut header = [0_u8; 12];
@@ -1383,6 +1443,7 @@ fn validate_wav_output_file(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn normalize_wav_pipe_file_in_place(path: &Path) -> Result<()> {
     let mut file = fs::OpenOptions::new().read(true).write(true).open(path)?;
     let file_len = file.metadata()?.len();
@@ -1453,10 +1514,12 @@ fn normalize_wav_pipe_file_in_place(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 const fn should_fallback_pipe_error(err: &Error) -> bool {
     matches!(err, Error::AudiowmarkExec(_) | Error::Io(_))
 }
 
+/// Internal helper function.
 fn is_pipe_compatibility_error(stderr: &str) -> bool {
     let normalized = stderr.to_ascii_lowercase();
     normalized.contains("unsupported option")
@@ -1467,6 +1530,7 @@ fn is_pipe_compatibility_error(stderr: &str) -> bool {
         || normalized.contains("stdin")
 }
 
+/// Internal helper function.
 fn warn_pipe_fallback(operation: &str, source: impl std::fmt::Display, err: &Error) {
     eprintln!(
         "Warning: audiowmark pipe I/O failed for {operation} (input: {source}), fallback to file I/O: {err}"
@@ -1474,6 +1538,7 @@ fn warn_pipe_fallback(operation: &str, source: impl std::fmt::Display, err: &Err
 }
 
 #[cfg(feature = "multichannel")]
+/// Internal helper function.
 fn validate_layout_channels(layout: ChannelLayout, source_channels: usize) -> Result<()> {
     let layout_channels = usize::from(layout.channels());
     if layout_channels != source_channels {
@@ -1485,6 +1550,7 @@ fn validate_layout_channels(layout: ChannelLayout, source_channels: usize) -> Re
 }
 
 #[cfg(feature = "multichannel")]
+/// Internal helper function.
 fn log_route_warnings(operation: &str, input: &Path, warnings: &[String]) {
     for warning in warnings {
         eprintln!(
@@ -1495,6 +1561,7 @@ fn log_route_warnings(operation: &str, input: &Path, warnings: &[String]) {
 }
 
 #[cfg(feature = "multichannel")]
+/// Internal helper function.
 fn compute_route_parallelism(step_count: usize) -> usize {
     if step_count <= 1 {
         return 1;
@@ -1509,6 +1576,7 @@ fn compute_route_parallelism(step_count: usize) -> usize {
 }
 
 #[cfg(feature = "multichannel")]
+/// Internal helper function.
 fn route_parallelism_override() -> Option<usize> {
     let raw = std::env::var("AWMKIT_ROUTE_PARALLELISM").ok()?;
     let parsed = raw.trim().parse::<usize>().ok()?;
@@ -1516,6 +1584,7 @@ fn route_parallelism_override() -> Option<usize> {
 }
 
 #[cfg(feature = "multichannel")]
+/// Internal helper function.
 fn with_route_thread_pool<F, R>(parallelism: usize, f: F) -> Result<R>
 where
     F: FnOnce() -> R + Send,
@@ -1535,6 +1604,7 @@ where
 }
 
 #[cfg(feature = "multichannel")]
+/// Internal helper function.
 fn run_embed_step_task(
     audio_engine: &Audio,
     source_audio: &MultichannelAudio,
@@ -1548,6 +1618,7 @@ fn run_embed_step_task(
 }
 
 #[cfg(feature = "multichannel")]
+/// Internal helper function.
 fn run_detect_step_task(
     audio_engine: &Audio,
     source_audio: &MultichannelAudio,
@@ -1562,6 +1633,7 @@ fn run_detect_step_task(
 }
 
 #[cfg(feature = "multichannel")]
+/// Internal helper function.
 fn apply_embed_step_results(
     target: &mut MultichannelAudio,
     step_results: &mut [EmbedStepTaskResult],
@@ -1588,6 +1660,7 @@ fn apply_embed_step_results(
 }
 
 #[cfg(feature = "multichannel")]
+/// Internal helper function.
 fn finalize_detect_step_results(
     mut step_results: Vec<DetectStepTaskResult>,
 ) -> MultichannelDetectResult {
@@ -1614,6 +1687,7 @@ fn finalize_detect_step_results(
 }
 
 #[cfg(feature = "multichannel")]
+/// Internal helper function.
 fn collect_detect_step_results_with_early_exit<F>(
     detect_steps: &[(usize, RouteStep)],
     mut run_step: F,
@@ -1693,6 +1767,7 @@ fn detect_multichannel_from_audio(
 }
 
 #[cfg(feature = "multichannel")]
+/// Internal helper function.
 fn build_stereo_for_route_step(
     audio: &MultichannelAudio,
     step: &RouteStep,
@@ -1720,6 +1795,7 @@ fn build_stereo_for_route_step(
 }
 
 #[cfg(feature = "multichannel")]
+/// Internal helper function.
 fn apply_processed_route_step(
     target: &mut MultichannelAudio,
     step: &RouteStep,
@@ -1812,6 +1888,7 @@ fn parse_detect_output(stdout: &str, stderr: &str) -> Option<DetectResult> {
     None
 }
 
+/// Internal helper function.
 fn extension_format_hint(path: &Path) -> Option<InputAudioFormat> {
     let ext = path
         .extension()
@@ -1831,6 +1908,7 @@ fn extension_format_hint(path: &Path) -> Option<InputAudioFormat> {
     }
 }
 
+/// Internal helper function.
 fn sniff_input_audio_format(path: &Path) -> Option<InputAudioFormat> {
     let mut file = File::open(path).ok()?;
     let mut header = [0_u8; 16];
@@ -1871,6 +1949,7 @@ fn sniff_input_audio_format(path: &Path) -> Option<InputAudioFormat> {
     None
 }
 
+/// Internal helper function.
 fn classify_pipe_input_source(path: &Path) -> PipeInputSource {
     match sniff_input_audio_format(path) {
         Some(InputAudioFormat::Wav) => PipeInputSource::FileDirect,
@@ -1888,6 +1967,7 @@ fn classify_pipe_input_source(path: &Path) -> PipeInputSource {
     }
 }
 
+/// Internal helper function.
 fn classify_input_prepare_strategy(path: &Path) -> InputPrepareStrategy {
     if let Some(sniffed) = sniff_input_audio_format(path) {
         return match sniffed {
@@ -1903,6 +1983,7 @@ fn classify_input_prepare_strategy(path: &Path) -> InputPrepareStrategy {
     InputPrepareStrategy::DecodeToWav
 }
 
+/// Internal helper function.
 fn validate_embed_output_path(path: &Path) -> Result<()> {
     let ext = path
         .extension()
@@ -1919,6 +2000,7 @@ fn validate_embed_output_path(path: &Path) -> Result<()> {
     }
 }
 
+/// Internal helper function.
 fn prepare_input_for_audiowmark(input: &Path, purpose: &str) -> Result<PreparedInput> {
     match classify_input_prepare_strategy(input) {
         InputPrepareStrategy::Direct => Ok(PreparedInput {
@@ -1937,6 +2019,7 @@ fn prepare_input_for_audiowmark(input: &Path, purpose: &str) -> Result<PreparedI
     }
 }
 
+/// Internal helper function.
 fn create_temp_dir(prefix: &str) -> Result<PathBuf> {
     use std::fs;
 
@@ -1954,6 +2037,7 @@ fn create_temp_dir(prefix: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
+/// Internal helper function.
 fn decode_to_wav(input: &Path, output_wav: &Path) -> Result<()> {
     use hound::{SampleFormat as HoundSampleFormat, WavSpec, WavWriter};
 
@@ -1990,14 +2074,20 @@ fn decode_to_wav(input: &Path, output_wav: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Internal struct.
 pub(crate) struct DecodedPcm {
+    /// Internal field.
     pub(crate) sample_rate: u32,
+    /// Internal field.
     pub(crate) channels: u16,
+    /// Internal field.
     pub(crate) bits_per_sample: u16,
+    /// Internal field.
     pub(crate) samples: Vec<i32>,
 }
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal helper function.
 fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
     media::decode_media_to_pcm_i32(input)
 }
@@ -2010,6 +2100,7 @@ fn decode_media_to_pcm_i32(_input: &Path) -> Result<DecodedPcm> {
 }
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal helper function.
 fn decode_media_to_wav_pipe(input: &Path, writer: &mut dyn Write) -> Result<()> {
     media::decode_media_to_wav_pipe(input, writer)
 }
@@ -2071,6 +2162,7 @@ fn decoded_pcm_into_multichannel(decoded: DecodedPcm) -> Result<MultichannelAudi
     MultichannelAudio::new(channels, decoded.sample_rate, sample_format)
 }
 
+/// Internal helper function.
 fn clamp_sample_to_bits(sample: i32, bits_per_sample: u16) -> i32 {
     let bits = bits_per_sample.clamp(1, 32);
     let min = -(1_i64 << (bits - 1));

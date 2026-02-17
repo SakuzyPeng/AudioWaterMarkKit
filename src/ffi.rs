@@ -56,10 +56,14 @@ pub struct AWMResult {
     pub identity: [c_char; 8], // 7 chars max + null terminator
 }
 
+/// Internal constant.
 const CLONE_LIKELY_MAX_SCORE: f64 = 7.0;
+/// Internal constant.
 const CLONE_LIKELY_MIN_SECONDS: f32 = 6.0;
+/// Internal constant.
 const FFI_SNR_STATUS_UNAVAILABLE: &str = "unavailable";
 
+/// Internal helper function.
 fn copy_str_to_c_buf(dst: &mut [c_char], text: &str) {
     dst.fill(0);
     let max = dst.len().saturating_sub(1);
@@ -76,11 +80,13 @@ const fn u8_to_c_char(byte: u8) -> c_char {
 }
 
 #[cfg(not(target_os = "windows"))]
+/// Internal helper function.
 const fn u8_to_c_char(byte: u8) -> c_char {
     i8::from_ne_bytes([byte])
 }
 
 #[cfg(unix)]
+/// Internal helper function.
 fn ensure_sigpipe_ignored_once() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
@@ -383,6 +389,7 @@ pub const extern "C" fn awm_current_version() -> u8 {
     CURRENT_VERSION
 }
 
+/// Internal helper function.
 unsafe fn fill_awm_result(result: *mut AWMResult, r: &crate::message::MessageResult) {
     (*result).version = r.version;
     (*result).timestamp_utc = r.timestamp_utc;
@@ -418,6 +425,7 @@ use crate::audio::Audio;
 
 /// 不透明的 Audio 句柄
 pub struct AWMAudioHandle {
+    /// Internal field.
     inner: Audio,
 }
 
@@ -485,6 +493,7 @@ pub struct AWMCloneCheckResult {
 }
 
 impl AWMCloneCheckResult {
+    /// Internal helper method.
     fn reset(&mut self) {
         self.kind = AWMCloneCheckKind::Unavailable;
         self.has_score = false;
@@ -511,6 +520,7 @@ pub struct AWMEmbedEvidenceResult {
 }
 
 impl AWMEmbedEvidenceResult {
+    /// Internal helper method.
     fn reset(&mut self) {
         self.has_snr_db = false;
         self.snr_db = 0.0;
@@ -687,11 +697,13 @@ pub unsafe extern "C" fn awm_audio_detect(
 }
 
 #[cfg(feature = "app")]
+/// Internal helper function.
 fn is_likely(score: f64, match_seconds: f32) -> bool {
     score <= CLONE_LIKELY_MAX_SCORE && match_seconds >= CLONE_LIKELY_MIN_SECONDS
 }
 
 #[cfg(feature = "app")]
+/// Internal helper function.
 fn evaluate_clone_check(
     input: &str,
     identity: &str,
@@ -963,6 +975,7 @@ pub unsafe extern "C" fn awm_evidence_record_embed_file_ex(
     AWMError::Success as i32
 }
 
+/// Internal helper function.
 unsafe fn record_evidence_file_impl(
     file_path: *const c_char,
     raw_message: *const u8,
@@ -1045,29 +1058,50 @@ unsafe fn record_evidence_file_impl(
 
 #[cfg(feature = "app")]
 #[derive(Serialize)]
+/// Internal struct.
 struct FfiAudioEvidence {
+    /// Internal field.
     id: i64,
+    /// Internal field.
     created_at: u64,
+    /// Internal field.
     file_path: String,
+    /// Internal field.
     tag: String,
+    /// Internal field.
     identity: String,
+    /// Internal field.
     version: u8,
+    /// Internal field.
     key_slot: u8,
+    /// Internal field.
     timestamp_minutes: u32,
+    /// Internal field.
     message_hex: String,
+    /// Internal field.
     sample_rate: u32,
+    /// Internal field.
     channels: u32,
+    /// Internal field.
     sample_count: u64,
+    /// Internal field.
     pcm_sha256: String,
+    /// Internal field.
     key_id: Option<String>,
+    /// Internal field.
     snr_db: Option<f64>,
+    /// Internal field.
     snr_status: String,
+    /// Internal field.
     chromaprint_blob: String,
+    /// Internal field.
     fingerprint_len: usize,
+    /// Internal field.
     fp_config_id: u8,
 }
 
 #[cfg(feature = "app")]
+/// Internal helper function.
 fn encode_chromaprint_blob_hex(values: &[u32]) -> String {
     let mut out = Vec::with_capacity(values.len().saturating_mul(4));
     for value in values {
@@ -1962,6 +1996,7 @@ pub enum AWMChannelLayout {
 
 #[cfg(feature = "multichannel")]
 impl AWMChannelLayout {
+    /// Internal helper method.
     const fn to_rust_layout(self) -> Option<ChannelLayout> {
         match self {
             Self::Stereo => Some(ChannelLayout::Stereo),

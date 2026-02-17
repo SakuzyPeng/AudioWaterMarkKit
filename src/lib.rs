@@ -34,6 +34,7 @@
 //! ```
 
 pub mod audio;
+/// Internal module.
 pub(crate) mod bundled;
 pub mod charset;
 pub mod error;

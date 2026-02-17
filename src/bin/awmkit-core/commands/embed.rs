@@ -13,9 +13,11 @@ use fluent_bundle::FluentArgs;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::PathBuf;
 
+/// Internal constant.
 const EMBED_PROGRESS_TEMPLATE: &str = "{prefix} [{bar:40}] {pos}/{len}";
 
 #[derive(Args)]
+/// Internal struct.
 pub struct CmdArgs {
     /// Tag (1-7 identity or full 8-char tag)
     #[arg(long)]
@@ -39,6 +41,7 @@ pub struct CmdArgs {
 }
 
 #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
+/// Internal helper function.
 pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let inputs = expand_inputs(&args.inputs)?;
     if args.output.is_some() && inputs.len() != 1 {

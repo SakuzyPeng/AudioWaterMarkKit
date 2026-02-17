@@ -10,20 +10,32 @@ use ffmpeg_next as ffmpeg;
 use crate::audio::{AudioMediaCapabilities, ContainerCapabilities, DecodedPcm};
 use crate::error::{Error, Result};
 
+/// Internal item.
 static FFMPEG_INIT: OnceLock<std::result::Result<(), String>> = OnceLock::new();
+/// Internal constant.
 const WAV_PIPE_UNKNOWN_SIZE: u32 = u32::MAX;
 
+/// Internal struct.
 struct DecodeContext {
+    /// Internal field.
     input_ctx: ffmpeg::format::context::Input,
+    /// Internal field.
     decoder: ffmpeg::codec::decoder::Audio,
+    /// Internal field.
     stream_index: usize,
+    /// Internal field.
     sample_rate: u32,
+    /// Internal field.
     channels: u16,
+    /// Internal field.
     output_layout: ffmpeg::ChannelLayout,
+    /// Internal field.
     output_rate: u32,
+    /// Internal field.
     resampler: ffmpeg::software::resampling::Context,
 }
 
+/// Internal helper function.
 pub fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
     let mut context = open_decode_context(input)?;
     let mut samples = Vec::<i32>::new();
@@ -46,6 +58,7 @@ pub fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
     })
 }
 
+/// Internal helper function.
 pub fn decode_media_to_wav_pipe(input: &Path, writer: &mut dyn Write) -> Result<()> {
     let mut context = open_decode_context(input)?;
     write_wav_pipe_header(writer, context.sample_rate, context.channels)?;
@@ -64,6 +77,7 @@ pub fn decode_media_to_wav_pipe(input: &Path, writer: &mut dyn Write) -> Result<
     Ok(())
 }
 
+/// Internal helper function.
 pub fn media_capabilities() -> AudioMediaCapabilities {
     if ensure_ffmpeg_initialized().is_err() {
         return AudioMediaCapabilities {
@@ -84,6 +98,7 @@ pub fn media_capabilities() -> AudioMediaCapabilities {
     }
 }
 
+/// Internal helper function.
 fn open_decode_context(input: &Path) -> Result<DecodeContext> {
     ensure_ffmpeg_initialized()?;
 
@@ -139,6 +154,7 @@ fn open_decode_context(input: &Path) -> Result<DecodeContext> {
     })
 }
 
+/// Internal helper function.
 fn decode_with_sink<F>(context: &mut DecodeContext, mut sink: F) -> Result<usize>
 where
     F: FnMut(&[u8]) -> Result<()>,
@@ -191,6 +207,7 @@ where
     Ok(total_bytes)
 }
 
+/// Internal helper function.
 fn ensure_ffmpeg_initialized() -> Result<()> {
     match FFMPEG_INIT.get_or_init(|| ffmpeg::init().map_err(|err| err.to_string())) {
         Ok(()) => Ok(()),
@@ -198,6 +215,7 @@ fn ensure_ffmpeg_initialized() -> Result<()> {
     }
 }
 
+/// Internal helper function.
 fn map_open_error(input: &Path, detail: &str) -> Error {
     let ext = input
         .extension()
@@ -218,6 +236,7 @@ fn map_open_error(input: &Path, detail: &str) -> Error {
     Error::FfmpegDecodeFailed(format!("failed to open input media: {detail}"))
 }
 
+/// Internal helper function.
 fn receive_decoded_frames<F>(
     decoder: &mut ffmpeg::codec::decoder::Audio,
     resampler: &mut ffmpeg::software::resampling::Context,
@@ -243,6 +262,7 @@ where
     Ok(())
 }
 
+/// Internal helper function.
 fn resample_frame<F>(
     resampler: &mut ffmpeg::software::resampling::Context,
     decoded: &ffmpeg::frame::Audio,
@@ -313,6 +333,7 @@ where
     }
 }
 
+/// Internal helper function.
 fn create_resampler(
     src_format: ffmpeg::format::Sample,
     src_layout: ffmpeg::ChannelLayout,
@@ -331,6 +352,7 @@ fn create_resampler(
     .map_err(|err| Error::FfmpegDecodeFailed(format!("failed to create audio resampler: {err}")))
 }
 
+/// Internal helper function.
 fn normalize_layout(layout: ffmpeg::ChannelLayout, channels: u16) -> ffmpeg::ChannelLayout {
     if layout.bits() == 0 {
         ffmpeg::ChannelLayout::default(i32::from(channels))
@@ -339,6 +361,7 @@ fn normalize_layout(layout: ffmpeg::ChannelLayout, channels: u16) -> ffmpeg::Cha
     }
 }
 
+/// Internal helper function.
 fn flush_resampler<F>(
     resampler: &mut ffmpeg::software::resampling::Context,
     total_bytes: &mut usize,
@@ -372,6 +395,7 @@ where
     Ok(())
 }
 
+/// Internal helper function.
 fn sink_frame_bytes<F>(
     frame: &ffmpeg::frame::Audio,
     total_bytes: &mut usize,
@@ -388,6 +412,7 @@ where
     sink(bytes)
 }
 
+/// Internal helper function.
 fn packed_i16_frame_bytes(frame: &ffmpeg::frame::Audio) -> Result<&[u8]> {
     if frame.format() != ffmpeg::format::Sample::I16(ffmpeg::format::sample::Type::Packed) {
         return Err(Error::FfmpegDecodeFailed(format!(
@@ -418,6 +443,7 @@ fn packed_i16_frame_bytes(frame: &ffmpeg::frame::Audio) -> Result<&[u8]> {
     Ok(&data[..expected_bytes])
 }
 
+/// Internal helper function.
 fn append_packed_i16_bytes(bytes: &[u8], samples: &mut Vec<i32>) {
     for chunk in bytes.chunks_exact(2) {
         let sample = i16::from_ne_bytes([chunk[0], chunk[1]]);
@@ -425,6 +451,7 @@ fn append_packed_i16_bytes(bytes: &[u8], samples: &mut Vec<i32>) {
     }
 }
 
+/// Internal helper function.
 fn write_wav_pipe_header(writer: &mut dyn Write, sample_rate: u32, channels: u16) -> Result<()> {
     if channels == 0 {
         return Err(Error::FfmpegDecodeFailed(
@@ -455,6 +482,7 @@ fn write_wav_pipe_header(writer: &mut dyn Write, sample_rate: u32, channels: u16
 }
 
 #[allow(unsafe_code)]
+/// Internal helper function.
 fn has_demuxer(name: &str) -> bool {
     let Ok(c_name) = CString::new(name) else {
         return false;

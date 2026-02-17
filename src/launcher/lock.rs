@@ -4,15 +4,21 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
+/// Internal constant.
 const ACQUIRE_RETRY_COUNT: usize = 300;
+/// Internal constant.
 const ACQUIRE_RETRY_DELAY_MS: u64 = 100;
 
+/// Internal struct.
 pub struct ExtractLock {
+    /// Internal field.
     path: PathBuf,
+    /// Internal field.
     held: bool,
 }
 
 impl ExtractLock {
+    /// Internal associated function.
     pub fn acquire(path: &Path) -> Result<Self, String> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|e| {

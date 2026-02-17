@@ -7,6 +7,7 @@ use fluent_bundle::FluentArgs;
 use serde::Serialize;
 
 #[derive(Subcommand)]
+/// Internal enum.
 pub enum Command {
     /// Suggest a tag from a username (deterministic, no storage)
     Suggest(SuggestArgs),
@@ -25,12 +26,14 @@ pub enum Command {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct SuggestArgs {
     /// Username to map
     pub username: String,
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct SaveArgs {
     /// Username to map
     pub username: String,
@@ -45,6 +48,7 @@ pub struct SaveArgs {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct ListArgs {
     /// Output as JSON
     #[arg(long)]
@@ -52,17 +56,22 @@ pub struct ListArgs {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct RemoveArgs {
     /// Username to remove
     pub username: String,
 }
 
 #[derive(Serialize)]
+/// Internal struct.
 struct TagStoreOutput {
+    /// Internal field.
     version: u8,
+    /// Internal field.
     entries: Vec<TagEntry>,
 }
 
+/// Internal helper function.
 pub fn run(ctx: &Context, command: Command) -> Result<()> {
     match command {
         Command::Suggest(args) => suggest(ctx, &args),
@@ -73,12 +82,14 @@ pub fn run(ctx: &Context, command: Command) -> Result<()> {
     }
 }
 
+/// Internal helper function.
 fn suggest(ctx: &Context, args: &SuggestArgs) -> Result<()> {
     let tag = TagStore::suggest(&args.username)?;
     ctx.out.info(tag.as_str());
     Ok(())
 }
 
+/// Internal helper function.
 fn save(ctx: &Context, args: &SaveArgs) -> Result<()> {
     let tag = match args.tag.as_ref() {
         Some(tag) => parse_tag(tag)?,
@@ -94,6 +105,7 @@ fn save(ctx: &Context, args: &SaveArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn list(ctx: &Context, args: &ListArgs) -> Result<()> {
     let store = TagStore::load()?;
 
@@ -119,6 +131,7 @@ fn list(ctx: &Context, args: &ListArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn remove(ctx: &Context, args: &RemoveArgs) -> Result<()> {
     let mut store = TagStore::load()?;
     store.remove(&args.username)?;
@@ -128,6 +141,7 @@ fn remove(ctx: &Context, args: &RemoveArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn clear(ctx: &Context) -> Result<()> {
     let mut store = TagStore::load()?;
     store.clear()?;

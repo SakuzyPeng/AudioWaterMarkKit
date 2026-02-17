@@ -6,12 +6,14 @@ use clap::Args;
 use fluent_bundle::FluentArgs;
 
 #[derive(Args)]
+/// Internal struct.
 pub struct CmdArgs {
     /// Message hex string (32 chars)
     #[arg(long)]
     pub hex: String,
 }
 
+/// Internal helper function.
 pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let store = KeyStore::new()?;
     let key = store.load()?;

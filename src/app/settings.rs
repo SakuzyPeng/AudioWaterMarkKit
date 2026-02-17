@@ -36,6 +36,7 @@ impl AppSettings {
         Ok(())
     }
 
+    /// Internal helper method.
     fn save_to(&self, path: &Path) -> Result<()> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
@@ -46,6 +47,7 @@ impl AppSettings {
     }
 }
 
+/// Internal helper function.
 fn load_from(path: &Path) -> Result<AppSettings> {
     if !path.exists() {
         return Ok(AppSettings::default());

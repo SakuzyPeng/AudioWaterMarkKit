@@ -4,6 +4,7 @@ use crate::Context;
 use awmkit::app::{i18n, KeyStore, KEY_LEN};
 use fluent_bundle::FluentArgs;
 
+/// Internal helper function.
 pub fn run(ctx: &Context) -> Result<()> {
     let store = KeyStore::new()?;
     let slot = store.active_slot()?;

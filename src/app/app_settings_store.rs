@@ -8,14 +8,20 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub const KEY_SLOT_MIN: u8 = 0;
 /// Maximum valid key slot.
 pub const KEY_SLOT_MAX: u8 = 31;
+/// Internal constant.
 const ACTIVE_KEY_SLOT_KEY: &str = "active_key_slot";
+/// Internal constant.
 const UI_LANGUAGE_KEY: &str = "ui_language";
+/// Internal constant.
 const UI_LANG_ZH_CN: &str = "zh-CN";
+/// Internal constant.
 const UI_LANG_EN_US: &str = "en-US";
 
 /// App-level settings store backed by sqlite.
 pub struct AppSettingsStore {
+    /// Internal field.
     conn: Connection,
+    /// Internal field.
     path: PathBuf,
 }
 
@@ -209,6 +215,7 @@ impl AppSettingsStore {
     }
 }
 
+/// Internal helper function.
 fn normalize_ui_language(value: &str) -> Option<&'static str> {
     match value.trim().to_ascii_lowercase().as_str() {
         "zh-cn" => Some(UI_LANG_ZH_CN),
@@ -237,6 +244,7 @@ pub const fn is_valid_slot(slot: u8) -> bool {
     slot <= KEY_SLOT_MAX
 }
 
+/// Internal helper function.
 fn db_path() -> Result<PathBuf> {
     #[cfg(target_os = "windows")]
     {
@@ -260,6 +268,7 @@ fn db_path() -> Result<PathBuf> {
     }
 }
 
+/// Internal helper function.
 fn open_db(path: &Path) -> Result<Connection> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -281,6 +290,7 @@ fn open_db(path: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
+/// Internal helper function.
 fn now_ts() -> Result<u64> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)

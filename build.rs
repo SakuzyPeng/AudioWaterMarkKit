@@ -22,7 +22,9 @@ fn main() {
 
     let generated = maybe_payload.map_or_else(
         || {
-            "pub const PAYLOAD: &[u8] = &[];\n\
+            "/// Embedded launcher payload bytes.\n\
+             pub const PAYLOAD: &[u8] = &[];\n\
+             /// SHA-256 hex digest of the embedded launcher payload.\n\
              pub const PAYLOAD_SHA256: &str = \"\";\n"
                 .to_string()
         },
@@ -45,7 +47,9 @@ fn main() {
                 std::process::exit(1);
             }
             format!(
-                "pub const PAYLOAD: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/launcher_payload.zip\"));\n\
+                "/// Embedded launcher payload bytes.\n\
+                 pub const PAYLOAD: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/launcher_payload.zip\"));\n\
+                 /// SHA-256 hex digest of the embedded launcher payload.\n\
                  pub const PAYLOAD_SHA256: &str = \"{payload_hash}\";\n"
             )
         },

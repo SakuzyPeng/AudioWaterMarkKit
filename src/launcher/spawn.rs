@@ -2,6 +2,7 @@ use super::payload::PreparedRuntime;
 use std::ffi::OsString;
 use std::process::{Command, Stdio};
 
+/// Internal helper function.
 pub fn run_core(runtime: &PreparedRuntime, args: &[OsString]) -> Result<i32, String> {
     let mut command = Command::new(&runtime.core_binary);
     command.args(args);
@@ -39,6 +40,7 @@ fn apply_runtime_env(command: &mut Command, runtime: &PreparedRuntime) {
 }
 
 #[cfg(not(target_os = "windows"))]
+/// Internal helper function.
 fn apply_runtime_env(command: &mut Command, runtime: &PreparedRuntime) {
     command.env("DYLD_LIBRARY_PATH", runtime.runtime_dir.as_os_str());
     command.env("AWMKIT_RUNTIME_STRICT", "1");

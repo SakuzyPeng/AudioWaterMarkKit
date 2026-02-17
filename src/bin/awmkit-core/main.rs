@@ -17,12 +17,16 @@ fn main() {
 }
 
 #[cfg(feature = "full-cli")]
+/// Internal module.
 mod commands;
 #[cfg(feature = "full-cli")]
+/// Internal module.
 mod error;
 #[cfg(feature = "full-cli")]
+/// Internal module.
 mod output;
 #[cfg(feature = "full-cli")]
+/// Internal module.
 mod util;
 
 #[cfg(feature = "full-cli")]
@@ -44,6 +48,7 @@ use std::path::PathBuf;
 #[command(
     after_help = "Launcher-only command (via `awmkit` wrapper):\n  cache clean [--db] --yes    Clean extracted runtime; add --db to also remove database and config"
 )]
+/// Internal struct.
 struct Cli {
     /// Verbose output
     #[arg(short, long, global = true)]
@@ -62,11 +67,13 @@ struct Cli {
     lang: Option<String>,
 
     #[command(subcommand)]
+    /// Internal field.
     command: Commands,
 }
 
 #[cfg(feature = "full-cli")]
 #[derive(Subcommand)]
+/// Internal enum.
 enum Commands {
     /// Initialize key storage
     Init,
@@ -74,12 +81,14 @@ enum Commands {
     /// Tag mapping helpers
     Tag {
         #[command(subcommand)]
+        /// Internal field.
         command: commands::tag::Command,
     },
 
     /// Key management
     Key {
         #[command(subcommand)]
+        /// Internal field.
         command: KeyCommand,
     },
 
@@ -98,6 +107,7 @@ enum Commands {
     /// Query and manage evidence records
     Evidence {
         #[command(subcommand)]
+        /// Internal field.
         command: commands::evidence::Command,
     },
 
@@ -107,6 +117,7 @@ enum Commands {
 
 #[cfg(feature = "full-cli")]
 #[derive(Subcommand)]
+/// Internal enum.
 enum KeyCommand {
     /// Show key info (no key material)
     Show(commands::key::ShowArgs),
@@ -126,17 +137,22 @@ enum KeyCommand {
     /// Slot management
     Slot {
         #[command(subcommand)]
+        /// Internal field.
         command: commands::key::SlotCommand,
     },
 }
 
 #[cfg(feature = "full-cli")]
+/// Internal struct.
 struct Context {
+    /// Internal field.
     out: Output,
+    /// Internal field.
     audiowmark: Option<PathBuf>,
 }
 
 #[cfg(feature = "full-cli")]
+/// Internal helper function.
 fn run() -> Result<()> {
     let cli = Cli::parse();
 

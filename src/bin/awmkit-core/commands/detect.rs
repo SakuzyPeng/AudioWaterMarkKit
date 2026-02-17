@@ -10,11 +10,15 @@ use indicatif::{ProgressBar, ProgressStyle};
 use rusty_chromaprint::{match_fingerprints, Configuration};
 use serde::Serialize;
 
+/// Internal constant.
 const CLONE_LIKELY_MAX_SCORE: f64 = 7.0;
+/// Internal constant.
 const CLONE_LIKELY_MIN_SECONDS: f32 = 6.0;
+/// Internal constant.
 const DETECT_PROGRESS_TEMPLATE: &str = "{prefix} [{bar:40}] {pos}/{len}";
 
 #[derive(Args)]
+/// Internal struct.
 pub struct CmdArgs {
     /// JSON output
     #[arg(long)]
@@ -30,34 +34,60 @@ pub struct CmdArgs {
 }
 
 #[derive(Serialize)]
+/// Internal struct.
 struct DetectJson {
+    /// Internal field.
     file: String,
+    /// Internal field.
     status: String,
+    /// Internal field.
     verification: Option<String>,
+    /// Internal field.
     forensic_warning: Option<String>,
+    /// Internal field.
     tag: Option<String>,
+    /// Internal field.
     identity: Option<String>,
+    /// Internal field.
     version: Option<u8>,
+    /// Internal field.
     key_slot: Option<u8>,
+    /// Internal field.
     timestamp_minutes: Option<u32>,
+    /// Internal field.
     timestamp_utc: Option<u64>,
+    /// Internal field.
     pattern: Option<String>,
+    /// Internal field.
     detect_score: Option<f32>,
+    /// Internal field.
     bit_errors: Option<u32>,
+    /// Internal field.
     match_found: Option<bool>,
+    /// Internal field.
     error: Option<String>,
+    /// Internal field.
     clone_check: Option<String>,
+    /// Internal field.
     clone_score: Option<f64>,
+    /// Internal field.
     clone_match_seconds: Option<f32>,
+    /// Internal field.
     clone_matched_evidence_id: Option<i64>,
+    /// Internal field.
     clone_reason: Option<String>,
+    /// Internal field.
     decode_slot_hint: Option<u8>,
+    /// Internal field.
     decode_slot_used: Option<u8>,
+    /// Internal field.
     slot_status: Option<String>,
+    /// Internal field.
     slot_scan_count: Option<u32>,
 }
 
 #[allow(clippy::too_many_lines)]
+/// Internal helper function.
 pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let inputs = expand_inputs(&args.inputs)?;
     for input in &inputs {
@@ -256,39 +286,65 @@ pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     }
 }
 
+/// Internal enum.
 enum DetectOutcome {
+    /// Internal variant.
     Found {
+        /// Internal field.
         tag: String,
+        /// Internal field.
         identity: String,
+        /// Internal field.
         clone_check: CloneCheck,
+        /// Internal field.
         detect_score: Option<f32>,
+        /// Internal field.
         decode_slot_hint: u8,
+        /// Internal field.
         decode_slot_used: u8,
+        /// Internal field.
         slot_status: String,
+        /// Internal field.
         slot_scan_count: u32,
     },
+    /// Internal variant.
     NotFound,
+    /// Internal variant.
     Invalid {
+        /// Internal field.
         error: String,
+        /// Internal field.
         unverified: Option<awmkit::MessageResult>,
+        /// Internal field.
         detect_score: Option<f32>,
+        /// Internal field.
         decode_slot_hint: Option<u8>,
+        /// Internal field.
         decode_slot_used: Option<u8>,
+        /// Internal field.
         slot_status: String,
+        /// Internal field.
         slot_scan_count: u32,
     },
 }
 
 #[derive(Clone)]
+/// Internal struct.
 struct CloneCheck {
+    /// Internal field.
     check: String,
+    /// Internal field.
     score: Option<f64>,
+    /// Internal field.
     match_seconds: Option<f32>,
+    /// Internal field.
     matched_evidence_id: Option<i64>,
+    /// Internal field.
     reason: Option<String>,
 }
 
 impl CloneCheck {
+    /// Internal associated function.
     fn exact(matched_evidence_id: i64) -> Self {
         Self {
             check: "exact".to_string(),
@@ -299,6 +355,7 @@ impl CloneCheck {
         }
     }
 
+    /// Internal associated function.
     fn likely(matched_evidence_id: i64, score: f64, match_seconds: f32) -> Self {
         Self {
             check: "likely".to_string(),
@@ -309,6 +366,7 @@ impl CloneCheck {
         }
     }
 
+    /// Internal associated function.
     fn suspect(score: Option<f64>, match_seconds: Option<f32>, reason: &str) -> Self {
         Self {
             check: "suspect".to_string(),
@@ -319,6 +377,7 @@ impl CloneCheck {
         }
     }
 
+    /// Internal associated function.
     fn unavailable(reason: String) -> Self {
         Self {
             check: "unavailable".to_string(),
@@ -329,6 +388,7 @@ impl CloneCheck {
         }
     }
 
+    /// Internal helper method.
     fn summary(&self) -> String {
         match self.check.as_str() {
             "exact" => "exact".to_string(),
@@ -354,6 +414,7 @@ impl CloneCheck {
     }
 }
 
+/// Internal helper function.
 fn detect_one(
     audio: &awmkit::Audio,
     key_store: &KeyStore,
@@ -394,6 +455,7 @@ fn detect_one(
 }
 
 #[allow(clippy::too_many_lines)]
+/// Internal helper function.
 fn detect_one_json(
     audio: &awmkit::Audio,
     key_store: &KeyStore,
@@ -519,6 +581,7 @@ fn detect_one_json(
     }
 }
 
+/// Internal helper function.
 fn detect_best(
     audio: &awmkit::Audio,
     input: &std::path::Path,
@@ -528,27 +591,43 @@ fn detect_best(
     Ok(result.best)
 }
 
+/// Internal struct.
 struct DecodedSlotMessage {
+    /// Internal field.
     message: awmkit::MessageResult,
+    /// Internal field.
     slot_hint: u8,
+    /// Internal field.
     slot_used: u8,
+    /// Internal field.
     status: String,
+    /// Internal field.
     scan_count: u32,
 }
 
+/// Internal struct.
 struct InvalidSlotDecode {
+    /// Internal field.
     slot_hint: u8,
+    /// Internal field.
     slot_used: Option<u8>,
+    /// Internal field.
     status: String,
+    /// Internal field.
     scan_count: u32,
+    /// Internal field.
     error: String,
 }
 
+/// Internal enum.
 enum SlotResolution {
+    /// Internal variant.
     Decoded(DecodedSlotMessage),
+    /// Internal variant.
     Invalid(InvalidSlotDecode),
 }
 
+/// Internal helper function.
 fn resolve_decode_slot(message: &[u8], key_store: &KeyStore) -> SlotResolution {
     let slot_hint = match Message::peek_version_and_slot(message) {
         Ok((_, slot)) => slot,
@@ -637,6 +716,7 @@ fn resolve_decode_slot(message: &[u8], key_store: &KeyStore) -> SlotResolution {
     }
 }
 
+/// Internal helper function.
 fn evaluate_clone_check(
     input: &std::path::Path,
     decoded: &awmkit::MessageResult,
@@ -709,6 +789,7 @@ fn evaluate_clone_check(
     }
 }
 
+/// Internal helper function.
 fn is_likely(score: f64, match_seconds: f32) -> bool {
     score <= CLONE_LIKELY_MAX_SCORE && match_seconds >= CLONE_LIKELY_MIN_SECONDS
 }

@@ -1,6 +1,10 @@
+/// Internal module.
 mod extract;
+/// Internal module.
 mod lock;
+/// Internal module.
 mod payload;
+/// Internal module.
 mod spawn;
 
 use keyring::Entry;
@@ -9,15 +13,29 @@ use std::ffi::OsString;
 #[cfg(windows)]
 use std::path::PathBuf;
 
+/// Internal constant.
 const KEYRING_SERVICE: &str = "com.awmkit.watermark";
+/// Internal constant.
 const SLOT_USERNAME_PREFIX: &str = "signing-key-slot-";
+/// Internal constant.
 const LEGACY_USERNAME: &str = "signing-key";
+/// Internal constant.
 const SLOT_MIN: u8 = 0;
+/// Internal constant.
 const SLOT_MAX: u8 = 31;
 
+/// Internal enum.
 enum LauncherCommand {
+    /// Internal variant.
     CacheHelp,
-    CacheClean { delete_db: bool, confirmed: bool },
+    /// Internal variant.
+    CacheClean {
+        /// Internal field.
+        delete_db: bool,
+        /// Internal field.
+        confirmed: bool,
+    },
+    /// Internal variant.
     Forward(Vec<OsString>),
 }
 
@@ -41,6 +59,7 @@ pub fn run() -> Result<i32, String> {
     }
 }
 
+/// Internal helper function.
 fn parse_command(args: &[OsString]) -> Result<LauncherCommand, String> {
     let Some(first) = args.first() else {
         return Ok(LauncherCommand::Forward(Vec::new()));
@@ -86,6 +105,7 @@ fn parse_command(args: &[OsString]) -> Result<LauncherCommand, String> {
     })
 }
 
+/// Internal helper function.
 fn run_cache_clean(delete_db: bool, confirmed: bool) -> Result<i32, String> {
     if !confirmed {
         return Err("refusing to clean without confirmation; pass --yes".to_string());
@@ -109,6 +129,7 @@ fn run_cache_clean(delete_db: bool, confirmed: bool) -> Result<i32, String> {
     Ok(0)
 }
 
+/// Internal helper function.
 fn configured_key_slots() -> usize {
     let mut slots = HashSet::new();
     for slot in SLOT_MIN..=SLOT_MAX {
@@ -139,6 +160,7 @@ fn configured_key_slots() -> usize {
     slots.len()
 }
 
+/// Internal helper function.
 fn entry_has_password(username: &str) -> bool {
     Entry::new(KEYRING_SERVICE, username)
         .and_then(|entry| entry.get_password())

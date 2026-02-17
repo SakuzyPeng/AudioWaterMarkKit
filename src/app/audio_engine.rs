@@ -8,6 +8,7 @@ pub struct AppConfig {
 }
 
 pub struct AudioEngine {
+    /// Internal field.
     audio: Audio,
 }
 

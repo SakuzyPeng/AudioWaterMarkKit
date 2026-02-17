@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 const BIN_REL: &str = "bin/audiowmark.exe";
 
 #[cfg(target_os = "macos")]
+/// Internal constant.
 const BIN_REL: &str = "bin/audiowmark";
 
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
@@ -28,11 +29,13 @@ const BUNDLE_BYTES: &[u8] = include_bytes!(concat!(
 ));
 
 #[cfg(all(feature = "bundled", target_os = "macos"))]
+/// Internal constant.
 const BUNDLE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/bundled/audiowmark-macos-arm64.zip"
 ));
 
+/// Internal helper function.
 pub fn ensure_extracted() -> Result<PathBuf> {
     let cache_root = cache_root()?;
     let bin_path = cache_root.join(BIN_REL);
@@ -67,6 +70,7 @@ pub fn ensure_extracted() -> Result<PathBuf> {
     Ok(bin_path)
 }
 
+/// Internal helper function.
 fn bundle_hash() -> String {
     #[cfg(feature = "bundled")]
     {
@@ -80,6 +84,7 @@ fn bundle_hash() -> String {
     }
 }
 
+/// Internal helper function.
 pub fn cache_root() -> Result<PathBuf> {
     #[cfg(target_os = "windows")]
     {
@@ -103,6 +108,7 @@ pub fn cache_root() -> Result<PathBuf> {
     }
 }
 
+/// Internal helper function.
 fn extract_zip(dest: &Path) -> Result<()> {
     #[cfg(not(feature = "bundled"))]
     {
@@ -145,6 +151,7 @@ fn extract_zip(dest: &Path) -> Result<()> {
 }
 
 #[cfg(unix)]
+/// Internal helper function.
 fn ensure_executable(path: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
     let mut perms = fs::metadata(path)?.permissions();
@@ -154,6 +161,7 @@ fn ensure_executable(path: &Path) -> Result<()> {
 }
 
 #[cfg(feature = "bundled")]
+/// Internal helper function.
 fn to_hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(bytes.len() * 2);

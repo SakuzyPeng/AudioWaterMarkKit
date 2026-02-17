@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 
+/// Internal helper function.
 pub fn extract_zip_payload(payload_zip: &[u8], destination: &Path) -> Result<(), String> {
     let parent = destination
         .parent()
@@ -40,6 +41,7 @@ pub fn extract_zip_payload(payload_zip: &[u8], destination: &Path) -> Result<(),
     Ok(())
 }
 
+/// Internal helper function.
 fn extract_all(payload_zip: &[u8], output_dir: &Path) -> Result<(), String> {
     let cursor = Cursor::new(payload_zip);
     let mut archive = ZipArchive::new(cursor).map_err(|e| format!("invalid payload zip: {e}"))?;

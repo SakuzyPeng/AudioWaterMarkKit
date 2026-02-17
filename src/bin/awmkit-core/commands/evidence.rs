@@ -5,6 +5,7 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 
 #[derive(Subcommand)]
+/// Internal enum.
 pub enum Command {
     /// List evidence records
     List(ListArgs),
@@ -20,6 +21,7 @@ pub enum Command {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct ListArgs {
     /// Filter by identity
     #[arg(long, value_name = "IDENTITY")]
@@ -43,6 +45,7 @@ pub struct ListArgs {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct ShowArgs {
     /// Evidence id
     pub id: i64,
@@ -53,6 +56,7 @@ pub struct ShowArgs {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct RemoveArgs {
     /// Evidence id
     pub id: i64,
@@ -63,6 +67,7 @@ pub struct RemoveArgs {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct ClearArgs {
     /// Filter by identity
     #[arg(long, value_name = "IDENTITY")]
@@ -82,26 +87,45 @@ pub struct ClearArgs {
 }
 
 #[derive(Serialize)]
+/// Internal struct.
 struct EvidenceJson {
+    /// Internal field.
     id: i64,
+    /// Internal field.
     created_at: u64,
+    /// Internal field.
     file_path: String,
+    /// Internal field.
     tag: String,
+    /// Internal field.
     identity: String,
+    /// Internal field.
     version: u8,
+    /// Internal field.
     key_slot: u8,
+    /// Internal field.
     timestamp_minutes: u32,
+    /// Internal field.
     message_hex: String,
+    /// Internal field.
     sample_rate: u32,
+    /// Internal field.
     channels: u32,
+    /// Internal field.
     sample_count: u64,
+    /// Internal field.
     pcm_sha256: String,
+    /// Internal field.
     snr_db: Option<f64>,
+    /// Internal field.
     snr_status: String,
+    /// Internal field.
     fingerprint_len: usize,
+    /// Internal field.
     fp_config_id: u8,
 }
 
+/// Internal helper function.
 pub fn run(ctx: &Context, command: Command) -> Result<()> {
     match command {
         Command::List(args) => list(ctx, &args),
@@ -111,6 +135,7 @@ pub fn run(ctx: &Context, command: Command) -> Result<()> {
     }
 }
 
+/// Internal helper function.
 fn list(ctx: &Context, args: &ListArgs) -> Result<()> {
     let store = EvidenceStore::load()?;
     let items = store.list_filtered(
@@ -156,6 +181,7 @@ fn list(ctx: &Context, args: &ListArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn show(ctx: &Context, args: &ShowArgs) -> Result<()> {
     let store = EvidenceStore::load()?;
     let Some(item) = store.get_by_id(args.id)? else {
@@ -196,6 +222,7 @@ fn show(ctx: &Context, args: &ShowArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn remove(ctx: &Context, args: &RemoveArgs) -> Result<()> {
     ensure_yes(args.yes, "remove")?;
 
@@ -211,6 +238,7 @@ fn remove(ctx: &Context, args: &RemoveArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn clear(ctx: &Context, args: &ClearArgs) -> Result<()> {
     ensure_yes(args.yes, "clear")?;
     if args.identity.is_none() && args.tag.is_none() && args.key_slot.is_none() {
@@ -236,6 +264,7 @@ fn clear(ctx: &Context, args: &ClearArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn ensure_yes(yes: bool, action: &str) -> Result<()> {
     if yes {
         Ok(())
@@ -246,6 +275,7 @@ fn ensure_yes(yes: bool, action: &str) -> Result<()> {
     }
 }
 
+/// Internal helper function.
 fn evidence_json(item: &AudioEvidence) -> EvidenceJson {
     EvidenceJson {
         id: item.id,
@@ -268,11 +298,13 @@ fn evidence_json(item: &AudioEvidence) -> EvidenceJson {
     }
 }
 
+/// Internal helper function.
 fn sha_prefix(sha: &str) -> &str {
     let end = sha.char_indices().nth(12).map_or(sha.len(), |(idx, _)| idx);
     &sha[..end]
 }
 
+/// Internal helper function.
 fn shorten_middle(input: &str, max_chars: usize) -> String {
     if input.chars().count() <= max_chars {
         return input.to_string();

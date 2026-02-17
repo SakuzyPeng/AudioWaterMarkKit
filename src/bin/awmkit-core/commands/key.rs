@@ -13,6 +13,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 #[derive(Args)]
+/// Internal struct.
 pub struct ShowArgs {
     /// Operate on a specific slot (0..31). Defaults to active slot.
     #[arg(long, value_name = "N", value_parser = parse_slot_arg)]
@@ -24,6 +25,7 @@ pub struct ShowArgs {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct ImportArgs {
     /// Key file path (binary)
     pub file: PathBuf,
@@ -34,6 +36,7 @@ pub struct ImportArgs {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct ExportArgs {
     /// Output file path (binary)
     pub file: PathBuf,
@@ -48,6 +51,7 @@ pub struct ExportArgs {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct RotateArgs {
     /// Target slot (0..31). Defaults to active slot.
     #[arg(long, value_name = "N", value_parser = parse_slot_arg)]
@@ -55,6 +59,7 @@ pub struct RotateArgs {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct DeleteArgs {
     /// Target slot (0..31). Defaults to active slot.
     #[arg(long, value_name = "N", value_parser = parse_slot_arg)]
@@ -70,6 +75,7 @@ pub struct DeleteArgs {
 }
 
 #[derive(Subcommand)]
+/// Internal enum.
 pub enum SlotCommand {
     /// Show current active slot.
     Current,
@@ -80,11 +86,13 @@ pub enum SlotCommand {
     /// Manage slot labels.
     Label {
         #[command(subcommand)]
+        /// Internal field.
         command: SlotLabelCommand,
     },
 }
 
 #[derive(Subcommand)]
+/// Internal enum.
 pub enum SlotLabelCommand {
     /// Set label for one slot.
     Set(SlotLabelSetArgs),
@@ -93,6 +101,7 @@ pub enum SlotLabelCommand {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct SlotUseArgs {
     /// Slot id (0..31)
     #[arg(value_parser = parse_slot_arg)]
@@ -100,6 +109,7 @@ pub struct SlotUseArgs {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct SlotListArgs {
     /// JSON output
     #[arg(long)]
@@ -107,6 +117,7 @@ pub struct SlotListArgs {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct SlotLabelSetArgs {
     /// Slot id (0..31)
     #[arg(value_parser = parse_slot_arg)]
@@ -116,6 +127,7 @@ pub struct SlotLabelSetArgs {
 }
 
 #[derive(Args)]
+/// Internal struct.
 pub struct SlotLabelClearArgs {
     /// Slot id (0..31)
     #[arg(value_parser = parse_slot_arg)]
@@ -123,27 +135,44 @@ pub struct SlotLabelClearArgs {
 }
 
 #[derive(Serialize)]
+/// Internal struct.
 struct SlotSummary {
+    /// Internal field.
     slot: u8,
+    /// Internal field.
     active: bool,
+    /// Internal field.
     configured: bool,
+    /// Internal field.
     label: Option<String>,
+    /// Internal field.
     fingerprint8: Option<String>,
+    /// Internal field.
     backend: Option<String>,
+    /// Internal field.
     evidence_count: usize,
+    /// Internal field.
     last_used_at: Option<u64>,
 }
 
 #[derive(Serialize)]
+/// Internal struct.
 struct ShowJson {
+    /// Internal field.
     slot: u8,
+    /// Internal field.
     active: bool,
+    /// Internal field.
     configured: bool,
+    /// Internal field.
     bytes: Option<usize>,
+    /// Internal field.
     fingerprint: Option<String>,
+    /// Internal field.
     backend: Option<String>,
 }
 
+/// Internal helper function.
 pub fn run(ctx: &Context, command: KeyCommand) -> Result<()> {
     match command {
         KeyCommand::Show(args) => show(ctx, &args),
@@ -155,6 +184,7 @@ pub fn run(ctx: &Context, command: KeyCommand) -> Result<()> {
     }
 }
 
+/// Internal helper function.
 fn show(ctx: &Context, args: &ShowArgs) -> Result<()> {
     let store = KeyStore::new()?;
     let active_slot = store.active_slot()?;
@@ -223,6 +253,7 @@ fn show(ctx: &Context, args: &ShowArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn import(ctx: &Context, args: &ImportArgs) -> Result<()> {
     let bytes = std::fs::read(&args.file)?;
     if bytes.len() != KEY_LEN {
@@ -243,6 +274,7 @@ fn import(ctx: &Context, args: &ImportArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn export(ctx: &Context, args: &ExportArgs) -> Result<()> {
     let store = KeyStore::new()?;
     let slot = resolve_slot(&store, args.slot)?;
@@ -269,6 +301,7 @@ fn export(ctx: &Context, args: &ExportArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn rotate(ctx: &Context, args: &RotateArgs) -> Result<()> {
     let store = KeyStore::new()?;
     let slot = resolve_slot(&store, args.slot)?;
@@ -282,6 +315,7 @@ fn rotate(ctx: &Context, args: &RotateArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn delete(ctx: &Context, args: &DeleteArgs) -> Result<()> {
     if !args.yes {
         return Err(CliError::Message(i18n::tr("cli-key-delete-requires-yes")));
@@ -318,6 +352,7 @@ fn delete(ctx: &Context, args: &DeleteArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn slot(ctx: &Context, command: SlotCommand) -> Result<()> {
     match command {
         SlotCommand::Current => slot_current(ctx),
@@ -330,6 +365,7 @@ fn slot(ctx: &Context, command: SlotCommand) -> Result<()> {
     }
 }
 
+/// Internal helper function.
 fn slot_current(ctx: &Context) -> Result<()> {
     let store = AppSettingsStore::load()?;
     let slot = store.active_key_slot()?;
@@ -339,6 +375,7 @@ fn slot_current(ctx: &Context) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn slot_use(ctx: &Context, args: &SlotUseArgs) -> Result<()> {
     let store = AppSettingsStore::load()?;
     store.set_active_key_slot(args.slot)?;
@@ -348,6 +385,7 @@ fn slot_use(ctx: &Context, args: &SlotUseArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn slot_list(ctx: &Context, args: &SlotListArgs) -> Result<()> {
     let store = KeyStore::new()?;
     let settings = AppSettingsStore::load()?;
@@ -409,6 +447,7 @@ fn slot_list(ctx: &Context, args: &SlotListArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn slot_label_set(ctx: &Context, args: &SlotLabelSetArgs) -> Result<()> {
     let store = AppSettingsStore::load()?;
     store.set_slot_label(args.slot, &args.label)?;
@@ -419,6 +458,7 @@ fn slot_label_set(ctx: &Context, args: &SlotLabelSetArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn slot_label_clear(ctx: &Context, args: &SlotLabelClearArgs) -> Result<()> {
     let store = AppSettingsStore::load()?;
     store.clear_slot_label(args.slot)?;
@@ -429,6 +469,7 @@ fn slot_label_clear(ctx: &Context, args: &SlotLabelClearArgs) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 pub fn generate_for_active_slot() -> Result<u8> {
     let store = KeyStore::new()?;
     let slot = store.active_slot()?;
@@ -438,10 +479,12 @@ pub fn generate_for_active_slot() -> Result<u8> {
     Ok(slot)
 }
 
+/// Internal helper function.
 fn resolve_slot(store: &KeyStore, slot: Option<u8>) -> Result<u8> {
     slot.map_or_else(|| store.active_slot().map_err(CliError::from), Ok)
 }
 
+/// Internal helper function.
 fn reject_slot_conflicts(store: &KeyStore, slot: u8, candidate_key: Option<&[u8]>) -> Result<()> {
     if store.exists_slot(slot) {
         let mut args = FluentArgs::new();
@@ -492,12 +535,14 @@ fn reject_slot_conflicts(store: &KeyStore, slot: u8, candidate_key: Option<&[u8]
     Ok(())
 }
 
+/// Internal helper function.
 fn key_fingerprint(key: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(key);
     hex::encode(hasher.finalize())
 }
 
+/// Internal helper function.
 fn parse_slot_arg(raw: &str) -> std::result::Result<u8, String> {
     let slot = raw
         .parse::<u8>()

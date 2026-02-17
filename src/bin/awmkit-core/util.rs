@@ -8,17 +8,26 @@ use glob::glob;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+/// Internal enum.
 pub enum CliLayout {
+    /// Internal variant.
     Auto,
+    /// Internal variant.
     Stereo,
+    /// Internal variant.
     Surround51,
+    /// Internal variant.
     Surround512,
+    /// Internal variant.
     Surround71,
+    /// Internal variant.
     Surround714,
+    /// Internal variant.
     Surround916,
 }
 
 impl CliLayout {
+    /// Internal helper method.
     pub const fn to_channel_layout(self) -> Option<ChannelLayout> {
         match self {
             Self::Auto => None,
@@ -32,6 +41,7 @@ impl CliLayout {
     }
 }
 
+/// Internal helper function.
 pub fn parse_tag(input: &str) -> Result<Tag> {
     if input.len() == 8 {
         Ok(Tag::parse(input)?)
@@ -40,6 +50,7 @@ pub fn parse_tag(input: &str) -> Result<Tag> {
     }
 }
 
+/// Internal helper function.
 pub fn expand_inputs(values: &[String]) -> Result<Vec<PathBuf>> {
     let mut out = Vec::new();
     for value in values {
@@ -66,6 +77,7 @@ pub fn expand_inputs(values: &[String]) -> Result<Vec<PathBuf>> {
     Ok(out)
 }
 
+/// Internal helper function.
 pub fn ensure_file(path: &Path) -> Result<()> {
     if path.is_file() {
         Ok(())
@@ -74,6 +86,7 @@ pub fn ensure_file(path: &Path) -> Result<()> {
     }
 }
 
+/// Internal helper function.
 pub fn audio_from_context(ctx: &Context) -> Result<awmkit::Audio> {
     let config = AppConfig {
         audiowmark_override: ctx.audiowmark.clone(),
@@ -87,10 +100,12 @@ pub fn audio_from_context(ctx: &Context) -> Result<awmkit::Audio> {
     Ok(engine.audio().clone())
 }
 
+/// Internal helper function.
 pub fn default_output_path(input: &Path) -> Result<PathBuf> {
     awmkit::app::audio_engine::default_output_path(input).map_err(CliError::from)
 }
 
+/// Internal helper function.
 fn is_glob_pattern(value: &str) -> bool {
     value.contains('*') || value.contains('?') || value.contains('[')
 }

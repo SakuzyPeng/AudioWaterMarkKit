@@ -6,6 +6,7 @@ use awmkit::{Message, CURRENT_VERSION};
 use clap::Args;
 
 #[derive(Args)]
+/// Internal struct.
 pub struct CmdArgs {
     /// Tag (1-7 identity or full 8-char tag)
     #[arg(long)]
@@ -20,6 +21,7 @@ pub struct CmdArgs {
     pub timestamp: Option<u32>,
 }
 
+/// Internal helper function.
 pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let store = KeyStore::new()?;
     let slot = store.active_slot()?;

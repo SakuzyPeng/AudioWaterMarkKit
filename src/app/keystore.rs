@@ -9,8 +9,11 @@ use sha2::{Digest, Sha256};
 #[cfg(windows)]
 use std::path::PathBuf;
 
+/// Internal constant.
 const SERVICE: &str = "com.awmkit.watermark";
+/// Internal constant.
 const LEGACY_USERNAME: &str = "signing-key";
+/// Internal constant.
 const SLOT_USERNAME_PREFIX: &str = "signing-key-slot-";
 
 pub const KEY_LEN: usize = 32;
@@ -261,6 +264,7 @@ impl KeyStore {
         Ok(summaries)
     }
 
+    /// Internal helper method.
     fn save_slot_raw(&self, slot: u8, key: &[u8]) -> Result<()> {
         #[cfg(not(windows))]
         let _ = self;
@@ -280,6 +284,7 @@ impl KeyStore {
         }
     }
 
+    /// Internal helper method.
     fn fallback_active_slot(&self) -> u8 {
         if self.exists_slot(KEY_SLOT_MIN) {
             return KEY_SLOT_MIN;
@@ -290,6 +295,7 @@ impl KeyStore {
             .unwrap_or(KEY_SLOT_MIN)
     }
 
+    /// Internal helper method.
     fn migrate_legacy_to_slot0(&self) -> Result<()> {
         if self.exists_slot(KEY_SLOT_MIN) {
             return Ok(());
@@ -300,6 +306,7 @@ impl KeyStore {
         Ok(())
     }
 
+    /// Internal helper method.
     fn try_load_legacy_key(&self) -> Result<Option<Vec<u8>>> {
         #[cfg(not(windows))]
         let _ = self;
@@ -317,6 +324,7 @@ impl KeyStore {
         Ok(None)
     }
 
+    /// Internal associated function.
     fn load_from_keyring_slot(slot: u8) -> Result<Vec<u8>> {
         let username = slot_username(slot);
         let entry = keyring_entry(&username)?;
@@ -326,6 +334,7 @@ impl KeyStore {
         Ok(key)
     }
 
+    /// Internal associated function.
     fn save_to_keyring_slot(slot: u8, key: &[u8]) -> Result<()> {
         let username = slot_username(slot);
         let entry = keyring_entry(&username)?;
@@ -335,6 +344,7 @@ impl KeyStore {
         Ok(())
     }
 
+    /// Internal associated function.
     fn delete_from_keyring_slot(slot: u8) -> Result<()> {
         let username = slot_username(slot);
         let entry = keyring_entry(&username)?;
@@ -344,6 +354,7 @@ impl KeyStore {
         Ok(())
     }
 
+    /// Internal associated function.
     fn load_from_legacy_keyring() -> Result<Vec<u8>> {
         let entry = keyring_entry(LEGACY_USERNAME)?;
         let hex_key = entry.get_password().map_err(|_| AppError::KeyNotFound)?;
@@ -410,6 +421,7 @@ pub fn generate_key() -> [u8; KEY_LEN] {
     key
 }
 
+/// Internal helper function.
 const fn validate_key_len(len: usize) -> Result<()> {
     if len == KEY_LEN {
         Ok(())
@@ -421,6 +433,7 @@ const fn validate_key_len(len: usize) -> Result<()> {
     }
 }
 
+/// Internal helper function.
 fn slot_username(slot: u8) -> String {
     format!("{SLOT_USERNAME_PREFIX}{slot}")
 }
@@ -431,6 +444,7 @@ pub fn key_id_from_key_material(key: &[u8]) -> String {
     hex::encode_upper(digest)[..10].to_string()
 }
 
+/// Internal helper function.
 fn apply_duplicate_status(summaries: &mut [KeySlotSummary]) {
     let mut buckets: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
     for summary in summaries.iter() {
@@ -462,6 +476,7 @@ fn apply_duplicate_status(summaries: &mut [KeySlotSummary]) {
     }
 }
 
+/// Internal helper function.
 fn keyring_entry(username: &str) -> Result<Entry> {
     Entry::new(SERVICE, username).map_err(|e| AppError::KeyStore(e.to_string()))
 }

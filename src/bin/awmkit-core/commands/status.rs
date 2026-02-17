@@ -6,6 +6,7 @@ use clap::Args;
 use fluent_bundle::FluentArgs;
 
 #[derive(Args)]
+/// Internal struct.
 pub struct CmdArgs {
     /// Run extended diagnostics
     #[arg(long)]
@@ -13,6 +14,7 @@ pub struct CmdArgs {
 }
 
 #[allow(clippy::too_many_lines)]
+/// Internal helper function.
 pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let mut fmt_args = FluentArgs::new();
     fmt_args.set("version", env!("CARGO_PKG_VERSION"));

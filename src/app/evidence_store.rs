@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Internal constant.
 const DEFAULT_CANDIDATE_LIMIT: usize = 200;
 
 #[derive(Debug, Clone)]
@@ -51,7 +52,9 @@ pub struct AudioEvidence {
 }
 
 pub struct EvidenceStore {
+    /// Internal field.
     path: PathBuf,
+    /// Internal field.
     conn: Connection,
 }
 
@@ -280,6 +283,7 @@ impl EvidenceStore {
         self.count_by_slot_with_key_id(key_slot, Some(key_id))
     }
 
+    /// Internal helper method.
     fn count_by_slot_with_key_id(&self, key_slot: u8, key_id: Option<&str>) -> Result<usize> {
         let mut stmt = self
             .conn
@@ -313,6 +317,7 @@ impl EvidenceStore {
         self.usage_by_slot_with_key_id(key_slot, Some(key_id))
     }
 
+    /// Internal helper method.
     fn usage_by_slot_with_key_id(
         &self,
         key_slot: u8,
@@ -346,6 +351,7 @@ impl EvidenceStore {
     }
 }
 
+/// Internal helper function.
 fn parse_audio_evidence_row(row: &Row<'_>) -> Result<AudioEvidence> {
     let blob: Vec<u8> = row.get(17)?;
     let chromaprint = decode_chromaprint_blob(&blob)?;
@@ -417,6 +423,7 @@ pub fn decode_chromaprint_blob(blob: &[u8]) -> Result<Vec<u32>> {
     Ok(output)
 }
 
+/// Internal helper function.
 fn db_path() -> Result<PathBuf> {
     #[cfg(target_os = "windows")]
     {
@@ -440,6 +447,7 @@ fn db_path() -> Result<PathBuf> {
     }
 }
 
+/// Internal helper function.
 fn open_db(path: &Path) -> Result<Connection> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -477,6 +485,7 @@ fn open_db(path: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
+/// Internal helper function.
 fn now_ts() -> Result<u64> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)

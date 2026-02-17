@@ -10,10 +10,13 @@ pub const SNR_STATUS_UNAVAILABLE: &str = "unavailable";
 pub const SNR_STATUS_ERROR: &str = "error";
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal constant.
 const SNR_TARGET_SAMPLE_RATE: u32 = 48_000;
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal constant.
 const SNR_MIN_OVERLAP_SAMPLES: usize = 4_800;
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal item.
 static FFMPEG_INIT: OnceLock<std::result::Result<(), String>> = OnceLock::new();
 
 #[derive(Debug, Clone)]
@@ -124,11 +127,13 @@ pub fn analyze_snr<P: AsRef<Path>>(input: P, output: P) -> SnrAnalysis {
     SnrAnalysis::ok(snr_db.clamp(-60.0, 120.0))
 }
 
+/// Internal helper function.
 fn normalize_sample(sample: i16) -> f64 {
     f64::from(sample) / f64::from(i16::MAX)
 }
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal helper function.
 fn decode_media_to_i16_mono_via_avfilter(path: &Path) -> std::result::Result<Vec<i16>, String> {
     ensure_ffmpeg_initialized()?;
     ensure_required_filters()?;
@@ -193,6 +198,7 @@ fn decode_media_to_i16_mono_via_avfilter(path: &Path) -> std::result::Result<Vec
 }
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal helper function.
 fn receive_decoded_frames_into_graph(
     decoder: &mut ffmpeg::codec::decoder::Audio,
     graph: &mut ffmpeg::filter::Graph,
@@ -223,6 +229,7 @@ fn receive_decoded_frames_into_graph(
 }
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal helper function.
 fn drain_filtered_samples(
     graph: &mut ffmpeg::filter::Graph,
     output: &mut Vec<i16>,
@@ -243,6 +250,7 @@ fn drain_filtered_samples(
 }
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal helper function.
 fn append_i16_frame(
     frame: &ffmpeg::frame::Audio,
     output: &mut Vec<i16>,
@@ -284,6 +292,7 @@ fn append_i16_frame(
 }
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal helper function.
 fn create_audio_normalize_graph(
     decoder: &ffmpeg::codec::decoder::Audio,
 ) -> std::result::Result<ffmpeg::filter::Graph, String> {
@@ -327,6 +336,7 @@ fn create_audio_normalize_graph(
 }
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal helper function.
 fn ensure_required_filters() -> std::result::Result<(), String> {
     for filter in ["abuffer", "abuffersink", "aformat", "aresample"] {
         if ffmpeg::filter::find(filter).is_none() {
@@ -337,6 +347,7 @@ fn ensure_required_filters() -> std::result::Result<(), String> {
 }
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal helper function.
 fn ensure_ffmpeg_initialized() -> std::result::Result<(), String> {
     match FFMPEG_INIT.get_or_init(|| ffmpeg::init().map_err(|err| err.to_string())) {
         Ok(()) => Ok(()),
@@ -345,6 +356,7 @@ fn ensure_ffmpeg_initialized() -> std::result::Result<(), String> {
 }
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal helper function.
 fn normalize_layout(layout: ffmpeg::ChannelLayout, channels: u16) -> ffmpeg::ChannelLayout {
     if layout.bits() == 0 {
         ffmpeg::ChannelLayout::default(i32::from(channels))

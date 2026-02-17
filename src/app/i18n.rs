@@ -8,11 +8,14 @@ use unic_langid::LanguageIdentifier;
 
 #[derive(RustEmbed)]
 #[folder = "i18n"]
+/// Internal struct.
 struct Localizations;
 
+/// Internal item.
 static FALLBACK_LANG: std::sync::LazyLock<LanguageIdentifier> = std::sync::LazyLock::new(|| {
     LanguageIdentifier::from_str("en-US").unwrap_or_else(|_| LanguageIdentifier::default())
 });
+/// Internal item.
 static LOADER: std::sync::LazyLock<FluentLanguageLoader> =
     std::sync::LazyLock::new(|| FluentLanguageLoader::new("awmkit", FALLBACK_LANG.clone()));
 
@@ -22,6 +25,7 @@ pub struct LanguageInfo {
     pub label: &'static str,
 }
 
+/// Internal item.
 static LANGUAGES: &[LanguageInfo] = &[
     LanguageInfo {
         id: "en-US",

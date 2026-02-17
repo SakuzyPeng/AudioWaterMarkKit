@@ -3,47 +3,67 @@ use fluent_bundle::FluentArgs;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+/// Internal enum.
 pub enum CliError {
     #[error("{0}")]
+    /// Internal variant.
     Message(String),
 
     #[error("key not found; run `awmkit init` or `awmkit key import`")]
+    /// Internal variant.
     KeyNotFound,
 
     #[error("invalid key length: expected {expected} bytes, got {actual}")]
-    InvalidKeyLength { expected: usize, actual: usize },
+    /// Internal variant.
+    InvalidKeyLength {
+        /// Internal field.
+        expected: usize,
+        /// Internal field.
+        actual: usize,
+    },
 
     #[error("key store error: {0}")]
+    /// Internal variant.
     KeyStore(String),
 
     #[error("audiowmark not found; use --audiowmark <PATH> or add to PATH")]
+    /// Internal variant.
     AudiowmarkNotFound,
 
     #[error("input not found: {0}")]
+    /// Internal variant.
     InputNotFound(String),
 
     #[error("invalid glob pattern: {0}")]
+    /// Internal variant.
     InvalidGlob(String),
 
     #[error("glob error: {0}")]
+    /// Internal variant.
     Glob(String),
 
     #[error("mapping exists for {0}")]
+    /// Internal variant.
     MappingExists(String),
 
     #[error(transparent)]
+    /// Internal variant.
     Io(#[from] std::io::Error),
 
     #[error(transparent)]
+    /// Internal variant.
     Hex(#[from] hex::FromHexError),
 
     #[error(transparent)]
+    /// Internal variant.
     Awmkit(#[from] awmkit::Error),
 
     #[error(transparent)]
+    /// Internal variant.
     Json(#[from] serde_json::Error),
 }
 
+/// Internal type alias.
 pub type Result<T> = std::result::Result<T, CliError>;
 
 impl From<awmkit::app::AppError> for CliError {
@@ -71,6 +91,7 @@ impl From<awmkit::app::AppError> for CliError {
 }
 
 impl CliError {
+    /// Internal helper method.
     pub fn user_message(&self) -> String {
         match self {
             Self::Message(msg) => msg.clone(),

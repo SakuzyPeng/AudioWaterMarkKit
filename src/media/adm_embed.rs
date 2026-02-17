@@ -15,6 +15,7 @@ use super::adm_bwav::{
 };
 use super::adm_routing::{build_route_plan_from_labels, is_silent};
 
+/// Internal helper function.
 pub fn embed_adm_multichannel(
     audio_engine: &Audio,
     input: &Path,
@@ -103,6 +104,7 @@ pub fn embed_adm_multichannel(
     })
 }
 
+/// Internal helper function.
 pub fn rewrite_adm_with_transform<F>(
     input: &Path,
     output: &Path,
@@ -429,6 +431,7 @@ fn extract_channels(audio: &MultichannelAudio, indices: &[usize]) -> Result<Mult
         .map_err(|e| Error::AdmPreserveFailed(format!("failed to build bed audio: {e}")))
 }
 
+/// Internal helper function.
 fn embed_pairs_via_audiowmark(
     audio_engine: &Audio,
     source_audio: &MultichannelAudio,
@@ -471,6 +474,7 @@ fn embed_pairs_via_audiowmark(
     embed_result
 }
 
+/// Internal helper function.
 fn validate_audio_shape(original: &MultichannelAudio, processed: &MultichannelAudio) -> Result<()> {
     if original.num_channels() != processed.num_channels() {
         return Err(Error::AdmPreserveFailed(format!(
@@ -503,6 +507,7 @@ fn validate_audio_shape(original: &MultichannelAudio, processed: &MultichannelAu
     Ok(())
 }
 
+/// Internal helper function.
 pub fn decode_pcm_audio(path: &Path, index: &ChunkIndex) -> Result<MultichannelAudio> {
     let data_size = usize::try_from(index.data_chunk.size)
         .map_err(|_| Error::AdmUnsupported("data chunk too large to decode".to_string()))?;
@@ -558,6 +563,7 @@ pub fn decode_pcm_audio(path: &Path, index: &ChunkIndex) -> Result<MultichannelA
     MultichannelAudio::new(separated, index.fmt.sample_rate, sample_format)
 }
 
+/// Internal helper function.
 fn encode_pcm_audio_data(audio: &MultichannelAudio, fmt: PcmFormat) -> Result<Vec<u8>> {
     let channels = audio.num_channels();
     let expected_channels = usize::from(fmt.channels);
@@ -603,6 +609,7 @@ fn encode_pcm_audio_data(audio: &MultichannelAudio, fmt: PcmFormat) -> Result<Ve
     Ok(out)
 }
 
+/// Internal helper function.
 fn decode_sample(data: &[u8], base: usize, bits: u16) -> Result<i32> {
     match bits {
         16 => {
@@ -639,6 +646,7 @@ fn decode_sample(data: &[u8], base: usize, bits: u16) -> Result<i32> {
     }
 }
 
+/// Internal helper function.
 fn encode_sample(data: &mut [u8], base: usize, bits: u16, sample: i32) -> Result<()> {
     match bits {
         16 => {
@@ -662,6 +670,7 @@ fn encode_sample(data: &mut [u8], base: usize, bits: u16, sample: i32) -> Result
     }
 }
 
+/// Internal helper function.
 fn write_sample_bytes(data: &mut [u8], base: usize, bytes: &[u8]) -> Result<()> {
     let end = base
         .checked_add(bytes.len())
@@ -673,6 +682,7 @@ fn write_sample_bytes(data: &mut [u8], base: usize, bytes: &[u8]) -> Result<()> 
     Ok(())
 }
 
+/// Internal helper function.
 fn replace_data_chunk_bytes(path: &Path, index: &ChunkIndex, replacement: &[u8]) -> Result<()> {
     let mut file = OpenOptions::new()
         .read(true)
@@ -688,6 +698,7 @@ fn replace_data_chunk_bytes(path: &Path, index: &ChunkIndex, replacement: &[u8])
     Ok(())
 }
 
+/// Internal helper function.
 fn sample_format_from_bits(bits: u16) -> Result<SampleFormat> {
     match bits {
         16 => Ok(SampleFormat::Int16),
@@ -699,6 +710,7 @@ fn sample_format_from_bits(bits: u16) -> Result<SampleFormat> {
     }
 }
 
+/// Internal helper function.
 fn create_temp_dir(prefix: &str) -> Result<PathBuf> {
     let path = std::env::temp_dir().join(format!(
         "{prefix}_{}_{}",

@@ -16,8 +16,11 @@ pub struct TagEntry {
 }
 
 pub struct TagStore {
+    /// Internal field.
     path: PathBuf,
+    /// Internal field.
     conn: Connection,
+    /// Internal field.
     entries: Vec<TagEntry>,
 }
 
@@ -199,12 +202,14 @@ impl TagStore {
         &self.path
     }
 
+    /// Internal helper method.
     fn refresh_entries(&mut self) -> Result<()> {
         self.entries = load_entries(&self.conn)?;
         Ok(())
     }
 }
 
+/// Internal helper function.
 fn normalize_username(username: &str) -> Result<String> {
     let trimmed = username.trim();
     if trimmed.is_empty() {
@@ -213,6 +218,7 @@ fn normalize_username(username: &str) -> Result<String> {
     Ok(trimmed.to_string())
 }
 
+/// Internal helper function.
 fn db_path() -> Result<PathBuf> {
     #[cfg(target_os = "windows")]
     {
@@ -236,6 +242,7 @@ fn db_path() -> Result<PathBuf> {
     }
 }
 
+/// Internal helper function.
 fn open_db(path: &Path) -> Result<Connection> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -253,6 +260,7 @@ fn open_db(path: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
+/// Internal helper function.
 fn load_entries(conn: &Connection) -> Result<Vec<TagEntry>> {
     let mut stmt = conn.prepare(
         "SELECT username, tag, created_at
@@ -275,6 +283,7 @@ fn load_entries(conn: &Connection) -> Result<Vec<TagEntry>> {
     Ok(entries)
 }
 
+/// Internal helper function.
 fn now_ts() -> Result<u64> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -282,6 +291,7 @@ fn now_ts() -> Result<u64> {
     Ok(now.as_secs())
 }
 
+/// Internal helper function.
 fn hash_to_identity(hash: &[u8]) -> String {
     let mut out = String::with_capacity(7);
     let mut acc: u64 = 0;

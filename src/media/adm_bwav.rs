@@ -8,51 +8,84 @@ use bwavfile::WaveReader;
 
 use crate::error::{Error, Result};
 
+/// Internal constant.
 const RIFF_SIG: [u8; 4] = *b"RIFF";
+/// Internal constant.
 const RF64_SIG: [u8; 4] = *b"RF64";
+/// Internal constant.
 const BW64_SIG: [u8; 4] = *b"BW64";
+/// Internal constant.
 const WAVE_SIG: [u8; 4] = *b"WAVE";
+/// Internal constant.
 const DS64_SIG: [u8; 4] = *b"ds64";
+/// Internal constant.
 const FMT_SIG: [u8; 4] = *b"fmt ";
+/// Internal constant.
 const DATA_SIG: [u8; 4] = *b"data";
+/// Internal constant.
 const AXML_SIG: [u8; 4] = *b"axml";
+/// Internal constant.
 const CHNA_SIG: [u8; 4] = *b"chna";
 #[cfg(test)]
 const BEXT_SIG: [u8; 4] = *b"bext";
+/// Internal constant.
 const U32_MAX_U64: u64 = 0xFFFF_FFFF;
+/// Internal constant.
 const CHNA_ENTRY_SIZE: usize = 40;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Internal enum.
 pub enum WaveContainer {
+    /// Internal variant.
     Riff,
+    /// Internal variant.
     Rf64,
+    /// Internal variant.
     Bw64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Internal struct.
 pub struct ChunkEntry {
+    /// Internal field.
     pub id: [u8; 4],
+    /// Internal field.
     pub header_offset: u64,
+    /// Internal field.
     pub data_offset: u64,
+    /// Internal field.
     pub size: u64,
+    /// Internal field.
     pub padded_size: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Internal struct.
 pub struct PcmFormat {
+    /// Internal field.
     pub channels: u16,
+    /// Internal field.
     pub sample_rate: u32,
+    /// Internal field.
     pub bits_per_sample: u16,
+    /// Internal field.
     pub block_align: u16,
+    /// Internal field.
     pub bytes_per_sample: u16,
 }
 
 #[derive(Debug, Clone)]
+/// Internal struct.
 pub struct ChunkIndex {
+    /// Internal field.
     pub chunks: Vec<ChunkEntry>,
+    /// Internal field.
     pub fmt: PcmFormat,
+    /// Internal field.
     pub data_chunk: ChunkEntry,
+    /// Internal field.
     pub has_axml: bool,
+    /// Internal field.
     pub has_chna: bool,
 }
 
@@ -262,6 +295,7 @@ fn is_bed_pack_format(pack_fmt: &str) -> bool {
     pack_fmt.contains("_0001") && !pack_fmt.contains("_0003")
 }
 
+/// Internal helper function.
 pub fn probe_adm_bwf(path: &Path) -> Result<Option<ChunkIndex>> {
     let maybe_index = parse_chunk_index(path)?;
     let Some(index) = maybe_index else {
@@ -276,6 +310,7 @@ pub fn probe_adm_bwf(path: &Path) -> Result<Option<ChunkIndex>> {
     Ok(Some(index))
 }
 
+/// Internal helper function.
 pub fn parse_chunk_index(path: &Path) -> Result<Option<ChunkIndex>> {
     let (mut file, file_size) = open_wave_file(path)?;
     let Some(state) = read_wave_scan_state(&mut file, file_size)? else {
@@ -293,12 +328,17 @@ pub fn parse_chunk_index(path: &Path) -> Result<Option<ChunkIndex>> {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Internal struct.
 struct ChunkScanState {
+    /// Internal field.
     parse_end: u64,
+    /// Internal field.
     cursor: u64,
+    /// Internal field.
     data_size_override: Option<u64>,
 }
 
+/// Internal helper function.
 fn open_wave_file(path: &Path) -> Result<(File, u64)> {
     let file = File::open(path)
         .map_err(|e| Error::AdmUnsupported(format!("failed to open {}: {e}", path.display())))?;
@@ -309,6 +349,7 @@ fn open_wave_file(path: &Path) -> Result<(File, u64)> {
     Ok((file, file_size))
 }
 
+/// Internal helper function.
 fn read_wave_scan_state(file: &mut File, file_size: u64) -> Result<Option<ChunkScanState>> {
     if file_size < 12 {
         return Ok(None);
@@ -342,6 +383,7 @@ fn read_wave_scan_state(file: &mut File, file_size: u64) -> Result<Option<ChunkS
     Ok(Some(state))
 }
 
+/// Internal helper function.
 fn parse_end_for_container(
     container: WaveContainer,
     header: &[u8; 12],
@@ -364,6 +406,7 @@ fn parse_end_for_container(
     }
 }
 
+/// Internal helper function.
 fn parse_ds64_chunk(file: &mut File, file_size: u64, state: &mut ChunkScanState) -> Result<()> {
     let (chunk_id, chunk_size) = read_chunk_header(file, state.cursor)?;
     if chunk_id != DS64_SIG {
@@ -400,6 +443,7 @@ fn parse_ds64_chunk(file: &mut File, file_size: u64, state: &mut ChunkScanState)
     Ok(())
 }
 
+/// Internal helper function.
 fn scan_chunk_entries(
     file: &mut File,
     file_size: u64,
@@ -439,6 +483,7 @@ fn scan_chunk_entries(
     Ok(chunks)
 }
 
+/// Internal helper function.
 fn resolve_chunk_size(
     chunk_id: [u8; 4],
     chunk_size: u64,
@@ -455,6 +500,7 @@ fn resolve_chunk_size(
     Ok(chunk_size)
 }
 
+/// Internal helper function.
 fn build_chunk_index(file: &mut File, chunks: Vec<ChunkEntry>) -> Result<ChunkIndex> {
     let fmt_chunk = chunks
         .iter()
@@ -490,6 +536,7 @@ fn build_chunk_index(file: &mut File, chunks: Vec<ChunkEntry>) -> Result<ChunkIn
     })
 }
 
+/// Internal helper function.
 fn validate_with_bwavfile(path: &Path) -> Result<()> {
     let mut reader = WaveReader::open(path).map_err(|e| {
         Error::AdmUnsupported(format!("bwavfile failed to open {}: {e}", path.display()))
@@ -515,6 +562,7 @@ fn validate_with_bwavfile(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Internal helper function.
 fn read_pcm_format(file: &mut File, fmt_chunk: ChunkEntry) -> Result<PcmFormat> {
     if fmt_chunk.size < 16 {
         return Err(Error::AdmUnsupported(
@@ -588,6 +636,7 @@ fn read_pcm_format(file: &mut File, fmt_chunk: ChunkEntry) -> Result<PcmFormat> 
     })
 }
 
+/// Internal helper function.
 fn read_chunk_header(file: &mut File, header_offset: u64) -> Result<([u8; 4], u32)> {
     let mut header = [0_u8; 8];
     file.seek(SeekFrom::Start(header_offset))
@@ -600,6 +649,7 @@ fn read_chunk_header(file: &mut File, header_offset: u64) -> Result<([u8; 4], u3
     ))
 }
 
+/// Internal helper function.
 fn read_u16_le(input: &[u8]) -> Result<u16> {
     if input.len() < 2 {
         return Err(Error::AdmUnsupported(
@@ -609,6 +659,7 @@ fn read_u16_le(input: &[u8]) -> Result<u16> {
     Ok(u16::from_le_bytes([input[0], input[1]]))
 }
 
+/// Internal helper function.
 fn read_u32_le(input: &[u8]) -> Result<u32> {
     if input.len() < 4 {
         return Err(Error::AdmUnsupported(
@@ -618,6 +669,7 @@ fn read_u32_le(input: &[u8]) -> Result<u32> {
     Ok(u32::from_le_bytes([input[0], input[1], input[2], input[3]]))
 }
 
+/// Internal helper function.
 fn read_u64_le(input: &[u8]) -> Result<u64> {
     if input.len() < 8 {
         return Err(Error::AdmUnsupported(
@@ -629,11 +681,13 @@ fn read_u64_le(input: &[u8]) -> Result<u64> {
     ]))
 }
 
+/// Internal helper function.
 fn checked_add(base: u64, add: u64, context: &str) -> Result<u64> {
     base.checked_add(add)
         .ok_or_else(|| Error::AdmUnsupported(context.to_string()))
 }
 
+/// Internal helper function.
 fn fourcc_to_string(id: [u8; 4]) -> String {
     String::from_utf8_lossy(&id).to_string()
 }

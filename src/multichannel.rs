@@ -28,12 +28,17 @@ pub enum ChannelLayout {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Internal enum.
 pub(crate) enum LfeMode {
+    /// Internal variant.
     Skip,
+    /// Internal variant.
     Mono,
+    /// Internal variant.
     Pair,
 }
 
+/// Internal constant.
 pub(crate) const DEFAULT_LFE_MODE: LfeMode = LfeMode::Skip;
 
 /// 运行时 LFE 路由模式（默认 `skip`）。
@@ -56,31 +61,46 @@ pub(crate) fn effective_lfe_mode() -> LfeMode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Internal enum.
 pub(crate) enum RouteMode {
+    /// Internal variant.
     Pair(usize, usize),
+    /// Internal variant.
     Mono(usize),
+    /// Internal variant.
     Skip {
+        /// Internal field.
         channel: usize,
+        /// Internal field.
         reason: &'static str,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Internal struct.
 pub(crate) struct RouteStep {
+    /// Internal field.
     pub name: String,
+    /// Internal field.
     pub mode: RouteMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Internal struct.
 pub(crate) struct RoutePlan {
+    /// Internal field.
     pub layout: ChannelLayout,
+    /// Internal field.
     pub channels: usize,
+    /// Internal field.
     pub steps: Vec<RouteStep>,
+    /// Internal field.
     pub warnings: Vec<String>,
 }
 
 impl RoutePlan {
     #[must_use]
+    /// Internal helper method.
     pub fn detectable_steps(&self) -> Vec<(usize, &RouteStep)> {
         self.steps
             .iter()
@@ -91,6 +111,7 @@ impl RoutePlan {
 }
 
 #[must_use]
+/// Internal helper function.
 pub(crate) fn build_smart_route_plan(
     layout: ChannelLayout,
     channels: usize,
@@ -137,6 +158,7 @@ pub(crate) fn build_smart_route_plan(
     }
 }
 
+/// Internal helper function.
 fn known_surround_steps(layout: ChannelLayout, lfe_mode: LfeMode) -> Vec<RouteStep> {
     let mut steps = Vec::new();
     steps.push(pair_step(0, 1, "FL+FR"));
@@ -194,6 +216,7 @@ fn known_surround_steps(layout: ChannelLayout, lfe_mode: LfeMode) -> Vec<RouteSt
     steps
 }
 
+/// Internal helper function.
 fn fallback_route_plan(layout: ChannelLayout, channels: usize) -> RoutePlan {
     let mut steps = Vec::new();
     let mut ch = 0usize;
@@ -218,6 +241,7 @@ fn fallback_route_plan(layout: ChannelLayout, channels: usize) -> RoutePlan {
     }
 }
 
+/// Internal helper function.
 fn pair_step(ch_a: usize, ch_b: usize, name: &str) -> RouteStep {
     RouteStep {
         name: name.to_string(),
@@ -225,6 +249,7 @@ fn pair_step(ch_a: usize, ch_b: usize, name: &str) -> RouteStep {
     }
 }
 
+/// Internal helper function.
 fn mono_step(channel: usize, name: &str) -> RouteStep {
     RouteStep {
         name: name.to_string(),
@@ -232,6 +257,7 @@ fn mono_step(channel: usize, name: &str) -> RouteStep {
     }
 }
 
+/// Internal helper function.
 fn skip_step(channel: usize, name: &str, reason: &'static str) -> RouteStep {
     RouteStep {
         name: name.to_string(),
@@ -808,6 +834,7 @@ impl MultichannelAudio {
             .collect()
     }
 
+    /// Internal helper method.
     pub(crate) fn channel_samples(&self, index: usize) -> Result<&[i32]> {
         self.channels
             .get(index)
@@ -815,6 +842,7 @@ impl MultichannelAudio {
             .ok_or_else(|| Error::InvalidInput(format!("channel index {index} out of range")))
     }
 
+    /// Internal helper method.
     pub(crate) fn replace_channel_samples(
         &mut self,
         index: usize,
@@ -972,6 +1000,7 @@ fn normalize_wav_pipe_sizes(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
     std::borrow::Cow::Owned(patched)
 }
 
+/// Internal helper function.
 fn scale_float_to_i32(sample: f32) -> i32 {
     use num_traits::ToPrimitive;
 

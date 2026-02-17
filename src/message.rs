@@ -12,6 +12,7 @@ use sha2::Sha256;
 use crate::error::{Error, Result};
 use crate::tag::Tag;
 
+/// Internal type alias.
 type HmacSha256 = Hmac<Sha256>;
 
 /// 消息长度 (bytes)
@@ -23,11 +24,17 @@ pub const HMAC_LEN: usize = 6;
 /// 当前协议版本
 pub const CURRENT_VERSION: u8 = 2;
 
+/// Internal constant.
 const VERSION_V1: u8 = 1;
+/// Internal constant.
 const VERSION_V2: u8 = 2;
+/// Internal constant.
 const KEY_SLOT_BITS: u32 = 5;
+/// Internal constant.
 const KEY_SLOT_MASK: u32 = (1 << KEY_SLOT_BITS) - 1;
+/// Internal constant.
 const MAX_TIMESTAMP_V2_MINUTES: u32 = (1 << (32 - KEY_SLOT_BITS)) - 1;
+/// Internal constant.
 const DEFAULT_KEY_SLOT: u8 = 0;
 
 /// 解码后的消息结果
@@ -213,6 +220,7 @@ pub fn peek_version_and_slot(data: &[u8]) -> Result<(u8, u8)> {
     Ok((version, key_slot))
 }
 
+/// Internal helper function.
 fn parse_message_fields(data: &[u8]) -> Result<MessageResult> {
     // 解析字段
     let version = data[0];
@@ -266,6 +274,7 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     diff == 0
 }
 
+/// Internal helper function.
 fn pack_timestamp_v2(timestamp_minutes: u32, key_slot: u8) -> Result<u32> {
     if timestamp_minutes > MAX_TIMESTAMP_V2_MINUTES {
         return Err(Error::InvalidInput(format!(
@@ -280,6 +289,7 @@ fn pack_timestamp_v2(timestamp_minutes: u32, key_slot: u8) -> Result<u32> {
     Ok((timestamp_minutes << KEY_SLOT_BITS) | u32::from(key_slot))
 }
 
+/// Internal helper function.
 const fn unpack_timestamp_v2(packed_timestamp: u32) -> (u32, u8) {
     let timestamp_minutes = packed_timestamp >> KEY_SLOT_BITS;
     #[allow(clippy::cast_possible_truncation)]

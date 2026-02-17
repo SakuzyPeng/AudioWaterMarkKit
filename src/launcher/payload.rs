@@ -7,20 +7,28 @@ use std::path::{Path, PathBuf};
 
 include!(concat!(env!("OUT_DIR"), "/launcher_payload.rs"));
 
+/// Internal constant.
 const READY_MARKER: &str = ".ready";
+/// Internal constant.
 const MANIFEST_FILE: &str = "manifest.json";
 
 #[derive(Debug)]
+/// Internal struct.
 pub struct PreparedRuntime {
+    /// Internal field.
     pub runtime_dir: PathBuf,
+    /// Internal field.
     pub core_binary: PathBuf,
 }
 
 #[derive(Debug, Deserialize)]
+/// Internal struct.
 struct PayloadManifest {
+    /// Internal field.
     core_binary: String,
 }
 
+/// Internal helper function.
 pub fn prepare_runtime() -> Result<PreparedRuntime, String> {
     if PAYLOAD.is_empty() {
         return prepare_dev_runtime();
@@ -76,6 +84,7 @@ pub fn prepare_runtime() -> Result<PreparedRuntime, String> {
     Ok(runtime)
 }
 
+/// Internal helper function.
 pub fn app_base_dir() -> Result<PathBuf, String> {
     #[cfg(target_os = "windows")]
     {
@@ -96,24 +105,28 @@ pub fn app_base_dir() -> Result<PathBuf, String> {
     }
 }
 
+/// Internal helper function.
 pub fn runtime_root() -> Result<PathBuf, String> {
     let mut path = app_base_dir()?;
     path.push("runtime");
     Ok(path)
 }
 
+/// Internal helper function.
 pub fn db_path() -> Result<PathBuf, String> {
     let mut path = app_base_dir()?;
     path.push("awmkit.db");
     Ok(path)
 }
 
+/// Internal helper function.
 pub fn config_path() -> Result<PathBuf, String> {
     let mut path = app_base_dir()?;
     path.push("config.toml");
     Ok(path)
 }
 
+/// Internal helper function.
 pub fn clear_runtime_root() -> Result<&'static str, String> {
     let path = runtime_root()?;
     if !path.exists() {
@@ -124,6 +137,7 @@ pub fn clear_runtime_root() -> Result<&'static str, String> {
     Ok("removed")
 }
 
+/// Internal helper function.
 pub fn clear_db_and_config() -> Result<&'static str, String> {
     let db_path = db_path()?;
     if db_path.exists() {
@@ -140,6 +154,7 @@ pub fn clear_db_and_config() -> Result<&'static str, String> {
     Ok("removed")
 }
 
+/// Internal helper function.
 fn prepare_dev_runtime() -> Result<PreparedRuntime, String> {
     let exe_path =
         std::env::current_exe().map_err(|e| format!("failed to resolve launcher path: {e}"))?;
@@ -159,6 +174,7 @@ fn prepare_dev_runtime() -> Result<PreparedRuntime, String> {
     })
 }
 
+/// Internal helper function.
 fn load_prepared_runtime(runtime_dir: &Path) -> Result<PreparedRuntime, String> {
     let manifest = read_manifest(runtime_dir)?;
     let core_path = runtime_dir.join(&manifest.core_binary);
@@ -176,6 +192,7 @@ fn load_prepared_runtime(runtime_dir: &Path) -> Result<PreparedRuntime, String> 
     })
 }
 
+/// Internal helper function.
 fn read_manifest(runtime_dir: &Path) -> Result<PayloadManifest, String> {
     let manifest_path = runtime_dir.join(MANIFEST_FILE);
     let data = fs::read(&manifest_path).map_err(|e| {
@@ -193,6 +210,7 @@ fn read_manifest(runtime_dir: &Path) -> Result<PayloadManifest, String> {
     })
 }
 
+/// Internal helper function.
 fn cleanup_old_runtime_dirs(runtime_root: &Path, keep_hash: &str) -> Result<(), String> {
     let entries = fs::read_dir(runtime_root).map_err(|e| {
         format!(
@@ -231,11 +249,13 @@ fn core_binary_name() -> &'static str {
 }
 
 #[cfg(not(target_os = "windows"))]
+/// Internal helper function.
 const fn core_binary_name() -> &'static str {
     "awmkit-core"
 }
 
 #[cfg(unix)]
+/// Internal helper function.
 fn ensure_executable(path: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
     let mut perms = fs::metadata(path)

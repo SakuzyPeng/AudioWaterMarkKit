@@ -46,6 +46,7 @@ pub fn build_audio_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {
 }
 
 #[cfg(feature = "ffmpeg-decode")]
+/// Internal helper function.
 fn build_audio_proof_via_ffmpeg(path: &Path) -> Result<AudioProof> {
     let decoded = media::decode_media_to_pcm_i32(path).map_err(AppError::from)?;
     let channels = u32::from(decoded.channels);
@@ -57,6 +58,7 @@ fn build_audio_proof_via_ffmpeg(path: &Path) -> Result<AudioProof> {
     )
 }
 
+/// Internal helper function.
 fn build_audio_proof_from_interleaved(
     sample_rate: u32,
     channels: u32,
@@ -113,6 +115,7 @@ fn build_audio_proof_from_interleaved(
     })
 }
 
+/// Internal helper function.
 fn has_wav_or_flac_extension(path: &Path) -> bool {
     let ext = path
         .extension()
@@ -121,6 +124,7 @@ fn has_wav_or_flac_extension(path: &Path) -> bool {
     matches!(ext.as_deref(), Some("wav" | "flac"))
 }
 
+/// Internal helper function.
 pub(crate) fn pcm_sha256_for_interleaved(
     sample_rate: u32,
     channels: u32,
@@ -137,6 +141,7 @@ pub(crate) fn pcm_sha256_for_interleaved(
     hex::encode(hasher.finalize())
 }
 
+/// Internal helper function.
 fn to_i16_samples(samples: &[i32], sample_format: SampleFormat) -> Vec<i16> {
     samples
         .iter()
@@ -144,6 +149,7 @@ fn to_i16_samples(samples: &[i32], sample_format: SampleFormat) -> Vec<i16> {
         .collect()
 }
 
+/// Internal helper function.
 fn sample_to_i16(sample: i32, sample_format: SampleFormat) -> i16 {
     let scaled = match sample_format {
         SampleFormat::Int16 => sample,

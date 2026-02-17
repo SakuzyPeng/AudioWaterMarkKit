@@ -70,8 +70,11 @@ const LFE_LABELS: &[&str] = &["LFE1", "LFE2", "LFE", "LFE+000", "RC_LFE"];
 /// - `chan_to_label`:   `AC_xxxxxxxx` → speakerLabel
 #[derive(Debug, Default)]
 pub struct AdmMaps {
+    /// Internal field.
     track_to_stream: HashMap<String, String>,
+    /// Internal field.
     stream_to_chan: HashMap<String, String>,
+    /// Internal field.
     chan_to_label: HashMap<String, String>,
 }
 
@@ -381,6 +384,7 @@ pub fn is_silent(samples: &[i32], format: SampleFormat) -> bool {
 
 // ─── 辅助构造 ─────────────────────────────────────────
 
+/// Internal helper function.
 fn make_pair(ch_a: usize, ch_b: usize, name: &str) -> RouteStep {
     RouteStep {
         name: name.to_string(),
@@ -388,6 +392,7 @@ fn make_pair(ch_a: usize, ch_b: usize, name: &str) -> RouteStep {
     }
 }
 
+/// Internal helper function.
 fn make_mono(channel: usize, name: &str) -> RouteStep {
     RouteStep {
         name: name.to_string(),
@@ -395,6 +400,7 @@ fn make_mono(channel: usize, name: &str) -> RouteStep {
     }
 }
 
+/// Internal helper function.
 fn make_skip(channel: usize, reason: &'static str) -> RouteStep {
     RouteStep {
         name: format!("ch{channel}(skip)"),
