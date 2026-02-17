@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 
 use ffmpeg_next as ffmpeg;
 
-use crate::audio::{AudioContainerCapabilities, AudioMediaCapabilities, DecodedPcm};
+use crate::audio::{AudioMediaCapabilities, ContainerCapabilities, DecodedPcm};
 use crate::error::{Error, Result};
 
 static FFMPEG_INIT: OnceLock<std::result::Result<(), String>> = OnceLock::new();
@@ -69,14 +69,14 @@ pub fn media_capabilities() -> AudioMediaCapabilities {
         return AudioMediaCapabilities {
             backend: "ffmpeg",
             eac3_decode: false,
-            containers: AudioContainerCapabilities::from_flags(false, false, false),
+            containers: ContainerCapabilities::from_flags(false, false, false),
         };
     }
 
     AudioMediaCapabilities {
         backend: "ffmpeg",
         eac3_decode: ffmpeg::codec::decoder::find(ffmpeg::codec::Id::EAC3).is_some(),
-        containers: AudioContainerCapabilities::from_flags(
+        containers: ContainerCapabilities::from_flags(
             has_demuxer("mov"),
             has_demuxer("matroska"),
             has_demuxer("mpegts"),

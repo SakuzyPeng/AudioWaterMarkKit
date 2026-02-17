@@ -32,6 +32,7 @@ const DEFAULT_KEY_SLOT: u8 = 0;
 
 /// 解码后的消息结果
 #[derive(Debug, Clone)]
+#[allow(clippy::module_name_repetitions)]
 pub struct MessageResult {
     /// 协议版本
     pub version: u8,

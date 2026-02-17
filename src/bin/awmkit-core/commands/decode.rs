@@ -6,13 +6,13 @@ use clap::Args;
 use fluent_bundle::FluentArgs;
 
 #[derive(Args)]
-pub struct DecodeArgs {
+pub struct CmdArgs {
     /// Message hex string (32 chars)
     #[arg(long)]
     pub hex: String,
 }
 
-pub fn run(ctx: &Context, args: &DecodeArgs) -> Result<()> {
+pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let store = KeyStore::new()?;
     let key = store.load()?;
     let bytes = hex::decode(&args.hex)?;

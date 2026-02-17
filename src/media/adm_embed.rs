@@ -81,7 +81,10 @@ pub fn embed_adm_multichannel(
     // 解析 Object（_0003 类型）声道索引，静默声道在嵌入时跳过
     let obj_indices = parse_object_channel_indices(input, &index).unwrap_or_default();
     if !obj_indices.is_empty() {
-        eprintln!("[awmkit] ADM: found {} Object channel(s) to embed", obj_indices.len());
+        eprintln!(
+            "[awmkit] ADM: found {} Object channel(s) to embed",
+            obj_indices.len()
+        );
     }
 
     rewrite_adm_with_transform(input, output, &index, |source_audio| {
@@ -267,16 +270,12 @@ fn embed_bed_by_speaker_labels(
                     source_audio.sample_rate(),
                     source_audio.sample_format(),
                 )
-                .map_err(|e| {
-                    Error::AdmPreserveFailed(format!("mono audio build error: {e}"))
-                })?;
+                .map_err(|e| Error::AdmPreserveFailed(format!("mono audio build error: {e}")))?;
                 match embed_single_audio_via_audiowmark(audio_engine, &mono_audio, message) {
                     Ok(processed) => {
                         let samples = processed.channel_samples(0)?.to_vec();
                         result.replace_channel_samples(*ch, samples).map_err(|e| {
-                            Error::AdmPreserveFailed(format!(
-                                "mono ch{ch} write error: {e}"
-                            ))
+                            Error::AdmPreserveFailed(format!("mono ch{ch} write error: {e}"))
                         })?;
                     }
                     Err(e) => {
@@ -289,30 +288,28 @@ fn embed_bed_by_speaker_labels(
                 }
             }
             RouteMode::Pair(ch_l, ch_r) => {
-                let left  = source_audio.channel_samples(*ch_l)?.to_vec();
+                let left = source_audio.channel_samples(*ch_l)?.to_vec();
                 let right = source_audio.channel_samples(*ch_r)?.to_vec();
                 let stereo = MultichannelAudio::new(
                     vec![left, right],
                     source_audio.sample_rate(),
                     source_audio.sample_format(),
                 )
-                .map_err(|e| {
-                    Error::AdmPreserveFailed(format!("stereo audio build error: {e}"))
-                })?;
+                .map_err(|e| Error::AdmPreserveFailed(format!("stereo audio build error: {e}")))?;
                 match embed_single_audio_via_audiowmark(audio_engine, &stereo, message) {
                     Ok(processed) => {
                         let l_samples = processed.channel_samples(0)?.to_vec();
                         let r_samples = processed.channel_samples(1)?.to_vec();
-                        result.replace_channel_samples(*ch_l, l_samples).map_err(|e| {
-                            Error::AdmPreserveFailed(format!(
-                                "pair ch{ch_l} write error: {e}"
-                            ))
-                        })?;
-                        result.replace_channel_samples(*ch_r, r_samples).map_err(|e| {
-                            Error::AdmPreserveFailed(format!(
-                                "pair ch{ch_r} write error: {e}"
-                            ))
-                        })?;
+                        result
+                            .replace_channel_samples(*ch_l, l_samples)
+                            .map_err(|e| {
+                                Error::AdmPreserveFailed(format!("pair ch{ch_l} write error: {e}"))
+                            })?;
+                        result
+                            .replace_channel_samples(*ch_r, r_samples)
+                            .map_err(|e| {
+                                Error::AdmPreserveFailed(format!("pair ch{ch_r} write error: {e}"))
+                            })?;
                     }
                     Err(e) => {
                         eprintln!(
@@ -347,28 +344,20 @@ fn embed_object_channels_into_audio(
 
     for &obj_idx in obj_indices {
         if obj_idx >= total_ch {
-            eprintln!(
-                "[awmkit] ADM: Object ch{obj_idx} out of range (total={total_ch}), skipping"
-            );
+            eprintln!("[awmkit] ADM: Object ch{obj_idx} out of range (total={total_ch}), skipping");
             continue;
         }
-        let samples = audio
-            .channel_samples(obj_idx)
-            .map_err(|e| {
-                Error::AdmPreserveFailed(format!("Object ch{obj_idx} channel_samples error: {e}"))
-            })?;
+        let samples = audio.channel_samples(obj_idx).map_err(|e| {
+            Error::AdmPreserveFailed(format!("Object ch{obj_idx} channel_samples error: {e}"))
+        })?;
         if is_silent(samples, sf) {
             eprintln!("[awmkit] ADM: Object ch{obj_idx} is silent (~-80 dBFS), skipping");
             continue;
         }
-        let mono_audio = MultichannelAudio::new(
-            vec![samples.to_vec()],
-            audio.sample_rate(),
-            sf,
-        )
-        .map_err(|e| {
-            Error::AdmPreserveFailed(format!("Object ch{obj_idx} mono build error: {e}"))
-        })?;
+        let mono_audio = MultichannelAudio::new(vec![samples.to_vec()], audio.sample_rate(), sf)
+            .map_err(|e| {
+                Error::AdmPreserveFailed(format!("Object ch{obj_idx} mono build error: {e}"))
+            })?;
         match embed_single_audio_via_audiowmark(audio_engine, &mono_audio, message) {
             Ok(processed) => {
                 let new_samples = processed
@@ -379,9 +368,13 @@ fn embed_object_channels_into_audio(
                         ))
                     })?
                     .to_vec();
-                audio.replace_channel_samples(obj_idx, new_samples).map_err(|e| {
-                    Error::AdmPreserveFailed(format!("Object ch{obj_idx} write-back error: {e}"))
-                })?;
+                audio
+                    .replace_channel_samples(obj_idx, new_samples)
+                    .map_err(|e| {
+                        Error::AdmPreserveFailed(format!(
+                            "Object ch{obj_idx} write-back error: {e}"
+                        ))
+                    })?;
             }
             Err(e) => {
                 eprintln!(
@@ -403,20 +396,14 @@ fn embed_single_audio_via_audiowmark(
     message: &[u8; MESSAGE_LEN],
 ) -> Result<MultichannelAudio> {
     let temp_dir = create_temp_dir("awmkit_adm_step")?;
-    let temp_in  = temp_dir.join("step_in.wav");
+    let temp_in = temp_dir.join("step_in.wav");
     let temp_out = temp_dir.join("step_out.wav");
 
     let result = (|| {
         audio.to_wav(&temp_in)?;
-        audio_engine.embed_multichannel(
-            &temp_in,
-            &temp_out,
-            message,
-            Some(audio.layout()),
-        )?;
-        let bytes = fs::read(&temp_out).map_err(|e| {
-            Error::AdmPreserveFailed(format!("failed to read step output: {e}"))
-        })?;
+        audio_engine.embed_multichannel(&temp_in, &temp_out, message, Some(audio.layout()))?;
+        let bytes = fs::read(&temp_out)
+            .map_err(|e| Error::AdmPreserveFailed(format!("failed to read step output: {e}")))?;
         MultichannelAudio::from_wav_bytes(&bytes)
     })();
 

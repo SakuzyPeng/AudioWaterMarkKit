@@ -5,7 +5,7 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 
 #[derive(Subcommand)]
-pub enum EvidenceCommand {
+pub enum Command {
     /// List evidence records
     List(ListArgs),
 
@@ -102,12 +102,12 @@ struct EvidenceJson {
     fp_config_id: u8,
 }
 
-pub fn run(ctx: &Context, command: EvidenceCommand) -> Result<()> {
+pub fn run(ctx: &Context, command: Command) -> Result<()> {
     match command {
-        EvidenceCommand::List(args) => list(ctx, &args),
-        EvidenceCommand::Show(args) => show(ctx, &args),
-        EvidenceCommand::Remove(args) => remove(ctx, &args),
-        EvidenceCommand::Clear(args) => clear(ctx, &args),
+        Command::List(args) => list(ctx, &args),
+        Command::Show(args) => show(ctx, &args),
+        Command::Remove(args) => remove(ctx, &args),
+        Command::Clear(args) => clear(ctx, &args),
     }
 }
 

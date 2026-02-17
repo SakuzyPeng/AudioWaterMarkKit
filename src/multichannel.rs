@@ -350,6 +350,7 @@ impl SampleFormat {
 
 /// 多声道音频数据
 #[derive(Debug, Clone)]
+#[allow(clippy::module_name_repetitions)]
 pub struct MultichannelAudio {
     /// 每个声道的样本数据 [channel][sample]
     /// 统一存储为 i32，便于处理
@@ -917,8 +918,7 @@ fn normalize_wav_pipe_sizes(bytes: &[u8]) -> std::borrow::Cow<'_, [u8]> {
                 }
             }
         } else if &patched[pos..pos + 4] == b"data" && chunk_size == u32::MAX {
-            let raw =
-                u32::try_from(patched.len().saturating_sub(pos + 8)).unwrap_or(u32::MAX);
+            let raw = u32::try_from(patched.len().saturating_sub(pos + 8)).unwrap_or(u32::MAX);
             // 截断到 block_align 整数倍，排除 WAV 块尾部的对齐填充字节
             let data_payload = raw - (raw % block_align);
             patched[pos + 4..pos + 8].copy_from_slice(&data_payload.to_le_bytes());

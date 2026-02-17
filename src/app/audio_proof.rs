@@ -16,6 +16,7 @@ pub struct AudioProof {
     pub fp_config_id: u8,
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub fn build_audio_proof<P: AsRef<Path>>(path: P) -> Result<AudioProof> {
     let path = path.as_ref();
 

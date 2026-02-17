@@ -16,6 +16,8 @@ use crate::media;
 use crate::message::{self, MESSAGE_LEN};
 use crate::tag::Tag;
 
+#[cfg(all(test, feature = "multichannel"))]
+use crate::multichannel::DEFAULT_LFE_MODE;
 #[cfg(feature = "multichannel")]
 use crate::multichannel::{
     build_smart_route_plan, effective_lfe_mode, ChannelLayout, MultichannelAudio, RouteMode,
@@ -23,8 +25,6 @@ use crate::multichannel::{
 };
 #[cfg(feature = "multichannel")]
 use rayon::prelude::*;
-#[cfg(all(test, feature = "multichannel"))]
-use crate::multichannel::DEFAULT_LFE_MODE;
 
 /// audiowmark 默认搜索路径（无官方包，仅供开发者本地编译后使用）
 #[cfg(not(feature = "bundled"))]
@@ -48,14 +48,14 @@ pub struct AudioMediaCapabilities {
     /// 是否支持 E-AC-3 解码
     pub eac3_decode: bool,
     /// 容器解封装能力位图
-    pub containers: AudioContainerCapabilities,
+    pub containers: ContainerCapabilities,
 }
 
 /// 容器能力位图（3 个布尔能力压缩成位标记，避免结构体布尔字段过多）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AudioContainerCapabilities(u8);
+pub struct ContainerCapabilities(u8);
 
-impl AudioContainerCapabilities {
+impl ContainerCapabilities {
     const MP4_BIT: u8 = 1 << 0;
     const MKV_BIT: u8 = 1 << 1;
     const TS_BIT: u8 = 1 << 2;
@@ -418,7 +418,9 @@ impl Audio {
             Ok(a) => a,
             Err(Error::InvalidInput(_)) => {
                 // 内存管线：decode → MultichannelAudio，跳过临时文件
-                if let Ok(a) = decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel) {
+                if let Ok(a) =
+                    decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel)
+                {
                     // 单声道或立体声：字节管线直接完成，无需继续路由
                     if a.num_channels() <= 2 {
                         let wav_bytes = a.to_wav_bytes()?;
@@ -429,8 +431,7 @@ impl Audio {
                     a
                 } else {
                     // 兜底：传统临时文件路径
-                    let prepared =
-                        prepare_input_for_audiowmark(input, "embed_multichannel_input")?;
+                    let prepared = prepare_input_for_audiowmark(input, "embed_multichannel_input")?;
                     match MultichannelAudio::from_file(&prepared.path) {
                         Ok(a) => {
                             prepared_fallback = Some(prepared);
@@ -585,7 +586,11 @@ impl Audio {
                 Ok(a) => (a, Some(input.to_path_buf())),
                 Err(Error::InvalidInput(_)) => {
                     // 内存管线：decode → MultichannelAudio，跳过临时文件
-                    if let Ok(a) = decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel) { (a, None) } else {
+                    if let Ok(a) =
+                        decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel)
+                    {
+                        (a, None)
+                    } else {
                         // 兜底：传统临时文件路径
                         let prepared =
                             prepare_input_for_audiowmark(input, "detect_multichannel_input")?;
@@ -1989,7 +1994,7 @@ pub fn media_capabilities() -> AudioMediaCapabilities {
         AudioMediaCapabilities {
             backend: "ffmpeg",
             eac3_decode: false,
-            containers: AudioContainerCapabilities::from_flags(false, false, false),
+            containers: ContainerCapabilities::from_flags(false, false, false),
         }
     }
 }

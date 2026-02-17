@@ -13,8 +13,8 @@
 
 use std::collections::HashMap;
 
-use quick_xml::Reader;
 use quick_xml::events::Event;
+use quick_xml::Reader;
 
 use crate::multichannel::{LfeMode, RouteMode, RoutePlan, RouteStep, SampleFormat};
 
@@ -39,8 +39,8 @@ const SPEAKER_PAIRS: &[(&str, &str, &str)] = &[
     ("B+030", "B-030", "BFL+BFR"),
     ("B+045", "B-045", "BFL+BFR"),
     // ── Dolby Room-Centric (RC_) ──
-    ("RC_L",   "RC_R",   "FL+FR"),
-    ("RC_Ls",  "RC_Rs",  "SL+SR"),
+    ("RC_L", "RC_R", "FL+FR"),
+    ("RC_Ls", "RC_Rs", "SL+SR"),
     ("RC_Lss", "RC_Rss", "SL+SR"),
     ("RC_Lrs", "RC_Rrs", "BL+BR"),
     ("RC_Lts", "RC_Rts", "TFL+TFR"),
@@ -48,8 +48,8 @@ const SPEAKER_PAIRS: &[(&str, &str, &str)] = &[
     ("RC_Lbs", "RC_Rbs", "TBL+TBR"),
     ("RC_Lvs", "RC_Rvs", "TML+TMR"),
     // ── 简单标签 ──
-    ("L",   "R",   "FL+FR"),
-    ("Ls",  "Rs",  "SL+SR"),
+    ("L", "R", "FL+FR"),
+    ("Ls", "Rs", "SL+SR"),
     ("Lss", "Rss", "SL+SR"),
     ("Lrs", "Rrs", "BL+BR"),
     ("Lts", "Rts", "TFL+TFR"),
@@ -112,8 +112,8 @@ pub fn parse_adm_maps(xml_bytes: &[u8]) -> AdmMaps {
 
                 match local {
                     "audioTrackFormat" => {
-                        cur_track_id = get_attr(e, "audioTrackFormatID")
-                            .map(|id| strip_track_fmt_suffix(&id));
+                        cur_track_id =
+                            get_attr(e, "audioTrackFormatID").map(|id| strip_track_fmt_suffix(&id));
                     }
                     "audioStreamFormat" => {
                         cur_stream_id = get_attr(e, "audioStreamFormatID");
@@ -138,12 +138,26 @@ pub fn parse_adm_maps(xml_bytes: &[u8]) -> AdmMaps {
                 let local_b = name_b.local_name();
                 let local = std::str::from_utf8(local_b.as_ref()).unwrap_or("");
                 match local {
-                    "audioTrackFormat"       => { cur_track_id  = None; in_stream_fmt_ref = false; }
-                    "audioStreamFormat"      => { cur_stream_id = None; in_chan_fmt_ref   = false; }
-                    "audioChannelFormat"     => { cur_chan_id   = None; }
-                    "audioStreamFormatIDRef" => { in_stream_fmt_ref = false; }
-                    "audioChannelFormatIDRef"=> { in_chan_fmt_ref   = false; }
-                    "speakerLabel"           => { in_speaker_label  = false; }
+                    "audioTrackFormat" => {
+                        cur_track_id = None;
+                        in_stream_fmt_ref = false;
+                    }
+                    "audioStreamFormat" => {
+                        cur_stream_id = None;
+                        in_chan_fmt_ref = false;
+                    }
+                    "audioChannelFormat" => {
+                        cur_chan_id = None;
+                    }
+                    "audioStreamFormatIDRef" => {
+                        in_stream_fmt_ref = false;
+                    }
+                    "audioChannelFormatIDRef" => {
+                        in_chan_fmt_ref = false;
+                    }
+                    "speakerLabel" => {
+                        in_speaker_label = false;
+                    }
                     _ => {}
                 }
             }
@@ -189,7 +203,11 @@ fn get_attr(e: &quick_xml::events::BytesStart<'_>, attr_name: &str) -> Option<St
             let key_b = a.key.local_name();
             std::str::from_utf8(key_b.as_ref()).unwrap_or("") == attr_name
         })
-        .and_then(|a| std::str::from_utf8(a.value.as_ref()).ok().map(str::to_string))
+        .and_then(|a| {
+            std::str::from_utf8(a.value.as_ref())
+                .ok()
+                .map(str::to_string)
+        })
 }
 
 /// `AT_00011001_01` → `AT_00011001`（去掉末尾的 `_XX` index 后缀）。
@@ -328,7 +346,12 @@ pub fn build_route_plan_from_labels(
         u16::try_from(channels).unwrap_or(u16::MAX),
     );
 
-    RoutePlan { layout, channels, steps, warnings }
+    RoutePlan {
+        layout,
+        channels,
+        steps,
+        warnings,
+    }
 }
 
 // ─────────────────── 静默检测 ─────────────────────────
@@ -359,15 +382,24 @@ pub fn is_silent(samples: &[i32], format: SampleFormat) -> bool {
 // ─── 辅助构造 ─────────────────────────────────────────
 
 fn make_pair(ch_a: usize, ch_b: usize, name: &str) -> RouteStep {
-    RouteStep { name: name.to_string(), mode: RouteMode::Pair(ch_a, ch_b) }
+    RouteStep {
+        name: name.to_string(),
+        mode: RouteMode::Pair(ch_a, ch_b),
+    }
 }
 
 fn make_mono(channel: usize, name: &str) -> RouteStep {
-    RouteStep { name: name.to_string(), mode: RouteMode::Mono(channel) }
+    RouteStep {
+        name: name.to_string(),
+        mode: RouteMode::Mono(channel),
+    }
 }
 
 fn make_skip(channel: usize, reason: &'static str) -> RouteStep {
-    RouteStep { name: format!("ch{channel}(skip)"), mode: RouteMode::Skip { channel, reason } }
+    RouteStep {
+        name: format!("ch{channel}(skip)"),
+        mode: RouteMode::Skip { channel, reason },
+    }
 }
 
 // ─────────────────── 测试 ───────────────────────────────
@@ -375,7 +407,7 @@ fn make_skip(channel: usize, reason: &'static str) -> RouteStep {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::multichannel::{DEFAULT_LFE_MODE, LfeMode};
+    use crate::multichannel::{LfeMode, DEFAULT_LFE_MODE};
 
     fn label_vec(labels: &[&str]) -> Vec<(usize, String)> {
         labels
@@ -389,39 +421,56 @@ mod tests {
     fn atmos_7_1_4_bs2076() {
         // 7.1.4: M+030 M-030 M+000 LFE1 M+110 M-110 M+090 M-090 U+030 U-030 U+110 U-110
         let labels = label_vec(&[
-            "M+030", "M-030", "M+000", "LFE1",
-            "M+110", "M-110", "M+090", "M-090",
-            "U+030", "U-030", "U+110", "U-110",
+            "M+030", "M-030", "M+000", "LFE1", "M+110", "M-110", "M+090", "M-090", "U+030",
+            "U-030", "U+110", "U-110",
         ]);
         let plan = build_route_plan_from_labels(&labels, DEFAULT_LFE_MODE);
-        assert!(plan.warnings.is_empty(), "no unknown labels expected: {:?}", plan.warnings);
+        assert!(
+            plan.warnings.is_empty(),
+            "no unknown labels expected: {:?}",
+            plan.warnings
+        );
 
         let modes: Vec<&RouteMode> = plan.steps.iter().map(|s| &s.mode).collect();
         // FL+FR
         assert!(matches!(modes[0], RouteMode::Pair(0, 1)));
         // Centre mono
-        assert!(matches!(modes.iter().find(|m| matches!(m, RouteMode::Mono(2))), Some(_)));
+        assert!(matches!(
+            modes.iter().find(|m| matches!(m, RouteMode::Mono(2))),
+            Some(_)
+        ));
         // LFE skip
-        assert!(matches!(modes.iter().find(|m| matches!(m, RouteMode::Skip { channel: 3, .. })), Some(_)));
+        assert!(matches!(
+            modes
+                .iter()
+                .find(|m| matches!(m, RouteMode::Skip { channel: 3, .. })),
+            Some(_)
+        ));
     }
 
     #[test]
     fn dolby_rc_labels_7_1_4() {
         // 7.1.4 RC_ 标签（和 ADM BWF 测试文件相同格式）
         let labels = label_vec(&[
-            "RC_L", "RC_R", "RC_C", "RC_LFE",
-            "RC_Lss", "RC_Rss", "RC_Lrs", "RC_Rrs",
-            "RC_Lts", "RC_Rts",
+            "RC_L", "RC_R", "RC_C", "RC_LFE", "RC_Lss", "RC_Rss", "RC_Lrs", "RC_Rrs", "RC_Lts",
+            "RC_Rts",
         ]);
         let plan = build_route_plan_from_labels(&labels, DEFAULT_LFE_MODE);
-        assert!(plan.warnings.is_empty(), "unexpected warnings: {:?}", plan.warnings);
+        assert!(
+            plan.warnings.is_empty(),
+            "unexpected warnings: {:?}",
+            plan.warnings
+        );
 
         let names: Vec<&str> = plan.steps.iter().map(|s| s.name.as_str()).collect();
         assert!(names.contains(&"FL+FR"), "FL+FR missing");
         assert!(names.contains(&"SL+SR"), "SL+SR missing");
         assert!(names.contains(&"BL+BR"), "BL+BR missing");
         assert!(names.contains(&"TFL+TFR"), "TFL+TFR missing");
-        assert!(names.iter().any(|n| n.contains("mono")), "Centre mono missing");
+        assert!(
+            names.iter().any(|n| n.contains("mono")),
+            "Centre mono missing"
+        );
         assert!(names.iter().any(|n| n.contains("skip")), "LFE skip missing");
     }
 
@@ -438,7 +487,10 @@ mod tests {
     fn lfe_pair_mode_two_lfe() {
         let labels = label_vec(&["M+030", "M-030", "LFE1", "LFE2"]);
         let plan = build_route_plan_from_labels(&labels, LfeMode::Pair);
-        let pair = plan.steps.iter().find(|s| matches!(s.mode, RouteMode::Pair(2, 3)));
+        let pair = plan
+            .steps
+            .iter()
+            .find(|s| matches!(s.mode, RouteMode::Pair(2, 3)));
         assert!(pair.is_some(), "LFE1+LFE2 pair expected");
     }
 
@@ -446,7 +498,10 @@ mod tests {
     fn unknown_labels_emit_warning() {
         let labels = label_vec(&["M+030", "M-030", "FooLeft", "FooRight"]);
         let plan = build_route_plan_from_labels(&labels, DEFAULT_LFE_MODE);
-        assert!(!plan.warnings.is_empty(), "warning expected for unknown labels");
+        assert!(
+            !plan.warnings.is_empty(),
+            "warning expected for unknown labels"
+        );
     }
 
     #[test]
@@ -471,7 +526,7 @@ mod tests {
     #[test]
     fn strip_suffix_basic() {
         assert_eq!(strip_track_fmt_suffix("AT_00011001_01"), "AT_00011001");
-        assert_eq!(strip_track_fmt_suffix("AT_00011001"),    "AT_00011001");
+        assert_eq!(strip_track_fmt_suffix("AT_00011001"), "AT_00011001");
         assert_eq!(strip_track_fmt_suffix("AT_0001100a_01"), "AT_0001100a");
     }
 
@@ -494,7 +549,7 @@ mod tests {
     fn is_silent_int24_threshold() {
         use crate::multichannel::SampleFormat;
         let threshold = 8_388_607_i32 / 10_000; // 838
-        // 样本峰值 = threshold - 1 → 静默
+                                                // 样本峰值 = threshold - 1 → 静默
         let quiet = vec![threshold - 1; 50];
         assert!(is_silent(&quiet, SampleFormat::Int24));
         // 样本峰值 = threshold → 非静默

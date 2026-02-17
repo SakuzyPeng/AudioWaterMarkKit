@@ -6,13 +6,14 @@ use clap::Args;
 use fluent_bundle::FluentArgs;
 
 #[derive(Args)]
-pub struct StatusArgs {
+pub struct CmdArgs {
     /// Run extended diagnostics
     #[arg(long)]
     pub doctor: bool,
 }
 
-pub fn run(ctx: &Context, args: &StatusArgs) -> Result<()> {
+#[allow(clippy::too_many_lines)]
+pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let mut fmt_args = FluentArgs::new();
     fmt_args.set("version", env!("CARGO_PKG_VERSION"));
     ctx.out.info(i18n::tr_args("cli-status-version", &fmt_args));

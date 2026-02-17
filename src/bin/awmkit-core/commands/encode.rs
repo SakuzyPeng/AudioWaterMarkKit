@@ -6,7 +6,7 @@ use awmkit::{Message, CURRENT_VERSION};
 use clap::Args;
 
 #[derive(Args)]
-pub struct EncodeArgs {
+pub struct CmdArgs {
     /// Tag (1-7 identity or full 8-char tag)
     #[arg(long)]
     pub tag: String,
@@ -20,7 +20,7 @@ pub struct EncodeArgs {
     pub timestamp: Option<u32>,
 }
 
-pub fn run(ctx: &Context, args: &EncodeArgs) -> Result<()> {
+pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let store = KeyStore::new()?;
     let slot = store.active_slot()?;
     let key = store.load_slot(slot)?;

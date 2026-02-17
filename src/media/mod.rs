@@ -11,6 +11,4 @@ pub mod adm_routing;
 mod ffmpeg_decode;
 
 #[cfg(feature = "ffmpeg-decode")]
-pub use ffmpeg_decode::{
-    decode_media_to_pcm_i32, decode_media_to_wav_pipe, media_capabilities,
-};
+pub use ffmpeg_decode::{decode_media_to_pcm_i32, decode_media_to_wav_pipe, media_capabilities};

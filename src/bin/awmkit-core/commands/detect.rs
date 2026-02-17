@@ -15,7 +15,7 @@ const CLONE_LIKELY_MIN_SECONDS: f32 = 6.0;
 const DETECT_PROGRESS_TEMPLATE: &str = "{prefix} [{bar:40}] {pos}/{len}";
 
 #[derive(Args)]
-pub struct DetectArgs {
+pub struct CmdArgs {
     /// JSON output
     #[arg(long)]
     pub json: bool,
@@ -57,7 +57,8 @@ struct DetectJson {
     slot_scan_count: Option<u32>,
 }
 
-pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
+#[allow(clippy::too_many_lines)]
+pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let inputs = expand_inputs(&args.inputs)?;
     for input in &inputs {
         ensure_file(input)?;
@@ -340,18 +341,14 @@ impl CloneCheck {
                     .map_or_else(|| "-".to_string(), |value| format!("{value:.1}s"));
                 format!("likely(score={score}, dur={seconds})")
             }
-            "suspect" => {
-                self.reason.as_ref().map_or_else(
-                    || "suspect".to_string(),
-                    |reason| format!("suspect({reason})"),
-                )
-            }
-            "unavailable" => {
-                self.reason.as_ref().map_or_else(
-                    || "unavailable".to_string(),
-                    |reason| format!("unavailable({reason})"),
-                )
-            }
+            "suspect" => self.reason.as_ref().map_or_else(
+                || "suspect".to_string(),
+                |reason| format!("suspect({reason})"),
+            ),
+            "unavailable" => self.reason.as_ref().map_or_else(
+                || "unavailable".to_string(),
+                |reason| format!("unavailable({reason})"),
+            ),
             other => other.to_string(),
         }
     }
@@ -396,6 +393,7 @@ fn detect_one(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn detect_one_json(
     audio: &awmkit::Audio,
     key_store: &KeyStore,

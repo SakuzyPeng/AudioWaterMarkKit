@@ -912,12 +912,14 @@ pub unsafe extern "C" fn awm_evidence_record_embed_file_ex(
     };
 
     #[cfg(feature = "app")]
-    let snr = catch_unwind(AssertUnwindSafe(|| analyze_snr(input_path_str_raw, output_path_str_raw)))
-        .unwrap_or_else(|_| crate::app::SnrAnalysis {
-            snr_db: None,
-            status: FFI_SNR_STATUS_UNAVAILABLE.to_string(),
-            detail: Some("snr_panic".to_string()),
-        });
+    let snr = catch_unwind(AssertUnwindSafe(|| {
+        analyze_snr(input_path_str_raw, output_path_str_raw)
+    }))
+    .unwrap_or_else(|_| crate::app::SnrAnalysis {
+        snr_db: None,
+        status: FFI_SNR_STATUS_UNAVAILABLE.to_string(),
+        detail: Some("snr_panic".to_string()),
+    });
     #[cfg(feature = "app")]
     let snr_db = snr.snr_db;
     #[cfg(feature = "app")]
@@ -1294,12 +1296,13 @@ pub unsafe extern "C" fn awm_db_tag_save_if_absent(
         let Ok(mut store) = TagStore::load() else {
             return AWMError::AudiowmarkExec as i32;
         };
-        store
-            .save_if_absent(username_str, &parsed_tag)
-            .map_or(AWMError::AudiowmarkExec as i32, |inserted| {
+        store.save_if_absent(username_str, &parsed_tag).map_or(
+            AWMError::AudiowmarkExec as i32,
+            |inserted| {
                 *out_inserted = inserted;
                 AWMError::Success as i32
-            })
+            },
+        )
     }
 
     #[cfg(not(feature = "app"))]
@@ -1591,12 +1594,13 @@ pub unsafe extern "C" fn awm_key_load(out_key: *mut u8, out_key_cap: usize) -> i
         if out_key_cap < crate::app::KEY_LEN {
             return AWMError::InvalidMessageLength as i32;
         }
-        crate::app::KeyStore::new()
-            .and_then(|ks| ks.load())
-            .map_or(AWMError::AudiowmarkExec as i32, |key| {
+        crate::app::KeyStore::new().and_then(|ks| ks.load()).map_or(
+            AWMError::AudiowmarkExec as i32,
+            |key| {
                 ptr::copy_nonoverlapping(key.as_ptr(), out_key, key.len());
                 AWMError::Success as i32
-            })
+            },
+        )
     }
 
     #[cfg(not(feature = "app"))]
@@ -1662,13 +1666,12 @@ pub unsafe extern "C" fn awm_key_active_slot_get(out_slot: *mut u8) -> i32 {
 
     #[cfg(feature = "app")]
     {
-        crate::app::KeyStore::new().and_then(|ks| ks.active_slot()).map_or(
-            AWMError::AudiowmarkExec as i32,
-            |slot| {
+        crate::app::KeyStore::new()
+            .and_then(|ks| ks.active_slot())
+            .map_or(AWMError::AudiowmarkExec as i32, |slot| {
                 *out_slot = slot;
                 AWMError::Success as i32
-            },
-        )
+            })
     }
 
     #[cfg(not(feature = "app"))]

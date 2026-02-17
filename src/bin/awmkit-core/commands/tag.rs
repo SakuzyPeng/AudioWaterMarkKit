@@ -7,7 +7,7 @@ use fluent_bundle::FluentArgs;
 use serde::Serialize;
 
 #[derive(Subcommand)]
-pub enum TagCommand {
+pub enum Command {
     /// Suggest a tag from a username (deterministic, no storage)
     Suggest(SuggestArgs),
 
@@ -63,13 +63,13 @@ struct TagStoreOutput {
     entries: Vec<TagEntry>,
 }
 
-pub fn run(ctx: &Context, command: TagCommand) -> Result<()> {
+pub fn run(ctx: &Context, command: Command) -> Result<()> {
     match command {
-        TagCommand::Suggest(args) => suggest(ctx, &args),
-        TagCommand::Save(args) => save(ctx, &args),
-        TagCommand::List(args) => list(ctx, &args),
-        TagCommand::Remove(args) => remove(ctx, &args),
-        TagCommand::Clear => clear(ctx),
+        Command::Suggest(args) => suggest(ctx, &args),
+        Command::Save(args) => save(ctx, &args),
+        Command::List(args) => list(ctx, &args),
+        Command::Remove(args) => remove(ctx, &args),
+        Command::Clear => clear(ctx),
     }
 }
 

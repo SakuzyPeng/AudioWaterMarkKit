@@ -16,7 +16,7 @@ use std::path::PathBuf;
 const EMBED_PROGRESS_TEMPLATE: &str = "{prefix} [{bar:40}] {pos}/{len}";
 
 #[derive(Args)]
-pub struct EmbedArgs {
+pub struct CmdArgs {
     /// Tag (1-7 identity or full 8-char tag)
     #[arg(long)]
     pub tag: String,
@@ -38,7 +38,8 @@ pub struct EmbedArgs {
     pub inputs: Vec<String>,
 }
 
-pub fn run(ctx: &Context, args: &EmbedArgs) -> Result<()> {
+#[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
+pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let inputs = expand_inputs(&args.inputs)?;
     if args.output.is_some() && inputs.len() != 1 {
         return Err(CliError::Message(i18n::tr("cli-embed-output_single")));

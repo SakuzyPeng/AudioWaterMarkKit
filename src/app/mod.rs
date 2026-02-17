@@ -1,3 +1,5 @@
+#![allow(clippy::module_name_repetitions)]
+
 pub mod app_settings_store;
 pub mod audio_engine;
 pub mod audio_proof;

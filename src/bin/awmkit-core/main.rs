@@ -74,7 +74,7 @@ enum Commands {
     /// Tag mapping helpers
     Tag {
         #[command(subcommand)]
-        command: commands::tag::TagCommand,
+        command: commands::tag::Command,
     },
 
     /// Key management
@@ -84,25 +84,25 @@ enum Commands {
     },
 
     /// Encode a watermark message
-    Encode(commands::encode::EncodeArgs),
+    Encode(commands::encode::CmdArgs),
 
     /// Decode a watermark message
-    Decode(commands::decode::DecodeArgs),
+    Decode(commands::decode::CmdArgs),
 
     /// Embed watermark into audio files
-    Embed(commands::embed::EmbedArgs),
+    Embed(commands::embed::CmdArgs),
 
     /// Detect watermark from audio files
-    Detect(commands::detect::DetectArgs),
+    Detect(commands::detect::CmdArgs),
 
     /// Query and manage evidence records
     Evidence {
         #[command(subcommand)]
-        command: commands::evidence::EvidenceCommand,
+        command: commands::evidence::Command,
     },
 
     /// Show system status
-    Status(commands::status::StatusArgs),
+    Status(commands::status::CmdArgs),
 }
 
 #[cfg(feature = "full-cli")]

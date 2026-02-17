@@ -17,6 +17,7 @@ const SNR_MIN_OVERLAP_SAMPLES: usize = 4_800;
 static FFMPEG_INIT: OnceLock<std::result::Result<(), String>> = OnceLock::new();
 
 #[derive(Debug, Clone)]
+#[allow(clippy::module_name_repetitions)]
 pub struct SnrAnalysis {
     pub snr_db: Option<f64>,
     pub status: String,
@@ -24,7 +25,7 @@ pub struct SnrAnalysis {
 }
 
 impl SnrAnalysis {
-    #[must_use] 
+    #[must_use]
     pub fn ok(snr_db: f64) -> Self {
         Self {
             snr_db: Some(snr_db),
@@ -50,6 +51,7 @@ impl SnrAnalysis {
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub fn analyze_snr<P: AsRef<Path>>(input: P, output: P) -> SnrAnalysis {
     #[cfg(not(feature = "ffmpeg-decode"))]
     {
@@ -308,9 +310,8 @@ fn create_audio_normalize_graph(
         .add(&sink, "out", "")
         .map_err(|err| format!("graph_add_abuffersink:{err}"))?;
 
-    let spec = format!(
-        "aformat=sample_fmts=s16:channel_layouts=mono,aresample={SNR_TARGET_SAMPLE_RATE}"
-    );
+    let spec =
+        format!("aformat=sample_fmts=s16:channel_layouts=mono,aresample={SNR_TARGET_SAMPLE_RATE}");
     graph
         .output("in", 0)
         .map_err(|err| format!("graph_output:{err}"))?

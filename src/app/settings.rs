@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
+#[allow(clippy::module_name_repetitions)]
 pub struct AppSettings {
     pub language: Option<String>,
 }

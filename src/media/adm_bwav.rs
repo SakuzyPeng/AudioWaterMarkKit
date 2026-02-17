@@ -73,10 +73,7 @@ impl ChunkIndex {
 /// packFormat ID 含 `_0001`（DirectSpeakers 类型）视为 Bed；
 /// 含 `_0003`（Objects 类型）视为 Object，排除在外。
 /// 若 chna 不存在或解析失败，返回 `None`（调用方应退回全声道路径）。
-pub fn parse_bed_channel_indices(
-    path: &Path,
-    index: &ChunkIndex,
-) -> Result<Option<Vec<usize>>> {
+pub fn parse_bed_channel_indices(path: &Path, index: &ChunkIndex) -> Result<Option<Vec<usize>>> {
     let Some(chna_entry) = index.chunks.iter().find(|c| c.id == CHNA_SIG) else {
         return Ok(None);
     };
@@ -105,7 +102,7 @@ pub fn parse_bed_channel_indices(
             continue;
         }
         let channel_index = track_num - 1; // 1-based → 0-based
-        // packFormat 引用在偏移 26，长度 11 字节（含 NUL padding）
+                                           // packFormat 引用在偏移 26，长度 11 字节（含 NUL padding）
         let pack_fmt_bytes = &payload[off + 26..off + 37];
         let pack_fmt = pack_fmt_bytes
             .iter()
@@ -136,7 +133,7 @@ pub fn parse_bed_channel_speaker_labels(
     path: &Path,
     index: &ChunkIndex,
 ) -> Result<Vec<(usize, String)>> {
-    use super::adm_routing::{AdmMaps, parse_adm_maps};
+    use super::adm_routing::{parse_adm_maps, AdmMaps};
 
     // ── 读 chna ──
     let Some(chna_entry) = index.chunks.iter().find(|c| c.id == CHNA_SIG) else {
@@ -157,8 +154,7 @@ pub fn parse_bed_channel_speaker_labels(
 
     // ── 读 axml ──
     let maps: AdmMaps = if let Some(axml_entry) = index.chunks.iter().find(|c| c.id == AXML_SIG) {
-        let axml_size = usize::try_from(axml_entry.size)
-            .unwrap_or(0);
+        let axml_size = usize::try_from(axml_entry.size).unwrap_or(0);
         let mut axml_buf = vec![0_u8; axml_size];
         file.seek(SeekFrom::Start(axml_entry.data_offset))
             .map_err(|e| Error::AdmUnsupported(format!("failed to seek axml: {e}")))?;
@@ -197,7 +193,8 @@ pub fn parse_bed_channel_speaker_labels(
 
         // AT → speakerLabel（通过 axml 链路）
         let label = maps
-            .resolve_at_to_label(&at_id).map_or_else(|| format!("?{at_id}?"), str::to_string);
+            .resolve_at_to_label(&at_id)
+            .map_or_else(|| format!("?{at_id}?"), str::to_string);
 
         result.push((channel_index, label));
     }
@@ -210,10 +207,7 @@ pub fn parse_bed_channel_speaker_labels(
 /// packFormatIDRef 含 `_0003`（Objects 类型）视为 Object；
 /// 含 `_0001`（DirectSpeakers）视为 Bed，排除在外。
 /// 若 chna 不存在或无 Object 声道，返回空 Vec。
-pub fn parse_object_channel_indices(
-    path: &Path,
-    index: &ChunkIndex,
-) -> Result<Vec<usize>> {
+pub fn parse_object_channel_indices(path: &Path, index: &ChunkIndex) -> Result<Vec<usize>> {
     let Some(chna_entry) = index.chunks.iter().find(|c| c.id == CHNA_SIG) else {
         return Ok(Vec::new());
     };
@@ -243,7 +237,7 @@ pub fn parse_object_channel_indices(
             continue;
         }
         let channel_index = track_num - 1; // 1-based → 0-based
-        // packFormat 引用在偏移 26，长度 11 字节
+                                           // packFormat 引用在偏移 26，长度 11 字节
         let pack_fmt_bytes = &payload[off + 26..off + 37];
         let pack_fmt_str = bytes_to_ascii_str(pack_fmt_bytes);
         // Object: 含 _0003，不是 Bed（_0001）
@@ -283,12 +277,39 @@ pub fn probe_adm_bwf(path: &Path) -> Result<Option<ChunkIndex>> {
 }
 
 pub fn parse_chunk_index(path: &Path) -> Result<Option<ChunkIndex>> {
-    let mut file = File::open(path)
+    let (mut file, file_size) = open_wave_file(path)?;
+    let Some(state) = read_wave_scan_state(&mut file, file_size)? else {
+        return Ok(None);
+    };
+    let chunks = scan_chunk_entries(
+        &mut file,
+        file_size,
+        state.cursor,
+        state.parse_end,
+        state.data_size_override,
+    )?;
+    let index = build_chunk_index(&mut file, chunks)?;
+    Ok(Some(index))
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ChunkScanState {
+    parse_end: u64,
+    cursor: u64,
+    data_size_override: Option<u64>,
+}
+
+fn open_wave_file(path: &Path) -> Result<(File, u64)> {
+    let file = File::open(path)
         .map_err(|e| Error::AdmUnsupported(format!("failed to open {}: {e}", path.display())))?;
     let file_size = file
         .metadata()
         .map_err(|e| Error::AdmUnsupported(format!("failed to stat {}: {e}", path.display())))?
         .len();
+    Ok((file, file_size))
+}
+
+fn read_wave_scan_state(file: &mut File, file_size: u64) -> Result<Option<ChunkScanState>> {
     if file_size < 12 {
         return Ok(None);
     }
@@ -298,6 +319,9 @@ pub fn parse_chunk_index(path: &Path) -> Result<Option<ChunkIndex>> {
         .map_err(|e| Error::AdmUnsupported(format!("failed to read RIFF header: {e}")))?;
     let container_sig = [header[0], header[1], header[2], header[3]];
     let form_type = [header[8], header[9], header[10], header[11]];
+    if form_type != WAVE_SIG {
+        return Ok(None);
+    }
 
     let container = match container_sig {
         RIFF_SIG => WaveContainer::Riff,
@@ -305,15 +329,29 @@ pub fn parse_chunk_index(path: &Path) -> Result<Option<ChunkIndex>> {
         BW64_SIG => WaveContainer::Bw64,
         _ => return Ok(None),
     };
-    if form_type != WAVE_SIG {
-        return Ok(None);
+
+    let mut state = ChunkScanState {
+        parse_end: parse_end_for_container(container, &header, file_size)?,
+        cursor: 12,
+        data_size_override: None,
+    };
+    if matches!(container, WaveContainer::Rf64 | WaveContainer::Bw64) {
+        parse_ds64_chunk(file, file_size, &mut state)?;
     }
 
-    let mut parse_end = match container {
+    Ok(Some(state))
+}
+
+fn parse_end_for_container(
+    container: WaveContainer,
+    header: &[u8; 12],
+    file_size: u64,
+) -> Result<u64> {
+    match container {
         WaveContainer::Riff => {
             let riff_size = u64::from(read_u32_le(&header[4..8])?);
             let end = checked_add(8, riff_size, "RIFF size overflow")?;
-            end.min(file_size)
+            Ok(end.min(file_size))
         }
         WaveContainer::Rf64 | WaveContainer::Bw64 => {
             if read_u32_le(&header[4..8])? != u32::MAX {
@@ -321,64 +359,64 @@ pub fn parse_chunk_index(path: &Path) -> Result<Option<ChunkIndex>> {
                     "RF64/BW64 header requires 0xFFFFFFFF size marker".to_string(),
                 ));
             }
-            file_size
+            Ok(file_size)
         }
-    };
+    }
+}
 
-    let mut cursor = 12_u64;
-    let mut data_size_override: Option<u64> = None;
-
-    if matches!(container, WaveContainer::Rf64 | WaveContainer::Bw64) {
-        let (chunk_id, chunk_size) = read_chunk_header(&mut file, cursor)?;
-        if chunk_id != DS64_SIG {
-            return Err(Error::AdmUnsupported(
-                "RF64/BW64 requires ds64 as first chunk".to_string(),
-            ));
-        }
-        if chunk_size < 28 {
-            return Err(Error::AdmUnsupported(
-                "invalid ds64 chunk: payload shorter than 28 bytes".to_string(),
-            ));
-        }
-
-        let mut ds64 = vec![
-            0_u8;
-            usize::try_from(chunk_size).map_err(|_| Error::AdmUnsupported(
-                "ds64 chunk too large to load".to_string()
-            ))?
-        ];
-        file.seek(SeekFrom::Start(cursor + 8))
-            .map_err(|e| Error::AdmUnsupported(format!("failed to seek ds64 payload: {e}")))?;
-        file.read_exact(&mut ds64)
-            .map_err(|e| Error::AdmUnsupported(format!("failed to read ds64 payload: {e}")))?;
-
-        let riff_size_64 = read_u64_le(&ds64[0..8])?;
-        let data_size_64 = read_u64_le(&ds64[8..16])?;
-        data_size_override = Some(data_size_64);
-
-        let rf64_form_end = checked_add(8, riff_size_64, "RF64 form size overflow")?;
-        parse_end = rf64_form_end.min(file_size);
-
-        cursor = checked_add(cursor, 8, "ds64 cursor overflow")?;
-        cursor = checked_add(cursor, u64::from(chunk_size), "ds64 cursor overflow")?;
-        cursor = checked_add(cursor, u64::from(chunk_size & 1), "ds64 cursor overflow")?;
+fn parse_ds64_chunk(file: &mut File, file_size: u64, state: &mut ChunkScanState) -> Result<()> {
+    let (chunk_id, chunk_size) = read_chunk_header(file, state.cursor)?;
+    if chunk_id != DS64_SIG {
+        return Err(Error::AdmUnsupported(
+            "RF64/BW64 requires ds64 as first chunk".to_string(),
+        ));
+    }
+    if chunk_size < 28 {
+        return Err(Error::AdmUnsupported(
+            "invalid ds64 chunk: payload shorter than 28 bytes".to_string(),
+        ));
     }
 
+    let payload_len = usize::try_from(chunk_size)
+        .map_err(|_| Error::AdmUnsupported("ds64 chunk too large to load".to_string()))?;
+    let mut ds64 = vec![0_u8; payload_len];
+    file.seek(SeekFrom::Start(state.cursor + 8))
+        .map_err(|e| Error::AdmUnsupported(format!("failed to seek ds64 payload: {e}")))?;
+    file.read_exact(&mut ds64)
+        .map_err(|e| Error::AdmUnsupported(format!("failed to read ds64 payload: {e}")))?;
+
+    let riff_size_64 = read_u64_le(&ds64[0..8])?;
+    state.data_size_override = Some(read_u64_le(&ds64[8..16])?);
+    let rf64_form_end = checked_add(8, riff_size_64, "RF64 form size overflow")?;
+    state.parse_end = rf64_form_end.min(file_size);
+
+    let padded_size = checked_add(
+        u64::from(chunk_size),
+        u64::from(chunk_size & 1),
+        "ds64 cursor overflow",
+    )?;
+    state.cursor = checked_add(state.cursor, 8, "ds64 cursor overflow")?;
+    state.cursor = checked_add(state.cursor, padded_size, "ds64 cursor overflow")?;
+    Ok(())
+}
+
+fn scan_chunk_entries(
+    file: &mut File,
+    file_size: u64,
+    mut cursor: u64,
+    parse_end: u64,
+    data_size_override: Option<u64>,
+) -> Result<Vec<ChunkEntry>> {
     let mut chunks = Vec::new();
-    while checked_add(cursor, 8, "chunk header overflow")? <= parse_end
-        && checked_add(cursor, 8, "chunk header overflow")? <= file_size
-    {
-        let (chunk_id, chunk_size_field) = read_chunk_header(&mut file, cursor)?;
-        let mut chunk_size = u64::from(chunk_size_field);
-        if chunk_id == DATA_SIG && chunk_size == U32_MAX_U64 {
-            let Some(override_size) = data_size_override else {
-                return Err(Error::AdmUnsupported(
-                    "data chunk uses RF64 size marker but ds64 has no size".to_string(),
-                ));
-            };
-            chunk_size = override_size;
+    loop {
+        let header_end = checked_add(cursor, 8, "chunk header overflow")?;
+        if header_end > parse_end || header_end > file_size {
+            break;
         }
 
+        let (chunk_id, chunk_size_field) = read_chunk_header(file, cursor)?;
+        let chunk_size =
+            resolve_chunk_size(chunk_id, u64::from(chunk_size_field), data_size_override)?;
         let data_offset = checked_add(cursor, 8, "chunk data offset overflow")?;
         let padded_size = checked_add(chunk_size, chunk_size & 1, "chunk pad overflow")?;
         let next = checked_add(data_offset, padded_size, "chunk next offset overflow")?;
@@ -398,7 +436,26 @@ pub fn parse_chunk_index(path: &Path) -> Result<Option<ChunkIndex>> {
         });
         cursor = next;
     }
+    Ok(chunks)
+}
 
+fn resolve_chunk_size(
+    chunk_id: [u8; 4],
+    chunk_size: u64,
+    data_size_override: Option<u64>,
+) -> Result<u64> {
+    if chunk_id == DATA_SIG && chunk_size == U32_MAX_U64 {
+        let Some(override_size) = data_size_override else {
+            return Err(Error::AdmUnsupported(
+                "data chunk uses RF64 size marker but ds64 has no size".to_string(),
+            ));
+        };
+        return Ok(override_size);
+    }
+    Ok(chunk_size)
+}
+
+fn build_chunk_index(file: &mut File, chunks: Vec<ChunkEntry>) -> Result<ChunkIndex> {
     let fmt_chunk = chunks
         .iter()
         .find(|c| c.id == FMT_SIG)
@@ -413,7 +470,7 @@ pub fn parse_chunk_index(path: &Path) -> Result<Option<ChunkIndex>> {
         .ok_or_else(|| {
             Error::AdmUnsupported("missing data chunk in ADM/BWF candidate".to_string())
         })?;
-    let fmt = read_pcm_format(&mut file, fmt_chunk)?;
+    let fmt = read_pcm_format(file, fmt_chunk)?;
     if fmt.block_align == 0 || data_chunk.size % u64::from(fmt.block_align) != 0 {
         return Err(Error::AdmUnsupported(format!(
             "data chunk is not aligned to block_align={} bytes",
@@ -424,13 +481,13 @@ pub fn parse_chunk_index(path: &Path) -> Result<Option<ChunkIndex>> {
     let has_axml = chunks.iter().any(|c| c.id == AXML_SIG);
     let has_chna = chunks.iter().any(|c| c.id == CHNA_SIG);
 
-    Ok(Some(ChunkIndex {
+    Ok(ChunkIndex {
         chunks,
         fmt,
         data_chunk,
         has_axml,
         has_chna,
-    }))
+    })
 }
 
 fn validate_with_bwavfile(path: &Path) -> Result<()> {
@@ -767,7 +824,9 @@ mod tests {
         out.extend_from_slice(&WAVE_SIG);
         out.extend_from_slice(&chunks);
 
-        let Ok(path) = write_temp_bytes("adm_obj_chna", &out) else { return; };
+        let Ok(path) = write_temp_bytes("adm_obj_chna", &out) else {
+            return;
+        };
         let Ok(Some(index)) = parse_chunk_index(&path) else {
             let _ = fs::remove_file(&path);
             return;
@@ -777,7 +836,9 @@ mod tests {
         let _ = fs::remove_file(&path);
 
         assert!(obj_result.is_ok(), "parse_object_channel_indices failed");
-        let Ok(obj) = obj_result else { return; };
+        let Ok(obj) = obj_result else {
+            return;
+        };
         // track 3 → 0-based index 2
         assert_eq!(obj, vec![2], "only Object channel expected");
     }
@@ -812,7 +873,9 @@ mod tests {
         out.extend_from_slice(&WAVE_SIG);
         out.extend_from_slice(&chunks);
 
-        let Ok(path) = write_temp_bytes("adm_obj_chna_noobj", &out) else { return; };
+        let Ok(path) = write_temp_bytes("adm_obj_chna_noobj", &out) else {
+            return;
+        };
         let Ok(Some(index)) = parse_chunk_index(&path) else {
             let _ = fs::remove_file(&path);
             return;
@@ -822,7 +885,9 @@ mod tests {
         let _ = fs::remove_file(&path);
 
         assert!(obj_result.is_ok());
-        let Ok(obj) = obj_result else { return; };
+        let Ok(obj) = obj_result else {
+            return;
+        };
         assert!(obj.is_empty(), "no Object channels expected: {obj:?}");
     }
 
