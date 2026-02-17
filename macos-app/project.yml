@@ -48,6 +48,43 @@ targets:
       - package: AWMKit
         product: AWMKit
 
+    preBuildScripts:
+      - name: Build Rust Core (ffi,bundled,app)
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eu
+          if [ -x /opt/homebrew/bin/brew ]; then
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+          elif [ -x /usr/local/bin/brew ]; then
+            eval "$(/usr/local/bin/brew shellenv)"
+          fi
+          if ! command -v cargo >/dev/null 2>&1; then
+            if [ -f "$HOME/.cargo/env" ]; then
+              . "$HOME/.cargo/env"
+            fi
+          fi
+          if ! command -v cargo >/dev/null 2>&1; then
+            echo "error: cargo not found. Install Rust toolchain first."
+            exit 1
+          fi
+          if command -v brew >/dev/null 2>&1; then
+            FF_PREFIX="$(brew --prefix ffmpeg 2>/dev/null || true)"
+            if [ -n "${FF_PREFIX}" ] && [ -d "${FF_PREFIX}/lib/pkgconfig" ]; then
+              export PKG_CONFIG_PATH="${FF_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+              export LIBRARY_PATH="${FF_PREFIX}/lib:${LIBRARY_PATH:-}"
+              export CPATH="${FF_PREFIX}/include:${CPATH:-}"
+            fi
+          fi
+          if ! command -v pkg-config >/dev/null 2>&1 || ! pkg-config --exists libavutil libavformat libavcodec libavfilter libswresample; then
+            echo "error: FFmpeg dev packages not found for ffmpeg-sys-next."
+            echo "hint: brew install pkgconf ffmpeg"
+            echo "hint: ensure pkg-config can resolve libav*.pc under \$(brew --prefix ffmpeg)/lib/pkgconfig"
+            exit 1
+          fi
+          cd "$SRCROOT/.."
+          echo "[awmkit] cargo build --release --features ffi,bundled,app"
+          cargo build --release --features ffi,bundled,app
+
     settings:
       base:
         PRODUCT_NAME: AWMKit
