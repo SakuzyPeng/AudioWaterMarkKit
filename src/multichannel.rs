@@ -109,13 +109,7 @@ pub(crate) fn build_smart_route_plan(
             steps: known_surround_steps(layout, lfe_mode),
             warnings: Vec::new(),
         },
-        ChannelLayout::Surround512 if channels == 8 => RoutePlan {
-            layout,
-            channels,
-            steps: known_surround_steps(layout, lfe_mode),
-            warnings: Vec::new(),
-        },
-        ChannelLayout::Surround71 if channels == 8 => RoutePlan {
+        ChannelLayout::Surround512 | ChannelLayout::Surround71 if channels == 8 => RoutePlan {
             layout,
             channels,
             steps: known_surround_steps(layout, lfe_mode),
@@ -581,11 +575,15 @@ impl MultichannelAudio {
         })?;
         buf.extend_from_slice(&ch_u16.to_le_bytes());
         buf.extend_from_slice(&self.sample_rate.to_le_bytes());
-        let byte_rate = self.sample_rate * u32::from(ch_u16) * sample_width as u32;
+        let sample_width_u32 = u32::try_from(sample_width)
+            .map_err(|_| Error::InvalidInput("sample width overflow for WAV header".to_string()))?;
+        let byte_rate = self.sample_rate * u32::from(ch_u16) * sample_width_u32;
         buf.extend_from_slice(&byte_rate.to_le_bytes());
-        let block_align = ch_u16 * sample_width as u16;
+        let sample_width_u16 = u16::try_from(sample_width)
+            .map_err(|_| Error::InvalidInput("sample width overflow for WAV header".to_string()))?;
+        let block_align = ch_u16 * sample_width_u16;
         buf.extend_from_slice(&block_align.to_le_bytes());
-        let bits: u16 = sample_width as u16 * 8;
+        let bits: u16 = sample_width_u16 * 8;
         buf.extend_from_slice(&bits.to_le_bytes());
 
         // data chunk
@@ -606,9 +604,10 @@ impl MultichannelAudio {
                     }
                     SampleFormat::Int24 => {
                         let s = ch[i];
-                        buf.push((s & 0xFF) as u8);
-                        buf.push(((s >> 8) & 0xFF) as u8);
-                        buf.push(((s >> 16) & 0xFF) as u8);
+                        let le = s.to_le_bytes();
+                        buf.push(le[0]);
+                        buf.push(le[1]);
+                        buf.push(le[2]);
                     }
                     SampleFormat::Int32 => {
                         buf.extend_from_slice(&ch[i].to_le_bytes());

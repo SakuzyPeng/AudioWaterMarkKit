@@ -57,7 +57,7 @@ fn parse_command(args: &[OsString]) -> Result<LauncherCommand, String> {
         return Ok(LauncherCommand::CacheHelp);
     }
 
-    if args.get(1).map_or(true, |value| value != "clean") {
+    if args.get(1).is_none_or(|value| value != "clean") {
         return Err(
             "unknown cache subcommand; supported: awmkit cache clean [--db] --yes".to_string(),
         );

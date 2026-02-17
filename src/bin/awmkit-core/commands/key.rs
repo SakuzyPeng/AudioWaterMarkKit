@@ -439,10 +439,7 @@ pub fn generate_for_active_slot() -> Result<u8> {
 }
 
 fn resolve_slot(store: &KeyStore, slot: Option<u8>) -> Result<u8> {
-    match slot {
-        Some(value) => Ok(value),
-        None => store.active_slot().map_err(CliError::from),
-    }
+    slot.map_or_else(|| store.active_slot().map_err(CliError::from), Ok)
 }
 
 fn reject_slot_conflicts(store: &KeyStore, slot: u8, candidate_key: Option<&[u8]>) -> Result<()> {

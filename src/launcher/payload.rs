@@ -231,7 +231,7 @@ fn core_binary_name() -> &'static str {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn core_binary_name() -> &'static str {
+const fn core_binary_name() -> &'static str {
     "awmkit-core"
 }
 

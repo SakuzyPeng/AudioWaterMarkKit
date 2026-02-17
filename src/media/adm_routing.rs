@@ -69,7 +69,7 @@ const LFE_LABELS: &[&str] = &["LFE1", "LFE2", "LFE", "LFE+000", "RC_LFE"];
 /// - `stream_to_chan`:  `AS_xxxxxxxx` → `AC_xxxxxxxx`
 /// - `chan_to_label`:   `AC_xxxxxxxx` → speakerLabel
 #[derive(Debug, Default)]
-pub(crate) struct AdmMaps {
+pub struct AdmMaps {
     track_to_stream: HashMap<String, String>,
     stream_to_chan: HashMap<String, String>,
     chan_to_label: HashMap<String, String>,
@@ -80,16 +80,16 @@ impl AdmMaps {
     ///
     /// 解析链路：`AT` → `AS` → `AC` → label。
     pub(crate) fn resolve_at_to_label(&self, at_id: &str) -> Option<&str> {
-        let as_id = self.track_to_stream.get(at_id)?;
-        let ac_id = self.stream_to_chan.get(as_id)?;
-        self.chan_to_label.get(ac_id).map(String::as_str)
+        let stream_id = self.track_to_stream.get(at_id)?;
+        let channel_id = self.stream_to_chan.get(stream_id)?;
+        self.chan_to_label.get(channel_id).map(String::as_str)
     }
 }
 
 /// 从 axml 字节流（UTF-8 XML）解析三张 ADM 映射表。
 ///
 /// 遇到解析错误时提前退出，已解析部分仍可用。
-pub(crate) fn parse_adm_maps(xml_bytes: &[u8]) -> AdmMaps {
+pub fn parse_adm_maps(xml_bytes: &[u8]) -> AdmMaps {
     let mut maps = AdmMaps::default();
 
     let mut reader = Reader::from_reader(xml_bytes);
@@ -105,7 +105,7 @@ pub(crate) fn parse_adm_maps(xml_bytes: &[u8]) -> AdmMaps {
 
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+            Ok(Event::Start(ref e) | Event::Empty(ref e)) => {
                 let name_b = e.name();
                 let local_b = name_b.local_name();
                 let local = std::str::from_utf8(local_b.as_ref()).unwrap_or("");
@@ -184,7 +184,7 @@ pub(crate) fn parse_adm_maps(xml_bytes: &[u8]) -> AdmMaps {
 /// 从 XML 元素中提取属性值。
 fn get_attr(e: &quick_xml::events::BytesStart<'_>, attr_name: &str) -> Option<String> {
     e.attributes()
-        .filter_map(|a| a.ok())
+        .filter_map(std::result::Result::ok)
         .find(|a| {
             let key_b = a.key.local_name();
             std::str::from_utf8(key_b.as_ref()).unwrap_or("") == attr_name
@@ -215,7 +215,7 @@ fn strip_track_fmt_suffix(id: &str) -> String {
 /// `channel_labels`: `(channelIndex, speakerLabel)` 列表，**仅包含 Bed 声道**。
 ///
 /// `lfe_mode` 控制 LFE 声道处理方式（Skip / Mono / Pair）。
-pub(crate) fn build_route_plan_from_labels(
+pub fn build_route_plan_from_labels(
     channel_labels: &[(usize, String)],
     lfe_mode: LfeMode,
 ) -> RoutePlan {
@@ -346,7 +346,7 @@ pub(crate) fn build_route_plan_from_labels(
 /// 归一化值 [-1.0, 1.0] 转换后绝对值远低于 i32::MAX，因此阈值仍能
 /// 有效过滤真正静默的 Float32 声道。
 #[must_use]
-pub(crate) fn is_silent(samples: &[i32], format: SampleFormat) -> bool {
+pub fn is_silent(samples: &[i32], format: SampleFormat) -> bool {
     let max_val: i32 = match format {
         SampleFormat::Int16 => 32_767,
         SampleFormat::Int24 => 8_388_607,

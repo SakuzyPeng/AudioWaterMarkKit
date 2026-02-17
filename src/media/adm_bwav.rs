@@ -20,16 +20,17 @@ const CHNA_SIG: [u8; 4] = *b"chna";
 #[cfg(test)]
 const BEXT_SIG: [u8; 4] = *b"bext";
 const U32_MAX_U64: u64 = 0xFFFF_FFFF;
+const CHNA_ENTRY_SIZE: usize = 40;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum WaveContainer {
+pub enum WaveContainer {
     Riff,
     Rf64,
     Bw64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ChunkEntry {
+pub struct ChunkEntry {
     pub id: [u8; 4],
     pub header_offset: u64,
     pub data_offset: u64,
@@ -38,7 +39,7 @@ pub(crate) struct ChunkEntry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct PcmFormat {
+pub struct PcmFormat {
     pub channels: u16,
     pub sample_rate: u32,
     pub bits_per_sample: u16,
@@ -47,7 +48,7 @@ pub(crate) struct PcmFormat {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct ChunkIndex {
+pub struct ChunkIndex {
     pub chunks: Vec<ChunkEntry>,
     pub fmt: PcmFormat,
     pub data_chunk: ChunkEntry,
@@ -72,7 +73,7 @@ impl ChunkIndex {
 /// packFormat ID 含 `_0001`（DirectSpeakers 类型）视为 Bed；
 /// 含 `_0003`（Objects 类型）视为 Object，排除在外。
 /// 若 chna 不存在或解析失败，返回 `None`（调用方应退回全声道路径）。
-pub(crate) fn parse_bed_channel_indices(
+pub fn parse_bed_channel_indices(
     path: &Path,
     index: &ChunkIndex,
 ) -> Result<Option<Vec<usize>>> {
@@ -93,11 +94,10 @@ pub(crate) fn parse_bed_channel_indices(
         .map_err(|e| Error::AdmUnsupported(format!("failed to read chna: {e}")))?;
 
     let num_uids = usize::from(read_u16_le(&payload[2..4])?);
-    const ENTRY_SIZE: usize = 40;
     let mut bed_indices = Vec::new();
     for i in 0..num_uids {
-        let off = 4 + i * ENTRY_SIZE;
-        if off + ENTRY_SIZE > payload.len() {
+        let off = 4 + i * CHNA_ENTRY_SIZE;
+        if off + CHNA_ENTRY_SIZE > payload.len() {
             break;
         }
         let track_num = usize::from(read_u16_le(&payload[off..off + 2])?);
@@ -132,7 +132,7 @@ pub(crate) fn parse_bed_channel_indices(
 /// `chna trackIndex → AT_xxx → (axml) AS_xxx → AC_xxx → speakerLabel`
 ///
 /// 若 chna/axml 缺失、解析失败或没有任何 Bed 声道，返回空 `Vec`。
-pub(crate) fn parse_bed_channel_speaker_labels(
+pub fn parse_bed_channel_speaker_labels(
     path: &Path,
     index: &ChunkIndex,
 ) -> Result<Vec<(usize, String)>> {
@@ -171,12 +171,11 @@ pub(crate) fn parse_bed_channel_speaker_labels(
 
     // ── 解析 chna 条目，提取 Bed 声道 → speakerLabel ──
     let num_uids = usize::from(read_u16_le(&chna_payload[2..4])?);
-    const ENTRY_SIZE: usize = 40;
     let mut result = Vec::new();
 
     for i in 0..num_uids {
-        let off = 4 + i * ENTRY_SIZE;
-        if off + ENTRY_SIZE > chna_payload.len() {
+        let off = 4 + i * CHNA_ENTRY_SIZE;
+        if off + CHNA_ENTRY_SIZE > chna_payload.len() {
             break;
         }
         let track_num = usize::from(read_u16_le(&chna_payload[off..off + 2])?);
@@ -198,9 +197,7 @@ pub(crate) fn parse_bed_channel_speaker_labels(
 
         // AT → speakerLabel（通过 axml 链路）
         let label = maps
-            .resolve_at_to_label(&at_id)
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("?{at_id}?"));
+            .resolve_at_to_label(&at_id).map_or_else(|| format!("?{at_id}?"), str::to_string);
 
         result.push((channel_index, label));
     }
@@ -213,7 +210,7 @@ pub(crate) fn parse_bed_channel_speaker_labels(
 /// packFormatIDRef 含 `_0003`（Objects 类型）视为 Object；
 /// 含 `_0001`（DirectSpeakers）视为 Bed，排除在外。
 /// 若 chna 不存在或无 Object 声道，返回空 Vec。
-pub(crate) fn parse_object_channel_indices(
+pub fn parse_object_channel_indices(
     path: &Path,
     index: &ChunkIndex,
 ) -> Result<Vec<usize>> {
@@ -234,12 +231,11 @@ pub(crate) fn parse_object_channel_indices(
         .map_err(|e| Error::AdmUnsupported(format!("failed to read chna: {e}")))?;
 
     let num_uids = usize::from(read_u16_le(&payload[2..4])?);
-    const ENTRY_SIZE: usize = 40;
     let mut obj_indices = Vec::new();
 
     for i in 0..num_uids {
-        let off = 4 + i * ENTRY_SIZE;
-        if off + ENTRY_SIZE > payload.len() {
+        let off = 4 + i * CHNA_ENTRY_SIZE;
+        if off + CHNA_ENTRY_SIZE > payload.len() {
             break;
         }
         let track_num = usize::from(read_u16_le(&payload[off..off + 2])?);
@@ -272,7 +268,7 @@ fn is_bed_pack_format(pack_fmt: &str) -> bool {
     pack_fmt.contains("_0001") && !pack_fmt.contains("_0003")
 }
 
-pub(crate) fn probe_adm_bwf(path: &Path) -> Result<Option<ChunkIndex>> {
+pub fn probe_adm_bwf(path: &Path) -> Result<Option<ChunkIndex>> {
     let maybe_index = parse_chunk_index(path)?;
     let Some(index) = maybe_index else {
         return Ok(None);
@@ -286,7 +282,7 @@ pub(crate) fn probe_adm_bwf(path: &Path) -> Result<Option<ChunkIndex>> {
     Ok(Some(index))
 }
 
-pub(crate) fn parse_chunk_index(path: &Path) -> Result<Option<ChunkIndex>> {
+pub fn parse_chunk_index(path: &Path) -> Result<Option<ChunkIndex>> {
     let mut file = File::open(path)
         .map_err(|e| Error::AdmUnsupported(format!("failed to open {}: {e}", path.display())))?;
     let file_size = file

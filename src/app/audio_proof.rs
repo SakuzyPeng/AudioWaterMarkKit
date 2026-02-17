@@ -62,7 +62,7 @@ fn build_audio_proof_from_interleaved(
 ) -> Result<AudioProof> {
     let channels_usize = usize::try_from(channels)
         .map_err(|_| AppError::Message("channel count overflow".to_string()))?;
-    if channels_usize == 0 || interleaved.len() % channels_usize != 0 {
+    if channels_usize == 0 || !interleaved.len().is_multiple_of(channels_usize) {
         return Err(AppError::Message(
             "interleaved sample length is not channel-aligned".to_string(),
         ));

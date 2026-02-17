@@ -75,7 +75,7 @@ pub fn run(ctx: &Context, args: &DetectArgs) -> Result<()> {
     };
     if ctx.out.verbose() && !ctx.out.quiet() {
         let parallelism = std::thread::available_parallelism()
-            .map(|value| value.get())
+            .map(std::num::NonZero::get)
             .unwrap_or(1);
         ctx.out.info(format!(
             "[INFO] multichannel route steps use Rayon parallel execution (max workers: {parallelism})"
@@ -341,18 +341,16 @@ impl CloneCheck {
                 format!("likely(score={score}, dur={seconds})")
             }
             "suspect" => {
-                if let Some(reason) = self.reason.as_ref() {
-                    format!("suspect({reason})")
-                } else {
-                    "suspect".to_string()
-                }
+                self.reason.as_ref().map_or_else(
+                    || "suspect".to_string(),
+                    |reason| format!("suspect({reason})"),
+                )
             }
             "unavailable" => {
-                if let Some(reason) = self.reason.as_ref() {
-                    format!("unavailable({reason})")
-                } else {
-                    "unavailable".to_string()
-                }
+                self.reason.as_ref().map_or_else(
+                    || "unavailable".to_string(),
+                    |reason| format!("unavailable({reason})"),
+                )
             }
             other => other.to_string(),
         }

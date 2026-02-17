@@ -24,6 +24,7 @@ pub struct SnrAnalysis {
 }
 
 impl SnrAnalysis {
+    #[must_use] 
     pub fn ok(snr_db: f64) -> Self {
         Self {
             snr_db: Some(snr_db),
@@ -80,7 +81,7 @@ pub fn analyze_snr<P: AsRef<Path>>(input: P, output: P) -> SnrAnalysis {
 
     let mut signal_power = 0.0_f64;
     let mut noise_power = 0.0_f64;
-    let mut count = 0_u64;
+    let mut sample_count = 0.0_f64;
 
     for (input_sample, output_sample) in input_samples[..overlap]
         .iter()
@@ -91,16 +92,15 @@ pub fn analyze_snr<P: AsRef<Path>>(input: P, output: P) -> SnrAnalysis {
         let noise = signal - output_value;
         signal_power += signal * signal;
         noise_power += noise * noise;
-        count = count.saturating_add(1);
+        sample_count += 1.0;
     }
 
-    if count == 0 {
+    if sample_count <= 0.0 {
         return SnrAnalysis::unavailable("empty_audio");
     }
 
-    let count_f64 = count as f64;
-    signal_power /= count_f64;
-    noise_power /= count_f64;
+    signal_power /= sample_count;
+    noise_power /= sample_count;
 
     if !signal_power.is_finite() || !noise_power.is_finite() {
         return SnrAnalysis::error("non_finite_power");
@@ -150,7 +150,7 @@ fn decode_media_to_i16_mono_via_avfilter(path: &Path) -> std::result::Result<Vec
     }
 
     let mut graph = create_audio_normalize_graph(&decoder)?;
-    let mut decoded = ffmpeg::frame::Audio::empty();
+    let mut decoded_frame = ffmpeg::frame::Audio::empty();
     let mut normalized = Vec::<i16>::new();
 
     for (packet_stream, packet) in input_ctx.packets() {
@@ -160,13 +160,23 @@ fn decode_media_to_i16_mono_via_avfilter(path: &Path) -> std::result::Result<Vec
         decoder
             .send_packet(&packet)
             .map_err(|err| format!("decoder_send_packet:{err}"))?;
-        receive_decoded_frames_into_graph(&mut decoder, &mut graph, &mut decoded, &mut normalized)?;
+        receive_decoded_frames_into_graph(
+            &mut decoder,
+            &mut graph,
+            &mut decoded_frame,
+            &mut normalized,
+        )?;
     }
 
     decoder
         .send_eof()
         .map_err(|err| format!("decoder_send_eof:{err}"))?;
-    receive_decoded_frames_into_graph(&mut decoder, &mut graph, &mut decoded, &mut normalized)?;
+    receive_decoded_frames_into_graph(
+        &mut decoder,
+        &mut graph,
+        &mut decoded_frame,
+        &mut normalized,
+    )?;
 
     let mut in_ctx = graph
         .get("in")
@@ -184,26 +194,26 @@ fn decode_media_to_i16_mono_via_avfilter(path: &Path) -> std::result::Result<Vec
 fn receive_decoded_frames_into_graph(
     decoder: &mut ffmpeg::codec::decoder::Audio,
     graph: &mut ffmpeg::filter::Graph,
-    decoded: &mut ffmpeg::frame::Audio,
+    frame: &mut ffmpeg::frame::Audio,
     output: &mut Vec<i16>,
 ) -> std::result::Result<(), String> {
-    while decoder.receive_frame(decoded).is_ok() {
-        let layout = normalize_layout(decoded.channel_layout(), decoded.channels());
-        if decoded.channel_layout().bits() == 0 {
-            decoded.set_channel_layout(layout);
+    while decoder.receive_frame(frame).is_ok() {
+        let layout = normalize_layout(frame.channel_layout(), frame.channels());
+        if frame.channel_layout().bits() == 0 {
+            frame.set_channel_layout(layout);
         }
-        if decoded.rate() == 0 {
-            decoded.set_rate(decoder.rate());
+        if frame.rate() == 0 {
+            frame.set_rate(decoder.rate());
         }
-        let timestamp = decoded.timestamp();
-        decoded.set_pts(timestamp);
+        let timestamp = frame.timestamp();
+        frame.set_pts(timestamp);
 
         let mut in_ctx = graph
             .get("in")
             .ok_or_else(|| "filter_input_not_found".to_string())?;
         in_ctx
             .source()
-            .add(decoded)
+            .add(frame)
             .map_err(|err| format!("filter_add_frame:{err}"))?;
         drain_filtered_samples(graph, output)?;
     }
@@ -299,8 +309,7 @@ fn create_audio_normalize_graph(
         .map_err(|err| format!("graph_add_abuffersink:{err}"))?;
 
     let spec = format!(
-        "aformat=sample_fmts=s16:channel_layouts=mono,aresample={}",
-        SNR_TARGET_SAMPLE_RATE
+        "aformat=sample_fmts=s16:channel_layouts=mono,aresample={SNR_TARGET_SAMPLE_RATE}"
     );
     graph
         .output("in", 0)

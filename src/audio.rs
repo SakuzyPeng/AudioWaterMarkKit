@@ -366,31 +366,28 @@ impl Audio {
             Ok(a) => a,
             Err(Error::InvalidInput(_)) => {
                 // 内存管线：decode → MultichannelAudio，跳过临时文件
-                match decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel) {
-                    Ok(a) => {
-                        // 单声道或立体声：字节管线直接完成，无需继续路由
-                        if a.num_channels() <= 2 {
-                            let wav_bytes = a.to_wav_bytes()?;
-                            let out_bytes =
-                                run_audiowmark_add_bytes(self, wav_bytes, &bytes_to_hex(message))?;
-                            return MultichannelAudio::from_wav_bytes(&out_bytes)?.to_wav(output);
-                        }
-                        a
+                if let Ok(a) = decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel) {
+                    // 单声道或立体声：字节管线直接完成，无需继续路由
+                    if a.num_channels() <= 2 {
+                        let wav_bytes = a.to_wav_bytes()?;
+                        let out_bytes =
+                            run_audiowmark_add_bytes(self, wav_bytes, &bytes_to_hex(message))?;
+                        return MultichannelAudio::from_wav_bytes(&out_bytes)?.to_wav(output);
                     }
-                    Err(_) => {
-                        // 兜底：传统临时文件路径
-                        let prepared =
-                            prepare_input_for_audiowmark(input, "embed_multichannel_input")?;
-                        match MultichannelAudio::from_file(&prepared.path) {
-                            Ok(a) => {
-                                prepared_fallback = Some(prepared);
-                                a
-                            }
-                            Err(Error::InvalidInput(_)) => {
-                                return self.embed(prepared.path.as_path(), output, message);
-                            }
-                            Err(e) => return Err(e),
+                    a
+                } else {
+                    // 兜底：传统临时文件路径
+                    let prepared =
+                        prepare_input_for_audiowmark(input, "embed_multichannel_input")?;
+                    match MultichannelAudio::from_file(&prepared.path) {
+                        Ok(a) => {
+                            prepared_fallback = Some(prepared);
+                            a
                         }
+                        Err(Error::InvalidInput(_)) => {
+                            return self.embed(prepared.path.as_path(), output, message);
+                        }
+                        Err(e) => return Err(e),
                     }
                 }
             }
@@ -524,7 +521,7 @@ impl Audio {
             } else {
                 (full_audio, layout)
             };
-            return detect_multichannel_from_audio(self, bed_audio, None, input, bed_layout);
+            return detect_multichannel_from_audio(self, &bed_audio, None, input, bed_layout);
         }
 
         // 加载多声道音频以检测声道数。
@@ -536,30 +533,27 @@ impl Audio {
                 Ok(a) => (a, Some(input.to_path_buf())),
                 Err(Error::InvalidInput(_)) => {
                     // 内存管线：decode → MultichannelAudio，跳过临时文件
-                    match decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel) {
-                        Ok(a) => (a, None),
-                        Err(_) => {
-                            // 兜底：传统临时文件路径
-                            let prepared =
-                                prepare_input_for_audiowmark(input, "detect_multichannel_input")?;
-                            match MultichannelAudio::from_file(&prepared.path) {
-                                Ok(a) => (a, Some(prepared.path.clone())),
-                                Err(Error::InvalidInput(_)) => {
-                                    let result = self.detect(prepared.path.as_path())?;
-                                    return Ok(MultichannelDetectResult {
-                                        pairs: vec![(0, "FL+FR".to_string(), result.clone())],
-                                        best: result,
-                                    });
-                                }
-                                Err(e) => return Err(e),
+                    if let Ok(a) = decode_media_to_pcm_i32(input).and_then(decoded_pcm_into_multichannel) { (a, None) } else {
+                        // 兜底：传统临时文件路径
+                        let prepared =
+                            prepare_input_for_audiowmark(input, "detect_multichannel_input")?;
+                        match MultichannelAudio::from_file(&prepared.path) {
+                            Ok(a) => (a, Some(prepared.path)),
+                            Err(Error::InvalidInput(_)) => {
+                                let result = self.detect(prepared.path.as_path())?;
+                                return Ok(MultichannelDetectResult {
+                                    pairs: vec![(0, "FL+FR".to_string(), result.clone())],
+                                    best: result,
+                                });
                             }
+                            Err(e) => return Err(e),
                         }
                     }
                 }
                 Err(e) => return Err(e),
             };
 
-        detect_multichannel_from_audio(self, audio, stereo_file.as_deref(), input, layout)
+        detect_multichannel_from_audio(self, &audio, stereo_file.as_deref(), input, layout)
     }
 
     /// 便捷方法：多声道嵌入 (使用 Tag)
@@ -1369,7 +1363,7 @@ fn normalize_wav_pipe_file_in_place(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn should_fallback_pipe_error(err: &Error) -> bool {
+const fn should_fallback_pipe_error(err: &Error) -> bool {
     matches!(err, Error::AudiowmarkExec(_) | Error::Io(_))
 }
 
@@ -1394,8 +1388,7 @@ fn validate_layout_channels(layout: ChannelLayout, source_channels: usize) -> Re
     let layout_channels = usize::from(layout.channels());
     if layout_channels != source_channels {
         return Err(Error::InvalidInput(format!(
-            "channel layout mismatch: layout={}ch, source={}ch",
-            layout_channels, source_channels
+            "channel layout mismatch: layout={layout_channels}ch, source={source_channels}ch"
         )));
     }
     Ok(())
@@ -1564,7 +1557,7 @@ where
 #[cfg(feature = "multichannel")]
 fn detect_multichannel_from_audio(
     audio_engine: &Audio,
-    audio: MultichannelAudio,
+    audio: &MultichannelAudio,
     stereo_file: Option<&Path>,
     input_for_log: &Path,
     layout: Option<ChannelLayout>,
@@ -1603,7 +1596,7 @@ fn detect_multichannel_from_audio(
         .collect();
 
     let step_results = collect_detect_step_results_with_early_exit(&detect_steps, |step| {
-        run_detect_step_task(audio_engine, &audio, step)
+        run_detect_step_task(audio_engine, audio, step)
     })?;
 
     Ok(finalize_detect_step_results(step_results))
@@ -1936,7 +1929,7 @@ fn decode_media_to_wav_pipe(input: &Path, writer: &mut dyn Write) -> Result<()> 
 pub fn media_capabilities() -> AudioMediaCapabilities {
     #[cfg(feature = "ffmpeg-decode")]
     {
-        return media::media_capabilities();
+        media::media_capabilities()
     }
 
     #[cfg(not(feature = "ffmpeg-decode"))]
@@ -1976,7 +1969,7 @@ fn decoded_pcm_into_multichannel(decoded: DecodedPcm) -> Result<MultichannelAudi
         }
     };
     let total = decoded.samples.len();
-    if total % num_channels != 0 {
+    if !total.is_multiple_of(num_channels) {
         return Err(Error::InvalidInput(format!(
             "decoded sample count {total} is not divisible by channel count {num_channels}"
         )));

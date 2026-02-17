@@ -15,7 +15,7 @@ use super::adm_bwav::{
 };
 use super::adm_routing::{build_route_plan_from_labels, is_silent};
 
-pub(crate) fn embed_adm_multichannel(
+pub fn embed_adm_multichannel(
     audio_engine: &Audio,
     input: &Path,
     output: &Path,
@@ -41,7 +41,9 @@ pub(crate) fn embed_adm_multichannel(
         Ok(labels) if !labels.is_empty() => {
             // 检查是否全部标签都能被识别（无 `?AT_xxx?` 格式的未知标签）
             let all_known = labels.iter().all(|(_, l)| !l.starts_with('?'));
-            if !all_known {
+            if all_known {
+                Some(labels)
+            } else {
                 let unknown: Vec<&str> = labels
                     .iter()
                     .filter(|(_, l)| l.starts_with('?'))
@@ -53,8 +55,6 @@ pub(crate) fn embed_adm_multichannel(
                      falling back to channel-count-based routing"
                 );
                 None
-            } else {
-                Some(labels)
             }
         }
         Ok(_) => {
@@ -88,10 +88,10 @@ pub(crate) fn embed_adm_multichannel(
         // Step 1：嵌入 Bed 声道
         let mut audio = embed_adm_bed_only(
             audio_engine,
-            source_audio,
+            &source_audio,
             message,
             layout,
-            &bed_indices,
+            bed_indices.as_deref(),
             bed_speaker_labels.as_deref(),
         )?;
         // Step 2：嵌入 Object 声道（每个真单声道，静默跳过）
@@ -100,7 +100,7 @@ pub(crate) fn embed_adm_multichannel(
     })
 }
 
-pub(crate) fn rewrite_adm_with_transform<F>(
+pub fn rewrite_adm_with_transform<F>(
     input: &Path,
     output: &Path,
     index: &ChunkIndex,
@@ -171,10 +171,10 @@ where
 ///   `None` 时退回按数量推断路由。两者均为 `None`/空 时走全声道路径。
 fn embed_adm_bed_only(
     audio_engine: &Audio,
-    source_audio: MultichannelAudio,
+    source_audio: &MultichannelAudio,
     message: &[u8; MESSAGE_LEN],
     layout: Option<ChannelLayout>,
-    bed_indices: &Option<Vec<usize>>,
+    bed_indices: Option<&[usize]>,
     speaker_labels: Option<&[(usize, String)]>,
 ) -> Result<MultichannelAudio> {
     // ── 路径 A：axml 位置感知路由 ──
@@ -197,11 +197,11 @@ fn embed_adm_bed_only(
     }
 
     let bed_layout = layout.or_else(|| ChannelLayout::from_channels_opt(indices.len()));
-    let bed_audio = extract_channels(&source_audio, indices)?;
+    let bed_audio = extract_channels(source_audio, indices)?;
     let watermarked_bed =
-        embed_pairs_via_audiowmark(audio_engine, bed_audio, message, bed_layout)?;
+        embed_pairs_via_audiowmark(audio_engine, &bed_audio, message, bed_layout)?;
 
-    let mut result = source_audio;
+    let mut result = source_audio.clone();
     for (bed_pos, &ch_idx) in indices.iter().enumerate() {
         let samples = watermarked_bed
             .channel_samples(bed_pos)
@@ -223,7 +223,7 @@ fn embed_adm_bed_only(
 /// `speaker_labels`: `(channelIndex, speakerLabel)` 列表，仅含 Bed 声道。
 fn embed_bed_by_speaker_labels(
     audio_engine: &Audio,
-    source_audio: MultichannelAudio,
+    source_audio: &MultichannelAudio,
     message: &[u8; MESSAGE_LEN],
     speaker_labels: &[(usize, String)],
 ) -> Result<MultichannelAudio> {
@@ -270,7 +270,7 @@ fn embed_bed_by_speaker_labels(
                 .map_err(|e| {
                     Error::AdmPreserveFailed(format!("mono audio build error: {e}"))
                 })?;
-                match embed_single_audio_via_audiowmark(audio_engine, mono_audio, message) {
+                match embed_single_audio_via_audiowmark(audio_engine, &mono_audio, message) {
                     Ok(processed) => {
                         let samples = processed.channel_samples(0)?.to_vec();
                         result.replace_channel_samples(*ch, samples).map_err(|e| {
@@ -299,7 +299,7 @@ fn embed_bed_by_speaker_labels(
                 .map_err(|e| {
                     Error::AdmPreserveFailed(format!("stereo audio build error: {e}"))
                 })?;
-                match embed_single_audio_via_audiowmark(audio_engine, stereo, message) {
+                match embed_single_audio_via_audiowmark(audio_engine, &stereo, message) {
                     Ok(processed) => {
                         let l_samples = processed.channel_samples(0)?.to_vec();
                         let r_samples = processed.channel_samples(1)?.to_vec();
@@ -369,7 +369,7 @@ fn embed_object_channels_into_audio(
         .map_err(|e| {
             Error::AdmPreserveFailed(format!("Object ch{obj_idx} mono build error: {e}"))
         })?;
-        match embed_single_audio_via_audiowmark(audio_engine, mono_audio, message) {
+        match embed_single_audio_via_audiowmark(audio_engine, &mono_audio, message) {
             Ok(processed) => {
                 let new_samples = processed
                     .channel_samples(0)
@@ -399,7 +399,7 @@ fn embed_object_channels_into_audio(
 /// 写临时文件 → audiowmark → 读回。
 fn embed_single_audio_via_audiowmark(
     audio_engine: &Audio,
-    audio: MultichannelAudio,
+    audio: &MultichannelAudio,
     message: &[u8; MESSAGE_LEN],
 ) -> Result<MultichannelAudio> {
     let temp_dir = create_temp_dir("awmkit_adm_step")?;
@@ -425,7 +425,7 @@ fn embed_single_audio_via_audiowmark(
 }
 
 /// 从 MultichannelAudio 按索引提取子集声道（供外部模块调用）。
-pub(crate) fn extract_bed_channels(
+pub fn extract_bed_channels(
     audio: &MultichannelAudio,
     indices: &[usize],
 ) -> Result<MultichannelAudio> {
@@ -444,7 +444,7 @@ fn extract_channels(audio: &MultichannelAudio, indices: &[usize]) -> Result<Mult
 
 fn embed_pairs_via_audiowmark(
     audio_engine: &Audio,
-    source_audio: MultichannelAudio,
+    source_audio: &MultichannelAudio,
     message: &[u8; MESSAGE_LEN],
     layout: Option<ChannelLayout>,
 ) -> Result<MultichannelAudio> {
@@ -516,7 +516,7 @@ fn validate_audio_shape(original: &MultichannelAudio, processed: &MultichannelAu
     Ok(())
 }
 
-pub(crate) fn decode_pcm_audio(path: &Path, index: &ChunkIndex) -> Result<MultichannelAudio> {
+pub fn decode_pcm_audio(path: &Path, index: &ChunkIndex) -> Result<MultichannelAudio> {
     let data_size = usize::try_from(index.data_chunk.size)
         .map_err(|_| Error::AdmUnsupported("data chunk too large to decode".to_string()))?;
     let mut file = File::open(path).map_err(|e| {
@@ -576,8 +576,7 @@ fn encode_pcm_audio_data(audio: &MultichannelAudio, fmt: PcmFormat) -> Result<Ve
     let expected_channels = usize::from(fmt.channels);
     if channels != expected_channels {
         return Err(Error::AdmPreserveFailed(format!(
-            "channel count mismatch for PCM encode: {} != {}",
-            channels, expected_channels
+            "channel count mismatch for PCM encode: {channels} != {expected_channels}"
         )));
     }
 
@@ -665,11 +664,8 @@ fn encode_sample(data: &mut [u8], base: usize, bits: u16, sample: i32) -> Result
         }
         24 => {
             let clamped = sample.clamp(-8_388_608, 8_388_607);
-            let bytes = [
-                (clamped & 0xFF) as u8,
-                ((clamped >> 8) & 0xFF) as u8,
-                ((clamped >> 16) & 0xFF) as u8,
-            ];
+            let le = clamped.to_le_bytes();
+            let bytes = [le[0], le[1], le[2]];
             write_sample_bytes(data, base, &bytes)
         }
         32 => write_sample_bytes(data, base, &sample.to_le_bytes()),

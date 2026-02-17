@@ -8,7 +8,7 @@ pub fn run_core(runtime: &PreparedRuntime, args: &[OsString]) -> Result<i32, Str
     command.stdin(Stdio::inherit());
     command.stdout(Stdio::inherit());
     command.stderr(Stdio::inherit());
-    apply_runtime_env(&mut command, runtime)?;
+    apply_runtime_env(&mut command, runtime);
 
     let status = command.status().map_err(|e| {
         format!(
@@ -21,7 +21,7 @@ pub fn run_core(runtime: &PreparedRuntime, args: &[OsString]) -> Result<i32, Str
 }
 
 #[cfg(target_os = "windows")]
-fn apply_runtime_env(command: &mut Command, runtime: &PreparedRuntime) -> Result<(), String> {
+fn apply_runtime_env(command: &mut Command, runtime: &PreparedRuntime) {
     let system_root =
         std::env::var_os("SystemRoot").unwrap_or_else(|| OsString::from(r"C:\Windows"));
     let mut path_value = OsString::new();
@@ -36,12 +36,10 @@ fn apply_runtime_env(command: &mut Command, runtime: &PreparedRuntime) -> Result
     path_value.push(system_root);
     command.env("PATH", path_value);
     command.env("AWMKIT_RUNTIME_STRICT", "1");
-    Ok(())
 }
 
 #[cfg(not(target_os = "windows"))]
-fn apply_runtime_env(command: &mut Command, runtime: &PreparedRuntime) -> Result<(), String> {
+fn apply_runtime_env(command: &mut Command, runtime: &PreparedRuntime) {
     command.env("DYLD_LIBRARY_PATH", runtime.runtime_dir.as_os_str());
     command.env("AWMKIT_RUNTIME_STRICT", "1");
-    Ok(())
 }

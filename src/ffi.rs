@@ -141,15 +141,12 @@ pub unsafe extern "C" fn awm_tag_new(identity: *const c_char, out: *mut c_char) 
         return AWMError::InvalidUtf8 as i32;
     };
 
-    match Tag::new(identity_str) {
-        Ok(tag) => {
-            let tag_str = tag.as_str();
-            ptr::copy_nonoverlapping(tag_str.as_ptr(), out.cast::<u8>(), 8);
-            *out.add(8) = 0; // null terminator
-            AWMError::Success as i32
-        }
-        Err(_) => AWMError::InvalidTag as i32,
-    }
+    Tag::new(identity_str).map_or(AWMError::InvalidTag as i32, |tag| {
+        let tag_str = tag.as_str();
+        ptr::copy_nonoverlapping(tag_str.as_ptr(), out.cast::<u8>(), 8);
+        *out.add(8) = 0; // null terminator
+        AWMError::Success as i32
+    })
 }
 
 /// 验证 Tag 校验位
@@ -184,15 +181,12 @@ pub unsafe extern "C" fn awm_tag_identity(tag: *const c_char, out: *mut c_char) 
         return AWMError::InvalidUtf8 as i32;
     };
 
-    match Tag::parse(tag_str) {
-        Ok(t) => {
-            let identity = t.identity();
-            ptr::copy_nonoverlapping(identity.as_ptr(), out.cast::<u8>(), identity.len());
-            *out.add(identity.len()) = 0;
-            AWMError::Success as i32
-        }
-        Err(_) => AWMError::InvalidTag as i32,
-    }
+    Tag::parse(tag_str).map_or(AWMError::InvalidTag as i32, |tag_value| {
+        let identity = tag_value.identity();
+        ptr::copy_nonoverlapping(identity.as_ptr(), out.cast::<u8>(), identity.len());
+        *out.add(identity.len()) = 0;
+        AWMError::Success as i32
+    })
 }
 
 /// 编码消息
@@ -223,13 +217,10 @@ pub unsafe extern "C" fn awm_message_encode(
 
     let key_slice = slice::from_raw_parts(key, key_len);
 
-    match message::encode(version, &tag_obj, key_slice) {
-        Ok(msg) => {
-            ptr::copy_nonoverlapping(msg.as_ptr(), out, MESSAGE_LEN);
-            AWMError::Success as i32
-        }
-        Err(_) => AWMError::InvalidTag as i32,
-    }
+    message::encode(version, &tag_obj, key_slice).map_or(AWMError::InvalidTag as i32, |msg| {
+        ptr::copy_nonoverlapping(msg.as_ptr(), out, MESSAGE_LEN);
+        AWMError::Success as i32
+    })
 }
 
 /// 编码消息（指定槽位）
@@ -261,13 +252,13 @@ pub unsafe extern "C" fn awm_message_encode_with_slot(
 
     let key_slice = slice::from_raw_parts(key, key_len);
 
-    match message::encode_with_slot(version, &tag_obj, key_slice, key_slot) {
-        Ok(msg) => {
+    message::encode_with_slot(version, &tag_obj, key_slice, key_slot).map_or(
+        AWMError::InvalidTag as i32,
+        |msg| {
             ptr::copy_nonoverlapping(msg.as_ptr(), out, MESSAGE_LEN);
             AWMError::Success as i32
-        }
-        Err(_) => AWMError::InvalidTag as i32,
-    }
+        },
+    )
 }
 
 /// 编码消息（指定时间戳）
@@ -299,13 +290,13 @@ pub unsafe extern "C" fn awm_message_encode_with_timestamp(
 
     let key_slice = slice::from_raw_parts(key, key_len);
 
-    match message::encode_with_timestamp(version, &tag_obj, key_slice, timestamp_minutes) {
-        Ok(msg) => {
+    message::encode_with_timestamp(version, &tag_obj, key_slice, timestamp_minutes).map_or(
+        AWMError::InvalidTag as i32,
+        |msg| {
             ptr::copy_nonoverlapping(msg.as_ptr(), out, MESSAGE_LEN);
             AWMError::Success as i32
-        }
-        Err(_) => AWMError::InvalidTag as i32,
-    }
+        },
+    )
 }
 
 /// 解码消息
@@ -536,10 +527,9 @@ impl AWMEmbedEvidenceResult {
 #[no_mangle]
 pub extern "C" fn awm_audio_new() -> *mut AWMAudioHandle {
     ensure_sigpipe_ignored_once();
-    match Audio::new() {
-        Ok(audio) => Box::into_raw(Box::new(AWMAudioHandle { inner: audio })),
-        Err(_) => ptr::null_mut(),
-    }
+    Audio::new().map_or(ptr::null_mut(), |audio| {
+        Box::into_raw(Box::new(AWMAudioHandle { inner: audio }))
+    })
 }
 
 /// 创建 Audio 实例（指定 audiowmark 路径）
@@ -560,10 +550,9 @@ pub unsafe extern "C" fn awm_audio_new_with_binary(
         return ptr::null_mut();
     };
 
-    match Audio::with_binary(path_str) {
-        Ok(audio) => Box::into_raw(Box::new(AWMAudioHandle { inner: audio })),
-        Err(_) => ptr::null_mut(),
-    }
+    Audio::with_binary(path_str).map_or(ptr::null_mut(), |audio| {
+        Box::into_raw(Box::new(AWMAudioHandle { inner: audio }))
+    })
 }
 
 /// 释放 Audio 实例
@@ -923,22 +912,18 @@ pub unsafe extern "C" fn awm_evidence_record_embed_file_ex(
     };
 
     #[cfg(feature = "app")]
-    let snr = match catch_unwind(AssertUnwindSafe(|| {
-        analyze_snr(input_path_str_raw, output_path_str_raw)
-    })) {
-        Ok(value) => value,
-        Err(_) => crate::app::SnrAnalysis {
+    let snr = catch_unwind(AssertUnwindSafe(|| analyze_snr(input_path_str_raw, output_path_str_raw)))
+        .unwrap_or_else(|_| crate::app::SnrAnalysis {
             snr_db: None,
             status: FFI_SNR_STATUS_UNAVAILABLE.to_string(),
             detail: Some("snr_panic".to_string()),
-        },
-    };
+        });
     #[cfg(feature = "app")]
     let snr_db = snr.snr_db;
     #[cfg(feature = "app")]
     let snr_status = snr.status.clone();
     #[cfg(feature = "app")]
-    let snr_detail = snr.detail.clone();
+    let snr_detail = snr.detail;
 
     #[cfg(not(feature = "app"))]
     let snr_db = None;
@@ -1005,10 +990,9 @@ unsafe fn record_evidence_file_impl(
             Err(_) => return AWMError::InvalidTag as i32,
         };
 
-        let proof = match catch_unwind(AssertUnwindSafe(|| build_audio_proof(file_path_str))) {
-            Ok(Ok(proof)) => proof,
-            Ok(Err(_)) => return AWMError::AudiowmarkExec as i32,
-            Err(_) => return AWMError::AudiowmarkExec as i32,
+        let Ok(Ok(proof)) = catch_unwind(AssertUnwindSafe(|| build_audio_proof(file_path_str)))
+        else {
+            return AWMError::AudiowmarkExec as i32;
         };
         let Ok(store) = EvidenceStore::load() else {
             return AWMError::AudiowmarkExec as i32;
@@ -1310,13 +1294,12 @@ pub unsafe extern "C" fn awm_db_tag_save_if_absent(
         let Ok(mut store) = TagStore::load() else {
             return AWMError::AudiowmarkExec as i32;
         };
-        match store.save_if_absent(username_str, &parsed_tag) {
-            Ok(inserted) => {
+        store
+            .save_if_absent(username_str, &parsed_tag)
+            .map_or(AWMError::AudiowmarkExec as i32, |inserted| {
                 *out_inserted = inserted;
                 AWMError::Success as i32
-            }
-            Err(_) => AWMError::AudiowmarkExec as i32,
-        }
+            })
     }
 
     #[cfg(not(feature = "app"))]
@@ -1353,13 +1336,12 @@ pub unsafe extern "C" fn awm_db_tag_remove_json(
         let Ok(mut store) = TagStore::load() else {
             return AWMError::AudiowmarkExec as i32;
         };
-        match store.remove_usernames(&usernames) {
-            Ok(deleted) => {
+        store
+            .remove_usernames(&usernames)
+            .map_or(AWMError::AudiowmarkExec as i32, |deleted| {
                 *out_deleted = u32::try_from(deleted).unwrap_or(u32::MAX);
                 AWMError::Success as i32
-            }
-            Err(_) => AWMError::AudiowmarkExec as i32,
-        }
+            })
     }
 
     #[cfg(not(feature = "app"))]
@@ -1546,10 +1528,7 @@ pub unsafe extern "C" fn awm_audio_media_capabilities(
 pub extern "C" fn awm_key_exists() -> bool {
     #[cfg(feature = "app")]
     {
-        match crate::app::KeyStore::new() {
-            Ok(ks) => ks.exists(),
-            Err(_) => false,
-        }
+        crate::app::KeyStore::new().is_ok_and(|ks| ks.exists())
     }
     #[cfg(not(feature = "app"))]
     {
@@ -1612,13 +1591,12 @@ pub unsafe extern "C" fn awm_key_load(out_key: *mut u8, out_key_cap: usize) -> i
         if out_key_cap < crate::app::KEY_LEN {
             return AWMError::InvalidMessageLength as i32;
         }
-        match crate::app::KeyStore::new().and_then(|ks| ks.load()) {
-            Ok(key) => {
+        crate::app::KeyStore::new()
+            .and_then(|ks| ks.load())
+            .map_or(AWMError::AudiowmarkExec as i32, |key| {
                 ptr::copy_nonoverlapping(key.as_ptr(), out_key, key.len());
                 AWMError::Success as i32
-            }
-            Err(_) => AWMError::AudiowmarkExec as i32,
-        }
+            })
     }
 
     #[cfg(not(feature = "app"))]
@@ -1684,13 +1662,13 @@ pub unsafe extern "C" fn awm_key_active_slot_get(out_slot: *mut u8) -> i32 {
 
     #[cfg(feature = "app")]
     {
-        match crate::app::KeyStore::new().and_then(|ks| ks.active_slot()) {
-            Ok(slot) => {
+        crate::app::KeyStore::new().and_then(|ks| ks.active_slot()).map_or(
+            AWMError::AudiowmarkExec as i32,
+            |slot| {
                 *out_slot = slot;
                 AWMError::Success as i32
-            }
-            Err(_) => AWMError::AudiowmarkExec as i32,
-        }
+            },
+        )
     }
 
     #[cfg(not(feature = "app"))]
@@ -1773,10 +1751,7 @@ pub extern "C" fn awm_key_slot_label_clear(slot: u8) -> i32 {
 pub extern "C" fn awm_key_exists_slot(slot: u8) -> bool {
     #[cfg(feature = "app")]
     {
-        match crate::app::KeyStore::new() {
-            Ok(ks) => ks.exists_slot(slot),
-            Err(_) => false,
-        }
+        crate::app::KeyStore::new().is_ok_and(|ks| ks.exists_slot(slot))
     }
     #[cfg(not(feature = "app"))]
     {
@@ -1842,13 +1817,12 @@ pub unsafe extern "C" fn awm_key_delete_slot(slot: u8, out_new_active_slot: *mut
 
     #[cfg(feature = "app")]
     {
-        match crate::app::KeyStore::new().and_then(|ks| ks.delete_slot_and_reconcile_active(slot)) {
-            Ok(new_active_slot) => {
+        crate::app::KeyStore::new()
+            .and_then(|ks| ks.delete_slot_and_reconcile_active(slot))
+            .map_or(AWMError::AudiowmarkExec as i32, |new_active_slot| {
                 *out_new_active_slot = new_active_slot;
                 AWMError::Success as i32
-            }
-            Err(_) => AWMError::AudiowmarkExec as i32,
-        }
+            })
     }
     #[cfg(not(feature = "app"))]
     {
@@ -1937,15 +1911,12 @@ pub unsafe extern "C" fn awm_tag_suggest(username: *const c_char, out_tag: *mut 
 
     #[cfg(feature = "app")]
     {
-        match crate::app::TagStore::suggest(username_str) {
-            Ok(tag) => {
-                let tag_str = tag.as_str();
-                ptr::copy_nonoverlapping(tag_str.as_ptr(), out_tag.cast::<u8>(), 8);
-                *out_tag.add(8) = 0;
-                AWMError::Success as i32
-            }
-            Err(_) => AWMError::InvalidTag as i32,
-        }
+        crate::app::TagStore::suggest(username_str).map_or(AWMError::InvalidTag as i32, |tag| {
+            let tag_str = tag.as_str();
+            ptr::copy_nonoverlapping(tag_str.as_ptr(), out_tag.cast::<u8>(), 8);
+            *out_tag.add(8) = 0;
+            AWMError::Success as i32
+        })
     }
 
     #[cfg(not(feature = "app"))]

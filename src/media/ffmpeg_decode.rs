@@ -24,7 +24,7 @@ struct DecodeContext {
     resampler: ffmpeg::software::resampling::Context,
 }
 
-pub(crate) fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
+pub fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
     let mut context = open_decode_context(input)?;
     let mut samples = Vec::<i32>::new();
     let copied = decode_with_sink(&mut context, |bytes| {
@@ -46,7 +46,7 @@ pub(crate) fn decode_media_to_pcm_i32(input: &Path) -> Result<DecodedPcm> {
     })
 }
 
-pub(crate) fn decode_media_to_wav_pipe(input: &Path, writer: &mut dyn Write) -> Result<()> {
+pub fn decode_media_to_wav_pipe(input: &Path, writer: &mut dyn Write) -> Result<()> {
     let mut context = open_decode_context(input)?;
     write_wav_pipe_header(writer, context.sample_rate, context.channels)?;
     let copied = decode_with_sink(&mut context, |bytes| {
@@ -64,7 +64,7 @@ pub(crate) fn decode_media_to_wav_pipe(input: &Path, writer: &mut dyn Write) -> 
     Ok(())
 }
 
-pub(crate) fn media_capabilities() -> AudioMediaCapabilities {
+pub fn media_capabilities() -> AudioMediaCapabilities {
     if ensure_ffmpeg_initialized().is_err() {
         return AudioMediaCapabilities {
             backend: "ffmpeg",
@@ -144,7 +144,7 @@ where
     F: FnMut(&[u8]) -> Result<()>,
 {
     let mut total_bytes = 0usize;
-    let mut decoded = ffmpeg::frame::Audio::empty();
+    let mut decoded_frame = ffmpeg::frame::Audio::empty();
 
     {
         let input_ctx = &mut context.input_ctx;
@@ -165,7 +165,7 @@ where
             receive_decoded_frames(
                 decoder,
                 resampler,
-                &mut decoded,
+                &mut decoded_frame,
                 output_layout,
                 output_rate,
                 &mut total_bytes,
@@ -179,7 +179,7 @@ where
         receive_decoded_frames(
             decoder,
             resampler,
-            &mut decoded,
+            &mut decoded_frame,
             output_layout,
             output_rate,
             &mut total_bytes,
@@ -221,7 +221,7 @@ fn map_open_error(input: &Path, detail: &str) -> Error {
 fn receive_decoded_frames<F>(
     decoder: &mut ffmpeg::codec::decoder::Audio,
     resampler: &mut ffmpeg::software::resampling::Context,
-    decoded: &mut ffmpeg::frame::Audio,
+    frame: &mut ffmpeg::frame::Audio,
     output_layout: ffmpeg::ChannelLayout,
     output_rate: u32,
     total_bytes: &mut usize,
@@ -230,10 +230,10 @@ fn receive_decoded_frames<F>(
 where
     F: FnMut(&[u8]) -> Result<()>,
 {
-    while decoder.receive_frame(decoded).is_ok() {
+    while decoder.receive_frame(frame).is_ok() {
         resample_frame(
             resampler,
-            decoded,
+            frame,
             output_layout,
             output_rate,
             total_bytes,
