@@ -248,93 +248,55 @@ struct DetectView: View {
                 )
 
                 tripleFieldRow(
-                    (
-                        label: l("状态", "Status"),
-                        value: detailValue(from: displayedDetectRecord?.status),
-                        valueColor: fieldValueColor(for: .status, record: displayedDetectRecord),
-                        monospaced: true
-                    ),
-                    (
-                        label: l("匹配标记", "Match found"),
-                        value: detailValue(from: displayedDetectRecord?.matchFound.map { $0 ? "true" : "false" }),
-                        valueColor: fieldValueColor(for: .matchFound, record: displayedDetectRecord),
-                        monospaced: true
-                    ),
-                    (
-                        label: l("检测模式", "Pattern"),
-                        value: detailValue(from: displayedDetectRecord?.pattern),
-                        valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
-                        monospaced: true
-                    )
+                    FieldCell(label: l("状态", "Status"),
+                              value: detailValue(from: displayedDetectRecord?.status),
+                              valueColor: fieldValueColor(for: .status, record: displayedDetectRecord)),
+                    FieldCell(label: l("匹配标记", "Match found"),
+                              value: detailValue(from: displayedDetectRecord?.matchFound.map { $0 ? "true" : "false" }),
+                              valueColor: fieldValueColor(for: .matchFound, record: displayedDetectRecord)),
+                    FieldCell(label: l("检测模式", "Pattern"),
+                              value: detailValue(from: displayedDetectRecord?.pattern),
+                              valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord))
                 )
 
                 tripleFieldRow(
-                    (
-                        label: l("标签", "Tag"),
-                        value: detailValue(from: displayedDetectRecord?.tag),
-                        valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
-                        monospaced: true
-                    ),
-                    (
-                        label: l("身份", "Identity"),
-                        value: detailValue(from: displayedDetectRecord?.identity),
-                        valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
-                        monospaced: true
-                    ),
-                    (
-                        label: l("版本", "Version"),
-                        value: detailValue(from: displayedDetectRecord?.version.map { String($0) }),
-                        valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
-                        monospaced: true
-                    )
+                    FieldCell(label: l("标签", "Tag"),
+                              value: detailValue(from: displayedDetectRecord?.tag),
+                              valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord)),
+                    FieldCell(label: l("身份", "Identity"),
+                              value: detailValue(from: displayedDetectRecord?.identity),
+                              valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord)),
+                    FieldCell(label: l("版本", "Version"),
+                              value: detailValue(from: displayedDetectRecord?.version.map { String($0) }),
+                              valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord))
                 )
 
                 tripleFieldRow(
-                    (
-                        label: l("检测时间", "Detect time"),
-                        value: localTimestampDisplay(from: displayedDetectRecord),
-                        valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
-                        monospaced: true,
-                        helpText: localTimestampHelp(from: displayedDetectRecord)
-                    ),
-                    (
-                        label: l("密钥槽位", "Key slot"),
-                        value: detailValue(from: displayedDetectRecord?.keySlot.map { String($0) }),
-                        valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
-                        monospaced: true,
-                        helpText: nil
-                    ),
-                    (
-                        label: l("位错误", "Bit errors"),
-                        value: detailValue(from: displayedDetectRecord?.bitErrors.map { String($0) }),
-                        valueColor: fieldValueColor(for: .bitErrors, record: displayedDetectRecord),
-                        monospaced: true,
-                        helpText: nil
-                    )
+                    FieldCell(label: l("检测时间", "Detect time"),
+                              value: localTimestampDisplay(from: displayedDetectRecord),
+                              valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
+                              helpText: localTimestampHelp(from: displayedDetectRecord)),
+                    FieldCell(label: l("密钥槽位", "Key slot"),
+                              value: detailValue(from: displayedDetectRecord?.keySlot.map { String($0) }),
+                              valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord)),
+                    FieldCell(label: l("位错误", "Bit errors"),
+                              value: detailValue(from: displayedDetectRecord?.bitErrors.map { String($0) }),
+                              valueColor: fieldValueColor(for: .bitErrors, record: displayedDetectRecord))
                 )
 
                 tripleFieldRow(
-                    (
-                        label: l("检测分数", "Detect score"),
-                        value: detectScoreDisplay(from: displayedDetectRecord),
-                        valueColor: fieldValueColor(for: .detectScore, record: displayedDetectRecord),
-                        monospaced: true,
-                        helpText: detectScoreHelp(from: displayedDetectRecord)
-                    ),
-                    (
-                        label: l("克隆校验", "Clone check"),
-                        value: detailValue(from: displayedDetectRecord?.cloneCheck),
-                        valueColor: fieldValueColor(for: .cloneCheck, record: displayedDetectRecord),
-                        monospaced: true,
-                        helpText: displayedDetectRecord?.cloneReason
-                    ),
-                    (
-                        label: l("指纹分数", "Fingerprint score"),
-                        value: fingerprintScoreDisplay(from: displayedDetectRecord),
-                        valueColor: fieldValueColor(for: .fingerprintScore, record: displayedDetectRecord),
-                        monospaced: true,
-                        helpText: fingerprintScoreHelp(from: displayedDetectRecord)
-                    )
+                    FieldCell(label: l("检测分数", "Detect score"),
+                              value: detectScoreDisplay(from: displayedDetectRecord),
+                              valueColor: fieldValueColor(for: .detectScore, record: displayedDetectRecord),
+                              helpText: detectScoreHelp(from: displayedDetectRecord)),
+                    FieldCell(label: l("克隆校验", "Clone check"),
+                              value: detailValue(from: displayedDetectRecord?.cloneCheck),
+                              valueColor: fieldValueColor(for: .cloneCheck, record: displayedDetectRecord),
+                              helpText: displayedDetectRecord?.cloneReason),
+                    FieldCell(label: l("指纹分数", "Fingerprint score"),
+                              value: fingerprintScoreDisplay(from: displayedDetectRecord),
+                              valueColor: fieldValueColor(for: .fingerprintScore, record: displayedDetectRecord),
+                              helpText: fingerprintScoreHelp(from: displayedDetectRecord))
                 )
 
                 singleLineFieldRow(
@@ -666,40 +628,18 @@ struct DetectView: View {
         )
     }
 
-    private func tripleFieldRow(
-        _ first: (label: String, value: String, valueColor: Color, monospaced: Bool),
-        _ second: (label: String, value: String, valueColor: Color, monospaced: Bool),
-        _ third: (label: String, value: String, valueColor: Color, monospaced: Bool)
-    ) -> some View {
-        tripleFieldRow(
-            (
-                label: first.label,
-                value: first.value,
-                valueColor: first.valueColor,
-                monospaced: first.monospaced,
-                helpText: nil
-            ),
-            (
-                label: second.label,
-                value: second.value,
-                valueColor: second.valueColor,
-                monospaced: second.monospaced,
-                helpText: nil
-            ),
-            (
-                label: third.label,
-                value: third.value,
-                valueColor: third.valueColor,
-                monospaced: third.monospaced,
-                helpText: nil
-            )
-        )
+    private struct FieldCell {
+        let label: String
+        let value: String
+        let valueColor: Color
+        var monospaced: Bool = true
+        var helpText: String?
     }
 
     private func tripleFieldRow(
-        _ first: (label: String, value: String, valueColor: Color, monospaced: Bool, helpText: String?),
-        _ second: (label: String, value: String, valueColor: Color, monospaced: Bool, helpText: String?),
-        _ third: (label: String, value: String, valueColor: Color, monospaced: Bool, helpText: String?)
+        _ first: FieldCell,
+        _ second: FieldCell,
+        _ third: FieldCell
     ) -> some View {
         HStack(spacing: 8) {
             compactFieldCell(

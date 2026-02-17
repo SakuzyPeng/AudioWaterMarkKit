@@ -1,0 +1,52 @@
+included:
+  - AWMKit/Sources
+
+disabled_rules:
+  # SwiftUI requires passing multiple closures to modifiers like .sheet(isPresented:content:)
+  # and .alert(_:isPresented:actions:message:). Trailing closure is idiomatic and expected.
+  - multiple_closures_with_trailing_closure
+
+opt_in_rules:
+  - empty_count
+  - explicit_init
+  - first_where
+  - force_unwrapping
+
+identifier_name:
+  min_length:
+    warning: 1
+    error: 1
+  allowed_symbols: ["_"]
+  # zh/en are intentional bilingual abbreviations; x/y are standard math/geometry names.
+  excluded:
+    - zh
+    - en
+    - x
+    - y
+    - id
+
+line_length:
+  warning: 150
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+
+file_length:
+  warning: 600
+  error: 1200
+
+type_body_length:
+  warning: 500
+  error: 1000
+
+function_body_length:
+  warning: 100
+  error: 200
+
+cyclomatic_complexity:
+  warning: 15
+  error: 25
+
+function_parameter_count:
+  warning: 7
+  error: 10

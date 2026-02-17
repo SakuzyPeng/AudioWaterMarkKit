@@ -371,7 +371,6 @@ class DetectViewModel: ObservableObject {
         return url.hasDirectoryPath
     }
 
-
     // MARK: - 清空操作
 
     func clearQueue() {

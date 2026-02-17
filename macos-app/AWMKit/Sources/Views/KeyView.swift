@@ -291,7 +291,7 @@ struct KeyView: View {
             ? "\(l("槽位", "Slot")) \(summary.slot)\(l("（激活）", " (active)"))"
             : "\(l("槽位", "Slot")) \(summary.slot)"
         let keyText = summary.hasKey ? "Key ID: \(summary.keyId ?? "-")" : l("未配置", "Not configured")
-        let labelText = summary.label?.isEmpty == false ? " · \(summary.label!)" : ""
+        let labelText = summary.label.flatMap { $0.isEmpty ? nil : " · \($0)" } ?? ""
         let evidenceText = "\(l("证据", "Evidence")): \(summary.evidenceCount)"
         let duplicateText = summary.duplicateOfSlots.isEmpty
             ? ""
@@ -460,7 +460,7 @@ private struct EditSlotLabelSheet: View {
             Text("Key ID: \(keyId ?? l("未配置", "Not configured"))")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text("\(l("当前标签", "Current label")): \((currentLabel?.isEmpty == false ? currentLabel! : l("未设置", "Not set")))")
+            Text("\(l("当前标签", "Current label")): \(currentLabel.flatMap { $0.isEmpty ? nil : $0 } ?? l("未设置", "Not set"))")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 

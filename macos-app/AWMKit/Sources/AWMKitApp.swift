@@ -79,7 +79,7 @@ class AppState: ObservableObject {
     private static let mkvFamilyExtensions = ["mkv", "mka"]
     private static let tsFamilyExtensions = ["ts", "m2ts", "m2t"]
     private static let fallbackInputExtensions = [
-        "wav", "flac", "mp3", "ogg", "opus", "m4a", "alac", "mp4", "mov", "mkv", "mka", "ts", "m2ts", "m2t",
+        "wav", "flac", "mp3", "ogg", "opus", "m4a", "alac", "mp4", "mov", "mkv", "mka", "ts", "m2ts", "m2t"
     ]
 
     enum Tab: String, CaseIterable, Identifiable {
@@ -238,7 +238,7 @@ class AppState: ObservableObject {
             let containers: [String] = [
                 capabilities.containerMp4 ? "mp4" : nil,
                 capabilities.containerMkv ? "mkv" : nil,
-                capabilities.containerTs ? "ts" : nil,
+                capabilities.containerTs ? "ts" : nil
             ].compactMap { $0 }
             let containerText = containers.isEmpty ? "-" : containers.joined(separator: ",")
 
