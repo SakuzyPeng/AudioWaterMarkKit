@@ -5,7 +5,7 @@ use crate::util::{
 use crate::Context;
 use awmkit::app::{
     analyze_snr, build_audio_proof, i18n, key_id_from_key_material, EvidenceStore, KeyStore,
-    NewAudioEvidence, TagStore, SNR_STATUS_OK,
+    NewAudioEvidence, SnrAnalysis, TagStore, SNR_STATUS_OK,
 };
 use awmkit::{Error as AwmError, Message};
 use clap::Args;
@@ -40,7 +40,6 @@ pub struct CmdArgs {
     pub inputs: Vec<String>,
 }
 
-#[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 /// Internal helper function.
 pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let inputs = expand_inputs(&args.inputs)?;
@@ -69,24 +68,89 @@ pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let audio = audio_from_context(ctx)?.strength(args.strength);
     let layout = args.layout.to_channel_layout();
 
-    let progress = if ctx.out.quiet() {
-        None
-    } else {
-        let bar = ProgressBar::new(inputs.len() as u64);
-        bar.set_style(
-            ProgressStyle::with_template(EMBED_PROGRESS_TEMPLATE)
-                .map_err(|e| CliError::Message(e.to_string()))?
-                .progress_chars("=>-"),
-        );
-        bar.set_prefix("embed");
-        Some(bar)
+    let progress = build_progress(ctx, inputs.len())?;
+    let mut stats = EmbedStats::default();
+    print_embed_intro(ctx);
+    let shared = EmbedShared {
+        ctx,
+        audio: &audio,
+        layout,
+        message: &message,
+        decoded_message: &decoded_message,
+        key: &key,
+        evidence_store: evidence_store.as_ref(),
+        progress: progress.as_ref(),
     };
 
-    let mut success = 0usize;
-    let mut failed = 0usize;
-    let mut skipped = 0usize;
-    let mut failure_details: Vec<String> = Vec::new();
+    for input in inputs {
+        let output = resolve_output_path(args.output.as_ref(), &input)?;
+        process_embed_input(&shared, &input, &output, &mut stats);
+    }
 
+    if let Some(bar) = progress {
+        bar.finish_and_clear();
+    }
+
+    print_embed_summary(ctx, &stats);
+    save_identity_mapping(ctx, &stats, &decoded_message, &tag);
+
+    if stats.failed > 0 {
+        Err(CliError::Message(i18n::tr("cli-embed-failed")))
+    } else {
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+/// Internal struct.
+struct EmbedStats {
+    /// Internal field.
+    success: usize,
+    /// Internal field.
+    failed: usize,
+    /// Internal field.
+    skipped: usize,
+    /// Internal field.
+    failure_details: Vec<String>,
+}
+
+/// Internal struct.
+struct EmbedShared<'a> {
+    /// Internal field.
+    ctx: &'a Context,
+    /// Internal field.
+    audio: &'a awmkit::Audio,
+    /// Internal field.
+    layout: Option<awmkit::ChannelLayout>,
+    /// Internal field.
+    message: &'a [u8; awmkit::MESSAGE_LEN],
+    /// Internal field.
+    decoded_message: &'a awmkit::MessageResult,
+    /// Internal field.
+    key: &'a [u8],
+    /// Internal field.
+    evidence_store: Option<&'a EvidenceStore>,
+    /// Internal field.
+    progress: Option<&'a ProgressBar>,
+}
+
+/// Internal helper function.
+fn build_progress(ctx: &Context, len: usize) -> Result<Option<ProgressBar>> {
+    if ctx.out.quiet() {
+        return Ok(None);
+    }
+    let bar = ProgressBar::new(len as u64);
+    bar.set_style(
+        ProgressStyle::with_template(EMBED_PROGRESS_TEMPLATE)
+            .map_err(|e| CliError::Message(e.to_string()))?
+            .progress_chars("=>-"),
+    );
+    bar.set_prefix("embed");
+    Ok(Some(bar))
+}
+
+/// Internal helper function.
+fn print_embed_intro(ctx: &Context) {
     if !ctx.out.quiet() {
         ctx.out
             .info("[INFO] multichannel smart routing enabled (default: LFE skip)");
@@ -99,184 +163,233 @@ pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
             ));
         }
     }
+}
 
-    for input in inputs {
-        let output = match &args.output {
-            Some(path) => path.clone(),
-            None => default_output_path(&input)?,
-        };
+/// Internal helper function.
+fn resolve_output_path(output_arg: Option<&PathBuf>, input: &std::path::Path) -> Result<PathBuf> {
+    match output_arg {
+        Some(path) => Ok(path.clone()),
+        None => default_output_path(input),
+    }
+}
 
-        match audio.detect_multichannel(&input, layout) {
-            Ok(detect) => {
-                if detect.best.is_some() {
-                    skipped += 1;
-                    if let Some(ref bar) = progress {
-                        bar.println(format!("[SKIP] {}: already watermarked", input.display()));
-                    } else if !ctx.out.quiet() {
-                        ctx.out
-                            .warn(format!("[SKIP] {}: already watermarked", input.display()));
-                    }
-                    if let Some(ref bar) = progress {
-                        bar.inc(1);
-                    }
-                    continue;
-                }
-            }
-            Err(err) => {
-                if matches!(err, AwmError::AdmUnsupported(_)) {
-                    if let Some(ref bar) = progress {
-                        bar.println(format!(
-                            "[WARN] {}: ADM detect 暂不支持，跳过预检并继续嵌入",
-                            input.display()
-                        ));
-                    } else if !ctx.out.quiet() {
-                        ctx.out.warn(format!(
-                            "[WARN] {}: ADM detect 暂不支持，跳过预检并继续嵌入",
-                            input.display()
-                        ));
-                    }
-                } else {
-                    failed += 1;
-                    if let Some(ref bar) = progress {
-                        bar.println(format!("[ERR] {}: precheck failed: {err}", input.display()));
-                        bar.inc(1);
-                    } else {
-                        crate::output::Output::error(format!(
-                            "[ERR] {}: precheck failed: {err}",
-                            input.display()
-                        ));
-                    }
-                    continue;
-                }
-            }
+/// Internal helper function.
+fn process_embed_input(
+    shared: &EmbedShared<'_>,
+    input: &std::path::Path,
+    output: &std::path::Path,
+    stats: &mut EmbedStats,
+) {
+    if !handle_precheck(shared, input, stats) {
+        return;
+    }
+
+    match shared
+        .audio
+        .embed_multichannel(input, output, shared.message, shared.layout)
+    {
+        Ok(()) => {
+            stats.success = stats.success.saturating_add(1);
+            let snr = analyze_snr(input, output);
+            persist_evidence(shared, input, output, &snr);
+            report_embed_ok(shared.ctx, input, output, &snr);
         }
-
-        let result = audio.embed_multichannel(&input, &output, &message, layout);
-        match result {
-            Ok(()) => {
-                success += 1;
-                let snr = analyze_snr(&input, &output);
-                if let Some(evidence_store) = evidence_store.as_ref() {
-                    match build_audio_proof(&output) {
-                        Ok(proof) => {
-                            let insert = NewAudioEvidence {
-                                file_path: output.display().to_string(),
-                                tag: decoded_message.tag.to_string(),
-                                identity: decoded_message.identity().to_string(),
-                                version: decoded_message.version,
-                                key_slot: decoded_message.key_slot,
-                                timestamp_minutes: decoded_message.timestamp_minutes,
-                                message_hex: hex::encode(message),
-                                sample_rate: proof.sample_rate,
-                                channels: proof.channels,
-                                sample_count: proof.sample_count,
-                                pcm_sha256: proof.pcm_sha256,
-                                key_id: key_id_from_key_material(&key),
-                                is_forced_embed: false,
-                                snr_db: snr.snr_db,
-                                snr_status: snr.status.clone(),
-                                chromaprint: proof.chromaprint,
-                                fp_config_id: proof.fp_config_id,
-                            };
-                            if let Err(err) = evidence_store.insert(&insert) {
-                                ctx.out.warn(format!(
-                                    "[WARN] evidence: {} -> {} ({err})",
-                                    input.display(),
-                                    output.display()
-                                ));
-                            }
-                        }
-                        Err(err) => {
-                            ctx.out.warn(format!(
-                                "[WARN] evidence: {} -> {} ({err})",
-                                input.display(),
-                                output.display()
-                            ));
-                        }
-                    }
-                }
-                if !ctx.out.quiet() {
-                    let snr_text = if snr.status == SNR_STATUS_OK {
-                        format!("SNR {:.2} dB", snr.snr_db.unwrap_or_default())
-                    } else {
-                        let reason = snr.detail.unwrap_or_else(|| snr.status.clone());
-                        format!("SNR unavailable ({reason})")
-                    };
-                    let line = format!(
-                        "[OK] {} -> {} | {}",
-                        input.display(),
-                        output.display(),
-                        snr_text
-                    );
-                    ctx.out.info(line);
-                }
-            }
-            Err(err) => {
-                failed += 1;
-                failure_details.push(format!("{}: {err}", input.display()));
-                if let Some(ref bar) = progress {
-                    bar.println(format!("[ERR] {}: {err}", input.display()));
-                } else {
-                    crate::output::Output::error(format!("[ERR] {}: {err}", input.display()));
-                }
-            }
-        }
-
-        if let Some(ref bar) = progress {
-            bar.inc(1);
+        Err(err) => {
+            stats.failed = stats.failed.saturating_add(1);
+            stats
+                .failure_details
+                .push(format!("{}: {err}", input.display()));
+            report_embed_error(shared.progress, input, &err.to_string());
         }
     }
 
+    if let Some(bar) = shared.progress {
+        bar.inc(1);
+    }
+}
+
+/// Internal helper function.
+fn handle_precheck(
+    shared: &EmbedShared<'_>,
+    input: &std::path::Path,
+    stats: &mut EmbedStats,
+) -> bool {
+    match shared.audio.detect_multichannel(input, shared.layout) {
+        Ok(detect) => {
+            if detect.best.is_some() {
+                stats.skipped = stats.skipped.saturating_add(1);
+                let line = format!("[SKIP] {}: already watermarked", input.display());
+                if let Some(bar) = shared.progress {
+                    bar.println(line);
+                    bar.inc(1);
+                } else if !shared.ctx.out.quiet() {
+                    shared.ctx.out.warn(line);
+                }
+                return false;
+            }
+        }
+        Err(err) => {
+            if matches!(err, AwmError::AdmUnsupported(_)) {
+                let line = format!(
+                    "[WARN] {}: ADM detect 暂不支持，跳过预检并继续嵌入",
+                    input.display()
+                );
+                if let Some(bar) = shared.progress {
+                    bar.println(line);
+                } else if !shared.ctx.out.quiet() {
+                    shared.ctx.out.warn(line);
+                }
+            } else {
+                stats.failed = stats.failed.saturating_add(1);
+                report_embed_error(shared.progress, input, &format!("precheck failed: {err}"));
+                if let Some(bar) = shared.progress {
+                    bar.inc(1);
+                }
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Internal helper function.
+fn persist_evidence(
+    shared: &EmbedShared<'_>,
+    input: &std::path::Path,
+    output: &std::path::Path,
+    snr: &SnrAnalysis,
+) {
+    let Some(evidence_store) = shared.evidence_store else {
+        return;
+    };
+
+    let proof = match build_audio_proof(output) {
+        Ok(proof) => proof,
+        Err(err) => {
+            shared.ctx.out.warn(format!(
+                "[WARN] evidence: {} -> {} ({err})",
+                input.display(),
+                output.display()
+            ));
+            return;
+        }
+    };
+
+    let insert = NewAudioEvidence {
+        file_path: output.display().to_string(),
+        tag: shared.decoded_message.tag.to_string(),
+        identity: shared.decoded_message.identity().to_string(),
+        version: shared.decoded_message.version,
+        key_slot: shared.decoded_message.key_slot,
+        timestamp_minutes: shared.decoded_message.timestamp_minutes,
+        message_hex: hex::encode(shared.message),
+        sample_rate: proof.sample_rate,
+        channels: proof.channels,
+        sample_count: proof.sample_count,
+        pcm_sha256: proof.pcm_sha256,
+        key_id: key_id_from_key_material(shared.key),
+        is_forced_embed: false,
+        snr_db: snr.snr_db,
+        snr_status: snr.status.clone(),
+        chromaprint: proof.chromaprint,
+        fp_config_id: proof.fp_config_id,
+    };
+    if let Err(err) = evidence_store.insert(&insert) {
+        shared.ctx.out.warn(format!(
+            "[WARN] evidence: {} -> {} ({err})",
+            input.display(),
+            output.display()
+        ));
+    }
+}
+
+/// Internal helper function.
+fn report_embed_ok(
+    ctx: &Context,
+    input: &std::path::Path,
+    output: &std::path::Path,
+    snr: &SnrAnalysis,
+) {
+    if ctx.out.quiet() {
+        return;
+    }
+    let snr_text = if snr.status == SNR_STATUS_OK {
+        format!("SNR {:.2} dB", snr.snr_db.unwrap_or_default())
+    } else {
+        let reason = snr.detail.clone().unwrap_or_else(|| snr.status.clone());
+        format!("SNR unavailable ({reason})")
+    };
+    ctx.out.info(format!(
+        "[OK] {} -> {} | {}",
+        input.display(),
+        output.display(),
+        snr_text
+    ));
+}
+
+/// Internal helper function.
+fn report_embed_error(progress: Option<&ProgressBar>, input: &std::path::Path, err: &str) {
+    let line = format!("[ERR] {}: {err}", input.display());
     if let Some(bar) = progress {
-        bar.finish_and_clear();
+        bar.println(line);
+    } else {
+        crate::output::Output::error(line);
     }
+}
 
-    if !ctx.out.quiet() {
-        let mut args = FluentArgs::new();
-        args.set("success", success.to_string());
-        args.set("failed", failed.to_string());
-        ctx.out.info(i18n::tr_args("cli-embed-done", &args));
-        if skipped > 0 {
-            ctx.out.warn(format!("已跳过 {skipped} 个已含水印文件"));
+/// Internal helper function.
+fn print_embed_summary(ctx: &Context, stats: &EmbedStats) {
+    if ctx.out.quiet() {
+        return;
+    }
+    let mut args = FluentArgs::new();
+    args.set("success", stats.success.to_string());
+    args.set("failed", stats.failed.to_string());
+    ctx.out.info(i18n::tr_args("cli-embed-done", &args));
+    if stats.skipped > 0 {
+        ctx.out
+            .warn(format!("已跳过 {} 个已含水印文件", stats.skipped));
+    }
+    if !stats.failure_details.is_empty() {
+        ctx.out.warn("失败详情：");
+        for detail in stats.failure_details.iter().take(8) {
+            ctx.out.warn(format!("- {detail}"));
         }
-        if !failure_details.is_empty() {
-            ctx.out.warn("失败详情：");
-            for detail in failure_details.iter().take(8) {
-                ctx.out.warn(format!("- {detail}"));
-            }
-            let remain = failure_details.len().saturating_sub(8);
-            if remain > 0 {
-                ctx.out.warn(format!("- 其余 {remain} 条失败详情已省略"));
-            }
+        let remain = stats.failure_details.len().saturating_sub(8);
+        if remain > 0 {
+            ctx.out.warn(format!("- 其余 {remain} 条失败详情已省略"));
         }
     }
+}
 
-    if success > 0 {
-        match TagStore::load() {
-            Ok(mut store) => match store.save_if_absent(decoded_message.identity(), &tag) {
-                Ok(inserted) if inserted && !ctx.out.quiet() => {
-                    ctx.out.info(format!(
-                        "已自动保存映射：{} -> {}",
-                        decoded_message.identity(),
-                        decoded_message.tag
-                    ));
-                }
-                Ok(_) => {}
-                Err(err) => {
-                    ctx.out
-                        .warn(format!("[WARN] tag mapping: save failed ({err})"));
-                }
-            },
+/// Internal helper function.
+fn save_identity_mapping(
+    ctx: &Context,
+    stats: &EmbedStats,
+    decoded_message: &awmkit::MessageResult,
+    tag: &awmkit::Tag,
+) {
+    if stats.success == 0 {
+        return;
+    }
+    match TagStore::load() {
+        Ok(mut store) => match store.save_if_absent(decoded_message.identity(), tag) {
+            Ok(inserted) if inserted && !ctx.out.quiet() => {
+                ctx.out.info(format!(
+                    "已自动保存映射：{} -> {}",
+                    decoded_message.identity(),
+                    decoded_message.tag
+                ));
+            }
+            Ok(_) => {}
             Err(err) => {
                 ctx.out
-                    .warn(format!("[WARN] tag mapping: load failed ({err})"));
+                    .warn(format!("[WARN] tag mapping: save failed ({err})"));
             }
+        },
+        Err(err) => {
+            ctx.out
+                .warn(format!("[WARN] tag mapping: load failed ({err})"));
         }
-    }
-
-    if failed > 0 {
-        Err(CliError::Message(i18n::tr("cli-embed-failed")))
-    } else {
-        Ok(())
     }
 }
