@@ -1286,7 +1286,12 @@ impl Audio {
 
     #[cfg(feature = "bundled")]
     /// Internal associated function.
-    fn resolve_binary(_fallback_path: Option<&Path>) -> Result<PathBuf> {
+    fn resolve_binary(fallback_path: Option<&Path>) -> Result<PathBuf> {
+        if let Some(path) = fallback_path {
+            if let Ok(audio) = Self::with_binary(path) {
+                return Ok(audio.binary_path);
+            }
+        }
         crate::bundled::ensure_extracted()
     }
 
