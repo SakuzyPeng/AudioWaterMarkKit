@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 env:
-  AUDIOWMARK_WINDOWS_RELEASE: audiowmark-win-2026-02-03
+  AUDIOWMARK_WINDOWS_RELEASE: audiowmark-win-2026-02-19-binary-mode-fix
   AUDIOWMARK_WINDOWS_ASSET: audiowmark-windows-x86_64.zip
   AUDIOWMARK_MACOS_RELEASE: audiowmark-macos-arm64-2026-02-03
   AUDIOWMARK_MACOS_ASSET: audiowmark-macos-arm64.tar.gz
