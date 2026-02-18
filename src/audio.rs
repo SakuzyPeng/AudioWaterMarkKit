@@ -3138,6 +3138,9 @@ mod tests {
             assert_eq!(effective_awmiomode(), AwmIoMode::File);
         });
         with_disable_pipe_env(Some("0"), || {
+            #[cfg(target_os = "windows")]
+            assert_eq!(effective_awmiomode(), AwmIoMode::File);
+            #[cfg(not(target_os = "windows"))]
             assert_eq!(effective_awmiomode(), AwmIoMode::Pipe);
         });
     }
