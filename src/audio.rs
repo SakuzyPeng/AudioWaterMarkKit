@@ -1950,10 +1950,15 @@ fn effective_awmiomode() -> AwmIoMode {
         .ok()
         .is_some_and(|value| parse_env_flag(&value))
     {
-        AwmIoMode::File
-    } else {
-        AwmIoMode::Pipe
+        return AwmIoMode::File;
     }
+    // On Windows, libsndfile reads stdin via Win32 API (GetStdHandle/ReadFile)
+    // rather than the CRT, making pipe I/O unreliable regardless of _setmode.
+    // Use file I/O by default on Windows.
+    if cfg!(target_os = "windows") {
+        return AwmIoMode::File;
+    }
+    AwmIoMode::Pipe
 }
 
 /// Internal helper function.
@@ -3121,6 +3126,9 @@ mod tests {
     #[test]
     fn test_effective_awmiomode_respects_env() {
         with_disable_pipe_env(None, || {
+            #[cfg(target_os = "windows")]
+            assert_eq!(effective_awmiomode(), AwmIoMode::File);
+            #[cfg(not(target_os = "windows"))]
             assert_eq!(effective_awmiomode(), AwmIoMode::Pipe);
         });
         with_disable_pipe_env(Some("1"), || {
