@@ -133,7 +133,7 @@ jobs:
           export CPPFLAGS="-I/mingw64/include"
 
           cd /tmp
-          git clone --depth 1 https://github.com/swesterfeld/audiowmark.git
+          git clone --depth 1 https://github.com/SakuzyPeng/audiowmark.git
           cd audiowmark
           sed -i '1i#define _GNU_SOURCE' src/utils.cc
           python -c 'import textwrap; exec(textwrap.dedent("""
