@@ -20,6 +20,8 @@ public sealed class DetectRecord
     public float? DetectScore { get; init; }
     public uint? BitErrors { get; init; }
     public bool? MatchFound { get; init; }
+    public string? DetectRoute { get; init; }
+    public string? FallbackReason { get; init; }
     public string? CloneCheck { get; init; }
     public double? CloneScore { get; init; }
     public float? CloneMatchSeconds { get; init; }

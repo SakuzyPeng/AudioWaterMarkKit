@@ -71,15 +71,6 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
     public string InputSourceText => string.IsNullOrWhiteSpace(InputSource) ? L("尚未选择输入源", "No input source selected") : InputSource;
 
-    public ObservableCollection<ChannelLayoutOption> ChannelLayoutOptions { get; } = BuildChannelLayoutOptions();
-
-    private ChannelLayoutOption? _selectedChannelLayout;
-    public ChannelLayoutOption? SelectedChannelLayout
-    {
-        get => _selectedChannelLayout;
-        set => SetProperty(ref _selectedChannelLayout, value);
-    }
-
     private bool _isProcessing;
     public bool IsProcessing
     {
@@ -282,7 +273,6 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
     public string GoToKeyPageText => L("前往密钥页", "Go to Key page");
     public string SelectActionText => L("选择", "Select");
     public string ClearActionText => L("清空", "Clear");
-    public string LayoutLabel => L("声道布局", "Channel layout");
     public string DropZoneTitle => L("拖拽音频文件到此处", "Drag audio files here");
     public string DropZoneSubtitle => _appState.UsingFallbackInputExtensions
         ? L(
@@ -303,6 +293,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
     public string KeySlotFieldLabel => L("密钥槽位", "Key slot");
     public string BitErrorsFieldLabel => L("位错误", "Bit errors");
     public string DetectScoreFieldLabel => L("检测分数", "Detect score");
+    public string DetectRouteFieldLabel => L("检测路径", "Detect path");
     public string CloneCheckFieldLabel => L("克隆校验", "Clone check");
     public string FingerprintScoreFieldLabel => L("指纹分数", "Fingerprint score");
     public string ErrorFieldLabel => L("错误信息", "Error");
@@ -370,6 +361,8 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
     public string DisplayDetectScore => DisplayedRecord?.DetectScore is float score ? $"{score:0.000}" : "-";
 
+    public string DisplayDetectRoute => DetectRouteDisplayValue(DisplayedRecord?.DetectRoute);
+
     public string DisplayCloneCheck => CloneCheckDisplayValue(DisplayedRecord?.CloneCheck);
 
     public string DisplayFingerprintScore => FingerprintScoreDisplay(DisplayedRecord);
@@ -392,7 +385,6 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
     public DetectViewModel()
     {
-        SelectedChannelLayout = ChannelLayoutOptions.FirstOrDefault();
         SelectedFiles.CollectionChanged += OnSelectedFilesChanged;
         Logs.CollectionChanged += OnLogsChanged;
         DetectRecords.CollectionChanged += OnDetectRecordsChanged;
@@ -412,9 +404,9 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(DisplayMatchFound));
             OnPropertyChanged(nameof(DisplayPattern));
             OnPropertyChanged(nameof(DisplayDetectTime));
+            OnPropertyChanged(nameof(DisplayDetectRoute));
             OnPropertyChanged(nameof(DisplayCloneCheck));
             NotifyLocalizedTextChanged();
-            RebuildLayoutOptions();
             return;
         }
 
@@ -622,12 +614,10 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
             CurrentProcessingIndex = 0;
             TotalDetected = 0;
             TotalFound = 0;
-            var channelLayout = SelectedChannelLayout?.Layout ?? AwmChannelLayout.Auto;
-            var layoutText = SelectedChannelLayout?.DisplayText ?? L("自动", "Auto");
 
             AddLog(
                 L("开始检测", "Detection started"),
-                L($"准备检测 {SelectedFiles.Count} 个文件（{layoutText}）", $"Preparing to detect {SelectedFiles.Count} files ({layoutText})"),
+                L($"准备检测 {SelectedFiles.Count} 个文件（Auto）", $"Preparing to detect {SelectedFiles.Count} files (Auto)"),
                 true,
                 false,
                 null,
@@ -687,7 +677,6 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
                     record = await Task.Run(() => DetectSingleFile(
                         filePath,
                         key,
-                        channelLayout,
                         snapshot =>
                         {
                             if (snapshot.Operation != AwmProgressOperation.Detect)
@@ -720,6 +709,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
                         FilePath = filePath,
                         Status = "error",
                         Error = ex.Message,
+                        DetectRoute = "multichannel",
                     };
                 }
 
@@ -729,6 +719,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
                 }
 
                 InsertDetectRecord(record);
+                LogFallbackOutcome(fileName, record);
                 LogDetectionOutcome(fileName, record);
 
                 TotalDetected += 1;
@@ -787,89 +778,72 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
     private DetectRecord DetectSingleFile(
         string filePath,
         byte[]? key,
-        AwmChannelLayout layout,
         Action<AwmBridge.ProgressSnapshot>? onProgress = null)
     {
-        var (mcDetected, detectError) = AwmBridge.DetectAudioMultichannelDetailed(filePath, layout, onProgress);
+        var (mcDetected, detectError) = AwmBridge.DetectAudioMultichannelDetailed(
+            filePath,
+            AwmChannelLayout.Auto,
+            onProgress);
+        var detectRoute = "multichannel";
+        string? fallbackReason = null;
+
+        if (detectError != AwmError.Ok && IsStrictAdmFallbackError(detectError))
+        {
+            detectRoute = "single_fallback";
+            fallbackReason = DescribeAwmError(detectError);
+
+            var (singleFallbackDetected, singleFallbackError) = AwmBridge.DetectAudioDetailed(filePath, onProgress);
+            if (singleFallbackError == AwmError.Ok && singleFallbackDetected is AwmBridge.DetectAudioResult singleFallbackResult)
+            {
+                return BuildDetectRecordFromMessage(
+                    filePath,
+                    key,
+                    singleFallbackResult.RawMessage,
+                    singleFallbackResult.Pattern,
+                    singleFallbackResult.DetectScore,
+                    singleFallbackResult.BitErrors,
+                    detectRoute,
+                    fallbackReason);
+            }
+
+            if (singleFallbackError == AwmError.NoWatermarkFound)
+            {
+                return new DetectRecord
+                {
+                    FilePath = filePath,
+                    Status = "not_found",
+                    DetectRoute = detectRoute,
+                    FallbackReason = fallbackReason,
+                };
+            }
+
+            return new DetectRecord
+            {
+                FilePath = filePath,
+                Status = "error",
+                Error = DescribeAwmError(singleFallbackError),
+                DetectRoute = detectRoute,
+                FallbackReason = fallbackReason,
+            };
+        }
+
         if (detectError == AwmError.Ok && mcDetected is AwmBridge.MultichannelDetectAudioResult mcResult)
         {
             var (singleDetected, singleDetectError) = AwmBridge.DetectAudioDetailed(filePath);
             var detectScore = singleDetectError == AwmError.Ok && singleDetected.HasValue
                 ? singleDetected.Value.DetectScore
-                : null;
-            var pattern = DetectPatternText(layout, mcResult.PairCount, singleDetected);
+                : mcResult.DetectScore;
+            var pattern = DetectPatternText(mcResult.PairCount, singleDetected);
 
-            var (unverifiedDecoded, unverifiedError) = AwmBridge.DecodeMessageUnverified(mcResult.RawMessage);
-            if (key is not null)
-            {
-                var (decoded, decodeError) = AwmBridge.DecodeMessage(mcResult.RawMessage, key);
-                if (decodeError == AwmError.Ok && decoded.HasValue)
-                {
-                    var decodedValue = decoded.Value;
-
-                    string cloneCheck = "unavailable";
-                    double? cloneScore = null;
-                    float? cloneMatchSeconds = null;
-                    string? cloneReason = null;
-
-                    var identity = decodedValue.GetIdentity();
-                    var keySlot = decodedValue.KeySlot;
-
-                    var (clone, cloneError) = AwmBridge.CloneCheckForFile(filePath, identity, keySlot);
-                    if (cloneError == AwmError.Ok && clone.HasValue)
-                    {
-                        cloneCheck = CloneKindToString(clone.Value.Kind);
-                        cloneScore = clone.Value.Score;
-                        cloneMatchSeconds = clone.Value.MatchSeconds;
-                        cloneReason = clone.Value.Reason;
-                    }
-                    else
-                    {
-                        cloneCheck = "unavailable";
-                        cloneReason = DescribeAwmError(cloneError);
-                    }
-
-                    return new DetectRecord
-                    {
-                        FilePath = filePath,
-                        Status = "ok",
-                        Verification = "verified",
-                        Tag = decodedValue.GetTag(),
-                        Identity = identity,
-                        Version = decodedValue.Version,
-                        TimestampMinutes = decodedValue.TimestampMinutes,
-                        TimestampUtc = decodedValue.TimestampUtc,
-                        KeySlot = decodedValue.KeySlot,
-                        Pattern = pattern,
-                        DetectScore = detectScore,
-                        BitErrors = mcResult.BitErrors,
-                        MatchFound = true,
-                        CloneCheck = cloneCheck,
-                        CloneScore = cloneScore,
-                        CloneMatchSeconds = cloneMatchSeconds,
-                        CloneReason = cloneReason,
-                    };
-                }
-            }
-
-            var invalidReason = key is null ? "key_not_configured" : "hmac_verification_failed";
-            return new DetectRecord
-            {
-                FilePath = filePath,
-                Status = "invalid_hmac",
-                Verification = "unverified",
-                Tag = unverifiedDecoded?.GetTag(),
-                Identity = unverifiedDecoded?.GetIdentity(),
-                Version = unverifiedDecoded?.Version,
-                TimestampMinutes = unverifiedDecoded?.TimestampMinutes,
-                TimestampUtc = unverifiedDecoded?.TimestampUtc,
-                KeySlot = unverifiedDecoded?.KeySlot,
-                Pattern = pattern,
-                DetectScore = detectScore,
-                BitErrors = mcResult.BitErrors,
-                MatchFound = true,
-                Error = unverifiedError == AwmError.Ok ? invalidReason : $"{invalidReason};{DescribeAwmError(unverifiedError)}",
-            };
+            return BuildDetectRecordFromMessage(
+                filePath,
+                key,
+                mcResult.RawMessage,
+                pattern,
+                detectScore,
+                mcResult.BitErrors,
+                detectRoute,
+                fallbackReason);
         }
 
         if (detectError == AwmError.NoWatermarkFound)
@@ -878,6 +852,8 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
             {
                 FilePath = filePath,
                 Status = "not_found",
+                DetectRoute = detectRoute,
+                FallbackReason = fallbackReason,
             };
         }
 
@@ -886,6 +862,95 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
             FilePath = filePath,
             Status = "error",
             Error = DescribeAwmError(detectError),
+            DetectRoute = detectRoute,
+            FallbackReason = fallbackReason,
+        };
+    }
+
+    private DetectRecord BuildDetectRecordFromMessage(
+        string filePath,
+        byte[]? key,
+        byte[] rawMessage,
+        string pattern,
+        float? detectScore,
+        uint bitErrors,
+        string detectRoute,
+        string? fallbackReason)
+    {
+        var (unverifiedDecoded, unverifiedError) = AwmBridge.DecodeMessageUnverified(rawMessage);
+        if (key is not null)
+        {
+            var (decoded, decodeError) = AwmBridge.DecodeMessage(rawMessage, key);
+            if (decodeError == AwmError.Ok && decoded.HasValue)
+            {
+                var decodedValue = decoded.Value;
+
+                string cloneCheck = "unavailable";
+                double? cloneScore = null;
+                float? cloneMatchSeconds = null;
+                string? cloneReason = null;
+
+                var identity = decodedValue.GetIdentity();
+                var keySlot = decodedValue.KeySlot;
+
+                var (clone, cloneError) = AwmBridge.CloneCheckForFile(filePath, identity, keySlot);
+                if (cloneError == AwmError.Ok && clone.HasValue)
+                {
+                    cloneCheck = CloneKindToString(clone.Value.Kind);
+                    cloneScore = clone.Value.Score;
+                    cloneMatchSeconds = clone.Value.MatchSeconds;
+                    cloneReason = clone.Value.Reason;
+                }
+                else
+                {
+                    cloneCheck = "unavailable";
+                    cloneReason = DescribeAwmError(cloneError);
+                }
+
+                return new DetectRecord
+                {
+                    FilePath = filePath,
+                    Status = "ok",
+                    Verification = "verified",
+                    Tag = decodedValue.GetTag(),
+                    Identity = identity,
+                    Version = decodedValue.Version,
+                    TimestampMinutes = decodedValue.TimestampMinutes,
+                    TimestampUtc = decodedValue.TimestampUtc,
+                    KeySlot = decodedValue.KeySlot,
+                    Pattern = pattern,
+                    DetectScore = detectScore,
+                    BitErrors = bitErrors,
+                    MatchFound = true,
+                    DetectRoute = detectRoute,
+                    FallbackReason = fallbackReason,
+                    CloneCheck = cloneCheck,
+                    CloneScore = cloneScore,
+                    CloneMatchSeconds = cloneMatchSeconds,
+                    CloneReason = cloneReason,
+                };
+            }
+        }
+
+        var invalidReason = key is null ? "key_not_configured" : "hmac_verification_failed";
+        return new DetectRecord
+        {
+            FilePath = filePath,
+            Status = "invalid_hmac",
+            Verification = "unverified",
+            Tag = unverifiedDecoded?.GetTag(),
+            Identity = unverifiedDecoded?.GetIdentity(),
+            Version = unverifiedDecoded?.Version,
+            TimestampMinutes = unverifiedDecoded?.TimestampMinutes,
+            TimestampUtc = unverifiedDecoded?.TimestampUtc,
+            KeySlot = unverifiedDecoded?.KeySlot,
+            Pattern = pattern,
+            DetectScore = detectScore,
+            BitErrors = bitErrors,
+            MatchFound = true,
+            DetectRoute = detectRoute,
+            FallbackReason = fallbackReason,
+            Error = unverifiedError == AwmError.Ok ? invalidReason : $"{invalidReason};{DescribeAwmError(unverifiedError)}",
         };
     }
 
@@ -929,6 +994,46 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
                 AddLog($"{L("失败", "Failed")}: {fileName}", record.Error ?? L("未知错误", "Unknown error"), false, false, record.Id, LogIconTone.Error, LogKind.ResultError);
                 break;
         }
+    }
+
+    private void LogFallbackOutcome(string fileName, DetectRecord record)
+    {
+        if (!string.Equals(record.DetectRoute, "single_fallback", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var reason = string.IsNullOrWhiteSpace(record.FallbackReason) ? "unknown" : record.FallbackReason;
+        AddLog(
+            $"{L("触发回退", "Fallback triggered")}: {fileName}",
+            $"route=single_fallback, reason={reason}",
+            false,
+            false,
+            record.Id,
+            LogIconTone.Warning,
+            LogKind.Generic);
+
+        if (record.Status == "error")
+        {
+            AddLog(
+                $"{L("回退失败", "Fallback failed")}: {fileName}",
+                $"route=single_fallback, reason={reason}, error={record.Error ?? "unknown"}",
+                false,
+                false,
+                record.Id,
+                LogIconTone.Error,
+                LogKind.ResultError);
+            return;
+        }
+
+        AddLog(
+            $"{L("回退成功", "Fallback succeeded")}: {fileName}",
+            $"route=single_fallback, reason={reason}, status={record.Status}",
+            true,
+            false,
+            record.Id,
+            LogIconTone.Info,
+            LogKind.Generic);
     }
 
     private IReadOnlyList<string> ResolveAudioFiles(string sourcePath)
@@ -1282,6 +1387,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(DisplayKeySlot));
         OnPropertyChanged(nameof(DisplayBitErrors));
         OnPropertyChanged(nameof(DisplayDetectScore));
+        OnPropertyChanged(nameof(DisplayDetectRoute));
         OnPropertyChanged(nameof(DisplayCloneCheck));
         OnPropertyChanged(nameof(DisplayFingerprintScore));
         OnPropertyChanged(nameof(DisplayError));
@@ -1333,6 +1439,21 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         };
     }
 
+    private string DetectRouteDisplayValue(string? detectRoute)
+    {
+        if (string.IsNullOrWhiteSpace(detectRoute))
+        {
+            return "-";
+        }
+
+        return detectRoute switch
+        {
+            "multichannel" => L("多声道主路径", "multichannel"),
+            "single_fallback" => L("单声道回退路径", "single fallback"),
+            _ => detectRoute,
+        };
+    }
+
     private static string CloneKindToString(AwmCloneCheckKind kind)
     {
         return kind switch
@@ -1344,47 +1465,23 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         };
     }
 
-    private string DetectPatternText(
-        AwmChannelLayout layout,
-        uint pairCount,
-        AwmBridge.DetectAudioResult? singleDetected)
+    private static bool IsStrictAdmFallbackError(AwmError error)
+    {
+        return error is AwmError.AdmUnsupported
+            or AwmError.AdmPreserveFailed
+            or AwmError.AdmPcmFormatUnsupported;
+    }
+
+    private string DetectPatternText(uint pairCount, AwmBridge.DetectAudioResult? singleDetected)
     {
         if (singleDetected is AwmBridge.DetectAudioResult detailed &&
             !string.IsNullOrWhiteSpace(detailed.Pattern) &&
-            layout == AwmChannelLayout.Stereo)
+            pairCount <= 1)
         {
             return detailed.Pattern;
         }
 
-        return layout switch
-        {
-            AwmChannelLayout.Stereo => "stereo",
-            AwmChannelLayout.Surround51 => L($"multichannel 5.1 ({pairCount} 对)", $"multichannel 5.1 ({pairCount} pairs)"),
-            AwmChannelLayout.Surround512 => L($"multichannel 5.1.2 ({pairCount} 对)", $"multichannel 5.1.2 ({pairCount} pairs)"),
-            AwmChannelLayout.Surround71 => L($"multichannel 7.1 ({pairCount} 对)", $"multichannel 7.1 ({pairCount} pairs)"),
-            AwmChannelLayout.Surround714 => L($"multichannel 7.1.4 ({pairCount} 对)", $"multichannel 7.1.4 ({pairCount} pairs)"),
-            AwmChannelLayout.Surround916 => L($"multichannel 9.1.6 ({pairCount} 对)", $"multichannel 9.1.6 ({pairCount} pairs)"),
-            _ => L($"multichannel auto ({pairCount} 对)", $"multichannel auto ({pairCount} pairs)"),
-        };
-    }
-
-    private static ObservableCollection<ChannelLayoutOption> BuildChannelLayoutOptions()
-    {
-        return new ObservableCollection<ChannelLayoutOption>
-        {
-            CreateLayoutOption(AwmChannelLayout.Auto, L("自动", "Auto")),
-            CreateLayoutOption(AwmChannelLayout.Stereo, L("立体声", "Stereo")),
-            CreateLayoutOption(AwmChannelLayout.Surround51, "5.1"),
-            CreateLayoutOption(AwmChannelLayout.Surround512, "5.1.2"),
-            CreateLayoutOption(AwmChannelLayout.Surround71, "7.1"),
-            CreateLayoutOption(AwmChannelLayout.Surround714, "7.1.4"),
-            CreateLayoutOption(AwmChannelLayout.Surround916, "9.1.6"),
-        };
-    }
-
-    private static ChannelLayoutOption CreateLayoutOption(AwmChannelLayout layout, string label)
-    {
-        return new ChannelLayoutOption(layout, label, AwmBridge.GetLayoutChannels(layout));
+        return L($"multichannel auto ({pairCount} 对)", $"multichannel auto ({pairCount} pairs)");
     }
 
     private static string FingerprintScoreDisplay(DetectRecord? record)
@@ -1586,20 +1683,6 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 
-    private void RebuildLayoutOptions()
-    {
-        var selectedLayout = SelectedChannelLayout?.Layout ?? AwmChannelLayout.Auto;
-        var options = BuildChannelLayoutOptions();
-        ChannelLayoutOptions.Clear();
-        foreach (var option in options)
-        {
-            ChannelLayoutOptions.Add(option);
-        }
-
-        SelectedChannelLayout = ChannelLayoutOptions.FirstOrDefault(x => x.Layout == selectedLayout)
-            ?? ChannelLayoutOptions.FirstOrDefault();
-    }
-
     private void NotifyLocalizedTextChanged()
     {
         OnPropertyChanged(nameof(InputSectionTitle));
@@ -1607,7 +1690,6 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(GoToKeyPageText));
         OnPropertyChanged(nameof(SelectActionText));
         OnPropertyChanged(nameof(ClearActionText));
-        OnPropertyChanged(nameof(LayoutLabel));
         OnPropertyChanged(nameof(DropZoneTitle));
         OnPropertyChanged(nameof(DropZoneSubtitle));
         OnPropertyChanged(nameof(DetectInfoTitle));
@@ -1622,6 +1704,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(KeySlotFieldLabel));
         OnPropertyChanged(nameof(BitErrorsFieldLabel));
         OnPropertyChanged(nameof(DetectScoreFieldLabel));
+        OnPropertyChanged(nameof(DetectRouteFieldLabel));
         OnPropertyChanged(nameof(CloneCheckFieldLabel));
         OnPropertyChanged(nameof(FingerprintScoreFieldLabel));
         OnPropertyChanged(nameof(ErrorFieldLabel));

@@ -264,17 +264,6 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="5"
-                        Style="{StaticResource EmbedSettingCellBorderStyle}"
-                        Visibility="Collapsed">
-                    <StackPanel Spacing="6">
-                        <TextBlock Text="{x:Bind ViewModel.LayoutLabel, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
-                        <ComboBox ItemsSource="{x:Bind ViewModel.ChannelLayoutOptions, Mode=OneWay}"
-                                  SelectedItem="{x:Bind ViewModel.SelectedChannelLayout, Mode=TwoWay}"
-                                  DisplayMemberPath="DisplayText"
-                                  PlaceholderText="{x:Bind ViewModel.LayoutLabel, Mode=OneWay}"/>
-                    </StackPanel>
-                </Border>
             </Grid>
         </Border>
 

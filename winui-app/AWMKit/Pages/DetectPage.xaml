@@ -88,13 +88,6 @@
                 </InfoBar>
 
                 <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,2,0,0">
-                    <ComboBox Width="170"
-                              ItemsSource="{x:Bind ViewModel.ChannelLayoutOptions, Mode=OneWay}"
-                              SelectedItem="{x:Bind ViewModel.SelectedChannelLayout, Mode=TwoWay}"
-                              DisplayMemberPath="DisplayText"
-                              PlaceholderText="{x:Bind ViewModel.LayoutLabel, Mode=OneWay}"
-                              AutomationProperties.Name="{x:Bind ViewModel.LayoutLabel, Mode=OneWay}"
-                              Visibility="Collapsed"/>
                     <Button Command="{x:Bind ViewModel.ClearInputSourceCommand}"
                             Style="{StaticResource SecondaryButtonStyle}"
                             AutomationProperties.Name="{x:Bind ViewModel.ClearInputSourceAccessibility, Mode=OneWay}">
@@ -168,6 +161,7 @@
         <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource DetectMainCardBorderStyle}" Padding="18">
             <Grid RowSpacing="10">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -307,7 +301,18 @@
                     </Border>
                 </Grid>
 
-                <Border Grid.Row="6" Style="{StaticResource DetectInfoCellBorderStyle}" Margin="2,0,2,2">
+                <Border Grid.Row="6" Style="{StaticResource DetectInfoCellBorderStyle}" Margin="2,0,2,0">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="68"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{x:Bind ViewModel.DetectRouteFieldLabel, Mode=OneWay}" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Grid.Column="1" Text="{x:Bind ViewModel.DisplayDetectRoute, Mode=OneWay}" TextTrimming="CharacterEllipsis"/>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Row="7" Style="{StaticResource DetectInfoCellBorderStyle}" Margin="2,0,2,2">
                     <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="68"/>

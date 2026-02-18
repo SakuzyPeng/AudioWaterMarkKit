@@ -149,15 +149,6 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         set => SetProperty(ref _customSuffix, value);
     }
 
-    public ObservableCollection<ChannelLayoutOption> ChannelLayoutOptions { get; } = BuildChannelLayoutOptions();
-
-    private ChannelLayoutOption? _selectedChannelLayout;
-    public ChannelLayoutOption? SelectedChannelLayout
-    {
-        get => _selectedChannelLayout;
-        set => SetProperty(ref _selectedChannelLayout, value);
-    }
-
     private bool _isProcessing;
     public bool IsProcessing
     {
@@ -289,7 +280,6 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
     public string StoredMappingsLabel => L("已存储的映射", "Stored mappings");
     public string StrengthLabel => L("水印强度", "Watermark strength");
     public string SuffixLabel => L("输出后缀", "Output suffix");
-    public string LayoutLabel => L("声道布局", "Channel layout");
     public string DropZoneTitle => L("拖拽音频文件到此处", "Drag audio files here");
     public string DropZoneSubtitle => _appState.UsingFallbackInputExtensions
         ? L(
@@ -358,7 +348,6 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
 
     public EmbedViewModel()
     {
-        SelectedChannelLayout = ChannelLayoutOptions.FirstOrDefault();
         SelectedFiles.CollectionChanged += OnSelectedFilesChanged;
         Logs.CollectionChanged += OnLogsChanged;
         AllMappings.CollectionChanged += OnMappingsChanged;
@@ -383,7 +372,6 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(SkipSummaryDialogCloseText));
             OnPropertyChanged(nameof(SkipSummaryDialogMessage));
             NotifyLocalizedTextChanged();
-            RebuildLayoutOptions();
             return;
         }
 
@@ -631,11 +619,9 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         CurrentProcessingIndex = 0;
         SkippedWatermarkedFiles.Clear();
 
-        var layout = SelectedChannelLayout?.Layout ?? AwmChannelLayout.Auto;
-        var layoutText = SelectedChannelLayout?.DisplayText ?? L("自动", "Auto");
         AddLog(
             L("开始处理", "Processing started"),
-            L($"准备处理 {SelectedFiles.Count} 个文件（{layoutText}）", $"Preparing to process {SelectedFiles.Count} files ({layoutText})"),
+            L($"准备处理 {SelectedFiles.Count} 个文件（Auto）", $"Preparing to process {SelectedFiles.Count} files (Auto)"),
             true,
             false,
             LogIconTone.Info);
@@ -703,7 +689,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
                 UpdateFileProgress(0.06);
                 precheckResult = await RunCancelableNativeCallAsync(() =>
                 {
-                    var detect = AwmBridge.DetectAudioMultichannelDetailed(inputPath, layout);
+                    var detect = AwmBridge.DetectAudioMultichannelDetailed(inputPath, AwmChannelLayout.Auto);
                     if (detect.error == AwmError.Ok && detect.result is not null)
                     {
                         return (true, AwmError.Ok, false);
@@ -838,7 +824,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
                         inputPath,
                         outputPath,
                         message,
-                        layout,
+                        AwmChannelLayout.Auto,
                         Strength,
                         onProgress: snapshot =>
                         {
@@ -1465,38 +1451,6 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SkipSummaryDialogMessage));
     }
 
-    private static ObservableCollection<ChannelLayoutOption> BuildChannelLayoutOptions()
-    {
-        return new ObservableCollection<ChannelLayoutOption>
-        {
-            CreateLayoutOption(AwmChannelLayout.Auto, L("自动", "Auto")),
-            CreateLayoutOption(AwmChannelLayout.Stereo, L("立体声", "Stereo")),
-            CreateLayoutOption(AwmChannelLayout.Surround51, "5.1"),
-            CreateLayoutOption(AwmChannelLayout.Surround512, "5.1.2"),
-            CreateLayoutOption(AwmChannelLayout.Surround71, "7.1"),
-            CreateLayoutOption(AwmChannelLayout.Surround714, "7.1.4"),
-            CreateLayoutOption(AwmChannelLayout.Surround916, "9.1.6"),
-        };
-    }
-
-    private void RebuildLayoutOptions()
-    {
-        var current = SelectedChannelLayout?.Layout ?? AwmChannelLayout.Auto;
-        ChannelLayoutOptions.Clear();
-        foreach (var option in BuildChannelLayoutOptions())
-        {
-            ChannelLayoutOptions.Add(option);
-        }
-
-        SelectedChannelLayout = ChannelLayoutOptions.FirstOrDefault(item => item.Layout == current)
-            ?? ChannelLayoutOptions.FirstOrDefault();
-    }
-
-    private static ChannelLayoutOption CreateLayoutOption(AwmChannelLayout layout, string label)
-    {
-        return new ChannelLayoutOption(layout, label, AwmBridge.GetLayoutChannels(layout));
-    }
-
     public async Task FlashOutputSelectAsync()
     {
         IsOutputSelectSuccess = true;
@@ -1562,7 +1516,6 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(StoredMappingsLabel));
         OnPropertyChanged(nameof(StrengthLabel));
         OnPropertyChanged(nameof(SuffixLabel));
-        OnPropertyChanged(nameof(LayoutLabel));
         OnPropertyChanged(nameof(DropZoneTitle));
         OnPropertyChanged(nameof(DropZoneSubtitle));
         OnPropertyChanged(nameof(QueueTitle));

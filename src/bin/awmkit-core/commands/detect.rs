@@ -84,6 +84,12 @@ struct DetectJson {
     slot_status: Option<String>,
     /// Internal field.
     slot_scan_count: Option<u32>,
+    /// Internal field.
+    detect_route: String,
+    /// Internal field.
+    fallback_triggered: bool,
+    /// Internal field.
+    fallback_reason: Option<String>,
 }
 
 /// Internal helper function.
@@ -244,17 +250,27 @@ fn run_text_mode(
     };
 
     for input in inputs {
-        match detect_one(audio, key_store, input, layout, evidence_store) {
-            Ok(DetectOutcome::Found {
+        let execution = detect_one(audio, key_store, input, layout, evidence_store);
+        report_fallback_trace(ctx, progress, input, &execution);
+
+        match execution.outcome {
+            DetectOutcome::Found {
                 tag,
                 identity,
+                version: _,
+                key_slot: _,
+                timestamp_minutes: _,
+                timestamp_utc: _,
+                pattern: _,
+                bit_errors: _,
+                match_found: _,
                 clone_check,
                 detect_score,
                 decode_slot_hint,
                 decode_slot_used,
                 slot_status,
                 slot_scan_count,
-            }) => {
+            } => {
                 stats.ok += 1;
                 report_found(
                     ctx,
@@ -272,19 +288,22 @@ fn run_text_mode(
                     },
                 );
             }
-            Ok(DetectOutcome::NotFound) => {
+            DetectOutcome::NotFound => {
                 stats.miss += 1;
                 report_miss(ctx, progress, input);
             }
-            Ok(DetectOutcome::Invalid {
+            DetectOutcome::Invalid {
                 error,
                 unverified,
+                pattern: _,
+                bit_errors: _,
+                match_found: _,
                 detect_score,
                 decode_slot_hint,
                 decode_slot_used,
                 slot_status,
                 slot_scan_count,
-            }) => {
+            } => {
                 stats.invalid += 1;
                 report_invalid(
                     progress,
@@ -300,9 +319,9 @@ fn run_text_mode(
                     },
                 );
             }
-            Err(err) => {
+            DetectOutcome::Error { error } => {
                 stats.invalid += 1;
-                report_error(progress, input, &err);
+                report_error(progress, input, &error);
             }
         }
 
@@ -411,12 +430,52 @@ fn report_invalid(
 }
 
 /// Internal helper function.
-fn report_error(progress: Option<&ProgressBar>, input: &std::path::Path, err: &CliError) {
+fn report_error(progress: Option<&ProgressBar>, input: &std::path::Path, err: &str) {
     let line = format!("[ERR] {}: {err}", input.display());
     if let Some(bar) = progress {
         bar.println(line);
     } else {
         crate::output::Output::error(line);
+    }
+}
+
+/// Internal helper function.
+fn report_fallback_trace(
+    ctx: &Context,
+    progress: Option<&ProgressBar>,
+    input: &std::path::Path,
+    execution: &DetectExecution,
+) {
+    if !execution.fallback_triggered || !ctx.out.verbose() || ctx.out.quiet() {
+        return;
+    }
+
+    let reason = execution.fallback_reason.as_deref().unwrap_or("unknown");
+    let trigger_line = format!(
+        "[FALLBACK] {} route={} reason={}",
+        input.display(),
+        execution.detect_route,
+        reason
+    );
+    if let Some(bar) = progress {
+        bar.println(trigger_line);
+    } else {
+        ctx.out.info(trigger_line);
+    }
+
+    let status = match &execution.outcome {
+        DetectOutcome::Error { .. } => "failed",
+        _ => "ok",
+    };
+    let outcome_line = format!(
+        "[FALLBACK-{status}] {} route={}",
+        input.display(),
+        execution.detect_route
+    );
+    if let Some(bar) = progress {
+        bar.println(outcome_line);
+    } else {
+        ctx.out.info(outcome_line);
     }
 }
 
@@ -440,6 +499,20 @@ enum DetectOutcome {
         /// Internal field.
         identity: String,
         /// Internal field.
+        version: u8,
+        /// Internal field.
+        key_slot: u8,
+        /// Internal field.
+        timestamp_minutes: u32,
+        /// Internal field.
+        timestamp_utc: u64,
+        /// Internal field.
+        pattern: String,
+        /// Internal field.
+        bit_errors: u32,
+        /// Internal field.
+        match_found: bool,
+        /// Internal field.
         clone_check: CloneCheck,
         /// Internal field.
         detect_score: Option<f32>,
@@ -461,6 +534,12 @@ enum DetectOutcome {
         /// Internal field.
         unverified: Option<awmkit::Decoded>,
         /// Internal field.
+        pattern: String,
+        /// Internal field.
+        bit_errors: u32,
+        /// Internal field.
+        match_found: bool,
+        /// Internal field.
         detect_score: Option<f32>,
         /// Internal field.
         decode_slot_hint: Option<u8>,
@@ -471,6 +550,23 @@ enum DetectOutcome {
         /// Internal field.
         slot_scan_count: u32,
     },
+    /// Internal variant.
+    Error {
+        /// Internal field.
+        error: String,
+    },
+}
+
+/// Internal struct.
+struct DetectExecution {
+    /// Internal field.
+    outcome: DetectOutcome,
+    /// Internal field.
+    detect_route: String,
+    /// Internal field.
+    fallback_triggered: bool,
+    /// Internal field.
+    fallback_reason: Option<String>,
 }
 
 #[derive(Clone)]
@@ -566,36 +662,86 @@ fn detect_one(
     input: &std::path::Path,
     layout: Option<ChannelLayout>,
     evidence_store: Option<&EvidenceStore>,
-) -> Result<DetectOutcome> {
-    match detect_best(audio, input, layout)? {
-        None => Ok(DetectOutcome::NotFound),
-        Some(result) => {
-            let slot_resolution = resolve_decode_slot(&result.raw_message, key_store);
-            match slot_resolution {
-                SlotResolution::Decoded(decoded) => {
-                    let clone_check = evaluate_clone_check(input, &decoded.message, evidence_store);
-                    Ok(DetectOutcome::Found {
-                        tag: decoded.message.tag.to_string(),
-                        identity: decoded.message.identity().to_string(),
-                        clone_check,
-                        detect_score: result.detect_score,
-                        decode_slot_hint: decoded.slot_hint,
-                        decode_slot_used: decoded.slot_used,
-                        slot_status: decoded.status,
-                        slot_scan_count: decoded.scan_count,
-                    })
+) -> DetectExecution {
+    let mut detect_route = "multichannel".to_string();
+    let mut fallback_triggered = false;
+    let mut fallback_reason: Option<String> = None;
+
+    let best_result = match audio.detect_multichannel(input, layout) {
+        Ok(result) => result.best,
+        Err(err) if is_strict_adm_fallback_error(&err) => {
+            detect_route = "single_fallback".to_string();
+            fallback_triggered = true;
+            fallback_reason = Some(err.to_string());
+            match audio.detect(input) {
+                Ok(result) => result,
+                Err(fallback_err) => {
+                    return DetectExecution {
+                        outcome: DetectOutcome::Error {
+                            error: format!("fallback detect failed: {fallback_err}"),
+                        },
+                        detect_route,
+                        fallback_triggered,
+                        fallback_reason,
+                    };
                 }
-                SlotResolution::Invalid(invalid) => Ok(DetectOutcome::Invalid {
-                    error: invalid.error,
-                    unverified: Message::decode_unverified(&result.raw_message).ok(),
-                    detect_score: result.detect_score,
-                    decode_slot_hint: Some(invalid.slot_hint),
-                    decode_slot_used: invalid.slot_used,
-                    slot_status: invalid.status,
-                    slot_scan_count: invalid.scan_count,
-                }),
             }
         }
+        Err(err) => {
+            return DetectExecution {
+                outcome: DetectOutcome::Error {
+                    error: err.to_string(),
+                },
+                detect_route,
+                fallback_triggered,
+                fallback_reason,
+            };
+        }
+    };
+
+    let outcome = match best_result {
+        None => DetectOutcome::NotFound,
+        Some(result) => match resolve_decode_slot(&result.raw_message, key_store) {
+            SlotResolution::Decoded(decoded) => {
+                let clone_check = evaluate_clone_check(input, &decoded.message, evidence_store);
+                DetectOutcome::Found {
+                    tag: decoded.message.tag.to_string(),
+                    identity: decoded.message.identity().to_string(),
+                    version: decoded.message.version,
+                    key_slot: decoded.message.key_slot,
+                    timestamp_minutes: decoded.message.timestamp_minutes,
+                    timestamp_utc: decoded.message.timestamp_utc,
+                    pattern: result.pattern,
+                    bit_errors: result.bit_errors,
+                    match_found: result.match_found,
+                    clone_check,
+                    detect_score: result.detect_score,
+                    decode_slot_hint: decoded.slot_hint,
+                    decode_slot_used: decoded.slot_used,
+                    slot_status: decoded.status,
+                    slot_scan_count: decoded.scan_count,
+                }
+            }
+            SlotResolution::Invalid(invalid) => DetectOutcome::Invalid {
+                error: invalid.error,
+                unverified: Message::decode_unverified(&result.raw_message).ok(),
+                pattern: result.pattern,
+                bit_errors: result.bit_errors,
+                match_found: result.match_found,
+                detect_score: result.detect_score,
+                decode_slot_hint: Some(invalid.slot_hint),
+                decode_slot_used: invalid.slot_used,
+                slot_status: invalid.status,
+                slot_scan_count: invalid.scan_count,
+            },
+        },
+    };
+
+    DetectExecution {
+        outcome,
+        detect_route,
+        fallback_triggered,
+        fallback_reason,
     }
 }
 
@@ -607,17 +753,95 @@ fn detect_one_json(
     layout: Option<ChannelLayout>,
     evidence_store: Option<&EvidenceStore>,
 ) -> DetectJson {
-    match detect_best(audio, input, layout) {
-        Ok(None) => detect_json_base(input, "not_found"),
-        Ok(Some(result)) => match resolve_decode_slot(&result.raw_message, key_store) {
-            SlotResolution::Decoded(decoded) => {
-                let clone_check = evaluate_clone_check(input, &decoded.message, evidence_store);
-                detect_json_ok(input, result, decoded, clone_check)
-            }
-            SlotResolution::Invalid(invalid) => detect_json_invalid(input, result, invalid),
-        },
-        Err(err) => detect_json_error(input, err.to_string()),
-    }
+    let execution = detect_one(audio, key_store, input, layout, evidence_store);
+    let DetectExecution {
+        outcome,
+        detect_route,
+        fallback_triggered,
+        fallback_reason,
+    } = execution;
+    let mut json = match outcome {
+        DetectOutcome::NotFound => detect_json_base(input, "not_found"),
+        DetectOutcome::Found {
+            tag,
+            identity,
+            version,
+            key_slot,
+            timestamp_minutes,
+            timestamp_utc,
+            pattern,
+            bit_errors,
+            match_found,
+            clone_check,
+            detect_score,
+            decode_slot_hint,
+            decode_slot_used,
+            slot_status,
+            slot_scan_count,
+        } => {
+            let mut json = detect_json_base(input, "ok");
+            json.verification = Some("verified".to_string());
+            json.tag = Some(tag);
+            json.identity = Some(identity);
+            json.version = Some(version);
+            json.key_slot = Some(key_slot);
+            json.timestamp_minutes = Some(timestamp_minutes);
+            json.timestamp_utc = Some(timestamp_utc);
+            json.pattern = Some(pattern);
+            json.detect_score = detect_score;
+            json.bit_errors = Some(bit_errors);
+            json.match_found = Some(match_found);
+            json.clone_check = Some(clone_check.check);
+            json.clone_score = clone_check.score;
+            json.clone_match_seconds = clone_check.match_seconds;
+            json.clone_matched_evidence_id = clone_check.matched_evidence_id;
+            json.clone_reason = clone_check.reason;
+            json.decode_slot_hint = Some(decode_slot_hint);
+            json.decode_slot_used = Some(decode_slot_used);
+            json.slot_status = Some(slot_status);
+            json.slot_scan_count = Some(slot_scan_count);
+            json
+        }
+        DetectOutcome::Invalid {
+            error,
+            unverified,
+            pattern,
+            bit_errors,
+            match_found,
+            detect_score,
+            decode_slot_hint,
+            decode_slot_used,
+            slot_status,
+            slot_scan_count,
+        } => {
+            let mut json = detect_json_base(input, "invalid_hmac");
+            json.verification = Some("unverified".to_string());
+            json.forensic_warning = Some(i18n::tr("cli-detect-forensic-warning"));
+            json.tag = unverified.as_ref().map(|message| message.tag.to_string());
+            json.identity = unverified
+                .as_ref()
+                .map(|message| message.identity().to_string());
+            json.version = unverified.as_ref().map(|message| message.version);
+            json.key_slot = unverified.as_ref().map(|message| message.key_slot);
+            json.timestamp_minutes = unverified.as_ref().map(|message| message.timestamp_minutes);
+            json.timestamp_utc = unverified.as_ref().map(|message| message.timestamp_utc);
+            json.pattern = Some(pattern);
+            json.detect_score = detect_score;
+            json.bit_errors = Some(bit_errors);
+            json.match_found = Some(match_found);
+            json.error = Some(error);
+            json.decode_slot_hint = decode_slot_hint;
+            json.decode_slot_used = decode_slot_used;
+            json.slot_status = Some(slot_status);
+            json.slot_scan_count = Some(slot_scan_count);
+            json
+        }
+        DetectOutcome::Error { error } => detect_json_error(input, error),
+    };
+    json.detect_route = detect_route;
+    json.fallback_triggered = fallback_triggered;
+    json.fallback_reason = fallback_reason;
+    json
 }
 
 /// Internal helper function.
@@ -647,68 +871,10 @@ fn detect_json_base(input: &std::path::Path, status: &str) -> DetectJson {
         decode_slot_used: None,
         slot_status: None,
         slot_scan_count: None,
+        detect_route: "multichannel".to_string(),
+        fallback_triggered: false,
+        fallback_reason: None,
     }
-}
-
-/// Internal helper function.
-fn detect_json_ok(
-    input: &std::path::Path,
-    result: awmkit::DetectResult,
-    decoded: DecodedSlotMessage,
-    clone_check: CloneCheck,
-) -> DetectJson {
-    let mut json = detect_json_base(input, "ok");
-    json.verification = Some("verified".to_string());
-    json.tag = Some(decoded.message.tag.to_string());
-    json.identity = Some(decoded.message.identity().to_string());
-    json.version = Some(decoded.message.version);
-    json.key_slot = Some(decoded.message.key_slot);
-    json.timestamp_minutes = Some(decoded.message.timestamp_minutes);
-    json.timestamp_utc = Some(decoded.message.timestamp_utc);
-    json.pattern = Some(result.pattern);
-    json.detect_score = result.detect_score;
-    json.bit_errors = Some(result.bit_errors);
-    json.match_found = Some(result.match_found);
-    json.clone_check = Some(clone_check.check);
-    json.clone_score = clone_check.score;
-    json.clone_match_seconds = clone_check.match_seconds;
-    json.clone_matched_evidence_id = clone_check.matched_evidence_id;
-    json.clone_reason = clone_check.reason;
-    json.decode_slot_hint = Some(decoded.slot_hint);
-    json.decode_slot_used = Some(decoded.slot_used);
-    json.slot_status = Some(decoded.status);
-    json.slot_scan_count = Some(decoded.scan_count);
-    json
-}
-
-/// Internal helper function.
-fn detect_json_invalid(
-    input: &std::path::Path,
-    result: awmkit::DetectResult,
-    invalid: InvalidSlotDecode,
-) -> DetectJson {
-    let unverified = Message::decode_unverified(&result.raw_message).ok();
-    let mut json = detect_json_base(input, "invalid_hmac");
-    json.verification = Some("unverified".to_string());
-    json.forensic_warning = Some(i18n::tr("cli-detect-forensic-warning"));
-    json.tag = unverified.as_ref().map(|message| message.tag.to_string());
-    json.identity = unverified
-        .as_ref()
-        .map(|message| message.identity().to_string());
-    json.version = unverified.as_ref().map(|message| message.version);
-    json.key_slot = unverified.as_ref().map(|message| message.key_slot);
-    json.timestamp_minutes = unverified.as_ref().map(|message| message.timestamp_minutes);
-    json.timestamp_utc = unverified.as_ref().map(|message| message.timestamp_utc);
-    json.pattern = Some(result.pattern);
-    json.detect_score = result.detect_score;
-    json.bit_errors = Some(result.bit_errors);
-    json.match_found = Some(result.match_found);
-    json.error = Some(invalid.error);
-    json.decode_slot_hint = Some(invalid.slot_hint);
-    json.decode_slot_used = invalid.slot_used;
-    json.slot_status = Some(invalid.status);
-    json.slot_scan_count = Some(invalid.scan_count);
-    json
 }
 
 /// Internal helper function.
@@ -719,13 +885,13 @@ fn detect_json_error(input: &std::path::Path, error: String) -> DetectJson {
 }
 
 /// Internal helper function.
-fn detect_best(
-    audio: &awmkit::Audio,
-    input: &std::path::Path,
-    layout: Option<ChannelLayout>,
-) -> Result<Option<awmkit::DetectResult>> {
-    let result = audio.detect_multichannel(input, layout)?;
-    Ok(result.best)
+const fn is_strict_adm_fallback_error(err: &awmkit::Error) -> bool {
+    matches!(
+        err,
+        awmkit::Error::AdmUnsupported(_)
+            | awmkit::Error::AdmPreserveFailed(_)
+            | awmkit::Error::AdmPcmFormatUnsupported(_)
+    )
 }
 
 /// Internal struct.
