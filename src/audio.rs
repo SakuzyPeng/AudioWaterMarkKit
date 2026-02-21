@@ -729,14 +729,26 @@ impl Audio {
     ) -> Result<()> {
         let op_id = self.progress_begin_operation(ProgressOperation::Embed, "prepare_input");
         let result = (|| {
-            validate_embed_output_path(output.as_ref())?;
-            let prepared = prepare_input_for_audiowmark(input.as_ref(), "embed_input")?;
+            let input = input.as_ref();
+            let output = output.as_ref();
+            validate_embed_output_path(output)?;
+            #[cfg(feature = "multichannel")]
+            if media::adm_bwav::probe_adm_bwf(input)?.is_some() {
+                self.progress_set_phase_for_op(
+                    op_id,
+                    &PhaseParams::indeterminate(ProgressPhase::Core, "embed_adm"),
+                );
+                return media::adm_embed::embed_adm_multichannel(
+                    self, input, output, message, None,
+                );
+            }
+            let prepared = prepare_input_for_audiowmark(input, "embed_input")?;
             let hex = bytes_to_hex(message);
             self.progress_set_phase_for_op(
                 op_id,
                 &PhaseParams::indeterminate(ProgressPhase::Core, "embed_core"),
             );
-            run_audiowmark_add_prepared(self, &prepared.path, output.as_ref(), &hex)
+            run_audiowmark_add_prepared(self, &prepared.path, output, &hex)
         })();
         self.progress_finish_operation(op_id, result.is_ok(), "embed_done");
         result

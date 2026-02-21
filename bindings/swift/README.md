@@ -53,7 +53,7 @@ print(tag.identity)  // "SAKUZY"
 
 // 3. 嵌入水印
 let audio = try AWMAudio()
-try audio.embed(
+try audio.embedMultichannel(
     input: URL(fileURLWithPath: "input.wav"),
     output: URL(fileURLWithPath: "output.wav"),
     tag: tag,
@@ -122,9 +122,13 @@ audio.setStrength(10)                    // 强度 1-30
 audio.setKeyFile("/path/to/key")         // audiowmark 密钥文件
 audio.isAvailable                        // Bool
 
-// 嵌入
+// 嵌入（立体声/普通音频）
 try audio.embed(input: url, output: url, message: data)
 try audio.embed(input: url, output: url, tag: tag, key: key)
+
+// 嵌入（多声道 / ADM BWF，保留 axml/chna）
+try audio.embedMultichannel(input: url, output: url, message: data)
+try audio.embedMultichannel(input: url, output: url, tag: tag, key: key)
 
 // 检测
 let result = try audio.detect(input: url)  // AWMDetectResultSwift?
