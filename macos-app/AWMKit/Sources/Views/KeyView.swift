@@ -215,7 +215,7 @@ struct KeyView: View {
                     showHexImportSheet = true
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "textformat.abc")
+                        Image(systemName: "number.square")
                             .foregroundStyle(viewModel.isHexImportSuccess ? DesignSystem.Colors.success : .primary)
                         Text(l("Hex 导入", "Hex Import"))
                     }
