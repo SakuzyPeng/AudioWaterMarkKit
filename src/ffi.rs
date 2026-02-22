@@ -760,10 +760,7 @@ pub unsafe extern "C" fn awm_audio_progress_set_callback(
             fill_progress_snapshot(&mut ffi_snapshot, &snapshot);
             // SAFETY: callback/user_data contract is provided by FFI caller.
             unsafe {
-                cb(
-                    &raw const ffi_snapshot,
-                    user_data_ptr as *mut c_void,
-                );
+                cb(&raw const ffi_snapshot, user_data_ptr as *mut c_void);
             }
         });
         audio.set_progress_callback(Some(wrapped));
@@ -1836,6 +1833,77 @@ pub unsafe extern "C" fn awm_key_load(out_key: *mut u8, out_key_cap: usize) -> i
     #[cfg(not(feature = "app"))]
     {
         let _ = out_key_cap;
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// Load key from a specific slot into output buffer.
+///
+/// # Safety
+/// - `out_key` 必须指向至少 `out_key_cap` 字节的缓冲区
+/// - `out_key_cap` 必须 >= 32
+/// - 成功时写入 32 字节密钥
+#[no_mangle]
+pub unsafe extern "C" fn awm_key_load_slot(slot: u8, out_key: *mut u8, out_key_cap: usize) -> i32 {
+    if out_key.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    #[cfg(feature = "app")]
+    {
+        if out_key_cap < crate::app::KEY_LEN {
+            return AWMError::InvalidMessageLength as i32;
+        }
+        crate::app::KeyStore::new()
+            .and_then(|ks| ks.load_slot(slot))
+            .map_or(AWMError::AudiowmarkExec as i32, |key| {
+                ptr::copy_nonoverlapping(key.as_ptr(), out_key, key.len());
+                AWMError::Success as i32
+            })
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = (slot, out_key_cap);
+        AWMError::AudiowmarkExec as i32
+    }
+}
+
+/// Save key into a specific slot.
+///
+/// # Safety
+/// - `key` 必须指向 `key_len` 字节的有效内存
+/// - `key_len` 必须为 32
+#[no_mangle]
+pub unsafe extern "C" fn awm_key_save_slot(slot: u8, key: *const u8, key_len: usize) -> i32 {
+    if key.is_null() {
+        return AWMError::NullPointer as i32;
+    }
+
+    #[cfg(feature = "app")]
+    {
+        if key_len != crate::app::KEY_LEN {
+            return AWMError::InvalidMessageLength as i32;
+        }
+
+        let key_slice = slice::from_raw_parts(key, key_len);
+        match crate::app::KeyStore::new() {
+            Ok(ks) => {
+                if ks.exists_slot(slot) {
+                    return AWMError::KeyAlreadyExists as i32;
+                }
+                match ks.save_slot(slot, key_slice) {
+                    Ok(()) => AWMError::Success as i32,
+                    Err(_) => AWMError::AudiowmarkExec as i32,
+                }
+            }
+            Err(_) => AWMError::AudiowmarkExec as i32,
+        }
+    }
+
+    #[cfg(not(feature = "app"))]
+    {
+        let _ = (slot, key_len);
         AWMError::AudiowmarkExec as i32
     }
 }

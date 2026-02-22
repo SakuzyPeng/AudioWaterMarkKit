@@ -99,6 +99,33 @@ public enum AWMKeyStore {
         return Data(key)
     }
 
+    public static func loadKey(slot: UInt8) throws -> Data {
+        var key = [UInt8](repeating: 0, count: keyLength)
+        let code = key.withUnsafeMutableBufferPointer { buffer -> Int32 in
+            awm_key_load_slot(slot, buffer.baseAddress, keyLength)
+        }
+        guard code == AWM_SUCCESS.rawValue else {
+            throw AWMError(code: code)
+        }
+        return Data(key)
+    }
+
+    public static func saveKey(slot: UInt8, key: Data) throws {
+        guard key.count == keyLength else {
+            throw AWMError.invalidMessageLength(key.count)
+        }
+        let code = key.withUnsafeBytes { keyPtr -> Int32 in
+            awm_key_save_slot(
+                slot,
+                keyPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
+                keyPtr.count
+            )
+        }
+        guard code == AWM_SUCCESS.rawValue else {
+            throw AWMError(code: code)
+        }
+    }
+
     @discardableResult
     public static func generateAndSaveActiveKey() throws -> Data {
         var key = [UInt8](repeating: 0, count: keyLength)

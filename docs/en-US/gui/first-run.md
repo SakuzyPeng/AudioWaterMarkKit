@@ -14,8 +14,12 @@ This guide is for first-time users of AWMKit GUI (macOS App and WinUI App).
 
 1. Open the `Key` page.
 2. Select a slot (default is `0`).
-3. Click `Generate` to create a key.
-4. Optional: set a label for the active slot.
+3. Configure key material using one of these methods:
+   - Click `Generate` to create a random key.
+   - Click `Import (.bin)` to import a 32-byte key file.
+   - Click `Hex Import` and paste a 64-character hex key (`0x` prefix allowed).
+4. Optional: click `Export (.bin)` to back up the selected slot key.
+5. Optional: set a label for the active slot.
 
 Notes:
 - Without a key, `Embed` is disabled.

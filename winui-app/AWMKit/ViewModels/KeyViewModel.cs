@@ -74,6 +74,8 @@ public sealed partial class KeyViewModel : ObservableObject
     public string KeySourceLabel => _appViewModel.KeySourceLabel;
     public bool CanOperate => !IsBusy;
     public bool CanGenerateKey => !IsBusy && !SelectedSlotHasKey;
+    public bool CanImportKey => !IsBusy && !SelectedSlotHasKey;
+    public bool CanExportKey => !IsBusy && SelectedSlotHasKey;
     public string GenerateKeyTooltip => SelectedSlotHasKey
         ? L("当前槽位已有密钥，已禁止覆盖。请先删除后再生成。", "A key already exists in this slot. Delete it before generating.")
         : L("在当前槽位生成新密钥", "Generate a new key in current slot");
@@ -111,6 +113,9 @@ public sealed partial class KeyViewModel : ObservableObject
     public string ApplyActionText => L("应用", "Apply");
     public string ActiveKeySectionTitle => L("当前激活密钥", "Current active key");
     public string GenerateActionText => L("生成", "Generate");
+    public string ImportFileActionText => L("导入(.bin)", "Import (.bin)");
+    public string ImportHexActionText => L("Hex 导入", "Hex Import");
+    public string ExportFileActionText => L("导出(.bin)", "Export (.bin)");
     public string EditActionText => L("编辑", "Edit");
     public string DeleteActionText => L("删除", "Delete");
     public string RefreshActionText => L("刷新", "Refresh");
@@ -184,9 +189,51 @@ public sealed partial class KeyViewModel : ObservableObject
 
     public Brush ApplyActionBrush => IsApplySuccess ? ResolveSuccessBrush() : ResolvePrimaryTextBrush();
     public Brush GenerateActionBrush => IsGenerateSuccess ? ResolveSuccessBrush() : ResolveAccentTextBrush();
+    public Brush ImportActionBrush => IsImportSuccess ? ResolveSuccessBrush() : ResolvePrimaryTextBrush();
+    public Brush ImportHexActionBrush => IsHexImportSuccess ? ResolveSuccessBrush() : ResolvePrimaryTextBrush();
+    public Brush ExportActionBrush => IsExportSuccess ? ResolveSuccessBrush() : ResolvePrimaryTextBrush();
     public Brush EditActionBrush => IsEditSuccess ? ResolveSuccessBrush() : ResolvePrimaryTextBrush();
     public Brush DeleteActionBrush => IsDeleteSuccess ? ResolveSuccessBrush() : ResolvePrimaryTextBrush();
     public Brush RefreshActionBrush => IsRefreshSuccess ? ResolveSuccessBrush() : ResolvePrimaryTextBrush();
+
+    private bool _isImportSuccess;
+    public bool IsImportSuccess
+    {
+        get => _isImportSuccess;
+        private set
+        {
+            if (SetProperty(ref _isImportSuccess, value))
+            {
+                OnPropertyChanged(nameof(ImportActionBrush));
+            }
+        }
+    }
+
+    private bool _isHexImportSuccess;
+    public bool IsHexImportSuccess
+    {
+        get => _isHexImportSuccess;
+        private set
+        {
+            if (SetProperty(ref _isHexImportSuccess, value))
+            {
+                OnPropertyChanged(nameof(ImportHexActionBrush));
+            }
+        }
+    }
+
+    private bool _isExportSuccess;
+    public bool IsExportSuccess
+    {
+        get => _isExportSuccess;
+        private set
+        {
+            if (SetProperty(ref _isExportSuccess, value))
+            {
+                OnPropertyChanged(nameof(ExportActionBrush));
+            }
+        }
+    }
 
     public KeyViewModel()
     {
@@ -247,6 +294,52 @@ public sealed partial class KeyViewModel : ObservableObject
         }
 
         return result;
+    }
+
+    public async Task<AwmError> ImportKeyBytesAsync(byte[] key)
+    {
+        return await ImportKeyBytesInternalAsync(key, isHexImport: false);
+    }
+
+    public async Task<AwmError> ImportHexAsync(string? hexInput)
+    {
+        var normalized = NormalizeHexKey(hexInput);
+        if (normalized is null)
+        {
+            return AwmError.InvalidMessageLength;
+        }
+
+        var key = Convert.FromHexString(normalized);
+        return await ImportKeyBytesInternalAsync(key, isHexImport: true);
+    }
+
+    public async Task<(byte[]? key, AwmError error)> ExportKeyBytesAsync()
+    {
+        if (IsBusy)
+        {
+            return (null, AwmError.AudiowmarkExec);
+        }
+
+        if (!SelectedSlotHasKey)
+        {
+            return (null, AwmError.AudiowmarkExec);
+        }
+
+        IsBusy = true;
+        try
+        {
+            return await Task.Run(() => AwmKeyBridge.LoadKeyInSlot(SelectedSlot));
+        }
+        finally
+        {
+            IsBusy = false;
+            RaiseComputedProperties();
+        }
+    }
+
+    public async Task MarkExportSuccessAsync()
+    {
+        await FlashExportSuccessAsync();
     }
 
     public async Task DeleteKeyAsync()
@@ -360,6 +453,8 @@ public sealed partial class KeyViewModel : ObservableObject
         OnPropertyChanged(nameof(ConfiguredSlotCountText));
         OnPropertyChanged(nameof(CanOperate));
         OnPropertyChanged(nameof(CanGenerateKey));
+        OnPropertyChanged(nameof(CanImportKey));
+        OnPropertyChanged(nameof(CanExportKey));
         OnPropertyChanged(nameof(GenerateKeyTooltip));
         OnPropertyChanged(nameof(KeyPageTitle));
         OnPropertyChanged(nameof(KeyStatusFieldLabel));
@@ -368,6 +463,9 @@ public sealed partial class KeyViewModel : ObservableObject
         OnPropertyChanged(nameof(ApplyActionText));
         OnPropertyChanged(nameof(ActiveKeySectionTitle));
         OnPropertyChanged(nameof(GenerateActionText));
+        OnPropertyChanged(nameof(ImportFileActionText));
+        OnPropertyChanged(nameof(ImportHexActionText));
+        OnPropertyChanged(nameof(ExportFileActionText));
         OnPropertyChanged(nameof(EditActionText));
         OnPropertyChanged(nameof(DeleteActionText));
         OnPropertyChanged(nameof(RefreshActionText));
@@ -537,6 +635,102 @@ public sealed partial class KeyViewModel : ObservableObject
         IsEditSuccess = true;
         await Task.Delay(1000);
         IsEditSuccess = false;
+    }
+
+    private async Task FlashImportSuccessAsync()
+    {
+        IsImportSuccess = true;
+        await Task.Delay(1000);
+        IsImportSuccess = false;
+    }
+
+    private async Task FlashHexImportSuccessAsync()
+    {
+        IsHexImportSuccess = true;
+        await Task.Delay(1000);
+        IsHexImportSuccess = false;
+    }
+
+    private async Task FlashExportSuccessAsync()
+    {
+        IsExportSuccess = true;
+        await Task.Delay(1000);
+        IsExportSuccess = false;
+    }
+
+    private async Task<AwmError> ImportKeyBytesInternalAsync(byte[] key, bool isHexImport)
+    {
+        if (IsBusy)
+        {
+            return AwmError.AudiowmarkExec;
+        }
+
+        if (SelectedSlotHasKey)
+        {
+            return AwmError.KeyAlreadyExists;
+        }
+
+        if (key.Length != 32)
+        {
+            return AwmError.InvalidMessageLength;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var error = await Task.Run(() => AwmKeyBridge.SaveKeyInSlot(SelectedSlot, key));
+            if (error == AwmError.Ok)
+            {
+                await _appViewModel.RefreshRuntimeStatusAsync();
+                await RefreshSlotSummariesAsync();
+                if (isHexImport)
+                {
+                    await FlashHexImportSuccessAsync();
+                }
+                else
+                {
+                    await FlashImportSuccessAsync();
+                }
+            }
+            else
+            {
+                await RefreshSlotSummariesAsync();
+            }
+            return error;
+        }
+        finally
+        {
+            IsBusy = false;
+            RaiseComputedProperties();
+        }
+    }
+
+    private static string? NormalizeHexKey(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return null;
+        }
+
+        var compact = string.Concat(input.Where(ch => !char.IsWhiteSpace(ch)));
+        if (compact.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            compact = compact[2..];
+        }
+
+        if (compact.Length != 64)
+        {
+            return null;
+        }
+
+        return compact.All(IsHexChar) ? compact : null;
+    }
+
+    private static bool IsHexChar(char ch)
+    {
+        return (ch >= '0' && ch <= '9')
+               || (ch >= 'a' && ch <= 'f')
+               || (ch >= 'A' && ch <= 'F');
     }
 
     private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;

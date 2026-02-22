@@ -9,7 +9,7 @@ The macOS app is built with SwiftUI and uses Rust FFI as the single source of co
 - Embed page (input source, settings, queue, logs)
 - Detect page (result card, queue, logs, selection linkage)
 - Tag/Database page (mapping + evidence management)
-- Key page (slots, generate/delete, labels, summaries)
+- Key page (slots, generate/delete, import/export, hex import, labels, summaries)
 
 ## 2. Development Build
 
@@ -42,4 +42,5 @@ xcodebuild \
 
 - Without key, embed is disabled; detect is still allowed with unverified-result warning
 - Switching slot refreshes status tooltip immediately
+- Key import supports 32-byte `.bin` and 64-char hex (`0x` prefix allowed); overwrite is blocked when slot already has key
 - Successful embed writes evidence; detect clone-check can match against evidence rows

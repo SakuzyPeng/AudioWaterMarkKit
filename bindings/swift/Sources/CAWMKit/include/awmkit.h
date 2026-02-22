@@ -636,6 +636,29 @@ int32_t awm_key_backend_label(char* out, size_t out_len);
 int32_t awm_key_load(uint8_t* out_key, size_t out_key_cap);
 
 /**
+ * Load key from a specific slot.
+ *
+ * @param slot         Slot index (0..31)
+ * @param out_key      Output buffer (at least 32 bytes)
+ * @param out_key_cap  Buffer capacity (must be >= 32)
+ * @return             AWM_SUCCESS or error code
+ */
+int32_t awm_key_load_slot(uint8_t slot, uint8_t* out_key, size_t out_key_cap);
+
+/**
+ * Save key into a specific slot.
+ *
+ * Overwrite is not allowed. If the slot already has a key,
+ * returns AWM_ERROR_KEY_ALREADY_EXISTS.
+ *
+ * @param slot     Slot index (0..31)
+ * @param key      Key bytes (must be 32 bytes)
+ * @param key_len  Key length (must be 32)
+ * @return         AWM_SUCCESS or error code
+ */
+int32_t awm_key_save_slot(uint8_t slot, const uint8_t* key, size_t key_len);
+
+/**
  * Generate a new signing key, save it, and return it
  *
  * @param out_key      Output buffer (at least 32 bytes)

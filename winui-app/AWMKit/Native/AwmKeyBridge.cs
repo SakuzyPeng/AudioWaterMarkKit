@@ -86,6 +86,51 @@ public static class AwmKeyBridge
     }
 
     /// <summary>
+    /// Loads key from specific slot.
+    /// </summary>
+    /// <returns>(key bytes, error code). Key is null if error occurred.</returns>
+    public static (byte[]? key, AwmError error) LoadKeyInSlot(int slot)
+    {
+        var keyBuffer = new byte[KeySize];
+        var handle = GCHandle.Alloc(keyBuffer, GCHandleType.Pinned);
+        try
+        {
+            int code = AwmNative.awm_key_load_slot(NormalizeSlot(slot), handle.AddrOfPinnedObject(), (nuint)KeySize);
+            if (code == 0)
+            {
+                return (keyBuffer, AwmError.Ok);
+            }
+            return (null, (AwmError)code);
+        }
+        finally
+        {
+            handle.Free();
+        }
+    }
+
+    /// <summary>
+    /// Saves key into specific slot. Overwrite is not allowed.
+    /// </summary>
+    public static AwmError SaveKeyInSlot(int slot, byte[] key)
+    {
+        if (key.Length != KeySize)
+        {
+            return AwmError.InvalidMessageLength;
+        }
+
+        var handle = GCHandle.Alloc(key, GCHandleType.Pinned);
+        try
+        {
+            int code = AwmNative.awm_key_save_slot(NormalizeSlot(slot), handle.AddrOfPinnedObject(), (nuint)key.Length);
+            return (AwmError)code;
+        }
+        finally
+        {
+            handle.Free();
+        }
+    }
+
+    /// <summary>
     /// Gets current active slot.
     /// </summary>
     public static (int slot, AwmError error) GetActiveSlot()

@@ -139,6 +139,36 @@
                             </StackPanel>
                         </Button>
 
+                        <Button Click="ImportKeyButton_Click"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                IsEnabled="{x:Bind ViewModel.CanImportKey, Mode=OneWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <SymbolIcon Symbol="Download"
+                                            Foreground="{x:Bind ViewModel.ImportActionBrush, Mode=OneWay}"/>
+                                <TextBlock Text="{x:Bind ViewModel.ImportFileActionText, Mode=OneWay}"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Click="ImportHexButton_Click"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                IsEnabled="{x:Bind ViewModel.CanImportKey, Mode=OneWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <SymbolIcon Symbol="Document"
+                                            Foreground="{x:Bind ViewModel.ImportHexActionBrush, Mode=OneWay}"/>
+                                <TextBlock Text="{x:Bind ViewModel.ImportHexActionText, Mode=OneWay}"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Click="ExportKeyButton_Click"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                IsEnabled="{x:Bind ViewModel.CanExportKey, Mode=OneWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <SymbolIcon Symbol="Upload"
+                                            Foreground="{x:Bind ViewModel.ExportActionBrush, Mode=OneWay}"/>
+                                <TextBlock Text="{x:Bind ViewModel.ExportFileActionText, Mode=OneWay}"/>
+                            </StackPanel>
+                        </Button>
+
                         <Button Click="EditLabelButton_Click"
                                 Style="{StaticResource SecondaryButtonStyle}"
                                 IsEnabled="{x:Bind ViewModel.CanOperate, Mode=OneWay}">

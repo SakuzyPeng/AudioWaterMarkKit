@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import AWMKit
+import UniformTypeIdentifiers
 
 @MainActor
 final class KeyViewModel: ObservableObject {
@@ -11,6 +13,9 @@ final class KeyViewModel: ObservableObject {
     @Published var isEditSuccess = false
     @Published var isDeleteSuccess = false
     @Published var isRefreshSuccess = false
+    @Published var isImportSuccess = false
+    @Published var isHexImportSuccess = false
+    @Published var isExportSuccess = false
     @Published var errorMessage: String?
     @Published var successMessage: String?
     @Published private(set) var slotSummaries: [AWMKeySlotSummary] = []
@@ -127,6 +132,111 @@ final class KeyViewModel: ObservableObject {
         flash(\.isRefreshSuccess)
     }
 
+    func importKeyFromFile(appState: AppState) async {
+        guard !isWorking else { return }
+        guard !selectedSlotHasKey else {
+            errorMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" 已有密钥，请先删除后再导入。", " already has a key. Delete it before importing."))"
+            successMessage = nil
+            return
+        }
+
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [UTType.data]
+        panel.message = localized("选择 32 字节密钥文件（.bin）", "Select a 32-byte key file (.bin)")
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        isWorking = true
+        defer { isWorking = false }
+
+        do {
+            let key = try Data(contentsOf: url)
+            guard key.count == 32 else {
+                errorMessage = "\(localized("导入密钥失败", "Import failed")): \(localized("文件长度必须为 32 字节", "Key file must be exactly 32 bytes")) (\(key.count))"
+                successMessage = nil
+                return
+            }
+
+            try await appState.saveKey(slot: selectedSlot, key: key)
+            refreshSlotSummaries()
+            successMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" 密钥导入成功", " key imported"))"
+            errorMessage = nil
+            flash(\.isImportSuccess)
+        } catch {
+            errorMessage = "\(localized("导入密钥失败", "Import failed")): \(error.localizedDescription)"
+            successMessage = nil
+        }
+    }
+
+    func importKeyFromHex(appState: AppState, hexInput: String) async {
+        guard !isWorking else { return }
+        guard !selectedSlotHasKey else {
+            errorMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" 已有密钥，请先删除后再导入。", " already has a key. Delete it before importing."))"
+            successMessage = nil
+            return
+        }
+
+        guard let normalized = normalizedHexKey(hexInput),
+              let key = Data(hexString: normalized),
+              key.count == 32 else {
+            errorMessage = "\(localized("Hex 导入失败", "Hex import failed")): \(localized("请输入 64 位十六进制字符（可带 0x 前缀）", "Enter 64 hex characters (0x prefix allowed)"))"
+            successMessage = nil
+            return
+        }
+
+        isWorking = true
+        defer { isWorking = false }
+
+        do {
+            try await appState.saveKey(slot: selectedSlot, key: key)
+            refreshSlotSummaries()
+            successMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" Hex 密钥导入成功", " hex key imported"))"
+            errorMessage = nil
+            flash(\.isHexImportSuccess)
+        } catch {
+            errorMessage = "\(localized("Hex 导入失败", "Hex import failed")): \(error.localizedDescription)"
+            successMessage = nil
+        }
+    }
+
+    func exportKeyToFile(appState: AppState) async {
+        guard !isWorking else { return }
+        guard selectedSlotHasKey else {
+            errorMessage = localized("当前槽位无密钥可导出", "Selected slot has no key to export")
+            successMessage = nil
+            return
+        }
+
+        isWorking = true
+        defer { isWorking = false }
+
+        do {
+            let key = try appState.loadKey(slot: selectedSlot)
+            let panel = NSSavePanel()
+            panel.canCreateDirectories = true
+            panel.allowedContentTypes = [UTType.data]
+            panel.nameFieldStringValue = "awmkit-key-slot-\(selectedSlot).bin"
+            panel.message = localized("导出 32 字节密钥文件（.bin）", "Export 32-byte key file (.bin)")
+
+            guard panel.runModal() == .OK, let url = panel.url else {
+                return
+            }
+
+            try key.write(to: url, options: .atomic)
+            successMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" 密钥导出成功", " key exported"))"
+            errorMessage = nil
+            flash(\.isExportSuccess)
+        } catch {
+            errorMessage = "\(localized("导出密钥失败", "Export failed")): \(error.localizedDescription)"
+            successMessage = nil
+        }
+    }
+
     func refreshSlotSummaries() {
         do {
             slotSummaries = try AWMKeyStore.slotSummaries()
@@ -144,5 +254,23 @@ final class KeyViewModel: ObservableObject {
 
     private func localized(_ zh: String, _ en: String) -> String {
         ((try? AWMUILanguageStore.get()) ?? .zhCN) == .enUS ? en : zh
+    }
+
+    private func normalizedHexKey(_ input: String) -> String? {
+        let compact = input.replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
+        guard !compact.isEmpty else { return nil }
+
+        let normalized: String
+        if compact.lowercased().hasPrefix("0x") {
+            normalized = String(compact.dropFirst(2))
+        } else {
+            normalized = compact
+        }
+
+        guard normalized.count == 64 else { return nil }
+        let isHex = normalized.unicodeScalars.allSatisfy { scalar in
+            CharacterSet(charactersIn: "0123456789abcdefABCDEF").contains(scalar)
+        }
+        return isHex ? normalized : nil
     }
 }

@@ -9,6 +9,8 @@ struct KeyView: View {
     @State private var deleteConfirmInput = ""
     @State private var showEditLabelSheet = false
     @State private var editLabelDraft = ""
+    @State private var showHexImportSheet = false
+    @State private var hexImportDraft = ""
 
     private func l(_ zh: String, _ en: String) -> String {
         appState.tr(zh, en)
@@ -85,6 +87,20 @@ struct KeyView: View {
                     Task {
                         await viewModel.deleteKey(appState: appState)
                         showDeleteConfirmSheet = false
+                    }
+                }
+            )
+        }
+        .sheet(isPresented: $showHexImportSheet) {
+            HexKeyImportSheet(
+                slot: viewModel.selectedSlot,
+                draftHex: $hexImportDraft,
+                isWorking: viewModel.isWorking,
+                onCancel: { showHexImportSheet = false },
+                onConfirm: {
+                    Task {
+                        await viewModel.importKeyFromHex(appState: appState, hexInput: hexImportDraft)
+                        showHexImportSheet = false
                     }
                 }
             )
@@ -182,6 +198,45 @@ struct KeyView: View {
                 .buttonStyle(GlassButtonStyle(accentOn: true))
                 .disabled(viewModel.isWorking)
 
+                Button {
+                    Task { await viewModel.importKeyFromFile(appState: appState) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.arrow.down")
+                            .foregroundStyle(viewModel.isImportSuccess ? DesignSystem.Colors.success : .primary)
+                        Text(l("导入(.bin)", "Import (.bin)"))
+                    }
+                }
+                .buttonStyle(GlassButtonStyle(size: .compact))
+                .disabled(viewModel.selectedSlotHasKey || viewModel.isWorking)
+
+                Button {
+                    hexImportDraft = ""
+                    showHexImportSheet = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "textformat.abc")
+                            .foregroundStyle(viewModel.isHexImportSuccess ? DesignSystem.Colors.success : .primary)
+                        Text(l("Hex 导入", "Hex Import"))
+                    }
+                }
+                .buttonStyle(GlassButtonStyle(size: .compact))
+                .disabled(viewModel.selectedSlotHasKey || viewModel.isWorking)
+
+                Button {
+                    Task { await viewModel.exportKeyToFile(appState: appState) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.arrow.up")
+                            .foregroundStyle(viewModel.isExportSuccess ? DesignSystem.Colors.success : .primary)
+                        Text(l("导出(.bin)", "Export (.bin)"))
+                    }
+                }
+                .buttonStyle(GlassButtonStyle(size: .compact))
+                .disabled(!viewModel.selectedSlotHasKey || viewModel.isWorking)
+            }
+
+            HStack(spacing: 10) {
                 Button {
                     editLabelDraft = viewModel.activeSlotSummary?.label ?? ""
                     showEditLabelSheet = true
@@ -478,5 +533,49 @@ private struct EditSlotLabelSheet: View {
         }
         .padding(18)
         .frame(minWidth: 420)
+    }
+}
+
+private struct HexKeyImportSheet: View {
+    let slot: Int
+    @Binding var draftHex: String
+    let isWorking: Bool
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    private func l(_ zh: String, _ en: String) -> String {
+        ((try? AWMUILanguageStore.get()) ?? .zhCN) == .enUS ? en : zh
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(l("Hex 密钥导入", "Hex key import"))
+                .font(.headline)
+            Text("\(l("目标槽位", "Target slot")): \(slot)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text(l("请输入 64 位十六进制字符（可带 0x 前缀）", "Enter 64 hex characters (0x prefix allowed)"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            TextEditor(text: $draftHex)
+                .font(.system(.body, design: .monospaced))
+                .frame(minHeight: 120)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+                )
+
+            HStack {
+                Spacer()
+                Button(l("取消", "Cancel"), action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button(l("导入", "Import"), action: onConfirm)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(isWorking || draftHex.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(18)
+        .frame(minWidth: 460)
     }
 }

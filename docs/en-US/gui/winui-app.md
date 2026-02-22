@@ -7,6 +7,7 @@
 The Windows app is built with WinUI 3 (.NET) and calls Rust FFI through `awmkit_native.dll`.
 
 Its page semantics are aligned with macOS: embed, detect, database management, and key management.
+The key page supports slot operations, random key generation, `.bin` import/export, and 64-char hex import (`0x` prefix allowed).
 
 ## 2. Development Build
 

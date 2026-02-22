@@ -2,8 +2,14 @@ using AWMKit.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Threading.Tasks;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 
 namespace AWMKit.Pages;
 
@@ -85,6 +91,137 @@ public sealed partial class KeyPage : Page
         }
     }
 
+    private async void ImportKeyButton_Click(object sender, RoutedEventArgs e)
+    {
+        var file = await PickKeyImportFileAsync();
+        if (file is null)
+        {
+            return;
+        }
+
+        byte[] keyBytes;
+        try
+        {
+            keyBytes = await File.ReadAllBytesAsync(file.Path);
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageDialogAsync(
+                L("导入失败", "Import failed"),
+                $"{L("读取密钥文件失败", "Failed to read key file")}: {ex.Message}");
+            return;
+        }
+
+        if (keyBytes.Length != 32)
+        {
+            await ShowMessageDialogAsync(
+                L("导入失败", "Import failed"),
+                $"{L("密钥文件必须为 32 字节", "Key file must be exactly 32 bytes")}: {keyBytes.Length}");
+            return;
+        }
+
+        var error = await ViewModel.ImportKeyBytesAsync(keyBytes);
+        if (error == Native.AwmError.KeyAlreadyExists)
+        {
+            await ShowMessageDialogAsync(
+                L("槽位已有密钥", "Slot already has key"),
+                L("当前槽位已存在密钥，已阻止覆盖。\n如需替换，请先删除该槽位密钥后再导入。", "Current slot already has a key and overwrite is blocked.\nDelete this slot key before importing."));
+            return;
+        }
+
+        if (error != Native.AwmError.Ok)
+        {
+            await ShowMessageDialogAsync(
+                L("导入失败", "Import failed"),
+                $"{L("密钥导入失败", "Key import failed")}: {error}");
+        }
+    }
+
+    private async void ImportHexButton_Click(object sender, RoutedEventArgs e)
+    {
+        var input = new TextBox
+        {
+            PlaceholderText = L("请输入 64 位十六进制字符（可带 0x 前缀）", "Enter 64 hex characters (0x prefix allowed)"),
+            TextWrapping = TextWrapping.Wrap,
+            AcceptsReturn = true,
+            MinHeight = 110
+        };
+
+        var content = new StackPanel { Spacing = 8 };
+        content.Children.Add(new TextBlock { Text = L($"目标槽位：{ViewModel.SelectedSlot}", $"Target slot: {ViewModel.SelectedSlot}") });
+        content.Children.Add(input);
+
+        var dialog = new ContentDialog
+        {
+            Title = L("Hex 密钥导入", "Hex key import"),
+            Content = content,
+            PrimaryButtonText = L("导入", "Import"),
+            CloseButtonText = L("取消", "Cancel"),
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var error = await ViewModel.ImportHexAsync(input.Text);
+        if (error == Native.AwmError.KeyAlreadyExists)
+        {
+            await ShowMessageDialogAsync(
+                L("槽位已有密钥", "Slot already has key"),
+                L("当前槽位已存在密钥，已阻止覆盖。\n如需替换，请先删除该槽位密钥后再导入。", "Current slot already has a key and overwrite is blocked.\nDelete this slot key before importing."));
+            return;
+        }
+
+        if (error == Native.AwmError.InvalidMessageLength)
+        {
+            await ShowMessageDialogAsync(
+                L("Hex 导入失败", "Hex import failed"),
+                L("请输入 64 位十六进制字符（可带 0x 前缀）。", "Enter 64 hex characters (0x prefix allowed)."));
+            return;
+        }
+
+        if (error != Native.AwmError.Ok)
+        {
+            await ShowMessageDialogAsync(
+                L("Hex 导入失败", "Hex import failed"),
+                $"{L("密钥导入失败", "Key import failed")}: {error}");
+        }
+    }
+
+    private async void ExportKeyButton_Click(object sender, RoutedEventArgs e)
+    {
+        var (key, error) = await ViewModel.ExportKeyBytesAsync();
+        if (error != Native.AwmError.Ok || key is null)
+        {
+            await ShowMessageDialogAsync(
+                L("导出失败", "Export failed"),
+                $"{L("读取槽位密钥失败", "Failed to load slot key")}: {error}");
+            return;
+        }
+
+        var file = await PickKeyExportFileAsync(ViewModel.SelectedSlot);
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await FileIO.WriteBytesAsync(file, key);
+            await ViewModel.MarkExportSuccessAsync();
+        }
+        catch (Exception ex)
+        {
+            await ShowMessageDialogAsync(
+                L("导出失败", "Export failed"),
+                $"{L("写入密钥文件失败", "Failed to write key file")}: {ex.Message}");
+        }
+    }
+
     private async void DeleteKeyButton_Click(object sender, RoutedEventArgs e)
     {
         var slot = ViewModel.SelectedSlot;
@@ -159,7 +296,15 @@ public sealed partial class KeyPage : Page
                 or nameof(KeyViewModel.KeyStatusMessage)
                 or nameof(KeyViewModel.CanOperate)
                 or nameof(KeyViewModel.CanGenerateKey)
-                or nameof(KeyViewModel.GenerateKeyTooltip))
+                or nameof(KeyViewModel.CanImportKey)
+                or nameof(KeyViewModel.CanExportKey)
+                or nameof(KeyViewModel.GenerateKeyTooltip)
+                or nameof(KeyViewModel.ImportActionBrush)
+                or nameof(KeyViewModel.ImportHexActionBrush)
+                or nameof(KeyViewModel.ExportActionBrush)
+                or nameof(KeyViewModel.ImportFileActionText)
+                or nameof(KeyViewModel.ImportHexActionText)
+                or nameof(KeyViewModel.ExportFileActionText))
             {
                 Bindings.Update();
             }
@@ -199,6 +344,30 @@ public sealed partial class KeyPage : Page
         }
 
         return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+    }
+
+    private async Task<StorageFile?> PickKeyImportFileAsync()
+    {
+        var picker = new FileOpenPicker();
+        picker.FileTypeFilter.Add(".bin");
+        picker.FileTypeFilter.Add("*");
+
+        var hWnd = WindowNative.GetWindowHandle(App.Current.MainWindow);
+        InitializeWithWindow.Initialize(picker, hWnd);
+        return await picker.PickSingleFileAsync();
+    }
+
+    private async Task<StorageFile?> PickKeyExportFileAsync(int slot)
+    {
+        var picker = new FileSavePicker
+        {
+            SuggestedFileName = $"awmkit-key-slot-{slot}"
+        };
+        picker.FileTypeChoices.Add("Binary key (.bin)", new List<string> { ".bin" });
+
+        var hWnd = WindowNative.GetWindowHandle(App.Current.MainWindow);
+        InitializeWithWindow.Initialize(picker, hWnd);
+        return await picker.PickSaveFileAsync();
     }
 
     private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;

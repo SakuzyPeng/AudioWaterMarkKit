@@ -530,6 +530,12 @@ internal static class AwmNative
     [DllImport(Lib, EntryPoint = "awm_key_load", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_key_load(IntPtr outKey, nuint outKeyCap);
 
+    [DllImport(Lib, EntryPoint = "awm_key_load_slot", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_key_load_slot(byte slot, IntPtr outKey, nuint outKeyCap);
+
+    [DllImport(Lib, EntryPoint = "awm_key_save_slot", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    internal static extern int awm_key_save_slot(byte slot, IntPtr key, nuint keyLen);
+
     [DllImport(Lib, EntryPoint = "awm_key_generate_and_save", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     internal static extern int awm_key_generate_and_save(IntPtr outKey, nuint outKeyCap);
 

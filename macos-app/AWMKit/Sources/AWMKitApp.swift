@@ -326,6 +326,17 @@ class AppState: ObservableObject {
         await refreshRuntimeStatus()
     }
 
+    func loadKey(slot: Int) throws -> Data {
+        let normalized = max(0, min(31, slot))
+        return try AWMKeyStore.loadKey(slot: UInt8(normalized))
+    }
+
+    func saveKey(slot: Int, key: Data) async throws {
+        let normalized = max(0, min(31, slot))
+        try AWMKeyStore.saveKey(slot: UInt8(normalized), key: key)
+        await refreshRuntimeStatus()
+    }
+
     func deleteKey(slot: Int) async throws {
         let normalized = max(0, min(31, slot))
         _ = try AWMKeyStore.deleteKey(slot: UInt8(normalized))
