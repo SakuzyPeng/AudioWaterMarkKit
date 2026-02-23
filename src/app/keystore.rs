@@ -6,7 +6,6 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-#[cfg(windows)]
 use std::path::PathBuf;
 
 /// Internal constant.
@@ -15,12 +14,19 @@ const SERVICE: &str = "com.awmkit.watermark";
 const LEGACY_USERNAME: &str = "signing-key";
 /// Internal constant.
 const SLOT_USERNAME_PREFIX: &str = "signing-key-slot-";
+/// Internal constant.
+const TEST_FILE_MODE_ENV: &str = "AWMKIT_TEST_KEYSTORE_FILE";
+/// Internal constant.
+const TEST_FILE_DIR_ENV: &str = "AWMKIT_TEST_KEYSTORE_DIR";
+/// Internal constant.
+const TEST_FILE_DIR_NAME: &str = "test-keystore";
 
 pub const KEY_LEN: usize = 32;
 
 #[derive(Debug, Clone)]
 pub enum KeyBackend {
     Keyring,
+    TestFile(PathBuf),
     #[cfg(windows)]
     Dpapi(PathBuf),
 }
@@ -30,6 +36,7 @@ impl KeyBackend {
     pub fn label(&self) -> String {
         match self {
             Self::Keyring => format!("keyring (service: {SERVICE})"),
+            Self::TestFile(path) => format!("test-file ({})", path.display()),
             #[cfg(windows)]
             Self::Dpapi(path) => format!("dpapi ({})", path.display()),
         }
@@ -63,6 +70,9 @@ impl KeyStore {
             let store = Self {};
             // Ensure settings table exists and perform one-time legacy migration.
             let _ = SettingsStore::load()?;
+            if test_file_backend_enabled() {
+                return Ok(store);
+            }
             store.migrate_legacy_to_slot0()?;
             Ok(store)
         }
@@ -72,6 +82,9 @@ impl KeyStore {
             let dpapi_base_dir = dpapi_base_dir()?;
             let store = Self { dpapi_base_dir };
             let _ = SettingsStore::load()?;
+            if test_file_backend_enabled() {
+                return Ok(store);
+            }
             store.migrate_legacy_to_slot0()?;
             Ok(store)
         }
@@ -151,6 +164,9 @@ impl KeyStore {
     /// 当槽位非法、对应密钥不存在或删除后端失败时返回错误。.
     pub fn delete_slot(&self, slot: u8) -> Result<()> {
         validate_slot(slot)?;
+        if test_file_backend_enabled() {
+            return Self::delete_from_test_file_slot(slot);
+        }
         #[cfg(not(windows))]
         let removed = Self::delete_from_keyring_slot(slot).is_ok();
 
@@ -201,6 +217,11 @@ impl KeyStore {
     /// 当槽位非法，且 keyring 与平台回退后端都读取失败时返回错误。.
     pub fn load_slot_with_backend(&self, slot: u8) -> Result<(Vec<u8>, KeyBackend)> {
         validate_slot(slot)?;
+        if test_file_backend_enabled() {
+            let path = Self::test_file_slot_path(slot)?;
+            let key = Self::load_from_test_file_slot(slot)?;
+            return Ok((key, KeyBackend::TestFile(path)));
+        }
         match Self::load_from_keyring_slot(slot) {
             Ok(key) => Ok((key, KeyBackend::Keyring)),
             Err(keyring_err) => {
@@ -266,8 +287,9 @@ impl KeyStore {
 
     /// Internal helper method.
     fn save_slot_raw(&self, slot: u8, key: &[u8]) -> Result<()> {
-        #[cfg(not(windows))]
-        let _ = self;
+        if test_file_backend_enabled() {
+            return Self::save_to_test_file_slot(slot, key);
+        }
         if Self::save_to_keyring_slot(slot, key).is_ok() {
             return Ok(());
         }
@@ -297,6 +319,9 @@ impl KeyStore {
 
     /// Internal helper method.
     fn migrate_legacy_to_slot0(&self) -> Result<()> {
+        if test_file_backend_enabled() {
+            return Ok(());
+        }
         if self.exists_slot(KEY_SLOT_MIN) {
             return Ok(());
         }
@@ -361,6 +386,44 @@ impl KeyStore {
         let key = hex::decode(hex_key).map_err(|e| Failure::Message(e.to_string()))?;
         validate_key_len(key.len())?;
         Ok(key)
+    }
+
+    /// Internal associated function.
+    fn load_from_test_file_slot(slot: u8) -> Result<Vec<u8>> {
+        let path = Self::test_file_slot_path(slot)?;
+        if !path.is_file() {
+            return Err(Failure::KeyNotFound);
+        }
+        let key = std::fs::read(path)?;
+        validate_key_len(key.len())?;
+        Ok(key)
+    }
+
+    /// Internal associated function.
+    fn save_to_test_file_slot(slot: u8, key: &[u8]) -> Result<()> {
+        let path = Self::test_file_slot_path(slot)?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, key)?;
+        Ok(())
+    }
+
+    /// Internal associated function.
+    fn delete_from_test_file_slot(slot: u8) -> Result<()> {
+        let path = Self::test_file_slot_path(slot)?;
+        if !path.exists() {
+            return Err(Failure::KeyNotFound);
+        }
+        std::fs::remove_file(path)?;
+        Ok(())
+    }
+
+    /// Internal associated function.
+    fn test_file_slot_path(slot: u8) -> Result<PathBuf> {
+        let mut path = test_file_base_dir()?;
+        path.push(format!("slot-{slot}.bin"));
+        Ok(path)
     }
 
     #[cfg(windows)]
@@ -479,6 +542,42 @@ fn apply_duplicate_status(summaries: &mut [KeySlotSummary]) {
 /// Internal helper function.
 fn keyring_entry(username: &str) -> Result<Entry> {
     Entry::new(SERVICE, username).map_err(|e| Failure::KeyStore(e.to_string()))
+}
+
+fn test_file_backend_enabled() -> bool {
+    std::env::var(TEST_FILE_MODE_ENV).ok().is_some_and(|raw| {
+        matches!(
+            raw.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    })
+}
+
+fn test_file_base_dir() -> Result<PathBuf> {
+    if let Some(override_dir) = std::env::var_os(TEST_FILE_DIR_ENV) {
+        return Ok(PathBuf::from(override_dir));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let base = std::env::var_os("LOCALAPPDATA")
+            .or_else(|| std::env::var_os("APPDATA"))
+            .ok_or_else(|| Failure::KeyStore("LOCALAPPDATA/APPDATA not set".to_string()))?;
+        let mut path = PathBuf::from(base);
+        path.push("awmkit");
+        path.push(TEST_FILE_DIR_NAME);
+        return Ok(path);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let home = std::env::var_os("HOME")
+            .ok_or_else(|| Failure::KeyStore("HOME not set".to_string()))?;
+        let mut path = PathBuf::from(home);
+        path.push(".awmkit");
+        path.push(TEST_FILE_DIR_NAME);
+        Ok(path)
+    }
 }
 
 #[cfg(test)]

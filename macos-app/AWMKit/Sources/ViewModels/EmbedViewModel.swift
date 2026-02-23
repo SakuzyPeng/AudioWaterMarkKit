@@ -163,7 +163,7 @@ class EmbedViewModel: ObservableObject {
             for url in urls {
                 if self.isDirectory(url) {
                     resolved.append(contentsOf: self.resolveAudioFiles(from: url, appState: appState))
-                } else if self.isSupportedAudioFile(url, appState: appState) {
+                } else if FileManager.default.fileExists(atPath: url.path) {
                     resolved.append(url)
                 } else {
                     unsupported.append(url)
@@ -197,19 +197,16 @@ class EmbedViewModel: ObservableObject {
                     options: [.skipsHiddenFiles]
                 )
                 let regularFiles = items.filter { !isDirectory($0) }
-                let files = regularFiles.filter { isSupportedAudioFile($0, appState: appState) }
-                let unsupported = regularFiles.filter { !isSupportedAudioFile($0, appState: appState) }
-                logUnsupportedFiles(unsupported, appState: appState)
-                if files.isEmpty {
+                if regularFiles.isEmpty {
                     log(
-                        localized("目录无可用音频", "No audio files in directory"),
+                        localized("目录无可用文件", "No files in directory"),
                         detail: directoryNoAudioDetail(appState: appState),
                         isSuccess: false,
                         kind: .directoryNoAudio,
                         isEphemeral: true
                     )
                 }
-                return files
+                return regularFiles
             } catch {
                 log(
                     localized("读取目录失败", "Failed to read directory"),
@@ -221,7 +218,7 @@ class EmbedViewModel: ObservableObject {
             }
         }
 
-        guard isSupportedAudioFile(source, appState: appState) else {
+        guard FileManager.default.fileExists(atPath: source.path) else {
             log(
                 localized("不支持的输入源", "Unsupported input source"),
                 detail: unsupportedInputDetail(appState: appState),
@@ -263,40 +260,17 @@ class EmbedViewModel: ObservableObject {
         }
     }
 
-    private func isSupportedAudioFile(_ url: URL, appState: AppState) -> Bool {
-        guard !isDirectory(url) else { return false }
-        return effectiveSupportedAudioExtensions(appState: appState).contains(url.pathExtension.lowercased())
-    }
-
-    private func effectiveSupportedAudioExtensions(appState: AppState) -> Set<String> {
-        Set(appState.effectiveSupportedInputExtensions().map { $0.lowercased() })
-    }
-
     private func directoryNoAudioDetail(appState: AppState) -> String {
-        let extText = appState.supportedInputExtensionsDisplay()
-        if appState.audioMediaCapsKnown {
-            return appState.tr(
-                "当前目录未找到 \(extText) 文件",
-                "No \(extText) files found in this directory"
-            )
-        }
         return appState.tr(
-            "当前目录未找到 \(extText) 文件（按默认支持集合处理）",
-            "No \(extText) files found in this directory (fallback set applied)"
+            "当前目录未找到可处理文件",
+            "No files found in this directory"
         )
     }
 
     private func unsupportedInputDetail(appState: AppState) -> String {
-        let extText = appState.supportedInputExtensionsDisplay()
-        if appState.audioMediaCapsKnown {
-            return appState.tr(
-                "请选择 \(extText) 文件或包含这些文件的目录",
-                "Select a \(extText) file or a directory containing these files"
-            )
-        }
         return appState.tr(
-            "请选择 \(extText) 文件或包含这些文件的目录。当前按默认集合处理，运行时缺少 demuxer 时仍可能失败",
-            "Select a \(extText) file or a directory containing these files. Using fallback set now; execution can still fail if demuxers are missing"
+            "请选择文件或目录作为输入源",
+            "Select a file or directory as input source"
         )
     }
 

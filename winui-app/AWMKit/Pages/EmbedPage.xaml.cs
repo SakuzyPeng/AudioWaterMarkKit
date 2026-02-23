@@ -165,15 +165,7 @@ public sealed partial class EmbedPage : Page
     private async Task<string?> PickSingleAudioFileAsync()
     {
         var picker = new FileOpenPicker();
-        var extensions = AppState.EffectiveSupportedInputExtensions();
-        foreach (var ext in extensions)
-        {
-            picker.FileTypeFilter.Add(ext);
-        }
-        if (extensions.Count == 0)
-        {
-            picker.FileTypeFilter.Add("*");
-        }
+        picker.FileTypeFilter.Add("*");
 
         var hWnd = WindowNative.GetWindowHandle(App.Current.MainWindow);
         InitializeWithWindow.Initialize(picker, hWnd);

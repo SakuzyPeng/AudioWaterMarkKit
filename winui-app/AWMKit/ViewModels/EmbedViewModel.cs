@@ -435,11 +435,11 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
             {
                 resolved.AddRange(ResolveAudioFiles(path));
             }
-            else if (IsSupportedAudioFile(path))
+            else if (File.Exists(path))
             {
                 resolved.Add(path);
             }
-            else if (File.Exists(path))
+            else
             {
                 unsupported.Add(path);
             }
@@ -1060,18 +1060,10 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
                 var files = Directory
                     .EnumerateFiles(sourcePath, "*", SearchOption.TopDirectoryOnly)
                     .ToList();
-                var supported = files
-                    .Where(IsSupportedAudioFile)
-                    .ToList();
-                var unsupported = files
-                    .Where(path => !IsSupportedAudioFile(path))
-                    .ToList();
-                LogUnsupportedDroppedFiles(unsupported);
-
-                if (supported.Count == 0)
+                if (files.Count == 0)
                 {
                     AddLog(
-                        L("目录无可用音频", "No audio files in directory"),
+                        L("目录无可用文件", "No files in directory"),
                         BuildDirectoryNoAudioDetail(),
                         false,
                         true,
@@ -1079,7 +1071,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
                     );
                 }
 
-                return supported;
+                return files;
             }
             catch (Exception ex)
             {
@@ -1088,7 +1080,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
             }
         }
 
-        if (File.Exists(sourcePath) && IsSupportedAudioFile(sourcePath))
+        if (File.Exists(sourcePath))
         {
             return new[] { sourcePath };
         }
@@ -1142,17 +1134,6 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         }
     }
 
-    private bool IsSupportedAudioFile(string path)
-    {
-        var ext = Path.GetExtension(path);
-        return EffectiveSupportedAudioExtensions().Contains(ext, StringComparer.OrdinalIgnoreCase);
-    }
-
-    private IReadOnlyList<string> EffectiveSupportedAudioExtensions()
-    {
-        return _appState.EffectiveSupportedInputExtensions();
-    }
-
     private string SupportedExtensionsDisplay()
     {
         return _appState.EffectiveSupportedInputExtensionsDisplay;
@@ -1160,26 +1141,16 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
 
     private string BuildDirectoryNoAudioDetail()
     {
-        var extText = SupportedExtensionsDisplay();
-        return _appState.UsingFallbackInputExtensions
-            ? L(
-                $"当前目录未找到 {extText} 文件（按默认支持集合处理）",
-                $"No {extText} files found in this directory (fallback set applied)")
-            : L(
-                $"当前目录未找到 {extText} 文件",
-                $"No {extText} files found in this directory");
+        return L(
+            "当前目录未找到可处理文件",
+            "No files found in this directory");
     }
 
     private string BuildUnsupportedInputDetail()
     {
-        var extText = SupportedExtensionsDisplay();
-        return _appState.UsingFallbackInputExtensions
-            ? L(
-                $"请选择 {extText} 文件或包含这些文件的目录。当前按默认集合处理，运行时缺少 demuxer 时仍可能失败",
-                $"Select a {extText} file or directory containing these files. Using fallback set now; execution can still fail if demuxers are missing")
-            : L(
-                $"请选择 {extText} 文件或包含这些文件的目录",
-                $"Select a {extText} file or directory containing these files");
+        return L(
+            "请选择文件或目录作为输入源",
+            "Select a file or directory as input source");
     }
 
     private void LogUnsupportedDroppedFiles(List<string> unsupported)

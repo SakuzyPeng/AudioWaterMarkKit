@@ -30,7 +30,7 @@ cargo build --bin awmkit --features launcher --release
 
 - 输入音频：`wav` / `flac` / `mp3` / `ogg` / `opus` / `m4a` / `alac` / `mp4` / `mkv` / `mka` / `ts` / `m2ts` / `m2t`
 - 输出音频：`wav`（当前仅支持 WAV 输出；若 `--output` 不是 `.wav` 会直接报错）
-- ADM/BWF（一期）：`embed` 会自动识别 `RIFF/RF64/BW64` 中的 ADM/BWF 元数据并走保真路径；若保真链路失败会直接报错（不降级）；`detect` 已支持 ADM/BWF 输入（走统一检测链路）
+- ADM/BWF：`embed` 会自动识别 `RIFF/RF64/BW64` 中的 ADM/BWF 元数据并走保真路径；若保真链路失败会直接报错（不降级）；`detect` 已支持 ADM/BWF 输入（走统一检测链路）
 - 声道布局：`auto`、`stereo`、`surround51`、`surround512`、`surround71`、`surround714`、`surround916`
 - 多声道默认路由（smart）：`FL/FR` 与环绕声道按成对嵌入，`FC` 按单声道嵌入（dual-mono），`LFE` 默认跳过；未知/自定义布局回退为顺序配对，若奇数声道则最后一路按单声道处理并给出警告
 - 多声道路由执行：内部使用 Rayon 并行处理 RouteStep，并按 step 索引确定性归并结果（不新增 CLI 参数）
@@ -43,6 +43,12 @@ cargo build --bin awmkit --features launcher --release
 --audiowmark <PATH>
 --lang <zh-CN|en-US>
 ```
+
+测试模式（仅用于本地自动化/回归）：
+
+- `AWMKIT_TEST_KEYSTORE_FILE=1`：切换到测试文件密钥后端（不走 macOS 钥匙串弹窗）。
+- `AWMKIT_TEST_KEYSTORE_DIR=/custom/path`：可选，覆盖测试密钥目录（默认 `~/.awmkit/test-keystore`）。
+- 该模式只建议测试环境使用；默认不启用，生产/日常使用保持系统密钥后端。
 
 ## 4. 常用流程（首次）
 
