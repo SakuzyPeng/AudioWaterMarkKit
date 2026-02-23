@@ -30,7 +30,7 @@ Performance note:
 
 - Input audio: `wav` / `flac` / `mp3` / `ogg` / `opus` / `m4a` / `alac` / `mp4` / `mkv` / `mka` / `ts` / `m2ts` / `m2t`
 - Output audio: `wav` (WAV-only output; non-`.wav` `--output` paths fail fast)
-- ADM/BWF (phase 1): `embed` auto-detects ADM/BWF metadata in `RIFF/RF64/BW64` and uses a metadata-preserving path; failures fail fast (no downgrade). ADM-specific `detect` is not supported yet
+- ADM/BWF (phase 1): `embed` auto-detects ADM/BWF metadata in `RIFF/RF64/BW64` and uses a metadata-preserving path; failures fail fast (no downgrade). `detect` now supports ADM/BWF inputs through the unified detect pipeline
 - Channel layout: `auto`, `stereo`, `surround51`, `surround512`, `surround71`, `surround714`, `surround916`
 - Default multichannel routing (`smart`): stereo/surround pairs are embedded as pairs, `FC` is embedded as mono (dual-mono wrapper), `LFE` is skipped by default; unknown/custom layouts fall back to sequential pairing, with a final mono step for odd channel counts and a warning
 - Multichannel route execution: RouteSteps are processed with internal Rayon parallelism and merged deterministically by step index (no new CLI flags)

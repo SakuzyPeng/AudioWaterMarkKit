@@ -1,4 +1,4 @@
-name: Windows WinUI Prep CI
+name: Desktop Packaging CI (macOS + Windows)
 
 on:
   workflow_dispatch:
