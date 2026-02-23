@@ -95,6 +95,14 @@ awmkit key rotate --slot 2
 awmkit key delete --slot 2 --yes
 ```
 
+macOS Keychain authorization notes (macOS only):
+
+- Commands that read key material, such as `awmkit init` and `awmkit key show/import/export/rotate/delete`, may trigger system Keychain authentication.
+- Keys are stored per slot (one Keychain entry per slot), so first access to multiple configured slots can lead to multiple prompts.
+- Choosing `Always Allow` usually prevents repeated prompts for the same app identity + entry.
+- If app identity changes (unsigned/ad-hoc signed builds, reinstall, or signing changes after update), Keychain may request authorization again.
+- This behavior applies to macOS only; Windows does not use this authorization model.
+
 ## 7. Evidence Examples
 
 ```bash

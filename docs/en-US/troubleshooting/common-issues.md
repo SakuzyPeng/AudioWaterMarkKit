@@ -53,7 +53,21 @@ Fix:
    - `xattr -dr com.apple.quarantine /path/to/AWMKit.app`
 3. If still blocked, allow the app in “System Settings -> Privacy & Security”, then retry.
 
-## 7. Pipe I/O Compatibility (`stdin/stdout`)
+## 7. Repeated Keychain prompts on macOS
+
+Note: this is expected macOS Keychain authorization behavior, not an AWMKit functional failure. Keys are currently stored per slot (one Keychain entry per slot), so first access to multiple configured slots may trigger multiple prompts.
+
+Checks and actions:
+
+1. Confirm whether this is first access to newly used slot keys; multiple prompts across first-time slot access are expected.
+2. Inspect the related entries in Keychain Access and verify the current app is included in access control.
+3. If you choose `Always Allow`, prompts usually stop for the same app identity + entry.
+4. If prompts return after update/reinstall/signing changes, app identity likely changed and authorization must be granted again.
+5. For local development builds, keep signing and app identity stable before re-testing prompt behavior.
+
+Additional note: this applies to macOS Keychain only; Windows does not use this authorization model.
+
+## 8. Pipe I/O Compatibility (`stdin/stdout`)
 
 Note: runtime now prefers `audiowmark` pipe I/O (`-` as input/output). For non-WAV detect input, AWMKit uses true streaming (`FFmpeg decode -> WAV pipe -> audiowmark`). If the local environment is incompatible, AWMKit automatically falls back to file I/O.
 In recent builds, Unix `SIGPIPE` is guarded in the FFI path (Swift/ObjC/.NET), so pipe write failures are converted to normal errors and fallback can proceed instead of crashing the host process.

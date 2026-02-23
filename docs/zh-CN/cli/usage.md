@@ -95,6 +95,14 @@ awmkit key rotate --slot 2
 awmkit key delete --slot 2 --yes
 ```
 
+macOS 钥匙串授权说明（仅 macOS）：
+
+- `awmkit init`、`awmkit key show/import/export/rotate/delete` 等涉及密钥读取的命令，可能触发系统钥匙串认证。
+- 当前按槽位保存密钥（每槽位一个钥匙串条目），首次访问多个已配置槽位时可能出现多次认证。
+- 在系统弹窗选择`始终允许`后，通常不会再对同一“应用身份 + 条目”重复询问。
+- 若应用身份变化（未签名/临时签名构建、重装、更新后签名变化），系统可能重新询问授权。
+- 该行为仅适用于 macOS；Windows 不使用该授权模型。
+
 ## 7. 证据管理示例
 
 ```bash

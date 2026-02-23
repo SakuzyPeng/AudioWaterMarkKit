@@ -44,3 +44,11 @@ xcodebuild \
 - Switching slot refreshes status tooltip immediately
 - Key import supports 32-byte `.bin` and 64-char hex (`0x` prefix allowed); overwrite is blocked when slot already has key
 - Successful embed writes evidence; detect clone-check can match against evidence rows
+
+## 5. Keychain Authorization Notes (macOS only)
+
+- macOS Keychain grants access per entry. AWMKit currently stores one key entry per slot, so first access to multiple configured slots can trigger multiple prompts.
+- Choosing `Always Allow` usually prevents repeated prompts for the same app identity + entry.
+- CLI and App share the same key backend, so both are affected by the same Keychain authorization policy.
+- If app identity changes (for example unsigned/ad-hoc signed builds, reinstall, or signing changes after update), macOS may treat it as a new app and request authorization again.
+- This is expected system security behavior, not a KeyStore logic defect in AWMKit.

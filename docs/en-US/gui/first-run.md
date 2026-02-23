@@ -24,6 +24,9 @@ This guide is for first-time users of AWMKit GUI (macOS App and WinUI App).
 Notes:
 - Without a key, `Embed` is disabled.
 - `Detect` is still allowed, but results may be unverified (reference only, not for attribution/forensics).
+- macOS only: keys are currently stored as separate Keychain entries per slot, so first access to multiple configured slots may trigger multiple prompts.
+- macOS only: choosing `Always Allow` usually suppresses repeated prompts for the same app identity + entry.
+- macOS only: if app identity changes (for example unsigned/ad-hoc signed builds, reinstall, or signing changes after update), Keychain may ask again. This is expected system behavior, not an AWMKit functional failure.
 
 ## 3. Create a Tag Mapping (Recommended)
 
