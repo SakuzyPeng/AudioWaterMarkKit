@@ -11,6 +11,13 @@ The macOS app is built with SwiftUI and uses Rust FFI as the single source of co
 - Tag/Database page (mapping + evidence management)
 - Key page (slots, generate/delete, import/export, hex import, labels, summaries)
 
+## 1.1 UI Text Contract
+
+- Human-readable UI copy is a presentation-layer contract and may change between versions.
+- Machine interfaces are unchanged (FFI structs and CLI JSON are still compatibility targets).
+- Default UI only shows user-facing messages; internal diagnostics are behind a "Show diagnostics" switch.
+- Canonical terms are defined in [`../ui/terminology.md`](../ui/terminology.md).
+
 ## 2. Development Build
 
 ```bash

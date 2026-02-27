@@ -9,6 +9,13 @@ The Windows app is built with WinUI 3 (.NET) and calls Rust FFI through `awmkit_
 Its page semantics are aligned with macOS: embed, detect, database management, and key management.
 The key page supports slot operations, random key generation, `.bin` import/export, and 64-char hex import (`0x` prefix allowed).
 
+## 1.1 UI Text Contract
+
+- Human-readable UI copy is a presentation-layer contract and may change between versions.
+- Machine interfaces are unchanged (FFI structs and CLI JSON are still compatibility targets).
+- Default UI only shows user-facing messages; internal diagnostics are behind a "Show diagnostics" switch.
+- Canonical terms are defined in [`../ui/terminology.md`](../ui/terminology.md).
+
 ## 2. Development Build
 
 ```powershell

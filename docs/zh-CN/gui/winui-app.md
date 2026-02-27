@@ -8,6 +8,13 @@ Windows 端使用 WinUI 3（.NET），并通过 `awmkit_native.dll` 调用 Rust 
 
 页面结构与 macOS 语义对齐：嵌入、检测、数据库管理、密钥管理。
 
+## 1.1 UI 文本契约说明
+
+- 人类可读 UI 文本属于展示层契约，可在版本间调整。
+- 机器接口不受影响（FFI 结构与 CLI JSON 仍保持兼容目标）。
+- 默认 UI 仅展示用户层消息，技术诊断通过“显示诊断”开关查看。
+- 术语统一基线见 [`../ui/terminology.md`](../ui/terminology.md)。
+
 ## 2. 开发构建
 
 ```powershell

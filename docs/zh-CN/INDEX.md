@@ -13,6 +13,7 @@
 - UI 首次使用教程：[`gui/first-run.md`](./gui/first-run.md)
 - macOS 原生应用：[`gui/macos-app.md`](./gui/macos-app.md)
 - WinUI 应用：[`gui/winui-app.md`](./gui/winui-app.md)
+- UI 术语表：[`ui/terminology.md`](./ui/terminology.md)
 
 ## 规格
 
