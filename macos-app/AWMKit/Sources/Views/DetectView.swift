@@ -63,10 +63,6 @@ struct DetectView: View {
         }
     }
 
-    private func l(_ zh: String, _ en: String) -> String {
-        appState.tr(zh, en)
-    }
-
     // MARK: - 输入卡片（左上）
 
     private var inputCard: some View {
@@ -82,48 +78,48 @@ struct DetectView: View {
                     Button(action: { viewModel.clearInputSource() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "folder")
-                            Text(l("清空", "Clear"))
+                            Text(Localizer.pick("清空", "Clear"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel(l("清空输入源地址", "Clear input source path"))
+                    .accessibilityLabel(Localizer.pick("清空输入源地址", "Clear input source path"))
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.detectFiles(audio: appState.audio) }) {
                         HStack(spacing: 6) {
                             Image(systemName: viewModel.isProcessing ? "stop.fill" : "play.fill")
                                 .foregroundColor(viewModel.isProcessing ? .red : .accentColor)
-                            Text(viewModel.isProcessing ? l("停止", "Stop") : l("检测", "Detect"))
+                            Text(viewModel.isProcessing ? Localizer.pick("停止", "Stop") : Localizer.pick("检测", "Detect"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(accentOn: !viewModel.isProcessing, size: .compact))
-                    .accessibilityLabel(viewModel.isProcessing ? l("停止检测", "Stop detection") : l("开始检测", "Start detection"))
+                    .accessibilityLabel(viewModel.isProcessing ? Localizer.pick("停止检测", "Stop detection") : Localizer.pick("开始检测", "Start detection"))
                     .disabled(viewModel.selectedFiles.isEmpty || viewModel.isProcessing)
 
                     Button(action: { viewModel.clearQueue() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "xmark.circle")
                                 .foregroundColor(viewModel.isClearQueueSuccess ? .green : .primary)
-                            Text(l("清空", "Clear"))
+                            Text(Localizer.pick("清空", "Clear"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel(l("清空队列", "Clear queue"))
+                    .accessibilityLabel(Localizer.pick("清空队列", "Clear queue"))
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.clearLogs() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "line.3.horizontal.decrease.circle")
                                 .foregroundColor(viewModel.isClearLogsSuccess ? .green : .primary)
-                            Text(l("清空", "Clear"))
+                            Text(Localizer.pick("清空", "Clear"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel(l("清空日志", "Clear logs"))
+                    .accessibilityLabel(Localizer.pick("清空日志", "Clear logs"))
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
 
@@ -137,7 +133,7 @@ struct DetectView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "waveform.badge.magnifyingglass")
                             .font(.title2)
-                        Text(l("拖拽音频文件到此处", "Drop audio files here"))
+                        Text(Localizer.pick("拖拽音频文件到此处", "Drop audio files here"))
                             .font(.headline)
                         Text(viewModel.dropZoneSubtitle(appState: appState))
                             .font(.footnote)
@@ -159,7 +155,7 @@ struct DetectView: View {
     private var directorySummary: some View {
         VStack(spacing: 10) {
             directoryInfoRow(
-                title: l("待检测文件", "Input source"),
+                title: Localizer.pick("待检测文件", "Input source"),
                 value: viewModel.inputSourceText,
                 systemImage: "tray.and.arrow.down",
                 onTap: { viewModel.selectFiles(appState: appState) }
@@ -214,11 +210,11 @@ struct DetectView: View {
     private var operationCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text(l("检测信息", "Detection Info"))
+                Text(Localizer.pick("检测信息", "Detection Info"))
                     .font(.headline)
                 Spacer()
                 if viewModel.totalDetected > 0 {
-                    Text("\(viewModel.totalFound)\(l("（成功）", " (success)"))/\(viewModel.totalDetected)\(l("（总）", " (total)"))")
+                    Text("\(viewModel.totalFound)\(Localizer.pick("（成功）", " (success)"))/\(viewModel.totalDetected)\(Localizer.pick("（总）", " (total)"))")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(viewModel.totalFound > 0 ? DesignSystem.Colors.success : .secondary)
                         .monospacedDigit()
@@ -241,66 +237,66 @@ struct DetectView: View {
 
             VStack(spacing: 8) {
                 singleLineFieldRow(
-                    label: l("文件", "File"),
+                    label: Localizer.pick("文件", "File"),
                     value: detailValue(from: displayedDetectRecord?.file),
                     valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
                     truncationMode: .middle
                 )
 
                 tripleFieldRow(
-                    FieldCell(label: l("状态", "Status"),
+                    FieldCell(label: Localizer.pick("状态", "Status"),
                               value: detailValue(from: displayedDetectRecord?.status),
                               valueColor: fieldValueColor(for: .status, record: displayedDetectRecord)),
-                    FieldCell(label: l("匹配标记", "Match found"),
+                    FieldCell(label: Localizer.pick("匹配标记", "Match found"),
                               value: detailValue(from: displayedDetectRecord?.matchFound.map { $0 ? "true" : "false" }),
                               valueColor: fieldValueColor(for: .matchFound, record: displayedDetectRecord)),
-                    FieldCell(label: l("检测模式", "Pattern"),
+                    FieldCell(label: Localizer.pick("检测模式", "Pattern"),
                               value: detailValue(from: displayedDetectRecord?.pattern),
                               valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord))
                 )
 
                 tripleFieldRow(
-                    FieldCell(label: l("标签", "Tag"),
+                    FieldCell(label: Localizer.pick("标签", "Tag"),
                               value: detailValue(from: displayedDetectRecord?.tag),
                               valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord)),
-                    FieldCell(label: l("身份", "Identity"),
+                    FieldCell(label: Localizer.pick("身份", "Identity"),
                               value: detailValue(from: displayedDetectRecord?.identity),
                               valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord)),
-                    FieldCell(label: l("版本", "Version"),
+                    FieldCell(label: Localizer.pick("版本", "Version"),
                               value: detailValue(from: displayedDetectRecord?.version.map { String($0) }),
                               valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord))
                 )
 
                 tripleFieldRow(
-                    FieldCell(label: l("检测时间", "Detect time"),
+                    FieldCell(label: Localizer.pick("检测时间", "Detect time"),
                               value: localTimestampDisplay(from: displayedDetectRecord),
                               valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord),
                               helpText: localTimestampHelp(from: displayedDetectRecord)),
-                    FieldCell(label: l("密钥槽位", "Key slot"),
+                    FieldCell(label: Localizer.pick("密钥槽位", "Key slot"),
                               value: detailValue(from: displayedDetectRecord?.keySlot.map { String($0) }),
                               valueColor: fieldValueColor(for: .generic, record: displayedDetectRecord)),
-                    FieldCell(label: l("位错误", "Bit errors"),
+                    FieldCell(label: Localizer.pick("位错误", "Bit errors"),
                               value: detailValue(from: displayedDetectRecord?.bitErrors.map { String($0) }),
                               valueColor: fieldValueColor(for: .bitErrors, record: displayedDetectRecord))
                 )
 
                 tripleFieldRow(
-                    FieldCell(label: l("检测分数", "Detect score"),
+                    FieldCell(label: Localizer.pick("检测分数", "Detect score"),
                               value: detectScoreDisplay(from: displayedDetectRecord),
                               valueColor: fieldValueColor(for: .detectScore, record: displayedDetectRecord),
                               helpText: detectScoreHelp(from: displayedDetectRecord)),
-                    FieldCell(label: l("克隆校验", "Clone check"),
+                    FieldCell(label: Localizer.pick("克隆校验", "Clone check"),
                               value: detailValue(from: displayedDetectRecord?.cloneCheck),
                               valueColor: fieldValueColor(for: .cloneCheck, record: displayedDetectRecord),
                               helpText: displayedDetectRecord?.cloneReason),
-                    FieldCell(label: l("指纹分数", "Fingerprint score"),
+                    FieldCell(label: Localizer.pick("指纹分数", "Fingerprint score"),
                               value: fingerprintScoreDisplay(from: displayedDetectRecord),
                               valueColor: fieldValueColor(for: .fingerprintScore, record: displayedDetectRecord),
                               helpText: fingerprintScoreHelp(from: displayedDetectRecord))
                 )
 
                 singleLineFieldRow(
-                    label: l("错误信息", "Error"),
+                    label: Localizer.pick("错误信息", "Error"),
                     value: errorDisplayValue(from: displayedDetectRecord),
                     valueColor: fieldValueColor(for: .error, record: displayedDetectRecord),
                     truncationMode: .middle
@@ -316,11 +312,11 @@ struct DetectView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(l("待检测文件", "Pending files"))
+                    Text(Localizer.pick("待检测文件", "Pending files"))
                         .font(.headline)
                     Spacer()
                     if !viewModel.selectedFiles.isEmpty {
-                        Text("\(l("共", "Total")) \(viewModel.selectedFiles.count)\(l(" 个", ""))")
+                        Text("\(Localizer.pick("共", "Total")) \(viewModel.selectedFiles.count)\(Localizer.pick(" 个", ""))")
                             .foregroundColor(.secondary)
                             .font(.subheadline)
                     }
@@ -347,7 +343,7 @@ struct DetectView: View {
                 }
 
                 if viewModel.selectedFiles.isEmpty {
-                    Text(l("暂无文件", "No files"))
+                    Text(Localizer.pick("暂无文件", "No files"))
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                         .transition(.opacity)
@@ -391,11 +387,15 @@ struct DetectView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(l("检测日志", "Detection logs"))
+                    Text(Localizer.pick("检测日志", "Detection logs"))
                         .font(.headline)
                     Spacer()
+                    Toggle(Localizer.pick("显示诊断", "Show diagnostics"), isOn: $viewModel.showDiagnostics)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .help(Localizer.pick("显示诊断", "Show diagnostics"))
                     if !viewModel.logs.isEmpty {
-                        Text("\(l("共", "Total")) \(viewModel.logs.count)\(l(" 条", ""))")
+                        Text("\(Localizer.pick("共", "Total")) \(viewModel.logs.count)\(Localizer.pick(" 条", ""))")
                             .foregroundColor(.secondary)
                             .font(.subheadline)
                     }
@@ -416,7 +416,7 @@ struct DetectView: View {
                 Divider().opacity(0.5)
 
                 if viewModel.logs.isEmpty {
-                    Text(l("暂无日志", "No logs"))
+                    Text(Localizer.pick("暂无日志", "No logs"))
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                         .transition(.opacity)
@@ -424,7 +424,7 @@ struct DetectView: View {
                     logSearchField
 
                     if filteredLogs.isEmpty {
-                        Text(l("无匹配日志", "No matched logs"))
+                        Text(Localizer.pick("无匹配日志", "No matched logs"))
                             .foregroundColor(.secondary)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                             .transition(.opacity)
@@ -511,6 +511,14 @@ struct DetectView: View {
                     .lineLimit(2)
                     .truncationMode(.middle)
             }
+            if viewModel.showDiagnostics && !entry.diagnosticDetail.isEmpty {
+                Text(entry.diagnosticDetail)
+                    .font(.caption2.monospaced())
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .lineLimit(3)
+                    .truncationMode(.middle)
+            }
         }
         .entryRowStyle()
         .overlay {
@@ -528,8 +536,8 @@ struct DetectView: View {
         .contentShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.row, style: .continuous))
         .accessibilityLabel(
             isSelectable
-                ? l("结果日志，可选中查看详情", "Result log, selectable for details")
-                : l("流程日志", "Process log")
+                ? Localizer.pick("结果日志，可选中查看详情", "Result log, selectable for details")
+                : Localizer.pick("流程日志", "Process log")
         )
     }
 
@@ -538,7 +546,7 @@ struct DetectView: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField(l("搜索日志（标题/详情）", "Search logs (title/detail)"), text: $logSearchText)
+                TextField(Localizer.pick("搜索日志（标题/详情）", "Search logs (title/detail)"), text: $logSearchText)
                     .textFieldStyle(.plain)
             }
             .padding(.horizontal, 10)
@@ -561,7 +569,8 @@ struct DetectView: View {
 
         return viewModel.logs.filter { entry in
             entry.title.localizedCaseInsensitiveContains(query) ||
-            entry.detail.localizedCaseInsensitiveContains(query)
+            entry.detail.localizedCaseInsensitiveContains(query) ||
+            (viewModel.showDiagnostics && entry.diagnosticDetail.localizedCaseInsensitiveContains(query))
         }
     }
 
@@ -792,7 +801,7 @@ struct DetectView: View {
 
     private func detectScoreHelp(from record: DetectRecord?) -> String {
         guard let score = record?.detectScore else { return "-" }
-        return "\(l("检测分数", "Detect score")): \(String(format: "%.3f", score))"
+        return "\(Localizer.pick("检测分数", "Detect score")): \(String(format: "%.3f", score))"
     }
 
     private func fingerprintScoreDisplay(from record: DetectRecord?) -> String {
@@ -806,14 +815,14 @@ struct DetectView: View {
     private func fingerprintScoreHelp(from record: DetectRecord?) -> String {
         guard let score = record?.cloneScore else { return "-" }
         if let seconds = record?.cloneMatchSeconds {
-            return "\(l("指纹分数", "Fingerprint score")): \(String(format: "%.3f", score))\n\(l("匹配时长", "Match duration")): \(String(format: "%.2f", seconds))s"
+            return "\(Localizer.pick("指纹分数", "Fingerprint score")): \(String(format: "%.3f", score))\n\(Localizer.pick("匹配时长", "Match duration")): \(String(format: "%.2f", seconds))s"
         }
-        return "\(l("指纹分数", "Fingerprint score")): \(String(format: "%.3f", score))"
+        return "\(Localizer.pick("指纹分数", "Fingerprint score")): \(String(format: "%.3f", score))"
     }
 
     private func errorDisplayValue(from record: DetectRecord?) -> String {
         if record?.verification == "unverified" {
-            let warning = l(
+            let warning = Localizer.pick(
                 "UNVERIFIED · 不可用于归属/取证",
                 "UNVERIFIED · Do not use for attribution/forensics"
             )
@@ -844,7 +853,7 @@ struct DetectView: View {
             return "-"
         }
         let local = localTimestampDisplay(from: record)
-        return "\(l("本地时间", "Local time")): \(local)\nUTC \(l("分钟", "minutes")): \(components.utcMinutes)\nUTC \(l("秒", "seconds")): \(components.utcSeconds)"
+        return "\(Localizer.pick("本地时间", "Local time")): \(local)\nUTC \(Localizer.pick("分钟", "minutes")): \(components.utcMinutes)\nUTC \(Localizer.pick("秒", "seconds")): \(components.utcSeconds)"
     }
 
     private func timestampComponents(from record: DetectRecord?) -> (utcMinutes: UInt32, utcSeconds: UInt64)? {
@@ -899,11 +908,11 @@ struct DetectView: View {
         HStack(spacing: 10) {
             Image(systemName: "key.slash")
                 .foregroundStyle(DesignSystem.Colors.warning)
-            Text(l("未配置密钥，请前往密钥页完成生成。", "No key configured. Open the Key page to generate one."))
+            Text(Localizer.pick("未配置密钥，请前往密钥页完成生成。", "No key configured. Open the Key page to generate one."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
-            Button(l("前往密钥页", "Go to Key page")) {
+            Button(Localizer.pick("前往密钥页", "Go to Key page")) {
                 appState.selectedTab = .key
             }
             .buttonStyle(GlassButtonStyle(size: .compact))

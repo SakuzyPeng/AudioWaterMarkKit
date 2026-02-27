@@ -82,6 +82,7 @@ class DetectViewModel: ObservableObject {
 
     // MARK: - 日志
     @Published var logs: [LogEntry] = []
+    @Published var showDiagnostics = false
     @Published var detectRecords: [DetectRecord] = []
 
     // MARK: - 统计
@@ -109,9 +110,16 @@ class DetectViewModel: ObservableObject {
         isEphemeral: Bool = false,
         relatedRecordId: UUID? = nil
     ) {
+        let mapped = UiErrorMapper.map(title: title, detail: detail, isSuccess: isSuccess)
         let entry = LogEntry(
-            title: title,
-            detail: detail,
+            title: mapped.resultTitle,
+            detail: mapped.userDetail,
+            userReason: mapped.userReason,
+            nextAction: mapped.nextAction,
+            diagnosticCode: mapped.diagnosticCode,
+            diagnosticDetail: mapped.diagnosticDetail,
+            rawError: mapped.rawError,
+            techFields: mapped.techFields,
             isSuccess: isSuccess,
             kind: kind,
             isEphemeral: isEphemeral,
@@ -157,8 +165,8 @@ class DetectViewModel: ObservableObject {
     func clearInputSource() {
         guard inputSource != nil else {
             log(
-                localized("输入源为空", "Input source is empty"),
-                detail: localized("没有可清空的输入源地址", "No input source path to clear"),
+                Localizer.pick("输入源为空", "Input source is empty"),
+                detail: Localizer.pick("没有可清空的输入源地址", "No input source path to clear"),
                 kind: .generic,
                 isEphemeral: true
             )
@@ -166,8 +174,8 @@ class DetectViewModel: ObservableObject {
         }
         inputSource = nil
         log(
-            localized("已清空输入源", "Input source cleared"),
-            detail: localized("仅清空输入源地址，不影响待处理队列", "Cleared input source path only; queue unchanged"),
+            Localizer.pick("已清空输入源", "Input source cleared"),
+            detail: Localizer.pick("仅清空输入源地址，不影响待处理队列", "Cleared input source path only; queue unchanged"),
             kind: .generic,
             isEphemeral: true
         )
@@ -231,7 +239,7 @@ class DetectViewModel: ObservableObject {
                 let regularFiles = items.filter { !isDirectory($0) }
                 if regularFiles.isEmpty {
                     log(
-                        localized("目录无可用文件", "No files in directory"),
+                        Localizer.pick("目录无可用文件", "No files in directory"),
                         detail: directoryNoAudioDetail(appState: appState),
                         isSuccess: false,
                         kind: .directoryNoAudio,
@@ -241,7 +249,7 @@ class DetectViewModel: ObservableObject {
                 return regularFiles
             } catch {
                 log(
-                    localized("读取目录失败", "Failed to read directory"),
+                    Localizer.pick("读取目录失败", "Failed to read directory"),
                     detail: error.localizedDescription,
                     isSuccess: false,
                     kind: .directoryReadFailed
@@ -252,7 +260,7 @@ class DetectViewModel: ObservableObject {
 
         guard FileManager.default.fileExists(atPath: source.path) else {
             log(
-                localized("不支持的输入源", "Unsupported input source"),
+                Localizer.pick("不支持的输入源", "Unsupported input source"),
                 detail: unsupportedInputDetail(appState: appState),
                 isSuccess: false,
                 kind: .unsupportedInput,
@@ -284,8 +292,8 @@ class DetectViewModel: ObservableObject {
         }
         if duplicateCount > 0 {
             log(
-                localized("已去重", "Deduplicated"),
-                detail: localized("跳过 \(duplicateCount) 个重复文件", "Skipped \(duplicateCount) duplicate files"),
+                Localizer.pick("已去重", "Deduplicated"),
+                detail: Localizer.pick("跳过 \(duplicateCount) 个重复文件", "Skipped \(duplicateCount) duplicate files"),
                 kind: .deduplicated,
                 isEphemeral: true
             )
@@ -330,7 +338,7 @@ class DetectViewModel: ObservableObject {
         }
 
         log(
-            localized("已跳过不支持文件", "Skipped unsupported files"),
+            Localizer.pick("已跳过不支持文件", "Skipped unsupported files"),
             detail: detail,
             isSuccess: false,
             kind: .unsupportedInput,
@@ -350,8 +358,8 @@ class DetectViewModel: ObservableObject {
     func clearQueue() {
         guard !selectedFiles.isEmpty else {
             log(
-                localized("队列为空", "Queue is empty"),
-                detail: localized("没有可移除的文件", "No files to remove"),
+                Localizer.pick("队列为空", "Queue is empty"),
+                detail: Localizer.pick("没有可移除的文件", "No files to remove"),
                 kind: .queueEmpty,
                 isEphemeral: true
             )
@@ -360,8 +368,8 @@ class DetectViewModel: ObservableObject {
         let count = selectedFiles.count
         selectedFiles.removeAll()
         log(
-            localized("已清空队列", "Queue cleared"),
-            detail: localized("移除了 \(count) 个文件", "Removed \(count) files"),
+            Localizer.pick("已清空队列", "Queue cleared"),
+            detail: Localizer.pick("移除了 \(count) 个文件", "Removed \(count) files"),
             kind: .queueCleared
         )
         flash(\.isClearQueueSuccess)
@@ -370,8 +378,8 @@ class DetectViewModel: ObservableObject {
     func clearLogs() {
         guard !logs.isEmpty else {
             log(
-                localized("日志为空", "Logs are empty"),
-                detail: localized("没有可清空的日志", "No logs to clear"),
+                Localizer.pick("日志为空", "Logs are empty"),
+                detail: Localizer.pick("没有可清空的日志", "No logs to clear"),
                 kind: .logsEmpty,
                 isEphemeral: true
             )
@@ -383,8 +391,8 @@ class DetectViewModel: ObservableObject {
         totalDetected = 0
         totalFound = 0
         log(
-            localized("已清空日志", "Logs cleared"),
-            detail: localized("移除了 \(count) 条日志记录", "Removed \(count) log entries"),
+            Localizer.pick("已清空日志", "Logs cleared"),
+            detail: Localizer.pick("移除了 \(count) 条日志记录", "Removed \(count) log entries"),
             kind: .logsCleared,
             isEphemeral: true
         )
@@ -398,8 +406,8 @@ class DetectViewModel: ObservableObject {
 
         guard !selectedFiles.isEmpty else {
             log(
-                localized("队列为空", "Queue is empty"),
-                detail: localized("请先添加音频文件", "Add audio files first"),
+                Localizer.pick("队列为空", "Queue is empty"),
+                detail: Localizer.pick("请先添加音频文件", "Add audio files first"),
                 isSuccess: false,
                 kind: .queueEmpty,
                 isEphemeral: true
@@ -415,16 +423,16 @@ class DetectViewModel: ObservableObject {
         totalFound = 0
 
         log(
-            localized("开始检测", "Detection started"),
-            detail: localized("准备检测 \(selectedFiles.count) 个文件", "Preparing to detect \(selectedFiles.count) files"),
+            Localizer.pick("开始检测", "Detection started"),
+            detail: Localizer.pick("准备检测 \(selectedFiles.count) 个文件", "Preparing to detect \(selectedFiles.count) files"),
             kind: .processStarted
         )
 
         Task {
             guard let audio else {
                 log(
-                    localized("检测失败", "Detection failed"),
-                    detail: localized("AudioWmark 未初始化", "AudioWmark is not initialized"),
+                    Localizer.pick("检测失败", "Detection failed"),
+                    detail: Localizer.pick("AudioWmark 未初始化", "AudioWmark is not initialized"),
                     isSuccess: false,
                     kind: .detectFailed
                 )
@@ -434,8 +442,8 @@ class DetectViewModel: ObservableObject {
             let key = try? AWMKeyStore.loadActiveKey()
             if key == nil {
                 log(
-                    localized("未配置密钥", "Key not configured"),
-                    detail: localized(
+                    Localizer.pick("未配置密钥", "Key not configured"),
+                    detail: Localizer.pick(
                         "将仅显示未校验结果，且不可用于归属/取证",
                         "Only unverified fields will be shown. Do not use for attribution/forensics"
                     ),
@@ -494,8 +502,8 @@ class DetectViewModel: ObservableObject {
             }
 
             log(
-                localized("检测完成", "Detection finished"),
-                detail: localized("已检测: \(totalDetected), 发现水印: \(totalFound)", "Detected: \(totalDetected), Found watermark: \(totalFound)"),
+                Localizer.pick("检测完成", "Detection finished"),
+                detail: Localizer.pick("已检测: \(totalDetected), 发现水印: \(totalFound)", "Detected: \(totalDetected), Found watermark: \(totalFound)"),
                 kind: .processFinished
             )
 
@@ -515,8 +523,8 @@ class DetectViewModel: ObservableObject {
                 timeText = "-"
             }
             log(
-                "\(localized("成功", "Success")): \(fileName)",
-                detail: localized(
+                "\(Localizer.pick("成功", "Success")): \(fileName)",
+                detail: Localizer.pick(
                     "标签: \(record.identity ?? "-") | 时间: \(timeText) | 克隆: \(record.cloneCheck ?? "-")",
                     "Tag: \(record.identity ?? "-") | Time: \(timeText) | Clone: \(record.cloneCheck ?? "-")"
                 ),
@@ -525,21 +533,21 @@ class DetectViewModel: ObservableObject {
             )
         case "not_found":
             log(
-                "\(localized("无标记", "Not found")): \(fileName)",
-                detail: localized("未检测到水印", "No watermark detected"),
+                "\(Localizer.pick("无标记", "Not found")): \(fileName)",
+                detail: Localizer.pick("未检测到水印", "No watermark detected"),
                 isSuccess: false,
                 kind: .resultNotFound,
                 relatedRecordId: record.id
             )
         case "invalid_hmac":
-            let warning = localized(
+            let warning = Localizer.pick(
                 "UNVERIFIED · 不可用于归属/取证",
                 "UNVERIFIED · Do not use for attribution/forensics"
             )
             let reason = record.error ?? "unknown"
             log(
-                "\(localized("失败", "Failed")): \(fileName)",
-                detail: localized(
+                "\(Localizer.pick("失败", "Failed")): \(fileName)",
+                detail: Localizer.pick(
                     "HMAC 校验失败: \(reason) · \(warning)",
                     "HMAC verification failed: \(reason) · \(warning)"
                 ),
@@ -549,8 +557,8 @@ class DetectViewModel: ObservableObject {
             )
         default:
             log(
-                "\(localized("失败", "Failed")): \(fileName)",
-                detail: record.error ?? localized("未知错误", "Unknown error"),
+                "\(Localizer.pick("失败", "Failed")): \(fileName)",
+                detail: record.error ?? Localizer.pick("未知错误", "Unknown error"),
                 isSuccess: false,
                 kind: .resultError,
                 relatedRecordId: record.id
@@ -577,7 +585,7 @@ class DetectViewModel: ObservableObject {
     // MARK: - 计算属性
 
     var inputSourceText: String {
-        inputSource?.path(percentEncoded: false) ?? localized("尚未选择输入源", "No input source selected")
+        inputSource?.path(percentEncoded: false) ?? Localizer.pick("尚未选择输入源", "No input source selected")
     }
 
     func fileStatusText(for url: URL, at index: Int) -> (text: String, isActive: Bool) {
@@ -586,29 +594,24 @@ class DetectViewModel: ObservableObject {
             let status: String
             switch entry.kind {
             case .resultOk:
-                status = localized("已检测", "Detected")
+                status = Localizer.pick("已检测", "Detected")
             case .resultNotFound:
-                status = localized("无标记", "Not found")
+                status = Localizer.pick("无标记", "Not found")
             case .resultInvalidHmac, .resultError:
-                status = localized("失败", "Failed")
+                status = Localizer.pick("失败", "Failed")
             default:
                 status = entry.isSuccess
-                    ? localized("已检测", "Detected")
-                    : localized("无标记", "Not found")
+                    ? Localizer.pick("已检测", "Detected")
+                    : Localizer.pick("无标记", "Not found")
             }
             return (status, false)
         } else if isProcessing && index == currentProcessingIndex {
-            return (localized("检测中", "Detecting"), true)
+            return (Localizer.pick("检测中", "Detecting"), true)
         } else if isProcessing {
-            return (localized("等待中", "Waiting"), false)
+            return (Localizer.pick("等待中", "Waiting"), false)
         } else {
-            return (localized("就绪", "Ready"), false)
+            return (Localizer.pick("就绪", "Ready"), false)
         }
-    }
-
-    private func localized(_ zh: String, _ en: String) -> String {
-        let selected = (try? AWMUILanguageStore.get()) ?? .zhCN
-        return selected == .enUS ? en : zh
     }
 }
 

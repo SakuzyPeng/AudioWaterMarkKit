@@ -28,6 +28,7 @@ class EmbedViewModel: ObservableObject {
 
     // MARK: - 日志
     @Published var logs: [LogEntry] = []
+    @Published var showDiagnostics = false
 
     // MARK: - 按钮闪烁
     @Published var isClearQueueSuccess = false
@@ -55,9 +56,16 @@ class EmbedViewModel: ObservableObject {
         kind: LogEntry.Kind = .generic,
         isEphemeral: Bool = false
     ) {
+        let mapped = UiErrorMapper.map(title: title, detail: detail, isSuccess: isSuccess)
         let entry = LogEntry(
-            title: title,
-            detail: detail,
+            title: mapped.resultTitle,
+            detail: mapped.userDetail,
+            userReason: mapped.userReason,
+            nextAction: mapped.nextAction,
+            diagnosticCode: mapped.diagnosticCode,
+            diagnosticDetail: mapped.diagnosticDetail,
+            rawError: mapped.rawError,
+            techFields: mapped.techFields,
             isSuccess: isSuccess,
             kind: kind,
             isEphemeral: isEphemeral
@@ -106,8 +114,8 @@ class EmbedViewModel: ObservableObject {
     func clearInputSource() {
         guard inputSource != nil else {
             log(
-                localized("输入源为空", "Input source is empty"),
-                detail: localized("没有可清空的输入源地址", "No input source path to clear"),
+                Localizer.pick("输入源为空", "Input source is empty"),
+                detail: Localizer.pick("没有可清空的输入源地址", "No input source path to clear"),
                 kind: .generic,
                 isEphemeral: true
             )
@@ -115,8 +123,8 @@ class EmbedViewModel: ObservableObject {
         }
         inputSource = nil
         log(
-            localized("已清空输入源", "Input source cleared"),
-            detail: localized("仅清空输入源地址，不影响待处理队列", "Cleared input source path only; queue unchanged"),
+            Localizer.pick("已清空输入源", "Input source cleared"),
+            detail: Localizer.pick("仅清空输入源地址，不影响待处理队列", "Cleared input source path only; queue unchanged"),
             kind: .generic,
             isEphemeral: true
         )
@@ -125,8 +133,8 @@ class EmbedViewModel: ObservableObject {
     func clearOutputDirectory() {
         guard outputDirectory != nil else {
             log(
-                localized("输出目录为空", "Output directory is empty"),
-                detail: localized("没有可清空的输出目录地址", "No output directory path to clear"),
+                Localizer.pick("输出目录为空", "Output directory is empty"),
+                detail: Localizer.pick("没有可清空的输出目录地址", "No output directory path to clear"),
                 kind: .generic,
                 isEphemeral: true
             )
@@ -134,8 +142,8 @@ class EmbedViewModel: ObservableObject {
         }
         outputDirectory = nil
         log(
-            localized("已清空输出目录", "Output directory cleared"),
-            detail: localized("已恢复为写回源文件目录", "Reset to write-back source directory"),
+            Localizer.pick("已清空输出目录", "Output directory cleared"),
+            detail: Localizer.pick("已恢复为写回源文件目录", "Reset to write-back source directory"),
             kind: .generic,
             isEphemeral: true
         )
@@ -199,7 +207,7 @@ class EmbedViewModel: ObservableObject {
                 let regularFiles = items.filter { !isDirectory($0) }
                 if regularFiles.isEmpty {
                     log(
-                        localized("目录无可用文件", "No files in directory"),
+                        Localizer.pick("目录无可用文件", "No files in directory"),
                         detail: directoryNoAudioDetail(appState: appState),
                         isSuccess: false,
                         kind: .directoryNoAudio,
@@ -209,7 +217,7 @@ class EmbedViewModel: ObservableObject {
                 return regularFiles
             } catch {
                 log(
-                    localized("读取目录失败", "Failed to read directory"),
+                    Localizer.pick("读取目录失败", "Failed to read directory"),
                     detail: error.localizedDescription,
                     isSuccess: false,
                     kind: .directoryReadFailed
@@ -220,7 +228,7 @@ class EmbedViewModel: ObservableObject {
 
         guard FileManager.default.fileExists(atPath: source.path) else {
             log(
-                localized("不支持的输入源", "Unsupported input source"),
+                Localizer.pick("不支持的输入源", "Unsupported input source"),
                 detail: unsupportedInputDetail(appState: appState),
                 isSuccess: false,
                 kind: .unsupportedInput,
@@ -252,8 +260,8 @@ class EmbedViewModel: ObservableObject {
         }
         if duplicateCount > 0 {
             log(
-                localized("已去重", "Deduplicated"),
-                detail: localized("跳过 \(duplicateCount) 个重复文件", "Skipped \(duplicateCount) duplicate files"),
+                Localizer.pick("已去重", "Deduplicated"),
+                detail: Localizer.pick("跳过 \(duplicateCount) 个重复文件", "Skipped \(duplicateCount) duplicate files"),
                 kind: .deduplicated,
                 isEphemeral: true
             )
@@ -298,7 +306,7 @@ class EmbedViewModel: ObservableObject {
         }
 
         log(
-            localized("已跳过不支持文件", "Skipped unsupported files"),
+            Localizer.pick("已跳过不支持文件", "Skipped unsupported files"),
             detail: detail,
             isSuccess: false,
             kind: .unsupportedInput,
@@ -322,8 +330,8 @@ class EmbedViewModel: ObservableObject {
     func clearQueue() {
         guard !selectedFiles.isEmpty else {
             log(
-                localized("队列为空", "Queue is empty"),
-                detail: localized("没有可移除的文件", "No files to remove"),
+                Localizer.pick("队列为空", "Queue is empty"),
+                detail: Localizer.pick("没有可移除的文件", "No files to remove"),
                 kind: .queueEmpty,
                 isEphemeral: true
             )
@@ -332,8 +340,8 @@ class EmbedViewModel: ObservableObject {
         let count = selectedFiles.count
         selectedFiles.removeAll()
         log(
-            localized("已清空队列", "Queue cleared"),
-            detail: localized("移除了 \(count) 个文件", "Removed \(count) files"),
+            Localizer.pick("已清空队列", "Queue cleared"),
+            detail: Localizer.pick("移除了 \(count) 个文件", "Removed \(count) files"),
             kind: .queueCleared
         )
         flash(\.isClearQueueSuccess)
@@ -342,8 +350,8 @@ class EmbedViewModel: ObservableObject {
     func clearLogs() {
         guard !logs.isEmpty else {
             log(
-                localized("日志为空", "Logs are empty"),
-                detail: localized("没有可清空的日志", "No logs to clear"),
+                Localizer.pick("日志为空", "Logs are empty"),
+                detail: Localizer.pick("没有可清空的日志", "No logs to clear"),
                 kind: .logsEmpty,
                 isEphemeral: true
             )
@@ -352,8 +360,8 @@ class EmbedViewModel: ObservableObject {
         let count = logs.count
         logs.removeAll()
         log(
-            localized("已清空日志", "Logs cleared"),
-            detail: localized("移除了 \(count) 条日志记录", "Removed \(count) log entries"),
+            Localizer.pick("已清空日志", "Logs cleared"),
+            detail: Localizer.pick("移除了 \(count) 条日志记录", "Removed \(count) log entries"),
             kind: .logsCleared,
             isEphemeral: true
         )
@@ -366,8 +374,8 @@ class EmbedViewModel: ObservableObject {
         if isProcessing {
             isCancelling = true
             log(
-                localized("正在中止处理", "Stopping processing"),
-                detail: localized("等待当前文件完成...", "Waiting for current file to finish..."),
+                Localizer.pick("正在中止处理", "Stopping processing"),
+                detail: Localizer.pick("等待当前文件完成...", "Waiting for current file to finish..."),
                 isSuccess: false,
                 kind: .processCancelling
             )
@@ -383,8 +391,8 @@ class EmbedViewModel: ObservableObject {
     private func startEmbedPass(audio: AWMAudio?) {
         guard !selectedFiles.isEmpty else {
             log(
-                localized("队列为空", "Queue is empty"),
-                detail: localized("请先添加音频文件", "Add audio files first"),
+                Localizer.pick("队列为空", "Queue is empty"),
+                detail: Localizer.pick("请先添加音频文件", "Add audio files first"),
                 isSuccess: false,
                 kind: .queueEmpty,
                 isEphemeral: true
@@ -396,8 +404,8 @@ class EmbedViewModel: ObservableObject {
         let normalizedUsername = normalizedUsernameInput
         guard let resolvedTag = resolvedTagValue, !normalizedUsername.isEmpty else {
             log(
-                localized("用户名未填写", "Username is missing"),
-                detail: localized("请输入用户名以自动生成 Tag", "Enter username to generate tag automatically"),
+                Localizer.pick("用户名未填写", "Username is missing"),
+                detail: Localizer.pick("请输入用户名以自动生成 Tag", "Enter username to generate tag automatically"),
                 isSuccess: false,
                 kind: .usernameMissing,
                 isEphemeral: true
@@ -412,21 +420,21 @@ class EmbedViewModel: ObservableObject {
         currentProcessingIndex = 0
         skippedWatermarkedFiles = []
 
-        let settingsStr = localized(
+        let settingsStr = Localizer.pick(
             "用户: \(normalizedUsername) | Tag: \(resolvedTag) | 强度: \(Int(strength))",
             "User: \(normalizedUsername) | Tag: \(resolvedTag) | Strength: \(Int(strength))"
         )
         log(
-            localized("开始处理", "Processing started"),
-            detail: localized("准备处理 \(selectedFiles.count) 个文件", "Preparing to process \(selectedFiles.count) files") + " | \(settingsStr)",
+            Localizer.pick("开始处理", "Processing started"),
+            detail: Localizer.pick("准备处理 \(selectedFiles.count) 个文件", "Preparing to process \(selectedFiles.count) files") + " | \(settingsStr)",
             kind: .processStarted
         )
 
         Task {
             guard let audio else {
                 log(
-                    localized("嵌入失败", "Embed failed"),
-                    detail: localized("AudioWmark 未初始化", "AudioWmark is not initialized"),
+                    Localizer.pick("嵌入失败", "Embed failed"),
+                    detail: Localizer.pick("AudioWmark 未初始化", "AudioWmark is not initialized"),
                     isSuccess: false,
                     kind: .embedFailed
                 )
@@ -435,8 +443,8 @@ class EmbedViewModel: ObservableObject {
             }
             guard let key = try? AWMKeyStore.loadActiveKey() else {
                 log(
-                    localized("嵌入失败", "Embed failed"),
-                    detail: localized("密钥未配置", "Key not configured"),
+                    Localizer.pick("嵌入失败", "Embed failed"),
+                    detail: Localizer.pick("密钥未配置", "Key not configured"),
                     isSuccess: false,
                     kind: .embedFailed
                 )
@@ -506,8 +514,8 @@ class EmbedViewModel: ObservableObject {
 
             if isCancelling {
                 log(
-                    localized("已取消", "Cancelled"),
-                    detail: localized(
+                    Localizer.pick("已取消", "Cancelled"),
+                    detail: Localizer.pick(
                         "已完成 \(state.successCount + state.failureCount) / \(initialTotal) 个文件",
                         "Completed \(state.successCount + state.failureCount) / \(initialTotal) files"
                     ),
@@ -516,8 +524,8 @@ class EmbedViewModel: ObservableObject {
                 )
             } else {
                 log(
-                    localized("处理完成", "Processing finished"),
-                    detail: localized("成功: \(state.successCount), 失败: \(state.failureCount)", "Success: \(state.successCount), Failed: \(state.failureCount)"),
+                    Localizer.pick("处理完成", "Processing finished"),
+                    detail: Localizer.pick("成功: \(state.successCount), 失败: \(state.failureCount)", "Success: \(state.successCount), Failed: \(state.failureCount)"),
                     kind: .processFinished
                 )
             }
@@ -531,14 +539,14 @@ class EmbedViewModel: ObservableObject {
                     if saveResult == .inserted {
                         refreshTagMappings()
                         log(
-                            localized("已保存映射", "Mapping saved"),
+                            Localizer.pick("已保存映射", "Mapping saved"),
                             detail: "\(normalizedUsername) -> \(resolvedTag)",
                             kind: .mappingSaved
                         )
                     }
                 } catch {
                     log(
-                        localized("保存映射失败", "Failed to save mapping"),
+                        Localizer.pick("保存映射失败", "Failed to save mapping"),
                         detail: error.localizedDescription,
                         isSuccess: false,
                         kind: .embedFailed,
@@ -555,8 +563,8 @@ class EmbedViewModel: ObservableObject {
             if !isCancelling, !state.skippedFiles.isEmpty {
                 skippedWatermarkedFiles = state.skippedFiles
                 log(
-                    localized("已跳过含水印文件", "Skipped watermarked files"),
-                    detail: localized(
+                    Localizer.pick("已跳过含水印文件", "Skipped watermarked files"),
+                    detail: Localizer.pick(
                         "共跳过 \(state.skippedFiles.count) 个已含水印文件",
                         "Skipped \(state.skippedFiles.count) already-watermarked files"
                     ),
@@ -589,7 +597,7 @@ class EmbedViewModel: ObservableObject {
 
     var matchedMappingHintText: String? {
         guard matchedMappingForInput != nil else { return nil }
-        return localized("已存在映射，自动复用", "Existing mapping found, auto reused")
+        return Localizer.pick("已存在映射，自动复用", "Existing mapping found, auto reused")
     }
 
     var skipSummaryCount: Int {
@@ -599,13 +607,13 @@ class EmbedViewModel: ObservableObject {
     var skipSummaryMessage: String {
         let preview = skippedWatermarkedFiles.prefix(3).map(\.lastPathComponent).joined(separator: "、")
         if skippedWatermarkedFiles.count <= 3 {
-            return localized(
+            return Localizer.pick(
                 "已跳过 \(skippedWatermarkedFiles.count) 个已含水印文件：\(preview)",
                 "Skipped \(skippedWatermarkedFiles.count) already-watermarked files: \(preview)"
             )
         }
         let remain = skippedWatermarkedFiles.count - 3
-        return localized(
+        return Localizer.pick(
             "已跳过 \(skippedWatermarkedFiles.count) 个已含水印文件：\(preview) 等 \(remain) 个",
             "Skipped \(skippedWatermarkedFiles.count) already-watermarked files: \(preview) and \(remain) more"
         )
@@ -689,32 +697,27 @@ class EmbedViewModel: ObservableObject {
     // MARK: - 计算属性
 
     var inputSourceText: String {
-        inputSource?.path(percentEncoded: false) ?? localized("尚未选择输入源", "No input source selected")
+        inputSource?.path(percentEncoded: false) ?? Localizer.pick("尚未选择输入源", "No input source selected")
     }
 
     var outputDirectoryText: String {
-        outputDirectory?.path(percentEncoded: false) ?? localized("默认写回各文件所在目录", "Default: write back to source directory")
+        outputDirectory?.path(percentEncoded: false) ?? Localizer.pick("默认写回各文件所在目录", "Default: write back to source directory")
     }
 
     func fileStatusText(for url: URL, at index: Int) -> (text: String, isActive: Bool) {
         let fileName = url.lastPathComponent
         if let entry = logs.first(where: { $0.title.hasSuffix(fileName) && !$0.isEphemeral }) {
             let status = entry.isSuccess
-                ? localized("完成", "Done")
-                : localized("失败", "Failed")
+                ? Localizer.pick("完成", "Done")
+                : Localizer.pick("失败", "Failed")
             return (status, false)
         } else if isProcessing && index == currentProcessingIndex {
-            return (localized("处理中", "Processing"), true)
+            return (Localizer.pick("处理中", "Processing"), true)
         } else if isProcessing {
-            return (localized("等待中", "Waiting"), false)
+            return (Localizer.pick("等待中", "Waiting"), false)
         } else {
-            return (localized("就绪", "Ready"), false)
+            return (Localizer.pick("就绪", "Ready"), false)
         }
-    }
-
-    private func localized(_ zh: String, _ en: String) -> String {
-        let selected = (try? AWMUILanguageStore.get()) ?? .zhCN
-        return selected == .enUS ? en : zh
     }
 }
 
@@ -807,8 +810,8 @@ private extension EmbedViewModel {
                     state.skippedFiles.append(fileURL)
                 }
                 log(
-                    localized("检测到已有水印", "Existing watermark detected"),
-                    detail: localized(
+                    Localizer.pick("检测到已有水印", "Existing watermark detected"),
+                    detail: Localizer.pick(
                         "\(fileURL.lastPathComponent) 已跳过",
                         "\(fileURL.lastPathComponent) skipped"
                     ),
@@ -820,8 +823,8 @@ private extension EmbedViewModel {
         } catch let awmError as AWMError {
             if case .admUnsupported = awmError {
                 log(
-                    localized("预检已跳过", "Precheck skipped"),
-                    detail: localized(
+                    Localizer.pick("预检已跳过", "Precheck skipped"),
+                    detail: Localizer.pick(
                         "ADM/BWF 检测暂不支持，已跳过预检并继续嵌入",
                         "ADM/BWF detect is not supported yet; precheck was skipped and embed continues"
                     ),
@@ -831,8 +834,8 @@ private extension EmbedViewModel {
                 )
             } else {
                 log(
-                    "\(localized("失败", "Failed")): \(fileURL.lastPathComponent)",
-                    detail: localized("预检失败", "Precheck failed") + ": \(awmError.localizedDescription)",
+                    "\(Localizer.pick("失败", "Failed")): \(fileURL.lastPathComponent)",
+                    detail: Localizer.pick("预检失败", "Precheck failed") + ": \(awmError.localizedDescription)",
                     isSuccess: false,
                     kind: .resultError
                 )
@@ -844,8 +847,8 @@ private extension EmbedViewModel {
             }
         } catch {
             log(
-                "\(localized("失败", "Failed")): \(fileURL.lastPathComponent)",
-                detail: localized("预检失败", "Precheck failed") + ": \(error.localizedDescription)",
+                "\(Localizer.pick("失败", "Failed")): \(fileURL.lastPathComponent)",
+                detail: Localizer.pick("预检失败", "Precheck failed") + ": \(error.localizedDescription)",
                 isSuccess: false,
                 kind: .resultError
             )
@@ -907,7 +910,7 @@ private extension EmbedViewModel {
             updateFileProgress(1)
             if let evidenceError = step.evidenceErrorDescription {
                 log(
-                    localized("证据记录失败", "Evidence record failed"),
+                    Localizer.pick("证据记录失败", "Evidence record failed"),
                     detail: "\(outputURL.lastPathComponent): \(evidenceError)",
                     isSuccess: false,
                     kind: .evidenceWarning,
@@ -920,7 +923,7 @@ private extension EmbedViewModel {
             } else if let snrStatus = step.snrStatus, snrStatus != "ok" {
                 let reason = step.snrDetail ?? snrStatus
                 log(
-                    localized("SNR 不可用", "SNR unavailable"),
+                    Localizer.pick("SNR 不可用", "SNR unavailable"),
                     detail: reason,
                     isSuccess: false,
                     kind: .evidenceWarning,
@@ -928,14 +931,14 @@ private extension EmbedViewModel {
                 )
             }
             log(
-                "\(localized("成功", "Success")): \(fileURL.lastPathComponent)",
+                "\(Localizer.pick("成功", "Success")): \(fileURL.lastPathComponent)",
                 detail: successDetail,
                 kind: .resultOk
             )
             state.successCount += 1
         } catch {
             log(
-                "\(localized("失败", "Failed")): \(fileURL.lastPathComponent)",
+                "\(Localizer.pick("失败", "Failed")): \(fileURL.lastPathComponent)",
                 detail: error.localizedDescription,
                 isSuccess: false,
                 kind: .resultError

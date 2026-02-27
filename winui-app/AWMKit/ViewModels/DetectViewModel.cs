@@ -69,7 +69,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         }
     }
 
-    public string InputSourceText => string.IsNullOrWhiteSpace(InputSource) ? L("尚未选择输入源", "No input source selected") : InputSource;
+    public string InputSourceText => string.IsNullOrWhiteSpace(InputSource) ? AppStrings.Pick("尚未选择输入源", "No input source selected") : InputSource;
 
     private bool _isProcessing;
     public bool IsProcessing
@@ -149,7 +149,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
     public bool HasDetectCount => TotalDetected > 0;
 
-    public string DetectCountText => $"{TotalFound}{L("（成功）", " (success)")}/{TotalDetected}{L("（总）", " (total)")}";
+    public string DetectCountText => $"{TotalFound}{AppStrings.Pick("（成功）", " (success)")}/{TotalDetected}{AppStrings.Pick("（总）", " (total)")}";
 
     private bool _isClearQueueSuccess;
     public bool IsClearQueueSuccess
@@ -163,6 +163,19 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
     {
         get => _isClearLogsSuccess;
         private set => SetProperty(ref _isClearLogsSuccess, value);
+    }
+
+    private bool _showDiagnostics;
+    public bool ShowDiagnostics
+    {
+        get => _showDiagnostics;
+        set
+        {
+            if (SetProperty(ref _showDiagnostics, value))
+            {
+                NotifyFilteredLogsChanged();
+            }
+        }
     }
 
     private string _logSearchText = string.Empty;
@@ -217,7 +230,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
     public bool ShowNoLogsHint => !HasLogs;
 
-    public string LogCountText => L($"共 {Logs.Count} 条", $"Total {Logs.Count}");
+    public string LogCountText => AppStrings.Pick($"共 {Logs.Count} 条", $"Total {Logs.Count}");
 
     public bool HasFilteredLogs => FilteredLogs.Any();
 
@@ -235,7 +248,8 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
             return Logs.Where(log =>
                 log.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                log.Detail.Contains(query, StringComparison.OrdinalIgnoreCase));
+                log.Detail.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                (ShowDiagnostics && log.DiagnosticDetail.Contains(query, StringComparison.OrdinalIgnoreCase)));
         }
     }
 
@@ -247,7 +261,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
     public bool ShowQueueEmptyHint => !HasQueueFiles;
 
-    public string QueueCountText => L($"共 {QueueCount} 个", $"Total {QueueCount}");
+    public string QueueCountText => AppStrings.Pick($"共 {QueueCount} 个", $"Total {QueueCount}");
 
     private bool _isKeyAvailable;
     public bool IsKeyAvailable
@@ -264,49 +278,50 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
     public bool CanDetectOrStop => IsProcessing || SelectedFiles.Count > 0;
 
-    public string DetectButtonText => IsProcessing ? L("停止", "Stop") : L("检测", "Detect");
+    public string DetectButtonText => IsProcessing ? AppStrings.Pick("停止", "Stop") : AppStrings.Pick("检测", "Detect");
     public bool ShowDetectStopIcon => IsProcessing;
     public bool ShowDetectDefaultPlayIcon => !IsProcessing && !IsDetectSuccess;
     public bool ShowDetectSuccessPlayIcon => !IsProcessing && IsDetectSuccess;
-    public string InputSectionTitle => L("待检测文件", "Input files");
-    public string MissingKeyMessage => L("未配置密钥，请前往密钥页完成生成。", "No key configured. Please go to Key page to create one.");
-    public string GoToKeyPageText => L("前往密钥页", "Go to Key page");
-    public string SelectActionText => L("选择", "Select");
-    public string ClearActionText => L("清空", "Clear");
-    public string DropZoneTitle => L("拖拽音频文件到此处", "Drag audio files here");
+    public string InputSectionTitle => AppStrings.Pick("待检测文件", "Input files");
+    public string MissingKeyMessage => AppStrings.Pick("未配置密钥，请前往密钥页完成生成。", "No key configured. Please go to Key page to create one.");
+    public string GoToKeyPageText => AppStrings.Pick("前往密钥页", "Go to Key page");
+    public string SelectActionText => AppStrings.Pick("选择", "Select");
+    public string ClearActionText => AppStrings.Pick("清空", "Clear");
+    public string DropZoneTitle => AppStrings.Pick("拖拽音频文件到此处", "Drag audio files here");
     public string DropZoneSubtitle => _appState.UsingFallbackInputExtensions
-        ? L(
+        ? AppStrings.Pick(
             $"支持 {SupportedExtensionsDisplay()}，当前按默认集合处理（运行时能力未知）",
             $"Supports {SupportedExtensionsDisplay()}; using default fallback set while runtime capabilities are unknown")
-        : L(
+        : AppStrings.Pick(
             $"支持 {SupportedExtensionsDisplay()}，可批量拖入并检测",
             $"Supports {SupportedExtensionsDisplay()}, batch drop enabled for detection");
-    public string DetectInfoTitle => L("检测信息", "Detection info");
-    public string FileFieldLabel => L("文件", "File");
-    public string StatusFieldLabel => L("状态", "Status");
-    public string MatchFieldLabel => L("匹配标记", "Match");
-    public string PatternFieldLabel => L("检测模式", "Mode");
-    public string TagFieldLabel => L("标签", "Tag");
-    public string IdentityFieldLabel => L("身份", "Identity");
-    public string VersionFieldLabel => L("版本", "Version");
-    public string TimeFieldLabel => L("检测时间", "Detect time");
-    public string KeySlotFieldLabel => L("密钥槽位", "Key slot");
-    public string BitErrorsFieldLabel => L("位错误", "Bit errors");
-    public string DetectScoreFieldLabel => L("检测分数", "Detect score");
-    public string DetectRouteFieldLabel => L("检测路径", "Detect path");
-    public string CloneCheckFieldLabel => L("克隆校验", "Clone check");
-    public string FingerprintScoreFieldLabel => L("指纹分数", "Fingerprint score");
-    public string ErrorFieldLabel => L("错误信息", "Error");
-    public string QueueTitle => L("待检测文件", "Pending files");
-    public string QueueEmptyText => L("暂无文件", "No files");
-    public string LogsTitle => L("检测日志", "Detection logs");
-    public string LogSearchPlaceholder => L("搜索日志（标题/详情）", "Search logs (title/detail)");
-    public string NoFilteredLogsText => L("暂无或无匹配日志", "No logs or no matches");
-    public string SelectInputSourceAccessibility => L("选择输入源", "Select input source");
-    public string ClearInputSourceAccessibility => L("清空输入源地址", "Clear input source path");
-    public string DetectActionAccessibility => L("开始或停止检测", "Start or stop detection");
-    public string ClearQueueAccessibility => L("清空队列", "Clear queue");
-    public string ClearLogsAccessibility => L("清空日志", "Clear logs");
+    public string DetectInfoTitle => AppStrings.Pick("检测信息", "Detection info");
+    public string FileFieldLabel => AppStrings.Pick("文件", "File");
+    public string StatusFieldLabel => AppStrings.Pick("状态", "Status");
+    public string MatchFieldLabel => AppStrings.Pick("匹配标记", "Match");
+    public string PatternFieldLabel => AppStrings.Pick("检测模式", "Mode");
+    public string TagFieldLabel => AppStrings.Pick("标签", "Tag");
+    public string IdentityFieldLabel => AppStrings.Pick("身份", "Identity");
+    public string VersionFieldLabel => AppStrings.Pick("版本", "Version");
+    public string TimeFieldLabel => AppStrings.Pick("检测时间", "Detect time");
+    public string KeySlotFieldLabel => AppStrings.Pick("密钥槽位", "Key slot");
+    public string BitErrorsFieldLabel => AppStrings.Pick("位错误", "Bit errors");
+    public string DetectScoreFieldLabel => AppStrings.Pick("检测分数", "Detect score");
+    public string DetectRouteFieldLabel => AppStrings.Pick("检测路径", "Detect path");
+    public string CloneCheckFieldLabel => AppStrings.Pick("克隆校验", "Clone check");
+    public string FingerprintScoreFieldLabel => AppStrings.Pick("指纹分数", "Fingerprint score");
+    public string ErrorFieldLabel => AppStrings.Pick("错误信息", "Error");
+    public string QueueTitle => AppStrings.Pick("待检测文件", "Pending files");
+    public string QueueEmptyText => AppStrings.Pick("暂无文件", "No files");
+    public string LogsTitle => AppStrings.Pick("检测日志", "Detection logs");
+    public string ShowDiagnosticsText => AppStrings.Get("ui.toggle.show_diagnostics");
+    public string LogSearchPlaceholder => AppStrings.Pick("搜索日志（标题/详情）", "Search logs (title/detail)");
+    public string NoFilteredLogsText => AppStrings.Pick("暂无或无匹配日志", "No logs or no matches");
+    public string SelectInputSourceAccessibility => AppStrings.Pick("选择输入源", "Select input source");
+    public string ClearInputSourceAccessibility => AppStrings.Pick("清空输入源地址", "Clear input source path");
+    public string DetectActionAccessibility => AppStrings.Pick("开始或停止检测", "Start or stop detection");
+    public string ClearQueueAccessibility => AppStrings.Pick("清空队列", "Clear queue");
+    public string ClearLogsAccessibility => AppStrings.Pick("清空日志", "Clear logs");
 
     public DetectRecord? DisplayedRecord
     {
@@ -340,8 +355,8 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
     public string DisplayMatchFound => DisplayedRecord?.MatchFound switch
     {
-        true => L("是", "true"),
-        false => L("否", "false"),
+        true => AppStrings.Pick("是", "true"),
+        false => AppStrings.Pick("否", "false"),
         _ => "-",
     };
 
@@ -475,8 +490,8 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(InputSource))
         {
             AddLog(
-                L("输入源为空", "Input source is empty"),
-                L("没有可清空的输入源地址", "No input source path to clear"),
+                AppStrings.Pick("输入源为空", "Input source is empty"),
+                AppStrings.Pick("没有可清空的输入源地址", "No input source path to clear"),
                 true,
                 true,
                 null,
@@ -486,8 +501,8 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
         InputSource = null;
         AddLog(
-            L("已清空输入源", "Input source cleared"),
-            L("仅清空输入源地址，不影响待处理队列", "Cleared input source path only; queue unchanged"),
+            AppStrings.Pick("已清空输入源", "Input source cleared"),
+            AppStrings.Pick("仅清空输入源地址，不影响待处理队列", "Cleared input source path only; queue unchanged"),
             true,
             true,
             null,
@@ -499,13 +514,13 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
     {
         if (!SelectedFiles.Any())
         {
-            AddLog(L("队列为空", "Queue is empty"), L("没有可移除的文件", "No files to remove"), true, true, null, LogIconTone.Info);
+            AddLog(AppStrings.Pick("队列为空", "Queue is empty"), AppStrings.Pick("没有可移除的文件", "No files to remove"), true, true, null, LogIconTone.Info);
             return;
         }
 
         var count = SelectedFiles.Count;
         SelectedFiles.Clear();
-        AddLog(L("已清空队列", "Queue cleared"), L($"移除了 {count} 个文件", $"Removed {count} files"), true, false, null, LogIconTone.Success, LogKind.QueueCleared);
+        AddLog(AppStrings.Pick("已清空队列", "Queue cleared"), AppStrings.Pick($"移除了 {count} 个文件", $"Removed {count} files"), true, false, null, LogIconTone.Success, LogKind.QueueCleared);
         await FlashClearQueueAsync();
     }
 
@@ -514,7 +529,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
     {
         if (!Logs.Any())
         {
-            AddLog(L("日志为空", "Logs are empty"), L("没有可清空的日志", "No logs to clear"), true, true, null, LogIconTone.Info);
+            AddLog(AppStrings.Pick("日志为空", "Logs are empty"), AppStrings.Pick("没有可清空的日志", "No logs to clear"), true, true, null, LogIconTone.Info);
             return;
         }
 
@@ -524,7 +539,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         TotalDetected = 0;
         TotalFound = 0;
 
-        AddLog(L("已清空日志", "Logs cleared"), L($"移除了 {count} 条日志记录", $"Removed {count} log entries"), true, true, null, LogIconTone.Success, LogKind.LogsCleared);
+        AddLog(AppStrings.Pick("已清空日志", "Logs cleared"), AppStrings.Pick($"移除了 {count} 条日志记录", $"Removed {count} log entries"), true, true, null, LogIconTone.Success, LogKind.LogsCleared);
         await FlashClearLogsAsync();
     }
 
@@ -555,7 +570,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
             if (IsProcessing)
             {
                 await (_detectCts?.CancelAsync() ?? Task.CompletedTask);
-                AddLog(L("检测已停止", "Detection stopped"), L("用户手动停止", "Stopped by user"), false, true, null, LogIconTone.Warning);
+                AddLog(AppStrings.Pick("检测已停止", "Detection stopped"), AppStrings.Pick("用户手动停止", "Stopped by user"), false, true, null, LogIconTone.Warning);
                 return;
             }
 
@@ -563,7 +578,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AddLog(L("检测异常", "Detection error"), ex.Message, false, false, null, LogIconTone.Error);
+            AddLog(AppStrings.Pick("检测异常", "Detection error"), ex.Message, false, false, null, LogIconTone.Error);
             CurrentProcessingFile = null;
             CurrentProcessingIndex = -1;
             IsProcessing = false;
@@ -579,7 +594,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
         if (!SelectedFiles.Any())
         {
-            AddLog(L("队列为空", "Queue is empty"), L("请先添加音频文件", "Add audio files first"), false, true, null, LogIconTone.Warning);
+            AddLog(AppStrings.Pick("队列为空", "Queue is empty"), AppStrings.Pick("请先添加音频文件", "Add audio files first"), false, true, null, LogIconTone.Warning);
             return;
         }
 
@@ -594,8 +609,8 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
             else
             {
                 AddLog(
-                    L("未配置密钥", "Key not configured"),
-                    L(
+                    AppStrings.Pick("未配置密钥", "Key not configured"),
+                    AppStrings.Pick(
                         "将仅显示未校验结果，且不可用于归属/取证",
                         "Only unverified fields will be shown. Do not use for attribution/forensics"
                     ),
@@ -616,8 +631,8 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
             TotalFound = 0;
 
             AddLog(
-                L("开始检测", "Detection started"),
-                L($"准备检测 {SelectedFiles.Count} 个文件（Auto）", $"Preparing to detect {SelectedFiles.Count} files (Auto)"),
+                AppStrings.Pick("开始检测", "Detection started"),
+                AppStrings.Pick($"准备检测 {SelectedFiles.Count} 个文件（Auto）", $"Preparing to detect {SelectedFiles.Count} files (Auto)"),
                 true,
                 false,
                 null,
@@ -742,8 +757,8 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
             if (!token.IsCancellationRequested)
             {
                 AddLog(
-                    L("检测完成", "Detection finished"),
-                    L($"已检测: {TotalDetected}, 发现水印: {TotalFound}", $"Processed: {TotalDetected}, found: {TotalFound}"),
+                    AppStrings.Pick("检测完成", "Detection finished"),
+                    AppStrings.Pick($"已检测: {TotalDetected}, 发现水印: {TotalFound}", $"Processed: {TotalDetected}, found: {TotalFound}"),
                     true,
                     false,
                     null,
@@ -756,7 +771,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            AddLog(L("检测失败", "Detection failed"), ex.Message, false, false, null, LogIconTone.Error);
+            AddLog(AppStrings.Pick("检测失败", "Detection failed"), ex.Message, false, false, null, LogIconTone.Error);
         }
         finally
         {
@@ -962,8 +977,8 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
                 {
                     var timeText = LocalTimestampDisplay(record);
                     AddLog(
-                        $"{L("成功", "Success")}: {fileName}",
-                        L($"标签: {record.Identity ?? "-"} | 时间: {timeText} | 克隆: {record.CloneCheck ?? "-"}", $"Identity: {record.Identity ?? "-"} | Time: {timeText} | Clone: {record.CloneCheck ?? "-"}"),
+                        $"{AppStrings.Pick("成功", "Success")}: {fileName}",
+                        AppStrings.Pick($"标签: {record.Identity ?? "-"} | 时间: {timeText} | 克隆: {record.CloneCheck ?? "-"}", $"Identity: {record.Identity ?? "-"} | Time: {timeText} | Clone: {record.CloneCheck ?? "-"}"),
                         true,
                         false,
                         record.Id,
@@ -972,15 +987,15 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
                     break;
                 }
             case "not_found":
-                AddLog($"{L("无标记", "Not found")}: {fileName}", L("未检测到水印", "No watermark detected"), false, false, record.Id, LogIconTone.Warning, LogKind.ResultNotFound);
+                AddLog($"{AppStrings.Pick("无标记", "Not found")}: {fileName}", AppStrings.Pick("未检测到水印", "No watermark detected"), false, false, record.Id, LogIconTone.Warning, LogKind.ResultNotFound);
                 break;
             case "invalid_hmac":
-                var warningText = L(
+                var warningText = AppStrings.Pick(
                     "UNVERIFIED · 不可用于归属/取证",
                     "UNVERIFIED · Do not use for attribution/forensics");
                 AddLog(
-                    $"{L("失败", "Failed")}: {fileName}",
-                    L(
+                    $"{AppStrings.Pick("失败", "Failed")}: {fileName}",
+                    AppStrings.Pick(
                         $"HMAC 校验失败: {record.Error ?? "unknown"} · {warningText}",
                         $"HMAC verification failed: {record.Error ?? "unknown"} · {warningText}"
                     ),
@@ -991,7 +1006,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
                     LogKind.ResultInvalidHmac);
                 break;
             default:
-                AddLog($"{L("失败", "Failed")}: {fileName}", record.Error ?? L("未知错误", "Unknown error"), false, false, record.Id, LogIconTone.Error, LogKind.ResultError);
+                AddLog($"{AppStrings.Pick("失败", "Failed")}: {fileName}", record.Error ?? AppStrings.Pick("未知错误", "Unknown error"), false, false, record.Id, LogIconTone.Error, LogKind.ResultError);
                 break;
         }
     }
@@ -1005,7 +1020,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
         var reason = string.IsNullOrWhiteSpace(record.FallbackReason) ? "unknown" : record.FallbackReason;
         AddLog(
-            $"{L("触发回退", "Fallback triggered")}: {fileName}",
+            $"{AppStrings.Pick("触发回退", "Fallback triggered")}: {fileName}",
             $"route=single_fallback, reason={reason}",
             false,
             false,
@@ -1016,7 +1031,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         if (record.Status == "error")
         {
             AddLog(
-                $"{L("回退失败", "Fallback failed")}: {fileName}",
+                $"{AppStrings.Pick("回退失败", "Fallback failed")}: {fileName}",
                 $"route=single_fallback, reason={reason}, error={record.Error ?? "unknown"}",
                 false,
                 false,
@@ -1027,7 +1042,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         }
 
         AddLog(
-            $"{L("回退成功", "Fallback succeeded")}: {fileName}",
+            $"{AppStrings.Pick("回退成功", "Fallback succeeded")}: {fileName}",
             $"route=single_fallback, reason={reason}, status={record.Status}",
             true,
             false,
@@ -1047,14 +1062,14 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
                     .ToList();
                 if (files.Count == 0)
                 {
-                    AddLog(L("目录无可用文件", "No files in directory"), BuildDirectoryNoAudioDetail(), false, true, null, LogIconTone.Warning);
+                    AddLog(AppStrings.Pick("目录无可用文件", "No files in directory"), BuildDirectoryNoAudioDetail(), false, true, null, LogIconTone.Warning);
                 }
 
                 return files;
             }
             catch (Exception ex)
             {
-                AddLog(L("读取目录失败", "Failed to read directory"), ex.Message, false, false, null, LogIconTone.Error);
+                AddLog(AppStrings.Pick("读取目录失败", "Failed to read directory"), ex.Message, false, false, null, LogIconTone.Error);
                 return Array.Empty<string>();
             }
         }
@@ -1064,7 +1079,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
             return new[] { sourcePath };
         }
 
-        AddLog(L("不支持的输入源", "Unsupported input source"), BuildUnsupportedInputDetail(), false, true, null, LogIconTone.Warning);
+        AddLog(AppStrings.Pick("不支持的输入源", "Unsupported input source"), BuildUnsupportedInputDetail(), false, true, null, LogIconTone.Warning);
         return Array.Empty<string>();
     }
 
@@ -1103,7 +1118,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
         if (duplicateCount > 0)
         {
-            AddLog(L("已去重", "Deduplicated"), L($"跳过 {duplicateCount} 个重复文件", $"Skipped {duplicateCount} duplicate files"), true, true, null, LogIconTone.Info);
+            AddLog(AppStrings.Pick("已去重", "Deduplicated"), AppStrings.Pick($"跳过 {duplicateCount} 个重复文件", $"Skipped {duplicateCount} duplicate files"), true, true, null, LogIconTone.Info);
         }
     }
 
@@ -1126,14 +1141,14 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
     private string BuildDirectoryNoAudioDetail()
     {
-        return L(
+        return AppStrings.Pick(
             "当前目录未找到可处理文件",
             "No files found in this directory");
     }
 
     private string BuildUnsupportedInputDetail()
     {
-        return L(
+        return AppStrings.Pick(
             "请选择文件或目录作为输入源",
             "Select a file or directory as input source");
     }
@@ -1157,11 +1172,11 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         var preview = string.Join(", ", unique.Take(3).Select(Path.GetFileName));
         var remain = unique.Count - Math.Min(unique.Count, 3);
         var detail = remain <= 0
-            ? L($"已跳过 {unique.Count} 个不支持文件：{preview}", $"Skipped {unique.Count} unsupported file(s): {preview}")
-            : L($"已跳过 {unique.Count} 个不支持文件：{preview} 等 {remain} 个", $"Skipped {unique.Count} unsupported file(s): {preview} and {remain} more");
+            ? AppStrings.Pick($"已跳过 {unique.Count} 个不支持文件：{preview}", $"Skipped {unique.Count} unsupported file(s): {preview}")
+            : AppStrings.Pick($"已跳过 {unique.Count} 个不支持文件：{preview} 等 {remain} 个", $"Skipped {unique.Count} unsupported file(s): {preview} and {remain} more");
 
         AddLog(
-            L("已跳过不支持文件", "Skipped unsupported files"),
+            AppStrings.Pick("已跳过不支持文件", "Skipped unsupported files"),
             detail,
             false,
             true,
@@ -1191,10 +1206,17 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         LogIconTone iconTone = LogIconTone.Info,
         LogKind kind = LogKind.Generic)
     {
+        var mapped = UiErrorMapper.Map(title, detail, isSuccess);
         var entry = new LogEntry
         {
-            Title = title,
-            Detail = detail,
+            Title = mapped.ResultTitle,
+            Detail = mapped.UserDetail,
+            UserReason = mapped.UserReason,
+            NextAction = mapped.NextAction,
+            DiagnosticCode = mapped.DiagnosticCode,
+            DiagnosticDetail = mapped.DiagnosticDetail,
+            RawError = mapped.RawError,
+            TechFields = mapped.TechFields,
             IsSuccess = isSuccess,
             IsEphemeral = isEphemeral,
             RelatedRecordId = relatedRecordId,
@@ -1385,10 +1407,10 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
         return status switch
         {
-            "ok" => L("成功", "ok"),
-            "not_found" => L("无标记", "not_found"),
-            "invalid_hmac" => L("校验失败", "invalid_hmac"),
-            "error" => L("错误", "error"),
+            "ok" => AppStrings.Pick("成功", "ok"),
+            "not_found" => AppStrings.Pick("无标记", "not_found"),
+            "invalid_hmac" => AppStrings.Pick("校验失败", "invalid_hmac"),
+            "error" => AppStrings.Pick("错误", "error"),
             _ => status,
         };
     }
@@ -1402,10 +1424,10 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
         return cloneCheck switch
         {
-            "exact" => L("一致", "exact"),
-            "likely" => L("疑似一致", "likely"),
-            "suspect" => L("可疑", "suspect"),
-            "unavailable" => L("不可用", "unavailable"),
+            "exact" => AppStrings.Pick("一致", "exact"),
+            "likely" => AppStrings.Pick("疑似一致", "likely"),
+            "suspect" => AppStrings.Pick("可疑", "suspect"),
+            "unavailable" => AppStrings.Pick("不可用", "unavailable"),
             _ => cloneCheck,
         };
     }
@@ -1419,8 +1441,8 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
         return detectRoute switch
         {
-            "multichannel" => L("多声道主路径", "multichannel"),
-            "single_fallback" => L("单声道回退路径", "single fallback"),
+            "multichannel" => AppStrings.Pick("多声道主路径", "multichannel"),
+            "single_fallback" => AppStrings.Pick("单声道回退路径", "single fallback"),
             _ => detectRoute,
         };
     }
@@ -1452,7 +1474,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
             return detailed.Pattern;
         }
 
-        return L($"multichannel auto ({pairCount} 对)", $"multichannel auto ({pairCount} pairs)");
+        return AppStrings.Pick($"multichannel auto ({pairCount} 对)", $"multichannel auto ({pairCount} pairs)");
     }
 
     private static string FingerprintScoreDisplay(DetectRecord? record)
@@ -1474,7 +1496,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
     {
         if (record?.Verification == "unverified")
         {
-            var warning = L(
+            var warning = AppStrings.Pick(
                 "UNVERIFIED · 不可用于归属/取证",
                 "UNVERIFIED · Do not use for attribution/forensics");
             if (!string.IsNullOrWhiteSpace(record.Error))
@@ -1492,7 +1514,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
 
         if (!string.IsNullOrWhiteSpace(record?.CloneReason))
         {
-            return $"{L("克隆", "clone")}: {record.CloneReason}";
+            return $"{AppStrings.Pick("克隆", "clone")}: {record.CloneReason}";
         }
 
         return "-";
@@ -1682,6 +1704,7 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(QueueTitle));
         OnPropertyChanged(nameof(QueueEmptyText));
         OnPropertyChanged(nameof(LogsTitle));
+        OnPropertyChanged(nameof(ShowDiagnosticsText));
         OnPropertyChanged(nameof(LogSearchPlaceholder));
         OnPropertyChanged(nameof(NoFilteredLogsText));
         OnPropertyChanged(nameof(SelectInputSourceAccessibility));
@@ -1774,25 +1797,25 @@ public sealed partial class DetectViewModel : ObservableObject, IDisposable
         Detect,
     }
 
-    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
+
 
     private static string DescribeAwmError(AwmError error)
     {
         return error switch
         {
-            AwmError.InvalidOutputFormat => L(
+            AwmError.InvalidOutputFormat => AppStrings.Pick(
                 "输出格式无效：仅支持 .wav",
                 "Invalid output format: output must be .wav"
             ),
-            AwmError.AdmUnsupported => L(
+            AwmError.AdmUnsupported => AppStrings.Pick(
                 "ADM/BWF 暂不支持检测或元数据结构不受支持",
                 "ADM/BWF detect is not supported yet or metadata layout is unsupported"
             ),
-            AwmError.AdmPreserveFailed => L(
+            AwmError.AdmPreserveFailed => AppStrings.Pick(
                 "ADM/BWF 元数据保真失败",
                 "Failed to preserve ADM/BWF metadata"
             ),
-            AwmError.AdmPcmFormatUnsupported => L(
+            AwmError.AdmPcmFormatUnsupported => AppStrings.Pick(
                 "ADM/BWF PCM 格式不支持：仅支持 16/24/32-bit PCM",
                 "Unsupported ADM/BWF PCM format: only 16/24/32-bit PCM"
             ),

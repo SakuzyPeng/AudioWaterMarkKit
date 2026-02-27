@@ -46,6 +46,12 @@ public sealed partial class LogEntry : ObservableObject
     public Guid Id { get; init; } = Guid.NewGuid();
     public required string Title { get; init; }
     public string Detail { get; init; } = string.Empty;
+    public string UserReason { get; init; } = string.Empty;
+    public string NextAction { get; init; } = string.Empty;
+    public string DiagnosticCode { get; init; } = string.Empty;
+    public string DiagnosticDetail { get; init; } = string.Empty;
+    public string RawError { get; init; } = string.Empty;
+    public string TechFields { get; init; } = string.Empty;
     public bool IsSuccess { get; init; }
     public bool IsEphemeral { get; init; }
     public Guid? RelatedRecordId { get; init; }
@@ -54,6 +60,7 @@ public sealed partial class LogEntry : ObservableObject
     public LogIconTone IconTone { get; init; } = LogIconTone.Info;
 
     public bool IsSelectable => RelatedRecordId.HasValue;
+    public bool HasDiagnosticDetail => !string.IsNullOrWhiteSpace(DiagnosticDetail);
 
     private LogIconTone EffectiveIconTone => Kind switch
     {

@@ -72,7 +72,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         }
     }
 
-    public string InputSourceText => string.IsNullOrWhiteSpace(InputSource) ? L("尚未选择输入源", "No input source selected") : InputSource;
+    public string InputSourceText => string.IsNullOrWhiteSpace(InputSource) ? AppStrings.Pick("尚未选择输入源", "No input source selected") : InputSource;
 
     private string? _outputDirectory;
     public string? OutputDirectory
@@ -87,7 +87,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         }
     }
 
-    public string OutputDirectoryText => string.IsNullOrWhiteSpace(OutputDirectory) ? L("默认写回各文件所在目录", "Default: write back to source directory") : OutputDirectory;
+    public string OutputDirectoryText => string.IsNullOrWhiteSpace(OutputDirectory) ? AppStrings.Pick("默认写回各文件所在目录", "Default: write back to source directory") : OutputDirectory;
 
     private string _usernameInput = string.Empty;
     public string UsernameInput
@@ -218,6 +218,13 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _isClearLogsSuccess, value);
     }
 
+    private bool _showDiagnostics;
+    public bool ShowDiagnostics
+    {
+        get => _showDiagnostics;
+        set => SetProperty(ref _showDiagnostics, value);
+    }
+
     public Brush PreviewTagBrush =>
         MatchedMappingForInput is not null
             ? ThemeSuccessBrush()
@@ -241,7 +248,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
 
     public int QueueCount => SelectedFiles.Count;
     public bool HasQueueCount => QueueCount > 0;
-    public string QueueCountText => L($"共 {QueueCount} 个", $"Total {QueueCount}");
+    public string QueueCountText => AppStrings.Pick($"共 {QueueCount} 个", $"Total {QueueCount}");
     public bool HasQueueFiles => QueueCount > 0;
     public bool ShowQueueEmptyHint => !HasQueueFiles;
 
@@ -259,73 +266,74 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
     }
 
     public bool HasLogs => Logs.Count > 0;
-    public string LogCountText => L($"共 {Logs.Count} 条", $"Total {Logs.Count}");
+    public string LogCountText => AppStrings.Pick($"共 {Logs.Count} 条", $"Total {Logs.Count}");
     public bool ShowNoLogsHint => !HasLogs;
 
     public bool HasMappings => AllMappings.Count > 0;
     public bool CanEmbedOrStop => IsKeyAvailable && (IsProcessing || SelectedFiles.Count > 0);
-    public string EmbedButtonText => IsProcessing ? L("停止", "Stop") : L("嵌入", "Embed");
+    public string EmbedButtonText => IsProcessing ? AppStrings.Pick("停止", "Stop") : AppStrings.Pick("嵌入", "Embed");
     public bool ShowEmbedStopIcon => IsProcessing;
     public bool ShowEmbedDefaultPlayIcon => !IsProcessing && !IsEmbedSuccess;
     public bool ShowEmbedSuccessPlayIcon => !IsProcessing && IsEmbedSuccess;
-    public string InputSourceLabel => L("输入源", "Input source");
-    public string OutputDirectoryLabel => L("输出目录", "Output directory");
-    public string MissingKeyMessage => L("未配置密钥，请前往密钥页完成生成。", "No key configured. Please go to Key page to create one.");
-    public string GoToKeyPageText => L("前往密钥页", "Go to Key page");
-    public string SelectActionText => L("选择", "Select");
-    public string ClearActionText => L("清空", "Clear");
-    public string SettingsTitle => L("嵌入设置", "Embed settings");
-    public string UsernameLabel => L("用户名", "Username");
-    public string UsernamePlaceholder => L("例如: user_001", "e.g. user_001");
-    public string StoredMappingsLabel => L("已存储的映射", "Stored mappings");
-    public string StrengthLabel => L("水印强度", "Watermark strength");
-    public string SuffixLabel => L("输出后缀", "Output suffix");
-    public string DropZoneTitle => L("拖拽音频文件到此处", "Drag audio files here");
+    public string InputSourceLabel => AppStrings.Pick("输入源", "Input source");
+    public string OutputDirectoryLabel => AppStrings.Pick("输出目录", "Output directory");
+    public string MissingKeyMessage => AppStrings.Pick("未配置密钥，请前往密钥页完成生成。", "No key configured. Please go to Key page to create one.");
+    public string GoToKeyPageText => AppStrings.Pick("前往密钥页", "Go to Key page");
+    public string SelectActionText => AppStrings.Pick("选择", "Select");
+    public string ClearActionText => AppStrings.Pick("清空", "Clear");
+    public string SettingsTitle => AppStrings.Pick("嵌入设置", "Embed settings");
+    public string UsernameLabel => AppStrings.Pick("用户名", "Username");
+    public string UsernamePlaceholder => AppStrings.Pick("例如: user_001", "e.g. user_001");
+    public string StoredMappingsLabel => AppStrings.Pick("已存储的映射", "Stored mappings");
+    public string StrengthLabel => AppStrings.Pick("水印强度", "Watermark strength");
+    public string SuffixLabel => AppStrings.Pick("输出后缀", "Output suffix");
+    public string DropZoneTitle => AppStrings.Pick("拖拽音频文件到此处", "Drag audio files here");
     public string DropZoneSubtitle => _appState.UsingFallbackInputExtensions
-        ? L(
+        ? AppStrings.Pick(
             $"支持 {SupportedExtensionsDisplay()}，当前按默认集合处理（运行时能力未知）",
             $"Supports {SupportedExtensionsDisplay()}; using default fallback set while runtime capabilities are unknown")
-        : L(
+        : AppStrings.Pick(
             $"支持 {SupportedExtensionsDisplay()}，可批量拖入",
             $"Supports {SupportedExtensionsDisplay()}, batch drop enabled");
-    public string QueueTitle => L("待处理文件", "Pending files");
-    public string QueueEmptyText => L("暂无文件", "No files");
-    public string LogsTitle => L("事件日志", "Event logs");
-    public string LogsEmptyText => L("暂无日志", "No logs");
-    public string SelectInputSourceAccessibility => L("选择输入源", "Select input source");
-    public string SelectOutputDirectoryAccessibility => L("选择输出目录", "Select output directory");
-    public string ClearInputSourceAccessibility => L("清空输入源地址", "Clear input source path");
-    public string ClearOutputDirectoryAccessibility => L("清空输出目录地址", "Clear output directory path");
-    public string EmbedActionAccessibility => L("开始或停止嵌入", "Start or stop embedding");
-    public string ClearQueueAccessibility => L("清空队列", "Clear queue");
-    public string ClearLogsAccessibility => L("清空日志", "Clear logs");
+    public string QueueTitle => AppStrings.Pick("待处理文件", "Pending files");
+    public string QueueEmptyText => AppStrings.Pick("暂无文件", "No files");
+    public string LogsTitle => AppStrings.Pick("事件日志", "Event logs");
+    public string LogsEmptyText => AppStrings.Pick("暂无日志", "No logs");
+    public string ShowDiagnosticsText => AppStrings.Get("ui.toggle.show_diagnostics");
+    public string SelectInputSourceAccessibility => AppStrings.Pick("选择输入源", "Select input source");
+    public string SelectOutputDirectoryAccessibility => AppStrings.Pick("选择输出目录", "Select output directory");
+    public string ClearInputSourceAccessibility => AppStrings.Pick("清空输入源地址", "Clear input source path");
+    public string ClearOutputDirectoryAccessibility => AppStrings.Pick("清空输出目录地址", "Clear output directory path");
+    public string EmbedActionAccessibility => AppStrings.Pick("开始或停止嵌入", "Start or stop embedding");
+    public string ClearQueueAccessibility => AppStrings.Pick("清空队列", "Clear queue");
+    public string ClearLogsAccessibility => AppStrings.Pick("清空日志", "Clear logs");
 
     public string PreviewTagText => ResolveTagValue() ?? "-";
     public string PreviewTagDisplay => $"Tag: {PreviewTagText}";
-    public string? MatchedMappingHintText => MatchedMappingForInput is null ? null : L("已存在映射，自动复用", "Existing mapping found, auto reused");
-    public string ReuseHintText => MatchedMappingForInput is null ? string.Empty : L("复用 ", "Reusing ");
-    public string MappingPlaceholderText => HasMappings ? L("选择已存储映射", "Select stored mapping") : L("暂无已存储映射", "No stored mappings");
-    public string SkipSummaryDialogTitle => L("已跳过含水印文件", "Skipped watermarked files");
-    public string SkipSummaryDialogCloseText => L("我知道了", "OK");
+    public string? MatchedMappingHintText => MatchedMappingForInput is null ? null : AppStrings.Pick("已存在映射，自动复用", "Existing mapping found, auto reused");
+    public string ReuseHintText => MatchedMappingForInput is null ? string.Empty : AppStrings.Pick("复用 ", "Reusing ");
+    public string MappingPlaceholderText => HasMappings ? AppStrings.Pick("选择已存储映射", "Select stored mapping") : AppStrings.Pick("暂无已存储映射", "No stored mappings");
+    public string SkipSummaryDialogTitle => AppStrings.Pick("已跳过含水印文件", "Skipped watermarked files");
+    public string SkipSummaryDialogCloseText => AppStrings.Pick("我知道了", "OK");
     public string SkipSummaryDialogMessage
     {
         get
         {
             if (SkipSummaryCount == 0)
             {
-                return L("未检测到已含水印文件。", "No already-watermarked files were detected.");
+                return AppStrings.Pick("未检测到已含水印文件。", "No already-watermarked files were detected.");
             }
 
             var preview = string.Join("、", SkippedWatermarkedFiles.Take(3).Select(Path.GetFileName));
             if (SkipSummaryCount <= 3)
             {
-                return L(
+                return AppStrings.Pick(
                     $"已跳过 {SkipSummaryCount} 个已含水印文件：{preview}\n该类文件已自动跳过。",
                     $"Skipped {SkipSummaryCount} already-watermarked files: {preview}\nThese files were skipped automatically.");
             }
 
             var remain = SkipSummaryCount - 3;
-            return L(
+            return AppStrings.Pick(
                 $"已跳过 {SkipSummaryCount} 个已含水印文件：{preview} 等 {remain} 个\n该类文件已自动跳过。",
                 $"Skipped {SkipSummaryCount} already-watermarked files: {preview} and {remain} more\nThese files were skipped automatically.");
         }
@@ -478,8 +486,8 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(InputSource))
         {
             AddLog(
-                L("输入源为空", "Input source is empty"),
-                L("没有可清空的输入源地址", "No input source path to clear"),
+                AppStrings.Pick("输入源为空", "Input source is empty"),
+                AppStrings.Pick("没有可清空的输入源地址", "No input source path to clear"),
                 true,
                 true,
                 LogIconTone.Info);
@@ -488,8 +496,8 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
 
         InputSource = null;
         AddLog(
-            L("已清空输入源", "Input source cleared"),
-            L("仅清空输入源地址，不影响待处理队列", "Cleared input source path only; queue unchanged"),
+            AppStrings.Pick("已清空输入源", "Input source cleared"),
+            AppStrings.Pick("仅清空输入源地址，不影响待处理队列", "Cleared input source path only; queue unchanged"),
             true,
             true,
             LogIconTone.Info);
@@ -501,8 +509,8 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(OutputDirectory))
         {
             AddLog(
-                L("输出目录为空", "Output directory is empty"),
-                L("没有可清空的输出目录地址", "No output directory path to clear"),
+                AppStrings.Pick("输出目录为空", "Output directory is empty"),
+                AppStrings.Pick("没有可清空的输出目录地址", "No output directory path to clear"),
                 true,
                 true,
                 LogIconTone.Info);
@@ -511,8 +519,8 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
 
         OutputDirectory = null;
         AddLog(
-            L("已清空输出目录", "Output directory cleared"),
-            L("已恢复为写回源文件目录", "Reset to write-back source directory"),
+            AppStrings.Pick("已清空输出目录", "Output directory cleared"),
+            AppStrings.Pick("已恢复为写回源文件目录", "Reset to write-back source directory"),
             true,
             true,
             LogIconTone.Info);
@@ -523,14 +531,14 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
     {
         if (!SelectedFiles.Any())
         {
-            AddLog(L("队列为空", "Queue is empty"), L("没有可移除的文件", "No files to remove"), true, true, LogIconTone.Info);
+            AddLog(AppStrings.Pick("队列为空", "Queue is empty"), AppStrings.Pick("没有可移除的文件", "No files to remove"), true, true, LogIconTone.Info);
             return;
         }
 
         var count = SelectedFiles.Count;
         SelectedFiles.Clear();
         SkippedWatermarkedFiles.Clear();
-        AddLog(L("已清空队列", "Queue cleared"), L($"移除了 {count} 个文件", $"Removed {count} files"), true, false, LogIconTone.Success, LogKind.QueueCleared);
+        AddLog(AppStrings.Pick("已清空队列", "Queue cleared"), AppStrings.Pick($"移除了 {count} 个文件", $"Removed {count} files"), true, false, LogIconTone.Success, LogKind.QueueCleared);
         await FlashClearQueueAsync();
     }
 
@@ -539,13 +547,13 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
     {
         if (!Logs.Any())
         {
-            AddLog(L("日志为空", "Logs are empty"), L("没有可清空的日志", "No logs to clear"), true, true, LogIconTone.Info);
+            AddLog(AppStrings.Pick("日志为空", "Logs are empty"), AppStrings.Pick("没有可清空的日志", "No logs to clear"), true, true, LogIconTone.Info);
             return;
         }
 
         var count = Logs.Count;
         Logs.Clear();
-        AddLog(L("已清空日志", "Logs cleared"), L($"移除了 {count} 条日志记录", $"Removed {count} log entries"), true, true, LogIconTone.Success, LogKind.LogsCleared);
+        AddLog(AppStrings.Pick("已清空日志", "Logs cleared"), AppStrings.Pick($"移除了 {count} 条日志记录", $"Removed {count} log entries"), true, true, LogIconTone.Success, LogKind.LogsCleared);
         await FlashClearLogsAsync();
     }
 
@@ -561,7 +569,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         {
             await (_embedCts?.CancelAsync() ?? Task.CompletedTask);
             IsCancelling = true;
-            AddLog(L("嵌入已停止", "Embedding stopped"), L("用户手动停止", "Stopped by user"), false, true, LogIconTone.Warning);
+            AddLog(AppStrings.Pick("嵌入已停止", "Embedding stopped"), AppStrings.Pick("用户手动停止", "Stopped by user"), false, true, LogIconTone.Warning);
             return;
         }
 
@@ -577,35 +585,35 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
 
         if (!SelectedFiles.Any())
         {
-            AddLog(L("队列为空", "Queue is empty"), L("请先添加音频文件", "Add audio files first"), false, true, LogIconTone.Warning);
+            AddLog(AppStrings.Pick("队列为空", "Queue is empty"), AppStrings.Pick("请先添加音频文件", "Add audio files first"), false, true, LogIconTone.Warning);
             return;
         }
 
         var username = NormalizedUsernameInput();
         if (string.IsNullOrEmpty(username))
         {
-            AddLog(L("用户名未填写", "Username is missing"), L("请输入用户名以自动生成 Tag", "Enter username to generate tag automatically"), false, true, LogIconTone.Warning);
+            AddLog(AppStrings.Pick("用户名未填写", "Username is missing"), AppStrings.Pick("请输入用户名以自动生成 Tag", "Enter username to generate tag automatically"), false, true, LogIconTone.Warning);
             return;
         }
 
         var resolvedTag = ResolveTagValue();
         if (string.IsNullOrWhiteSpace(resolvedTag))
         {
-            AddLog(L("Tag 生成失败", "Tag generation failed"), L("请检查用户名输入", "Please check username input"), false, false, LogIconTone.Error);
+            AddLog(AppStrings.Pick("Tag 生成失败", "Tag generation failed"), AppStrings.Pick("请检查用户名输入", "Please check username input"), false, false, LogIconTone.Error);
             return;
         }
 
         var (key, keyError) = AwmKeyBridge.LoadKey();
         if (key is null || keyError != AwmError.Ok)
         {
-            AddLog(L("嵌入失败", "Embed failed"), $"{L("密钥不可用", "Key unavailable")}: {DescribeAwmError(keyError)}", false, false, LogIconTone.Error);
+            AddLog(AppStrings.Pick("嵌入失败", "Embed failed"), $"{AppStrings.Pick("密钥不可用", "Key unavailable")}: {DescribeAwmError(keyError)}", false, false, LogIconTone.Error);
             return;
         }
 
         var (message, encodeError) = AwmBridge.EncodeMessage(resolvedTag, key, _appState.ActiveKeySlot);
         if (message is null || encodeError != AwmError.Ok)
         {
-            AddLog(L("嵌入失败", "Embed failed"), $"{L("消息编码失败", "Message encode failed")}: {DescribeAwmError(encodeError)}", false, false, LogIconTone.Error);
+            AddLog(AppStrings.Pick("嵌入失败", "Embed failed"), $"{AppStrings.Pick("消息编码失败", "Message encode failed")}: {DescribeAwmError(encodeError)}", false, false, LogIconTone.Error);
             return;
         }
 
@@ -620,8 +628,8 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         SkippedWatermarkedFiles.Clear();
 
         AddLog(
-            L("开始处理", "Processing started"),
-            L($"准备处理 {SelectedFiles.Count} 个文件（Auto）", $"Preparing to process {SelectedFiles.Count} files (Auto)"),
+            AppStrings.Pick("开始处理", "Processing started"),
+            AppStrings.Pick($"准备处理 {SelectedFiles.Count} 个文件（Auto）", $"Preparing to process {SelectedFiles.Count} files (Auto)"),
             true,
             false,
             LogIconTone.Info);
@@ -715,8 +723,8 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
             catch (Exception ex)
             {
                 AddLog(
-                    $"{L("失败", "Failed")}: {Path.GetFileName(inputPath)}",
-                    $"{L("预检异常", "Precheck exception")}: {ex.Message}",
+                    $"{AppStrings.Pick("失败", "Failed")}: {Path.GetFileName(inputPath)}",
+                    $"{AppStrings.Pick("预检异常", "Precheck exception")}: {ex.Message}",
                     false,
                     false,
                     LogIconTone.Error,
@@ -735,8 +743,8 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
             if (precheckResult.error != AwmError.Ok)
             {
                 AddLog(
-                    $"{L("失败", "Failed")}: {Path.GetFileName(inputPath)}",
-                    $"{L("预检失败", "Precheck failed")}: {DescribeAwmError(precheckResult.error)}",
+                    $"{AppStrings.Pick("失败", "Failed")}: {Path.GetFileName(inputPath)}",
+                    $"{AppStrings.Pick("预检失败", "Precheck failed")}: {DescribeAwmError(precheckResult.error)}",
                     false,
                     false,
                     LogIconTone.Error,
@@ -756,8 +764,8 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
             {
                 admPrecheckWarned = true;
                 AddLog(
-                    L("预检已跳过", "Precheck skipped"),
-                    L(
+                    AppStrings.Pick("预检已跳过", "Precheck skipped"),
+                    AppStrings.Pick(
                         "ADM/BWF 检测暂不支持，已跳过预检并继续嵌入",
                         "ADM/BWF detect is not supported yet; precheck was skipped and embed continues"
                     ),
@@ -779,8 +787,8 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
                 }
 
                 AddLog(
-                    L("检测到已有水印", "Existing watermark detected"),
-                    L($"{Path.GetFileName(inputPath)} 已跳过", $"{Path.GetFileName(inputPath)} skipped"),
+                    AppStrings.Pick("检测到已有水印", "Existing watermark detected"),
+                    AppStrings.Pick($"{Path.GetFileName(inputPath)} 已跳过", $"{Path.GetFileName(inputPath)} skipped"),
                     false,
                     false,
                     LogIconTone.Warning,
@@ -800,7 +808,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                AddLog($"{L("失败", "Failed")}: {Path.GetFileName(inputPath)}", ex.Message, false, false, LogIconTone.Error, LogKind.ResultError);
+                AddLog($"{AppStrings.Pick("失败", "Failed")}: {Path.GetFileName(inputPath)}", ex.Message, false, false, LogIconTone.Error, LogKind.ResultError);
                 failureCount += 1;
                 if (queueIndex < SelectedFiles.Count)
                 {
@@ -876,8 +884,8 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
             {
                 failureCount += 1;
                 AddLog(
-                    $"{L("失败", "Failed")}: {Path.GetFileName(inputPath)}",
-                    $"{L("嵌入异常", "Embed exception")}: {ex.Message}",
+                    $"{AppStrings.Pick("失败", "Failed")}: {Path.GetFileName(inputPath)}",
+                    $"{AppStrings.Pick("嵌入异常", "Embed exception")}: {ex.Message}",
                     false,
                     false,
                     LogIconTone.Error,
@@ -903,7 +911,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
                 if (stepResult.evidenceError != AwmError.Ok)
                 {
                     AddLog(
-                        L("证据记录失败", "Evidence record failed"),
+                        AppStrings.Pick("证据记录失败", "Evidence record failed"),
                         $"{Path.GetFileName(outputPath)}: {DescribeAwmError(stepResult.evidenceError)}",
                         false,
                         true,
@@ -923,10 +931,10 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
                     {
                         legacyFfiWarned = legacyFfiWarned || isLegacyFfi;
                         var warningDetail = isLegacyFfi
-                            ? L("本地核心库版本较旧，暂不支持 SNR 分析", "Native core is outdated and does not support SNR analysis yet")
+                            ? AppStrings.Pick("本地核心库版本较旧，暂不支持 SNR 分析", "Native core is outdated and does not support SNR analysis yet")
                             : (nonOkSnr.SnrDetail ?? nonOkSnr.SnrStatus);
                         AddLog(
-                            L("SNR 不可用", "SNR unavailable"),
+                            AppStrings.Pick("SNR 不可用", "SNR unavailable"),
                             warningDetail,
                             false,
                             true,
@@ -934,13 +942,13 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
                     }
                 }
 
-                AddLog($"{L("成功", "Success")}: {Path.GetFileName(inputPath)}", successDetail, true, false, LogIconTone.Success, LogKind.ResultOk);
+                AddLog($"{AppStrings.Pick("成功", "Success")}: {Path.GetFileName(inputPath)}", successDetail, true, false, LogIconTone.Success, LogKind.ResultOk);
             }
             else
             {
                 failureCount += 1;
                 AddLog(
-                    $"{L("失败", "Failed")}: {Path.GetFileName(inputPath)}",
+                    $"{AppStrings.Pick("失败", "Failed")}: {Path.GetFileName(inputPath)}",
                     DescribeAwmError(stepResult.embedError),
                     false,
                     false,
@@ -965,13 +973,13 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
 
         if (token.IsCancellationRequested)
         {
-            AddLog(L("已取消", "Cancelled"), L($"已完成 {successCount + failureCount} / {initialTotal} 个文件", $"Completed {successCount + failureCount} / {initialTotal} files"), false, false, LogIconTone.Warning);
+            AddLog(AppStrings.Pick("已取消", "Cancelled"), AppStrings.Pick($"已完成 {successCount + failureCount} / {initialTotal} 个文件", $"Completed {successCount + failureCount} / {initialTotal} files"), false, false, LogIconTone.Warning);
         }
         else
         {
             AddLog(
-                L("处理完成", "Processing finished"),
-                L($"成功: {successCount}, 失败: {failureCount}", $"Success: {successCount}, Failed: {failureCount}"),
+                AppStrings.Pick("处理完成", "Processing finished"),
+                AppStrings.Pick($"成功: {successCount}, 失败: {failureCount}", $"Success: {successCount}, Failed: {failureCount}"),
                 true,
                 false,
                 LogIconTone.Info);
@@ -986,13 +994,13 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
                 if (inserted)
                 {
                     await RefreshTagMappingsAsync();
-                    AddLog(L("已保存映射", "Mapping saved"), $"{username} -> {resolvedTag}", true, false, LogIconTone.Success);
+                    AddLog(AppStrings.Pick("已保存映射", "Mapping saved"), $"{username} -> {resolvedTag}", true, false, LogIconTone.Success);
                 }
             }
             catch (Exception ex)
             {
                 AddLog(
-                    L("映射保存失败", "Mapping save failed"),
+                    AppStrings.Pick("映射保存失败", "Mapping save failed"),
                     ex.Message,
                     false,
                     true,
@@ -1015,8 +1023,8 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
             }
 
             AddLog(
-                L("已跳过含水印文件", "Skipped watermarked files"),
-                L($"共跳过 {skippedFiles.Count} 个已含水印文件", $"Skipped {skippedFiles.Count} already-watermarked files"),
+                AppStrings.Pick("已跳过含水印文件", "Skipped watermarked files"),
+                AppStrings.Pick($"共跳过 {skippedFiles.Count} 个已含水印文件", $"Skipped {skippedFiles.Count} already-watermarked files"),
                 false,
                 false,
                 LogIconTone.Warning,
@@ -1038,7 +1046,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
     {
         var outputDirectory = !string.IsNullOrWhiteSpace(OutputDirectory)
             ? OutputDirectory!
-            : Path.GetDirectoryName(inputPath) ?? throw new InvalidOperationException(L("无法确定输出目录", "Failed to determine output directory"));
+            : Path.GetDirectoryName(inputPath) ?? throw new InvalidOperationException(AppStrings.Pick("无法确定输出目录", "Failed to determine output directory"));
 
         var suffix = string.IsNullOrWhiteSpace(CustomSuffix) ? "_wm" : CustomSuffix.Trim();
         var baseName = Path.GetFileNameWithoutExtension(inputPath);
@@ -1063,7 +1071,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
                 if (files.Count == 0)
                 {
                     AddLog(
-                        L("目录无可用文件", "No files in directory"),
+                        AppStrings.Pick("目录无可用文件", "No files in directory"),
                         BuildDirectoryNoAudioDetail(),
                         false,
                         true,
@@ -1075,7 +1083,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                AddLog(L("读取目录失败", "Failed to read directory"), ex.Message, false, false, LogIconTone.Error);
+                AddLog(AppStrings.Pick("读取目录失败", "Failed to read directory"), ex.Message, false, false, LogIconTone.Error);
                 return Array.Empty<string>();
             }
         }
@@ -1086,7 +1094,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         }
 
         AddLog(
-            L("不支持的输入源", "Unsupported input source"),
+            AppStrings.Pick("不支持的输入源", "Unsupported input source"),
             BuildUnsupportedInputDetail(),
             false,
             true,
@@ -1130,7 +1138,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
 
         if (duplicateCount > 0)
         {
-            AddLog(L("已去重", "Deduplicated"), L($"跳过 {duplicateCount} 个重复文件", $"Skipped {duplicateCount} duplicate files"), true, true, LogIconTone.Info);
+            AddLog(AppStrings.Pick("已去重", "Deduplicated"), AppStrings.Pick($"跳过 {duplicateCount} 个重复文件", $"Skipped {duplicateCount} duplicate files"), true, true, LogIconTone.Info);
         }
     }
 
@@ -1141,14 +1149,14 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
 
     private string BuildDirectoryNoAudioDetail()
     {
-        return L(
+        return AppStrings.Pick(
             "当前目录未找到可处理文件",
             "No files found in this directory");
     }
 
     private string BuildUnsupportedInputDetail()
     {
-        return L(
+        return AppStrings.Pick(
             "请选择文件或目录作为输入源",
             "Select a file or directory as input source");
     }
@@ -1172,11 +1180,11 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         var preview = string.Join(", ", unique.Take(3).Select(Path.GetFileName));
         var remain = unique.Count - Math.Min(unique.Count, 3);
         var detail = remain <= 0
-            ? L($"已跳过 {unique.Count} 个不支持文件：{preview}", $"Skipped {unique.Count} unsupported file(s): {preview}")
-            : L($"已跳过 {unique.Count} 个不支持文件：{preview} 等 {remain} 个", $"Skipped {unique.Count} unsupported file(s): {preview} and {remain} more");
+            ? AppStrings.Pick($"已跳过 {unique.Count} 个不支持文件：{preview}", $"Skipped {unique.Count} unsupported file(s): {preview}")
+            : AppStrings.Pick($"已跳过 {unique.Count} 个不支持文件：{preview} 等 {remain} 个", $"Skipped {unique.Count} unsupported file(s): {preview} and {remain} more");
 
         AddLog(
-            L("已跳过不支持文件", "Skipped unsupported files"),
+            AppStrings.Pick("已跳过不支持文件", "Skipped unsupported files"),
             detail,
             false,
             true,
@@ -1316,10 +1324,17 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         LogIconTone iconTone = LogIconTone.Info,
         LogKind kind = LogKind.Generic)
     {
+        var mapped = UiErrorMapper.Map(title, detail, isSuccess);
         var entry = new LogEntry
         {
-            Title = title,
-            Detail = detail,
+            Title = mapped.ResultTitle,
+            Detail = mapped.UserDetail,
+            UserReason = mapped.UserReason,
+            NextAction = mapped.NextAction,
+            DiagnosticCode = mapped.DiagnosticCode,
+            DiagnosticDetail = mapped.DiagnosticDetail,
+            RawError = mapped.RawError,
+            TechFields = mapped.TechFields,
             IsSuccess = isSuccess,
             IsEphemeral = isEphemeral,
             IconTone = iconTone,
@@ -1493,6 +1508,7 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(QueueEmptyText));
         OnPropertyChanged(nameof(LogsTitle));
         OnPropertyChanged(nameof(LogsEmptyText));
+        OnPropertyChanged(nameof(ShowDiagnosticsText));
         OnPropertyChanged(nameof(SelectInputSourceAccessibility));
         OnPropertyChanged(nameof(SelectOutputDirectoryAccessibility));
         OnPropertyChanged(nameof(ClearInputSourceAccessibility));
@@ -1505,25 +1521,25 @@ public sealed partial class EmbedViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SkipSummaryDialogMessage));
     }
 
-    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
+
 
     private static string DescribeAwmError(AwmError error)
     {
         return error switch
         {
-            AwmError.InvalidOutputFormat => L(
+            AwmError.InvalidOutputFormat => AppStrings.Pick(
                 "输出格式无效：仅支持 .wav",
                 "Invalid output format: output must be .wav"
             ),
-            AwmError.AdmUnsupported => L(
+            AwmError.AdmUnsupported => AppStrings.Pick(
                 "ADM/BWF 不支持：当前操作或元数据结构不受支持",
                 "ADM/BWF unsupported for current operation or metadata layout"
             ),
-            AwmError.AdmPreserveFailed => L(
+            AwmError.AdmPreserveFailed => AppStrings.Pick(
                 "ADM/BWF 元数据保真失败：为避免破坏母版已中止输出",
                 "Failed to preserve ADM/BWF metadata; output was aborted to protect the master"
             ),
-            AwmError.AdmPcmFormatUnsupported => L(
+            AwmError.AdmPcmFormatUnsupported => AppStrings.Pick(
                 "ADM/BWF PCM 格式不支持：仅支持 16/24/32-bit PCM",
                 "Unsupported ADM/BWF PCM format: only 16/24/32-bit PCM"
             ),

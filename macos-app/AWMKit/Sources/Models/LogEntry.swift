@@ -37,6 +37,12 @@ struct LogEntry: Identifiable, Equatable {
     let id = UUID()
     let title: String
     let detail: String
+    let userReason: String
+    let nextAction: String
+    let diagnosticCode: String
+    let diagnosticDetail: String
+    let rawError: String
+    let techFields: [String: String]
     let timestamp: Date
     let isSuccess: Bool
     let kind: Kind
@@ -46,6 +52,12 @@ struct LogEntry: Identifiable, Equatable {
     init(
         title: String,
         detail: String = "",
+        userReason: String = "",
+        nextAction: String = "",
+        diagnosticCode: String = "",
+        diagnosticDetail: String = "",
+        rawError: String = "",
+        techFields: [String: String] = [:],
         isSuccess: Bool = true,
         kind: Kind = .generic,
         isEphemeral: Bool = false,
@@ -53,6 +65,12 @@ struct LogEntry: Identifiable, Equatable {
     ) {
         self.title = title
         self.detail = detail
+        self.userReason = userReason
+        self.nextAction = nextAction
+        self.diagnosticCode = diagnosticCode
+        self.diagnosticDetail = diagnosticDetail
+        self.rawError = rawError
+        self.techFields = techFields
         self.timestamp = Date()
         self.isSuccess = isSuccess
         self.kind = kind

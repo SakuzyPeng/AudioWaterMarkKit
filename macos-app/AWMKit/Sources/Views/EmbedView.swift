@@ -47,17 +47,13 @@ struct EmbedView: View {
             showSkipSummaryAlert = true
         }
         .alert(
-            l("已跳过含水印文件", "Skipped watermarked files"),
+            Localizer.pick("已跳过含水印文件", "Skipped watermarked files"),
             isPresented: $showSkipSummaryAlert
         ) {
-            Button(l("我知道了", "OK"), role: .cancel) {}
+            Button(Localizer.pick("我知道了", "OK"), role: .cancel) {}
         } message: {
-            Text(viewModel.skipSummaryMessage + "\n" + l("该类文件已自动跳过。", "These files were skipped automatically."))
+            Text(viewModel.skipSummaryMessage + "\n" + Localizer.pick("该类文件已自动跳过。", "These files were skipped automatically."))
         }
-    }
-
-    private func l(_ zh: String, _ en: String) -> String {
-        appState.tr(zh, en)
     }
 
     // MARK: - 输入卡片（左上）
@@ -75,59 +71,59 @@ struct EmbedView: View {
                     Button(action: { viewModel.clearInputSource() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "folder")
-                            Text(l("清空", "Clear"))
+                            Text(Localizer.pick("清空", "Clear"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel(l("清空输入源地址", "Clear input source path"))
+                    .accessibilityLabel(Localizer.pick("清空输入源地址", "Clear input source path"))
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.clearOutputDirectory() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "externaldrive")
-                            Text(l("清空", "Clear"))
+                            Text(Localizer.pick("清空", "Clear"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel(l("清空输出目录地址", "Clear output directory path"))
+                    .accessibilityLabel(Localizer.pick("清空输出目录地址", "Clear output directory path"))
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.embedFiles(audio: appState.audio) }) {
                         HStack(spacing: 6) {
                             Image(systemName: viewModel.isProcessing ? "stop.fill" : "play.fill")
                                 .foregroundColor(viewModel.isProcessing ? .red : .accentColor)
-                            Text(viewModel.isProcessing ? l("停止", "Stop") : l("嵌入", "Embed"))
+                            Text(viewModel.isProcessing ? Localizer.pick("停止", "Stop") : Localizer.pick("嵌入", "Embed"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(accentOn: !viewModel.isProcessing, size: .compact))
-                    .accessibilityLabel(viewModel.isProcessing ? l("停止嵌入", "Stop embedding") : l("开始嵌入", "Start embedding"))
+                    .accessibilityLabel(viewModel.isProcessing ? Localizer.pick("停止嵌入", "Stop embedding") : Localizer.pick("开始嵌入", "Start embedding"))
                     .disabled(viewModel.isCancelling || !appState.keyLoaded)
 
                     Button(action: { viewModel.clearQueue() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "xmark.circle")
                                 .foregroundColor(viewModel.isClearQueueSuccess ? .green : .primary)
-                            Text(l("清空", "Clear"))
+                            Text(Localizer.pick("清空", "Clear"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel(l("清空队列", "Clear queue"))
+                    .accessibilityLabel(Localizer.pick("清空队列", "Clear queue"))
                     .disabled(viewModel.isProcessing)
 
                     Button(action: { viewModel.clearLogs() }) {
                         HStack(spacing: 6) {
                             Image(systemName: "line.3.horizontal.decrease.circle")
                                 .foregroundColor(viewModel.isClearLogsSuccess ? .green : .primary)
-                            Text(l("清空", "Clear"))
+                            Text(Localizer.pick("清空", "Clear"))
                                 .lineLimit(1)
                         }
                     }
                     .buttonStyle(GlassButtonStyle(size: .compact))
-                    .accessibilityLabel(l("清空日志", "Clear logs"))
+                    .accessibilityLabel(Localizer.pick("清空日志", "Clear logs"))
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
 
@@ -141,7 +137,7 @@ struct EmbedView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "waveform.and.person.filled")
                             .font(.title2)
-                        Text(l("拖拽音频文件到此处", "Drop audio files here"))
+                        Text(Localizer.pick("拖拽音频文件到此处", "Drop audio files here"))
                             .font(.headline)
                         Text(viewModel.dropZoneSubtitle(appState: appState))
                             .font(.footnote)
@@ -163,7 +159,7 @@ struct EmbedView: View {
     private var directorySummary: some View {
         VStack(spacing: 10) {
             directoryInfoRow(
-                title: l("输入文件", "Input source"),
+                title: Localizer.pick("输入文件", "Input source"),
                 value: viewModel.inputSourceText,
                 systemImage: "tray.and.arrow.down",
                 onTap: { viewModel.selectFiles(appState: appState) }
@@ -171,7 +167,7 @@ struct EmbedView: View {
             Divider()
                 .background(Color.white.opacity(colorScheme == .dark ? 0.2 : 0.4))
             directoryInfoRow(
-                title: l("输出目录", "Output directory"),
+                title: Localizer.pick("输出目录", "Output directory"),
                 value: viewModel.outputDirectoryText,
                 systemImage: "externaldrive",
                 onTap: { viewModel.selectOutputDirectory() }
@@ -226,7 +222,7 @@ struct EmbedView: View {
     private var settingsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text(l("嵌入设置", "Embed settings"))
+                Text(Localizer.pick("嵌入设置", "Embed settings"))
                     .font(.headline)
                 Spacer()
             }
@@ -247,7 +243,7 @@ struct EmbedView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(l("用户名", "Username"))
+                    Text(Localizer.pick("用户名", "Username"))
                         .font(.subheadline)
                     Spacer()
                     HStack(spacing: 8) {
@@ -268,7 +264,7 @@ struct EmbedView: View {
                     }
                 }
                 GlassEffectContainer {
-                    TextField(l("例如: user_001", "e.g. user_001"), text: $viewModel.usernameInput)
+                    TextField(Localizer.pick("例如: user_001", "e.g. user_001"), text: $viewModel.usernameInput)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -297,7 +293,7 @@ struct EmbedView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "list.bullet")
-                            Text(l("已存储的映射", "Stored mappings"))
+                            Text(Localizer.pick("已存储的映射", "Stored mappings"))
                                 .lineLimit(1)
                             Spacer()
                             Image(systemName: "chevron.down")
@@ -320,27 +316,27 @@ struct EmbedView: View {
                             )
                     )
                 }
-                Text(l("按用户名稳定生成 Tag；命中映射时优先使用已保存 Tag", "Generate stable Tag from username; reuse saved mapping when matched"))
+                Text(Localizer.pick("按用户名稳定生成 Tag；命中映射时优先使用已保存 Tag", "Generate stable Tag from username; reuse saved mapping when matched"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(l("水印强度", "Watermark strength"))
+                    Text(Localizer.pick("水印强度", "Watermark strength"))
                         .font(.subheadline)
                     Spacer()
                     Text("\(Int(viewModel.strength))")
                         .font(.system(.body, design: .monospaced))
                 }
                 Slider(value: $viewModel.strength, in: 1...30, step: 1)
-                Text(l("推荐 10，越高越稳但音质损失越大", "Recommended 10; higher is more robust but degrades audio more"))
+                Text(Localizer.pick("推荐 10，越高越稳但音质损失越大", "Recommended 10; higher is more robust but degrades audio more"))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(l("输出后缀", "Output suffix"))
+                Text(Localizer.pick("输出后缀", "Output suffix"))
                     .font(.subheadline)
                 GlassEffectContainer {
                     TextField("_wm", text: $viewModel.customSuffix)
@@ -358,7 +354,7 @@ struct EmbedView: View {
                         )
                 )
                 let effective = viewModel.customSuffix.isEmpty ? "_wm" : viewModel.customSuffix
-                Text("\(l("示例", "Example")): audio\(effective).wav")
+                Text("\(Localizer.pick("示例", "Example")): audio\(effective).wav")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -376,13 +372,13 @@ struct EmbedView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(l("待处理文件", "Pending files"))
+                    Text(Localizer.pick("待处理文件", "Pending files"))
                         .font(.headline)
                     Spacer()
                     if !viewModel.selectedFiles.isEmpty {
                         Text(viewModel.isProcessing
-                             ? "\(l("剩", "Left")) \(viewModel.selectedFiles.count)\(l(" 个", ""))"
-                             : "\(l("共", "Total")) \(viewModel.selectedFiles.count)\(l(" 个", ""))")
+                             ? "\(Localizer.pick("剩", "Left")) \(viewModel.selectedFiles.count)\(Localizer.pick(" 个", ""))"
+                             : "\(Localizer.pick("共", "Total")) \(viewModel.selectedFiles.count)\(Localizer.pick(" 个", ""))")
                             .foregroundColor(.secondary)
                             .font(.subheadline)
                     }
@@ -409,7 +405,7 @@ struct EmbedView: View {
                 }
 
                 if viewModel.selectedFiles.isEmpty {
-                    Text(l("暂无文件", "No files"))
+                    Text(Localizer.pick("暂无文件", "No files"))
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                         .transition(.opacity)
@@ -453,11 +449,15 @@ struct EmbedView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(l("事件 / 日志", "Events / Logs"))
+                    Text(Localizer.pick("事件 / 日志", "Events / Logs"))
                         .font(.headline)
                     Spacer()
+                    Toggle(Localizer.pick("显示诊断", "Show diagnostics"), isOn: $viewModel.showDiagnostics)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .help(Localizer.pick("显示诊断", "Show diagnostics"))
                     if !viewModel.logs.isEmpty {
-                        Text("\(l("共", "Total")) \(viewModel.logs.count)\(l(" 条", ""))")
+                        Text("\(Localizer.pick("共", "Total")) \(viewModel.logs.count)\(Localizer.pick(" 条", ""))")
                             .foregroundColor(.secondary)
                             .font(.subheadline)
                     }
@@ -478,7 +478,7 @@ struct EmbedView: View {
                 Divider().opacity(0.5)
 
                 if viewModel.logs.isEmpty {
-                    Text(l("暂无日志", "No logs"))
+                    Text(Localizer.pick("暂无日志", "No logs"))
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                         .transition(.opacity)
@@ -541,6 +541,14 @@ struct EmbedView: View {
                     .lineLimit(2)
                     .truncationMode(.middle)
             }
+            if viewModel.showDiagnostics && !entry.diagnosticDetail.isEmpty {
+                Text(entry.diagnosticDetail)
+                    .font(.caption2.monospaced())
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .lineLimit(3)
+                    .truncationMode(.middle)
+            }
         }
         .entryRowStyle()
     }
@@ -572,11 +580,11 @@ struct EmbedView: View {
         HStack(spacing: 10) {
             Image(systemName: "key.slash")
                 .foregroundStyle(DesignSystem.Colors.warning)
-            Text(l("未配置密钥，请前往密钥页完成生成。", "No key configured. Open the Key page to generate one."))
+            Text(Localizer.pick("未配置密钥，请前往密钥页完成生成。", "No key configured. Open the Key page to generate one."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
-            Button(l("前往密钥页", "Go to Key page")) {
+            Button(Localizer.pick("前往密钥页", "Go to Key page")) {
                 appState.selectedTab = .key
             }
             .buttonStyle(GlassButtonStyle(size: .compact))

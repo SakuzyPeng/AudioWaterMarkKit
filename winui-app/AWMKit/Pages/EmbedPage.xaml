@@ -351,9 +351,14 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="{x:Bind ViewModel.LogsTitle, Mode=OneWay}" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                        <TextBlock Grid.Column="1"
+                        <ToggleSwitch Grid.Column="1"
+                                      Header="{x:Bind ViewModel.ShowDiagnosticsText, Mode=OneWay}"
+                                      IsOn="{x:Bind ViewModel.ShowDiagnostics, Mode=TwoWay}"
+                                      Margin="0,0,8,0"/>
+                        <TextBlock Grid.Column="2"
                                    VerticalAlignment="Center"
                                    Text="{x:Bind ViewModel.LogCountText, Mode=OneWay}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
@@ -386,6 +391,7 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
                                     <Grid Grid.Row="0">
@@ -408,6 +414,11 @@
                                                TextWrapping="WrapWholeWords"
                                                MaxLines="2"
                                                TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Row="2"
+                                               Text="{x:Bind DiagnosticDetail}"
+                                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                               TextWrapping="WrapWholeWords"
+                                               Visibility="{x:Bind RootPage.ViewModel.ShowDiagnostics, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                 </Grid>
                             </Border>
                         </DataTemplate>
