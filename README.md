@@ -34,6 +34,12 @@ AWMKit 是一个围绕音频水印场景构建的跨平台工具集，包含 Rus
 - CLI 使用指南：[`docs/zh-CN/cli/usage.md`](./docs/zh-CN/cli/usage.md)
 - 构建矩阵：[`docs/zh-CN/build/build-matrix.md`](./docs/zh-CN/build/build-matrix.md)
 
+## CLI 输出变更说明（Breaking）
+
+- 从当前版本起，CLI 的**文本输出（人类可读）不再保证向后兼容**，已重构为统一用户提示与诊断分层。
+- `--verbose` 会额外输出诊断细节；默认模式只输出面向用户的信息。
+- `--json` 输出结构保持兼容，推荐脚本与自动化优先依赖 JSON 输出而非文本解析。
+
 ## 本地发布（当前主流程）
 
 - macOS（App + CLI）：`./scripts/release/local-release-macos.sh`

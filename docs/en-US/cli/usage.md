@@ -50,6 +50,12 @@ Test mode (for local automation/regression only):
 - `AWMKIT_TEST_KEYSTORE_DIR=/custom/path`: optional override for test key directory (default: `~/.awmkit/test-keystore`).
 - This mode is intended for testing only. It is disabled by default; normal usage keeps the system key backend.
 
+## 3.1 Output Contract (Important)
+
+- Human-readable text output is a presentation layer and is not guaranteed to be backward compatible from this version onward.
+- Default mode stays user-focused; `--verbose` adds diagnostic details for troubleshooting.
+- For automation, prefer `--json` output and avoid parsing text lines.
+
 ## 4. Typical First-Run Flow
 
 ```bash

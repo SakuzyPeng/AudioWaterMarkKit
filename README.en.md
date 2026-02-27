@@ -34,6 +34,12 @@ AWMKit is a cross-platform audio watermark toolkit built around a Rust core, wit
 - CLI usage: [`docs/en-US/cli/usage.md`](./docs/en-US/cli/usage.md)
 - Build matrix: [`docs/en-US/build/build-matrix.md`](./docs/en-US/build/build-matrix.md)
 
+## CLI Output Contract (Breaking)
+
+- Starting in this version, CLI **human-readable text output is not backward compatible** and has been redesigned with a clear user-vs-diagnostics split.
+- `--verbose` now exposes additional diagnostic details, while default mode stays user-focused.
+- `--json` output remains contract-compatible and is the recommended interface for scripts and automation.
+
 ## Local Release (Current Primary Flow)
 
 - macOS (App + CLI): `./scripts/release/local-release-macos.sh`

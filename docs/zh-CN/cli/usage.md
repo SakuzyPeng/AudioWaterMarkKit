@@ -50,6 +50,12 @@ cargo build --bin awmkit --features launcher --release
 - `AWMKIT_TEST_KEYSTORE_DIR=/custom/path`：可选，覆盖测试密钥目录（默认 `~/.awmkit/test-keystore`）。
 - 该模式只建议测试环境使用；默认不启用，生产/日常使用保持系统密钥后端。
 
+## 3.1 输出契约（重要）
+
+- 文本输出（人类可读）属于 CLI 展示层，当前版本起不保证向后兼容。
+- 默认模式仅输出用户导向信息；`--verbose` 会追加诊断细节（用于排障）。
+- 自动化脚本请优先使用 `--json` 输出，不建议依赖文本行解析。
+
 ## 4. 常用流程（首次）
 
 ```bash
