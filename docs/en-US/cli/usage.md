@@ -56,6 +56,13 @@ Test mode (for local automation/regression only):
 - Default mode stays user-focused; `--verbose` adds diagnostic details for troubleshooting.
 - For automation, prefer `--json` output and avoid parsing text lines.
 
+## 3.2 Copywriting Rules and Stability
+
+- Copy follows a "result first + next action" style.
+- Default mode must not expose internal field names; diagnostic details belong to `--verbose`.
+- See the [CLI terminology glossary](./terminology.md) for canonical terms. New copy must reuse those terms.
+- Text output remains a mutable presentation layer; machine integrations should continue to use `--json`.
+
 ## 4. Typical First-Run Flow
 
 ```bash
