@@ -80,40 +80,40 @@ cli-status-db-evidence-unavailable = Evidence records are unavailable. Next: run
 cli-embed-output_single = `--output` supports exactly one input file. Next: pass one input file or remove `--output`.
 cli-embed-done = Embed run finished: { $success } succeeded, { $failed } failed. Next: rerun failed files with `--verbose` if needed.
 cli-embed-failed = Some files failed to embed. Next: rerun with `--verbose` to inspect diagnostics.
-cli-embed-intro-routing-detail = multichannel smart routing enabled (default LFE skip)
-cli-embed-intro-parallelism-detail = multichannel route steps use Rayon (max workers: { $workers })
+cli-embed-intro-routing-detail = Diagnostic: multichannel embed routing is enabled; default route skips LFE.
+cli-embed-intro-parallelism-detail = Diagnostic: multichannel route steps run with Rayon parallelism (max workers: { $workers }).
 cli-embed-skip-existing = File already contains a watermark and was skipped: { $path }. Next: use a clean source file if re-embedding is required.
 cli-embed-precheck-adm-fallback = ADM precheck was unavailable and embedding continued: { $path }. Next: rerun with `--verbose` to inspect fallback reason.
-cli-embed-precheck-adm-fallback-detail = ADM precheck fallback on { $path }: { $error }
-cli-embed-evidence-store-unavailable-detail = evidence store unavailable: { $error }
-cli-embed-evidence-proof-failed-detail = evidence proof failed ({ $input } -> { $output }): { $error }
-cli-embed-evidence-insert-failed-detail = evidence insert failed ({ $input } -> { $output }): { $error }
+cli-embed-precheck-adm-fallback-detail = Diagnostic: ADM precheck fallback on { $path }. error={ $error }
+cli-embed-evidence-store-unavailable-detail = Diagnostic: evidence store unavailable. error={ $error }
+cli-embed-evidence-proof-failed-detail = Diagnostic: failed to build evidence fingerprint ({ $input } -> { $output }). error={ $error }
+cli-embed-evidence-insert-failed-detail = Diagnostic: failed to insert evidence record ({ $input } -> { $output }). error={ $error }
 cli-embed-file-ok-snr = Watermark embedded successfully: { $input } -> { $output } (SNR { $snr } dB). Next: run `awmkit detect { $output }` to verify.
 cli-embed-file-ok = Watermark embedded successfully: { $input } -> { $output }. Next: run `awmkit detect { $output }` to verify.
-cli-embed-snr-unavailable-detail = SNR unavailable for { $input } -> { $output }: { $reason }
+cli-embed-snr-unavailable-detail = Diagnostic: SNR calculation unavailable for { $input } -> { $output }. reason={ $reason }
 cli-embed-file-failed = Embedding failed: { $path }. Next: rerun with `--verbose` to inspect the failure reason.
-cli-embed-file-failed-detail = Embed failed on { $path }: { $error }
+cli-embed-file-failed-detail = Diagnostic: embed failed on { $path }. error={ $error }
 cli-embed-skipped-count = Files skipped in this run: { $count }. Next: review skipped files before rerunning.
-cli-embed-failure-details-title-detail = Failed file diagnostics:
+cli-embed-failure-details-title-detail = Diagnostic summary for failed files:
 cli-embed-failure-details-item-detail = - { $detail }
-cli-embed-failure-details-omitted-detail = - { $count } more failure details omitted
+cli-embed-failure-details-omitted-detail = - { $count } additional failure diagnostics omitted
 cli-embed-mapping-autosaved = Mapping saved automatically: { $identity } -> { $tag }. Next: run `awmkit tag list` to review mapping records.
-cli-embed-mapping-save-failed-detail = mapping save failed: { $error }
-cli-embed-mapping-load-failed-detail = mapping load failed: { $error }
+cli-embed-mapping-save-failed-detail = Diagnostic: mapping save failed. error={ $error }
+cli-embed-mapping-load-failed-detail = Diagnostic: mapping load failed. error={ $error }
 
 cli-detect-done = Detect run finished: { $ok } found, { $miss } miss, { $invalid } invalid. Next: inspect invalid files before any decision.
 cli-detect-failed = Some files failed during detect. Next: rerun with `--verbose` to inspect diagnostics.
 cli-detect-forensic-warning = This output is not suitable for attribution or forensics. Next: use your formal verification workflow for legal conclusions.
-cli-detect-parallelism-detail = multichannel route steps use Rayon (max workers: { $workers })
-cli-detect-evidence-store-unavailable-detail = evidence store unavailable: { $error }
+cli-detect-parallelism-detail = Diagnostic: multichannel route steps run with Rayon parallelism (max workers: { $workers }).
+cli-detect-evidence-store-unavailable-detail = Diagnostic: evidence store unavailable. error={ $error }
 cli-detect-file-found = Watermark detected: { $path } (tag { $tag }, identity { $identity }). Next: run `awmkit evidence list --identity { $identity }` to inspect related evidence.
-cli-detect-file-found-detail = detect detail for { $path }: clone={ $clone }, score={ $score }, slot_hint={ $slot_hint }, slot_used={ $slot_used }, slot_status={ $slot_status }, scanned={ $slot_scan_count }
+cli-detect-file-found-detail = Diagnostic detect detail for { $path }: clone_check={ $clone }, clone_score={ $score }, decode_slot_hint={ $slot_hint }, decode_slot_used={ $slot_used }, slot_status={ $slot_status }, slot_scan_count={ $slot_scan_count }
 cli-detect-file-miss = No watermark detected: { $path }. Next: verify the input source and key slot, then rerun detect.
 cli-detect-file-invalid = Watermark is invalid: { $path } ({ $warning }). Next: rerun with `--verbose` and confirm key slot and source integrity.
-cli-detect-file-invalid-detail = invalid detect detail for { $path }: error={ $error }, score={ $score }, tag={ $tag }, identity={ $identity }, timestamp={ $timestamp }, slot_unverified={ $slot_unverified }, slot_hint={ $slot_hint }, slot_used={ $slot_used }, slot_status={ $slot_status }, scanned={ $slot_scan_count }
+cli-detect-file-invalid-detail = Diagnostic invalid result for { $path }: error={ $error }, clone_score={ $score }, tag={ $tag }, identity={ $identity }, timestamp={ $timestamp }, slot_unverified={ $slot_unverified }, decode_slot_hint={ $slot_hint }, decode_slot_used={ $slot_used }, slot_status={ $slot_status }, slot_scan_count={ $slot_scan_count }
 cli-detect-file-error = Detect failed: { $path }. Next: rerun with `--verbose` to inspect the underlying error.
-cli-detect-file-error-detail = detect failed on { $path }: { $error }
-cli-detect-fallback-detail = fallback trace for { $path }: route={ $route }, reason={ $reason }, outcome={ $outcome }
+cli-detect-file-error-detail = Diagnostic: detect failed on { $path }. error={ $error }
+cli-detect-fallback-detail = Diagnostic fallback route for { $path }: route={ $route }, reason={ $reason }, outcome={ $outcome }
 
 cli-decode-version = Version: { $version }
 cli-decode-timestamp_minutes = Timestamp (minutes): { $minutes }

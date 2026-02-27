@@ -80,40 +80,40 @@ cli-status-db-evidence-unavailable = 证据记录不可用。下一步：运行 
 cli-embed-output_single = `--output` 仅支持一个输入文件。下一步：传入单个输入文件，或移除 `--output`。
 cli-embed-done = 嵌入任务完成：{ $success } 成功，{ $failed } 失败。下一步：如需排障，请对失败文件使用 `--verbose` 重试。
 cli-embed-failed = 有文件嵌入失败。下一步：使用 `--verbose` 重试查看诊断信息。
-cli-embed-intro-routing-detail = 已启用多声道路由（默认跳过 LFE）
-cli-embed-intro-parallelism-detail = 多声道路由步骤使用 Rayon 并行（最大 worker：{ $workers }）
+cli-embed-intro-routing-detail = 诊断：已启用多声道嵌入路由，默认路由会跳过 LFE。
+cli-embed-intro-parallelism-detail = 诊断：多声道路由步骤使用 Rayon 并行（最大 worker：{ $workers }）。
 cli-embed-skip-existing = 文件已含水印，已跳过：{ $path }。下一步：如需重新嵌入，请使用干净源文件。
 cli-embed-precheck-adm-fallback = ADM 预检不可用，已继续嵌入：{ $path }。下一步：可使用 `--verbose` 查看回退原因。
-cli-embed-precheck-adm-fallback-detail = ADM 预检回退（{ $path }）：{ $error }
-cli-embed-evidence-store-unavailable-detail = 证据库不可用：{ $error }
-cli-embed-evidence-proof-failed-detail = 证据指纹构建失败（{ $input } -> { $output }）：{ $error }
-cli-embed-evidence-insert-failed-detail = 证据写入失败（{ $input } -> { $output }）：{ $error }
+cli-embed-precheck-adm-fallback-detail = 诊断：{ $path } 触发 ADM 预检回退。error={ $error }
+cli-embed-evidence-store-unavailable-detail = 诊断：证据库不可用。error={ $error }
+cli-embed-evidence-proof-failed-detail = 诊断：证据指纹构建失败（{ $input } -> { $output }）。error={ $error }
+cli-embed-evidence-insert-failed-detail = 诊断：证据记录写入失败（{ $input } -> { $output }）。error={ $error }
 cli-embed-file-ok-snr = 水印嵌入成功：{ $input } -> { $output }（SNR { $snr } dB）。下一步：运行 `awmkit detect { $output }` 验证结果。
 cli-embed-file-ok = 水印嵌入成功：{ $input } -> { $output }。下一步：运行 `awmkit detect { $output }` 验证结果。
-cli-embed-snr-unavailable-detail = 无法计算 SNR（{ $input } -> { $output }）：{ $reason }
+cli-embed-snr-unavailable-detail = 诊断：无法计算 SNR（{ $input } -> { $output }）。reason={ $reason }
 cli-embed-file-failed = 水印嵌入失败：{ $path }。下一步：使用 `--verbose` 重试查看失败原因。
-cli-embed-file-failed-detail = 嵌入失败详情（{ $path }）：{ $error }
+cli-embed-file-failed-detail = 诊断：{ $path } 嵌入失败。error={ $error }
 cli-embed-skipped-count = 本次跳过文件数：{ $count }。下一步：重试前请先确认这些文件是否需要处理。
-cli-embed-failure-details-title-detail = 失败文件诊断详情：
+cli-embed-failure-details-title-detail = 失败文件诊断汇总：
 cli-embed-failure-details-item-detail = - { $detail }
-cli-embed-failure-details-omitted-detail = - 其余 { $count } 条失败详情已省略
+cli-embed-failure-details-omitted-detail = - 其余 { $count } 条失败诊断已省略
 cli-embed-mapping-autosaved = 已自动保存映射：{ $identity } -> { $tag }。下一步：运行 `awmkit tag list` 查看映射记录。
-cli-embed-mapping-save-failed-detail = 映射保存失败：{ $error }
-cli-embed-mapping-load-failed-detail = 映射加载失败：{ $error }
+cli-embed-mapping-save-failed-detail = 诊断：映射保存失败。error={ $error }
+cli-embed-mapping-load-failed-detail = 诊断：映射加载失败。error={ $error }
 
 cli-detect-done = 检测任务完成：{ $ok } 命中，{ $miss } 未命中，{ $invalid } 无效。下一步：先处理无效结果再做结论。
 cli-detect-failed = 有文件检测失败。下一步：使用 `--verbose` 重试查看诊断信息。
 cli-detect-forensic-warning = 此输出不适用于归属或取证。下一步：法律结论请使用正式校验流程。
-cli-detect-parallelism-detail = 多声道路由步骤使用 Rayon 并行（最大 worker：{ $workers }）
-cli-detect-evidence-store-unavailable-detail = 证据库不可用：{ $error }
+cli-detect-parallelism-detail = 诊断：多声道路由步骤使用 Rayon 并行（最大 worker：{ $workers }）。
+cli-detect-evidence-store-unavailable-detail = 诊断：证据库不可用。error={ $error }
 cli-detect-file-found = 检测到水印：{ $path }（标签 { $tag }，身份 { $identity }）。下一步：运行 `awmkit evidence list --identity { $identity }` 查看关联证据。
-cli-detect-file-found-detail = 检测详情（{ $path }）：clone={ $clone }，score={ $score }，slot_hint={ $slot_hint }，slot_used={ $slot_used }，slot_status={ $slot_status }，scan={ $slot_scan_count }
+cli-detect-file-found-detail = 诊断：{ $path } 检测命中，clone_check={ $clone }，clone_score={ $score }，decode_slot_hint={ $slot_hint }，decode_slot_used={ $slot_used }，slot_status={ $slot_status }，slot_scan_count={ $slot_scan_count }
 cli-detect-file-miss = 未检测到水印：{ $path }。下一步：检查输入来源与密钥槽位后重试。
 cli-detect-file-invalid = 水印无效：{ $path }（{ $warning }）。下一步：使用 `--verbose` 重试，并确认密钥槽位与源文件完整性。
-cli-detect-file-invalid-detail = 无效检测详情（{ $path }）：error={ $error }，score={ $score }，tag={ $tag }，identity={ $identity }，timestamp={ $timestamp }，slot_unverified={ $slot_unverified }，slot_hint={ $slot_hint }，slot_used={ $slot_used }，slot_status={ $slot_status }，scan={ $slot_scan_count }
+cli-detect-file-invalid-detail = 诊断：{ $path } 结果无效，error={ $error }，clone_score={ $score }，tag={ $tag }，identity={ $identity }，timestamp={ $timestamp }，slot_unverified={ $slot_unverified }，decode_slot_hint={ $slot_hint }，decode_slot_used={ $slot_used }，slot_status={ $slot_status }，slot_scan_count={ $slot_scan_count }
 cli-detect-file-error = 检测失败：{ $path }。下一步：使用 `--verbose` 重试查看底层错误。
-cli-detect-file-error-detail = 检测失败详情（{ $path }）：{ $error }
-cli-detect-fallback-detail = 回退检测详情（{ $path }）：route={ $route }，reason={ $reason }，outcome={ $outcome }
+cli-detect-file-error-detail = 诊断：{ $path } 检测失败。error={ $error }
+cli-detect-fallback-detail = 诊断：{ $path } 回退路径，route={ $route }，reason={ $reason }，outcome={ $outcome }
 
 cli-decode-version = 版本：{ $version }
 cli-decode-timestamp_minutes = 时间戳（分钟）：{ $minutes }
