@@ -18,14 +18,14 @@ public sealed class KeySlotSummary
     public string StatusText { get; init; } = "empty";
     public int[] DuplicateOfSlots { get; init; } = Array.Empty<int>();
 
-    public string SlotTitle => IsActive ? L($"槽位 {Slot}（激活）", $"Slot {Slot} (active)") : L($"槽位 {Slot}", $"Slot {Slot}");
+    public string SlotTitle => IsActive ? AppStrings.Pick($"槽位 {Slot}（激活）", $"Slot {Slot} (active)") : AppStrings.Pick($"槽位 {Slot}", $"Slot {Slot}");
 
     public string StatusDisplayText => StatusText switch
     {
-        "active" => L("激活", "Active"),
-        "configured" => L("已配置", "Configured"),
-        "duplicate" => L("重复", "Duplicate"),
-        _ => L("未配置", "Empty")
+        "active" => AppStrings.Pick("激活", "Active"),
+        "configured" => AppStrings.Pick("已配置", "Configured"),
+        "duplicate" => AppStrings.Pick("重复", "Duplicate"),
+        _ => AppStrings.Pick("未配置", "Empty")
     };
 
     public string TitleWithStatus => $"{SlotTitle} · {StatusDisplayText}";
@@ -36,7 +36,7 @@ public sealed class KeySlotSummary
         {
             if (!HasKey)
             {
-                return L("未配置", "Not configured");
+                return AppStrings.Pick("未配置", "Not configured");
             }
 
             if (string.IsNullOrWhiteSpace(Label))
@@ -52,15 +52,15 @@ public sealed class KeySlotSummary
     {
         get
         {
-            var baseText = L($"证据: {EvidenceCount}", $"Evidence: {EvidenceCount}");
+            var baseText = AppStrings.Pick($"证据: {EvidenceCount}", $"Evidence: {EvidenceCount}");
             if (DuplicateOfSlots.Length == 0)
             {
                 return baseText;
             }
 
-            return L($"{baseText} · 重复: {string.Join(",", DuplicateOfSlots)}", $"{baseText} · duplicate: {string.Join(",", DuplicateOfSlots)}");
+            return AppStrings.Pick($"{baseText} · 重复: {string.Join(",", DuplicateOfSlots)}", $"{baseText} · duplicate: {string.Join(",", DuplicateOfSlots)}");
         }
     }
 
-    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
+
 }

@@ -8,12 +8,43 @@
   <data name="nav.detect" xml:space="preserve"><value>Detect</value></data>
   <data name="nav.tags" xml:space="preserve"><value>Database</value></data>
   <data name="nav.key" xml:space="preserve"><value>Keys</value></data>
+  <data name="ui.nav.embed" xml:space="preserve"><value>Embed</value></data>
+  <data name="ui.nav.detect" xml:space="preserve"><value>Detect</value></data>
+  <data name="ui.nav.tags" xml:space="preserve"><value>Tags</value></data>
+  <data name="ui.nav.key" xml:space="preserve"><value>Keys</value></data>
   <data name="language.zh.short" xml:space="preserve"><value>中</value></data>
   <data name="language.en.short" xml:space="preserve"><value>EN</value></data>
+  <data name="ui.language.zh.short" xml:space="preserve"><value>中</value></data>
+  <data name="ui.language.en.short" xml:space="preserve"><value>EN</value></data>
   <data name="appearance.system" xml:space="preserve"><value>System</value></data>
   <data name="appearance.light" xml:space="preserve"><value>Light</value></data>
   <data name="appearance.dark" xml:space="preserve"><value>Dark</value></data>
+  <data name="ui.appearance.system" xml:space="preserve"><value>System</value></data>
+  <data name="ui.appearance.light" xml:space="preserve"><value>Light</value></data>
+  <data name="ui.appearance.dark" xml:space="preserve"><value>Dark</value></data>
   <data name="status.key" xml:space="preserve"><value>Key status</value></data>
   <data name="status.engine" xml:space="preserve"><value>Audio engine status</value></data>
   <data name="status.database" xml:space="preserve"><value>Database status</value></data>
+  <data name="ui.status.key" xml:space="preserve"><value>Key status</value></data>
+  <data name="ui.status.engine" xml:space="preserve"><value>Audio engine status</value></data>
+  <data name="ui.status.database" xml:space="preserve"><value>Database status</value></data>
+  <data name="ui.status.available" xml:space="preserve"><value>Available</value></data>
+  <data name="ui.status.unavailable" xml:space="preserve"><value>Unavailable</value></data>
+  <data name="ui.status.path" xml:space="preserve"><value>Path</value></data>
+  <data name="ui.status.media_backend" xml:space="preserve"><value>Media backend</value></data>
+  <data name="ui.status.containers" xml:space="preserve"><value>Containers</value></data>
+  <data name="ui.status.mappings" xml:space="preserve"><value>Mappings</value></data>
+  <data name="ui.status.evidence" xml:space="preserve"><value>Evidence</value></data>
+  <data name="ui.status.click_refresh" xml:space="preserve"><value>Click to refresh status</value></data>
+  <data name="ui.status.check_bundled_path" xml:space="preserve"><value>Check bundled binary or PATH</value></data>
+  <data name="ui.automation.theme.system" xml:space="preserve"><value>Switch to system theme</value></data>
+  <data name="ui.automation.theme.light" xml:space="preserve"><value>Switch to light theme</value></data>
+  <data name="ui.automation.theme.dark" xml:space="preserve"><value>Switch to dark theme</value></data>
+  <data name="ui.automation.language.zh" xml:space="preserve"><value>Switch language to Chinese</value></data>
+  <data name="ui.automation.language.en" xml:space="preserve"><value>Switch language to English</value></data>
+  <data name="ui.toggle.show_diagnostics" xml:space="preserve"><value>Show diagnostics</value></data>
+  <data name="ui.error.processing_failed" xml:space="preserve"><value>The operation failed.</value></data>
+  <data name="ui.error.next.open_diagnostics" xml:space="preserve"><value>Next: Turn on diagnostics and retry.</value></data>
+  <data name="ui.error.next.check_input_path" xml:space="preserve"><value>Next: Check the input path and retry.</value></data>
+  <data name="ui.error.next.retry" xml:space="preserve"><value>Next: Retry, and turn on diagnostics if it fails again.</value></data>
 </root>

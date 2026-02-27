@@ -48,7 +48,7 @@ struct ContentView: View {
 
     private var languageSwitcher: some View {
         VStack(spacing: 6) {
-            Label(localizedText("语言", "Language"), systemImage: "globe")
+            Label(Localizer.tr("language.title"), systemImage: "globe")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -75,8 +75,8 @@ struct ContentView: View {
 
     private var appearanceSwitcher: some View {
         VStack(spacing: 6) {
-            Label(localizedText("外观", "Appearance"), systemImage: "circle.lefthalf.filled")
-                .help(localizedText("切换应用外观", "Switch app appearance"))
+            Label(Localizer.tr("ui.sidebar.appearance"), systemImage: "circle.lefthalf.filled")
+                .help(Localizer.tr("ui.sidebar.appearance.help"))
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -101,16 +101,12 @@ struct ContentView: View {
     private func appearanceModeDisplayName(_ mode: AppearanceMode) -> String {
         switch mode {
         case .system:
-            return localizedText("系统", "System")
+            return Localizer.tr("appearance.system")
         case .light:
-            return localizedText("亮色", "Light")
+            return Localizer.tr("appearance.light")
         case .dark:
-            return localizedText("暗色", "Dark")
+            return Localizer.tr("appearance.dark")
         }
-    }
-
-    private func localizedText(_ zh: String, _ en: String) -> String {
-        appState.uiLanguage == .enUS ? en : zh
     }
 
     @ViewBuilder

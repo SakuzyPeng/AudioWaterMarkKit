@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using Windows.Globalization;
 
 namespace AWMKit.ViewModels;
 
@@ -232,12 +233,12 @@ public sealed partial class AppViewModel : ObservableObject, IDisposable
     public string KeyStatusTooltip => BuildKeyStatusTooltip();
 
     public string EngineStatusTooltip => EngineAvailable
-        ? $"{L("音频引擎", "Audio engine")}：{L("可用", "Available")}\n{L("路径", "Path")}：{EnginePath}\n{L("媒体后端", "Media backend")}：{EngineBackend}\nEAC3：{EngineEac3}\n{L("容器", "Containers")}：{EngineContainers}\n{L("点击刷新状态", "Click to refresh status")}"
-        : $"{L("音频引擎", "Audio engine")}：{L("不可用", "Unavailable")}\n{L("请检查 bundled 或 PATH", "Check bundled binary or PATH")}\n{L("点击刷新状态", "Click to refresh status")}";
+        ? $"{AppStrings.Get("ui.status.engine")}：{AppStrings.Get("ui.status.available")}\n{AppStrings.Get("ui.status.path")}：{EnginePath}\n{AppStrings.Get("ui.status.media_backend")}：{EngineBackend}\nEAC3：{EngineEac3}\n{AppStrings.Get("ui.status.containers")}：{EngineContainers}\n{AppStrings.Get("ui.status.click_refresh")}"
+        : $"{AppStrings.Get("ui.status.engine")}：{AppStrings.Get("ui.status.unavailable")}\n{AppStrings.Get("ui.status.check_bundled_path")}\n{AppStrings.Get("ui.status.click_refresh")}";
 
     public string DatabaseStatusTooltip => DatabaseAvailable
-        ? $"{L("数据库", "Database")}：{L("可用", "Available")}\n{L("映射", "Mappings")}：{TotalTags}\n{L("证据", "Evidence")}：{TotalEvidence}\n{L("点击刷新状态", "Click to refresh status")}"
-        : $"{L("数据库", "Database")}：{L("不可用", "Unavailable")}\n{L("点击刷新状态", "Click to refresh status")}";
+        ? $"{AppStrings.Get("ui.status.database")}：{AppStrings.Get("ui.status.available")}\n{AppStrings.Get("ui.status.mappings")}：{TotalTags}\n{AppStrings.Get("ui.status.evidence")}：{TotalEvidence}\n{AppStrings.Get("ui.status.click_refresh")}"
+        : $"{AppStrings.Get("ui.status.database")}：{AppStrings.Get("ui.status.unavailable")}\n{AppStrings.Get("ui.status.click_refresh")}";
     public bool UsingFallbackInputExtensions => !EngineCapsKnown;
     public string EffectiveSupportedInputExtensionsDisplay => string.Join(" / ", EffectiveSupportedInputExtensions().Select(ext => ext.TrimStart('.').ToUpperInvariant()));
 
@@ -249,6 +250,7 @@ public sealed partial class AppViewModel : ObservableObject, IDisposable
         {
             if (SetProperty(ref _uiLanguageCode, value))
             {
+                ApplicationLanguages.PrimaryLanguageOverride = _uiLanguageCode;
                 OnPropertyChanged(nameof(IsChineseLanguage));
                 OnPropertyChanged(nameof(IsEnglishLanguage));
                 OnPropertyChanged(nameof(ThemeSystemLabel));
@@ -266,14 +268,14 @@ public sealed partial class AppViewModel : ObservableObject, IDisposable
 
     public bool IsChineseLanguage => string.Equals(UiLanguageCode, "zh-CN", StringComparison.OrdinalIgnoreCase);
     public bool IsEnglishLanguage => string.Equals(UiLanguageCode, "en-US", StringComparison.OrdinalIgnoreCase);
-    public string ThemeSystemLabel => L("系统", "System");
-    public string ThemeLightLabel => L("亮色", "Light");
-    public string ThemeDarkLabel => L("暗色", "Dark");
-    public string LanguageChineseLabel => "中";
-    public string LanguageEnglishLabel => "EN";
-    public string KeyStatusName => L("密钥状态", "Key status");
-    public string EngineStatusName => L("音频引擎状态", "Audio engine status");
-    public string DatabaseStatusName => L("数据库状态", "Database status");
+    public string ThemeSystemLabel => AppStrings.Get("ui.appearance.system");
+    public string ThemeLightLabel => AppStrings.Get("ui.appearance.light");
+    public string ThemeDarkLabel => AppStrings.Get("ui.appearance.dark");
+    public string LanguageChineseLabel => AppStrings.Get("ui.language.zh.short");
+    public string LanguageEnglishLabel => AppStrings.Get("ui.language.en.short");
+    public string KeyStatusName => AppStrings.Get("ui.status.key");
+    public string EngineStatusName => AppStrings.Get("ui.status.engine");
+    public string DatabaseStatusName => AppStrings.Get("ui.status.database");
 
     private int _activeKeySlot;
     public int ActiveKeySlot
@@ -373,8 +375,8 @@ public sealed partial class AppViewModel : ObservableObject, IDisposable
             KeyAvailable = false;
             EngineAvailable = false;
             KeySourceLabel = string.IsNullOrWhiteSpace(nativeError)
-                ? L("本机引擎加载失败", "Native engine load failed")
-                : $"{L("本机引擎加载失败", "Native engine load failed")}: {nativeError}";
+                ? AppStrings.Pick("本机引擎加载失败", "Native engine load failed")
+                : $"{AppStrings.Pick("本机引擎加载失败", "Native engine load failed")}: {nativeError}";
             EnginePath = string.Empty;
             EngineBackend = "-";
             EngineEac3 = "unavailable";
@@ -463,7 +465,7 @@ public sealed partial class AppViewModel : ObservableObject, IDisposable
             KeyAvailable = exists;
             if (!exists)
             {
-                KeySourceLabel = L("未配置", "Not configured");
+                KeySourceLabel = AppStrings.Pick("未配置", "Not configured");
                 return Task.CompletedTask;
             }
 
@@ -474,7 +476,7 @@ public sealed partial class AppViewModel : ObservableObject, IDisposable
             }
             else
             {
-                KeySourceLabel = L("已配置（来源未知）", "Configured (unknown backend)");
+                KeySourceLabel = AppStrings.Pick("已配置（来源未知）", "Configured (unknown backend)");
             }
 
             NotifyStatusPresentationChanged();
@@ -483,7 +485,7 @@ public sealed partial class AppViewModel : ObservableObject, IDisposable
         {
             _keySlotSummaries = [];
             KeyAvailable = false;
-            KeySourceLabel = L("不可用", "Unavailable");
+            KeySourceLabel = AppStrings.Pick("不可用", "Unavailable");
             NotifyStatusPresentationChanged();
         }
         return Task.CompletedTask;
@@ -663,7 +665,7 @@ public sealed partial class AppViewModel : ObservableObject, IDisposable
             .OrderBy(item => item.Slot)
             .ToList();
         var active = _keySlotSummaries.FirstOrDefault(item => item.Slot == ActiveKeySlot);
-        var activeKeyId = active?.KeyId ?? L("未配置", "Not configured");
+        var activeKeyId = active?.KeyId ?? AppStrings.Pick("未配置", "Not configured");
 
         var digest = configured.Count == 0
             ? "-"
@@ -682,18 +684,18 @@ public sealed partial class AppViewModel : ObservableObject, IDisposable
 
         var lines = new List<string>
         {
-            $"{L("激活槽位", "Active slot")}：{ActiveKeySlot}",
-            $"{L("激活 Key ID", "Active Key ID")}：{activeKeyId}",
-            $"{L("已配置槽位", "Configured slots")}：{configured.Count}/32",
-            $"{L("槽位摘要", "Slot summary")}：{digest}"
+            $"{AppStrings.Pick("激活槽位", "Active slot")}：{ActiveKeySlot}",
+            $"{AppStrings.Pick("激活 Key ID", "Active Key ID")}：{activeKeyId}",
+            $"{AppStrings.Pick("已配置槽位", "Configured slots")}：{configured.Count}/32",
+            $"{AppStrings.Pick("槽位摘要", "Slot summary")}：{digest}"
         };
         if (duplicateSlots.Length > 0)
         {
-            lines.Add($"{L("重复密钥槽位", "Duplicate key slots")}：{string.Join(",", duplicateSlots)}");
+            lines.Add($"{AppStrings.Pick("重复密钥槽位", "Duplicate key slots")}：{string.Join(",", duplicateSlots)}");
         }
         lines.Add(KeyAvailable
-            ? L("点击刷新状态", "Click to refresh status")
-            : L("未配置密钥，请前往“密钥”页面生成", "No key configured. Open Key page to create one."));
+            ? AppStrings.Pick("点击刷新状态", "Click to refresh status")
+            : AppStrings.Pick("未配置密钥，请前往“密钥”页面生成", "No key configured. Open Key page to create one."));
         return string.Join('\n', lines);
     }
 
@@ -704,7 +706,7 @@ public sealed partial class AppViewModel : ObservableObject, IDisposable
             : "zh-CN";
     }
 
-    private string L(string zh, string en) => IsEnglishLanguage ? en : zh;
+
 
     public void Dispose()
     {

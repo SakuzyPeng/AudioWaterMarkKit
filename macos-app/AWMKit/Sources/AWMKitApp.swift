@@ -128,18 +128,18 @@ class AppState: ObservableObject {
     func localizedTabTitle(_ tab: Tab) -> String {
         switch tab {
         case .embed:
-            return l("嵌入", "Embed")
+            return Localizer.tr("nav.embed")
         case .detect:
-            return l("检测", "Detect")
+            return Localizer.tr("nav.detect")
         case .tags:
-            return l("标签", "Database")
+            return Localizer.tr("nav.tags")
         case .key:
-            return l("密钥", "Keys")
+            return Localizer.tr("nav.key")
         }
     }
 
     func tr(_ zh: String, _ en: String) -> String {
-        l(zh, en)
+        Localizer.pick(zh, en)
     }
 
     func setUILanguage(_ language: UILanguageOption) {
@@ -175,7 +175,7 @@ class AppState: ObservableObject {
         do {
             if !AWMKeyStore.exists() {
                 keyLoaded = false
-                keySourceLabel = l("未配置", "Not configured")
+                keySourceLabel = Localizer.pick("未配置", "Not configured")
                 keyStatusTone = .warning
                 keyStatusHelp = formatKeyStatusHelp(
                     activeSlot: resolvedActiveSlot,
@@ -192,7 +192,7 @@ class AppState: ObservableObject {
             if let backend, !backend.isEmpty, backend != "none" {
                 keySourceLabel = backend
             } else {
-                keySourceLabel = l("已配置（来源未知）", "Configured (unknown backend)")
+                keySourceLabel = Localizer.pick("已配置（来源未知）", "Configured (unknown backend)")
             }
 
             keyStatusTone = .ready
@@ -203,9 +203,9 @@ class AppState: ObservableObject {
             )
         } catch {
             keyLoaded = false
-            keySourceLabel = l("读取失败", "Read failed")
+            keySourceLabel = Localizer.pick("读取失败", "Read failed")
             keyStatusTone = .error
-            keyStatusHelp = "\(l("密钥读取失败", "Key read failed")): \(error.localizedDescription)"
+            keyStatusHelp = "\(Localizer.pick("密钥读取失败", "Key read failed")): \(error.localizedDescription)"
         }
     }
 
@@ -217,14 +217,14 @@ class AppState: ObservableObject {
         guard let audio else {
             applyAudioInputPolicy(known: false, containerMp4: false, containerMkv: false, containerTs: false)
             audioStatusTone = .error
-            audioStatusHelp = "\(l("AudioWmark 初始化失败", "AudioWmark initialization failed")): \(audioInitError ?? l("未找到可用二进制", "No available binary"))"
+            audioStatusHelp = "\(Localizer.pick("AudioWmark 初始化失败", "AudioWmark initialization failed")): \(audioInitError ?? Localizer.pick("未找到可用二进制", "No available binary"))"
             return
         }
 
         guard audio.isAvailable else {
             applyAudioInputPolicy(known: false, containerMp4: false, containerMkv: false, containerTs: false)
             audioStatusTone = .error
-            audioStatusHelp = l("AudioWmark 不可用：初始化成功但无法执行", "AudioWmark unavailable: initialized but execution failed")
+            audioStatusHelp = Localizer.pick("AudioWmark 不可用：初始化成功但无法执行", "AudioWmark unavailable: initialized but execution failed")
             return
         }
 
@@ -244,17 +244,17 @@ class AppState: ObservableObject {
 
             audioStatusTone = .ready
             audioStatusHelp = """
-            \(l("AudioWmark 可用", "AudioWmark available"))
-            \(l("媒体后端", "Media backend")): \(capabilities.backend)
+            \(Localizer.pick("AudioWmark 可用", "AudioWmark available"))
+            \(Localizer.pick("媒体后端", "Media backend")): \(capabilities.backend)
             eac3: \(capabilities.eac3Decode ? "available" : "unavailable")
-            \(l("容器", "Containers")): \(containerText)
+            \(Localizer.pick("容器", "Containers")): \(containerText)
             """
             return
         }
 
         applyAudioInputPolicy(known: false, containerMp4: false, containerMkv: false, containerTs: false)
         audioStatusTone = .warning
-        audioStatusHelp = "\(l("AudioWmark 可用", "AudioWmark available")) (\(inferredAudioBackend()))"
+        audioStatusHelp = "\(Localizer.pick("AudioWmark 可用", "AudioWmark available")) (\(inferredAudioBackend()))"
     }
 
     func effectiveSupportedInputExtensions() -> [String] {
@@ -284,9 +284,9 @@ class AppState: ObservableObject {
 
     func inputPolicyDetailText() -> String {
         if audioMediaCapsKnown {
-            return l("按运行时解码能力筛选输入", "Input is filtered by runtime decode capabilities")
+            return Localizer.pick("按运行时解码能力筛选输入", "Input is filtered by runtime decode capabilities")
         }
-        return l(
+        return Localizer.pick(
             "当前按默认支持集合处理（运行时能力未知，执行阶段可能因缺少 demuxer 失败）",
             "Using default fallback input set (runtime capabilities unknown; execution can still fail if demuxers are missing)"
         )
@@ -299,14 +299,14 @@ class AppState: ObservableObject {
             evidenceCount = summary.evidenceCount
             databaseStatusTone = (summary.tagCount == 0 && summary.evidenceCount == 0) ? .warning : .ready
             databaseStatusHelp = """
-            \(l("映射总数", "Total mappings")): \(summary.tagCount)
-            \(l("证据总数（SHA256+指纹）", "Total evidence (SHA256 + fingerprint)")): \(summary.evidenceCount)
+            \(Localizer.pick("映射总数", "Total mappings")): \(summary.tagCount)
+            \(Localizer.pick("证据总数（SHA256+指纹）", "Total evidence (SHA256 + fingerprint)")): \(summary.evidenceCount)
             """
         } catch {
             mappingCount = 0
             evidenceCount = 0
             databaseStatusTone = .error
-            databaseStatusHelp = "\(l("数据库读取失败", "Database read failed")): \(error.localizedDescription)"
+            databaseStatusHelp = "\(Localizer.pick("数据库读取失败", "Database read failed")): \(error.localizedDescription)"
         }
     }
 
@@ -389,15 +389,11 @@ class AppState: ObservableObject {
         return UILanguageOption.defaultFromSystem()
     }
 
-    private func l(_ zh: String, _ en: String) -> String {
-        uiLanguage == .enUS ? en : zh
-    }
-
     private func resetLocalizedPlaceholders() {
-        keySourceLabel = l("未配置", "Not configured")
-        keyStatusHelp = l("密钥状态检查中...", "Checking key status...")
-        audioStatusHelp = l("AudioWmark 状态检查中...", "Checking AudioWmark status...")
-        databaseStatusHelp = l("数据库状态检查中...", "Checking database status...")
+        keySourceLabel = Localizer.pick("未配置", "Not configured")
+        keyStatusHelp = Localizer.pick("密钥状态检查中...", "Checking key status...")
+        audioStatusHelp = Localizer.pick("AudioWmark 状态检查中...", "Checking AudioWmark status...")
+        databaseStatusHelp = Localizer.pick("数据库状态检查中...", "Checking database status...")
     }
 
     private func applyAudioInputPolicy(known: Bool, containerMp4: Bool, containerMkv: Bool, containerTs: Bool) {
@@ -423,7 +419,7 @@ class AppState: ObservableObject {
         keyAvailable: Bool
     ) -> String {
         let configured = summaries.filter { $0.hasKey }
-        let activeKeyId = summaries.first(where: { $0.slot == UInt8(activeSlot) })?.keyId ?? l("未配置", "Not configured")
+        let activeKeyId = summaries.first(where: { $0.slot == UInt8(activeSlot) })?.keyId ?? Localizer.pick("未配置", "Not configured")
         let listPreview = configured
             .prefix(6)
             .map { "\($0.slot):\($0.keyId ?? "-")" }
@@ -437,18 +433,18 @@ class AppState: ObservableObject {
             .joined(separator: ",")
 
         var lines: [String] = [
-            "\(l("激活槽位", "Active slot")): \(activeSlot)",
-            "\(l("激活 Key ID", "Active Key ID")): \(activeKeyId)",
-            "\(l("已配置槽位", "Configured slots")): \(configured.count)/32",
-            "\(l("槽位摘要", "Slot summary")): \(slotDigest)"
+            "\(Localizer.pick("激活槽位", "Active slot")): \(activeSlot)",
+            "\(Localizer.pick("激活 Key ID", "Active Key ID")): \(activeKeyId)",
+            "\(Localizer.pick("已配置槽位", "Configured slots")): \(configured.count)/32",
+            "\(Localizer.pick("槽位摘要", "Slot summary")): \(slotDigest)"
         ]
         if !duplicateSlots.isEmpty {
-            lines.append("\(l("重复密钥槽位", "Duplicate key slots")): \(duplicateSlots)")
+            lines.append("\(Localizer.pick("重复密钥槽位", "Duplicate key slots")): \(duplicateSlots)")
         }
         lines.append(
             keyAvailable
-                ? l("点击可刷新密钥状态", "Click to refresh key status")
-                : l("未配置密钥，请前往“密钥”页面生成", "No key configured. Open Key page to generate one.")
+                ? Localizer.pick("点击可刷新密钥状态", "Click to refresh key status")
+                : Localizer.pick("未配置密钥，请前往“密钥”页面生成", "No key configured. Open Key page to generate one.")
         )
         return lines.joined(separator: "\n")
     }

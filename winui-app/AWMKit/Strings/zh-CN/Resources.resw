@@ -8,12 +8,43 @@
   <data name="nav.detect" xml:space="preserve"><value>检测</value></data>
   <data name="nav.tags" xml:space="preserve"><value>标签</value></data>
   <data name="nav.key" xml:space="preserve"><value>密钥</value></data>
+  <data name="ui.nav.embed" xml:space="preserve"><value>嵌入</value></data>
+  <data name="ui.nav.detect" xml:space="preserve"><value>检测</value></data>
+  <data name="ui.nav.tags" xml:space="preserve"><value>标签</value></data>
+  <data name="ui.nav.key" xml:space="preserve"><value>密钥</value></data>
   <data name="language.zh.short" xml:space="preserve"><value>中</value></data>
   <data name="language.en.short" xml:space="preserve"><value>EN</value></data>
+  <data name="ui.language.zh.short" xml:space="preserve"><value>中</value></data>
+  <data name="ui.language.en.short" xml:space="preserve"><value>EN</value></data>
   <data name="appearance.system" xml:space="preserve"><value>系统</value></data>
   <data name="appearance.light" xml:space="preserve"><value>亮色</value></data>
   <data name="appearance.dark" xml:space="preserve"><value>暗色</value></data>
+  <data name="ui.appearance.system" xml:space="preserve"><value>系统</value></data>
+  <data name="ui.appearance.light" xml:space="preserve"><value>亮色</value></data>
+  <data name="ui.appearance.dark" xml:space="preserve"><value>暗色</value></data>
   <data name="status.key" xml:space="preserve"><value>密钥状态</value></data>
   <data name="status.engine" xml:space="preserve"><value>音频引擎状态</value></data>
   <data name="status.database" xml:space="preserve"><value>数据库状态</value></data>
+  <data name="ui.status.key" xml:space="preserve"><value>密钥状态</value></data>
+  <data name="ui.status.engine" xml:space="preserve"><value>音频引擎状态</value></data>
+  <data name="ui.status.database" xml:space="preserve"><value>数据库状态</value></data>
+  <data name="ui.status.available" xml:space="preserve"><value>可用</value></data>
+  <data name="ui.status.unavailable" xml:space="preserve"><value>不可用</value></data>
+  <data name="ui.status.path" xml:space="preserve"><value>路径</value></data>
+  <data name="ui.status.media_backend" xml:space="preserve"><value>媒体后端</value></data>
+  <data name="ui.status.containers" xml:space="preserve"><value>容器</value></data>
+  <data name="ui.status.mappings" xml:space="preserve"><value>映射</value></data>
+  <data name="ui.status.evidence" xml:space="preserve"><value>证据</value></data>
+  <data name="ui.status.click_refresh" xml:space="preserve"><value>点击刷新状态</value></data>
+  <data name="ui.status.check_bundled_path" xml:space="preserve"><value>请检查 bundled 或 PATH</value></data>
+  <data name="ui.automation.theme.system" xml:space="preserve"><value>切换到系统主题</value></data>
+  <data name="ui.automation.theme.light" xml:space="preserve"><value>切换到亮色主题</value></data>
+  <data name="ui.automation.theme.dark" xml:space="preserve"><value>切换到暗色主题</value></data>
+  <data name="ui.automation.language.zh" xml:space="preserve"><value>切换语言到中文</value></data>
+  <data name="ui.automation.language.en" xml:space="preserve"><value>切换语言到英文</value></data>
+  <data name="ui.toggle.show_diagnostics" xml:space="preserve"><value>显示诊断</value></data>
+  <data name="ui.error.processing_failed" xml:space="preserve"><value>操作失败。</value></data>
+  <data name="ui.error.next.open_diagnostics" xml:space="preserve"><value>下一步：打开诊断并重试。</value></data>
+  <data name="ui.error.next.check_input_path" xml:space="preserve"><value>下一步：检查输入路径后重试。</value></data>
+  <data name="ui.error.next.retry" xml:space="preserve"><value>下一步：请重试；若再次失败，请打开诊断。</value></data>
 </root>

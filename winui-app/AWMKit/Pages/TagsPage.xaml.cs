@@ -39,7 +39,7 @@ public sealed partial class TagsPage : Page
     {
         var usernameBox = new TextBox
         {
-            PlaceholderText = L("例如: user_001", "e.g. user_001")
+            PlaceholderText = AppStrings.Pick("例如: user_001", "e.g. user_001")
         };
         var previewValue = new TextBlock
         {
@@ -58,9 +58,9 @@ public sealed partial class TagsPage : Page
             Spacing = 10,
             Children =
             {
-                new TextBlock { Text = L("用户名", "Username") },
+                new TextBlock { Text = AppStrings.Pick("用户名", "Username") },
                 usernameBox,
-                new TextBlock { Text = L("Tag 预览", "Tag preview") },
+                new TextBlock { Text = AppStrings.Pick("Tag 预览", "Tag preview") },
                 previewValue,
                 hintText
             }
@@ -68,9 +68,9 @@ public sealed partial class TagsPage : Page
 
         var dialog = new ContentDialog
         {
-            Title = L("添加标签映射", "Add mapping"),
-            PrimaryButtonText = L("保存", "Save"),
-            CloseButtonText = L("取消", "Cancel"),
+            Title = AppStrings.Pick("添加标签映射", "Add mapping"),
+            PrimaryButtonText = AppStrings.Pick("保存", "Save"),
+            CloseButtonText = AppStrings.Pick("取消", "Cancel"),
             DefaultButton = ContentDialogButton.Primary,
             Content = content,
             XamlRoot = XamlRoot,
@@ -82,8 +82,8 @@ public sealed partial class TagsPage : Page
             var preview = ViewModel.ResolveTagPreview(usernameBox.Text, out var reusedExisting);
             previewValue.Text = preview;
             hintText.Text = reusedExisting
-                ? L("已存在映射，自动复用", "Mapping already exists, auto reused")
-                : L("将新增该用户名映射", "A new mapping will be added for this username");
+                ? AppStrings.Pick("已存在映射，自动复用", "Mapping already exists, auto reused")
+                : AppStrings.Pick("将新增该用户名映射", "A new mapping will be added for this username");
             dialog.IsPrimaryButtonEnabled = !string.IsNullOrWhiteSpace(usernameBox.Text) && preview != "-";
         }
 
@@ -132,7 +132,7 @@ public sealed partial class TagsPage : Page
             return;
         }
 
-        var noun = ViewModel.DeleteMode == TagsDeleteMode.Evidence ? L("证据", "evidence") : L("标签", "mapping");
+        var noun = ViewModel.DeleteMode == TagsDeleteMode.Evidence ? AppStrings.Pick("证据", "evidence") : AppStrings.Pick("标签", "mapping");
         var confirmed = await ShowDeleteConfirmDialogAsync(selectedCount, noun);
         if (!confirmed)
         {
@@ -151,7 +151,7 @@ public sealed partial class TagsPage : Page
     {
         var instruction = new TextBlock
         {
-            Text = L(
+            Text = AppStrings.Pick(
                 $"请输入数字 {expectedCount} 以确认删除 {expectedCount} 条{noun}",
                 $"Type number {expectedCount} to confirm deleting {expectedCount} {noun} item(s)"),
             TextWrapping = TextWrapping.Wrap
@@ -159,12 +159,12 @@ public sealed partial class TagsPage : Page
 
         var inputBox = new TextBox
         {
-            PlaceholderText = L($"输入 {expectedCount}", $"Enter {expectedCount}")
+            PlaceholderText = AppStrings.Pick($"输入 {expectedCount}", $"Enter {expectedCount}")
         };
 
         var hint = new TextBlock
         {
-            Text = L("数量不匹配时无法确认", "Confirmation disabled when number does not match"),
+            Text = AppStrings.Pick("数量不匹配时无法确认", "Confirmation disabled when number does not match"),
             Foreground = GetBrush("TextFillColorSecondaryBrush")
         };
 
@@ -176,9 +176,9 @@ public sealed partial class TagsPage : Page
 
         var dialog = new ContentDialog
         {
-            Title = L("确认删除", "Confirm deletion"),
-            PrimaryButtonText = L("确认删除", "Delete"),
-            CloseButtonText = L("取消", "Cancel"),
+            Title = AppStrings.Pick("确认删除", "Confirm deletion"),
+            PrimaryButtonText = AppStrings.Pick("确认删除", "Delete"),
+            CloseButtonText = AppStrings.Pick("取消", "Cancel"),
             DefaultButton = ContentDialogButton.Close,
             Content = content,
             XamlRoot = XamlRoot,
@@ -225,5 +225,5 @@ public sealed partial class TagsPage : Page
         return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 
-    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
+
 }

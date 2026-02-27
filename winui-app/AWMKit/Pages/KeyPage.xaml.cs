@@ -37,16 +37,16 @@ public sealed partial class KeyPage : Page
         if (error == Native.AwmError.KeyAlreadyExists)
         {
             await ShowMessageDialogAsync(
-                L("槽位已有密钥", "Slot already has key"),
-                L("当前槽位已存在密钥，已阻止覆盖。\n如需替换，请先删除该槽位密钥后再生成。", "Current slot already has a key and overwrite is blocked.\nDelete this slot key before generating a new one."));
+                AppStrings.Pick("槽位已有密钥", "Slot already has key"),
+                AppStrings.Pick("当前槽位已存在密钥，已阻止覆盖。\n如需替换，请先删除该槽位密钥后再生成。", "Current slot already has a key and overwrite is blocked.\nDelete this slot key before generating a new one."));
             return;
         }
 
         if (error != Native.AwmError.Ok)
         {
             await ShowMessageDialogAsync(
-                L("生成失败", "Generate failed"),
-                $"{L("密钥生成失败", "Key generation failed")}: {error}");
+                AppStrings.Pick("生成失败", "Generate failed"),
+                $"{AppStrings.Pick("密钥生成失败", "Key generation failed")}: {error}");
         }
     }
 
@@ -56,22 +56,22 @@ public sealed partial class KeyPage : Page
         var activeSummary = ViewModel.ActiveKeySummary;
         var editor = new TextBox
         {
-            PlaceholderText = L("输入新标签（留空表示清除）", "Enter new label (leave empty to clear)"),
+            PlaceholderText = AppStrings.Pick("输入新标签（留空表示清除）", "Enter new label (leave empty to clear)"),
             Text = activeSummary?.Label ?? string.Empty
         };
 
         var content = new StackPanel { Spacing = 8 };
-        content.Children.Add(new TextBlock { Text = L($"当前激活槽位：{activeSlot}", $"Active slot: {activeSlot}") });
-        content.Children.Add(new TextBlock { Text = $"Key ID: {activeSummary?.KeyId ?? L("未配置", "Not configured")}" });
-        content.Children.Add(new TextBlock { Text = L($"当前标签：{(string.IsNullOrWhiteSpace(activeSummary?.Label) ? "未设置" : activeSummary!.Label)}", $"Current label: {(string.IsNullOrWhiteSpace(activeSummary?.Label) ? "not set" : activeSummary!.Label)}") });
+        content.Children.Add(new TextBlock { Text = AppStrings.Pick($"当前激活槽位：{activeSlot}", $"Active slot: {activeSlot}") });
+        content.Children.Add(new TextBlock { Text = $"Key ID: {activeSummary?.KeyId ?? AppStrings.Pick("未配置", "Not configured")}" });
+        content.Children.Add(new TextBlock { Text = AppStrings.Pick($"当前标签：{(string.IsNullOrWhiteSpace(activeSummary?.Label) ? "未设置" : activeSummary!.Label)}", $"Current label: {(string.IsNullOrWhiteSpace(activeSummary?.Label) ? "not set" : activeSummary!.Label)}") });
         content.Children.Add(editor);
 
         var dialog = new ContentDialog
         {
-            Title = L("编辑槽位标签", "Edit slot label"),
+            Title = AppStrings.Pick("编辑槽位标签", "Edit slot label"),
             Content = content,
-            PrimaryButtonText = L("保存", "Save"),
-            CloseButtonText = L("取消", "Cancel"),
+            PrimaryButtonText = AppStrings.Pick("保存", "Save"),
+            CloseButtonText = AppStrings.Pick("取消", "Cancel"),
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot
         };
@@ -86,8 +86,8 @@ public sealed partial class KeyPage : Page
         if (error != Native.AwmError.Ok)
         {
             await ShowMessageDialogAsync(
-                L("编辑失败", "Edit failed"),
-                $"{L("密钥标签更新失败", "Key label update failed")}: {error}");
+                AppStrings.Pick("编辑失败", "Edit failed"),
+                $"{AppStrings.Pick("密钥标签更新失败", "Key label update failed")}: {error}");
         }
     }
 
@@ -107,16 +107,16 @@ public sealed partial class KeyPage : Page
         catch (Exception ex)
         {
             await ShowMessageDialogAsync(
-                L("导入失败", "Import failed"),
-                $"{L("读取密钥文件失败", "Failed to read key file")}: {ex.Message}");
+                AppStrings.Pick("导入失败", "Import failed"),
+                $"{AppStrings.Pick("读取密钥文件失败", "Failed to read key file")}: {ex.Message}");
             return;
         }
 
         if (keyBytes.Length != 32)
         {
             await ShowMessageDialogAsync(
-                L("导入失败", "Import failed"),
-                $"{L("密钥文件必须为 32 字节", "Key file must be exactly 32 bytes")}: {keyBytes.Length}");
+                AppStrings.Pick("导入失败", "Import failed"),
+                $"{AppStrings.Pick("密钥文件必须为 32 字节", "Key file must be exactly 32 bytes")}: {keyBytes.Length}");
             return;
         }
 
@@ -124,16 +124,16 @@ public sealed partial class KeyPage : Page
         if (error == Native.AwmError.KeyAlreadyExists)
         {
             await ShowMessageDialogAsync(
-                L("槽位已有密钥", "Slot already has key"),
-                L("当前槽位已存在密钥，已阻止覆盖。\n如需替换，请先删除该槽位密钥后再导入。", "Current slot already has a key and overwrite is blocked.\nDelete this slot key before importing."));
+                AppStrings.Pick("槽位已有密钥", "Slot already has key"),
+                AppStrings.Pick("当前槽位已存在密钥，已阻止覆盖。\n如需替换，请先删除该槽位密钥后再导入。", "Current slot already has a key and overwrite is blocked.\nDelete this slot key before importing."));
             return;
         }
 
         if (error != Native.AwmError.Ok)
         {
             await ShowMessageDialogAsync(
-                L("导入失败", "Import failed"),
-                $"{L("密钥导入失败", "Key import failed")}: {error}");
+                AppStrings.Pick("导入失败", "Import failed"),
+                $"{AppStrings.Pick("密钥导入失败", "Key import failed")}: {error}");
         }
     }
 
@@ -141,22 +141,22 @@ public sealed partial class KeyPage : Page
     {
         var input = new TextBox
         {
-            PlaceholderText = L("请输入 64 位十六进制字符（可带 0x 前缀）", "Enter 64 hex characters (0x prefix allowed)"),
+            PlaceholderText = AppStrings.Pick("请输入 64 位十六进制字符（可带 0x 前缀）", "Enter 64 hex characters (0x prefix allowed)"),
             TextWrapping = TextWrapping.Wrap,
             AcceptsReturn = true,
             MinHeight = 110
         };
 
         var content = new StackPanel { Spacing = 8 };
-        content.Children.Add(new TextBlock { Text = L($"目标槽位：{ViewModel.SelectedSlot}", $"Target slot: {ViewModel.SelectedSlot}") });
+        content.Children.Add(new TextBlock { Text = AppStrings.Pick($"目标槽位：{ViewModel.SelectedSlot}", $"Target slot: {ViewModel.SelectedSlot}") });
         content.Children.Add(input);
 
         var dialog = new ContentDialog
         {
-            Title = L("Hex 密钥导入", "Hex key import"),
+            Title = AppStrings.Pick("Hex 密钥导入", "Hex key import"),
             Content = content,
-            PrimaryButtonText = L("导入", "Import"),
-            CloseButtonText = L("取消", "Cancel"),
+            PrimaryButtonText = AppStrings.Pick("导入", "Import"),
+            CloseButtonText = AppStrings.Pick("取消", "Cancel"),
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot
         };
@@ -171,24 +171,24 @@ public sealed partial class KeyPage : Page
         if (error == Native.AwmError.KeyAlreadyExists)
         {
             await ShowMessageDialogAsync(
-                L("槽位已有密钥", "Slot already has key"),
-                L("当前槽位已存在密钥，已阻止覆盖。\n如需替换，请先删除该槽位密钥后再导入。", "Current slot already has a key and overwrite is blocked.\nDelete this slot key before importing."));
+                AppStrings.Pick("槽位已有密钥", "Slot already has key"),
+                AppStrings.Pick("当前槽位已存在密钥，已阻止覆盖。\n如需替换，请先删除该槽位密钥后再导入。", "Current slot already has a key and overwrite is blocked.\nDelete this slot key before importing."));
             return;
         }
 
         if (error == Native.AwmError.InvalidMessageLength)
         {
             await ShowMessageDialogAsync(
-                L("Hex 导入失败", "Hex import failed"),
-                L("请输入 64 位十六进制字符（可带 0x 前缀）。", "Enter 64 hex characters (0x prefix allowed)."));
+                AppStrings.Pick("Hex 导入失败", "Hex import failed"),
+                AppStrings.Pick("请输入 64 位十六进制字符（可带 0x 前缀）。", "Enter 64 hex characters (0x prefix allowed)."));
             return;
         }
 
         if (error != Native.AwmError.Ok)
         {
             await ShowMessageDialogAsync(
-                L("Hex 导入失败", "Hex import failed"),
-                $"{L("密钥导入失败", "Key import failed")}: {error}");
+                AppStrings.Pick("Hex 导入失败", "Hex import failed"),
+                $"{AppStrings.Pick("密钥导入失败", "Key import failed")}: {error}");
         }
     }
 
@@ -198,8 +198,8 @@ public sealed partial class KeyPage : Page
         if (error != Native.AwmError.Ok || key is null)
         {
             await ShowMessageDialogAsync(
-                L("导出失败", "Export failed"),
-                $"{L("读取槽位密钥失败", "Failed to load slot key")}: {error}");
+                AppStrings.Pick("导出失败", "Export failed"),
+                $"{AppStrings.Pick("读取槽位密钥失败", "Failed to load slot key")}: {error}");
             return;
         }
 
@@ -217,8 +217,8 @@ public sealed partial class KeyPage : Page
         catch (Exception ex)
         {
             await ShowMessageDialogAsync(
-                L("导出失败", "Export failed"),
-                $"{L("写入密钥文件失败", "Failed to write key file")}: {ex.Message}");
+                AppStrings.Pick("导出失败", "Export failed"),
+                $"{AppStrings.Pick("写入密钥文件失败", "Failed to write key file")}: {ex.Message}");
         }
     }
 
@@ -227,7 +227,7 @@ public sealed partial class KeyPage : Page
         var slot = ViewModel.SelectedSlot;
         var instruction = new TextBlock
         {
-            Text = L(
+            Text = AppStrings.Pick(
                 $"此操作不可恢复。请输入槽位号 {slot} 以确认删除该槽位密钥。",
                 $"This action cannot be undone. Enter slot number {slot} to confirm deleting this slot key."),
             TextWrapping = TextWrapping.Wrap
@@ -235,12 +235,12 @@ public sealed partial class KeyPage : Page
 
         var inputBox = new TextBox
         {
-            PlaceholderText = L($"输入槽位号 {slot}", $"Enter slot number {slot}")
+            PlaceholderText = AppStrings.Pick($"输入槽位号 {slot}", $"Enter slot number {slot}")
         };
 
         var hint = new TextBlock
         {
-            Text = L("输入不匹配时无法确认删除", "Delete confirmation disabled when input does not match"),
+            Text = AppStrings.Pick("输入不匹配时无法确认删除", "Delete confirmation disabled when input does not match"),
             Foreground = GetBrush("TextFillColorSecondaryBrush")
         };
 
@@ -252,10 +252,10 @@ public sealed partial class KeyPage : Page
 
         var dialog = new ContentDialog
         {
-            Title = L("删除密钥", "Delete key"),
+            Title = AppStrings.Pick("删除密钥", "Delete key"),
             Content = content,
-            PrimaryButtonText = L("删除", "Delete"),
-            CloseButtonText = L("取消", "Cancel"),
+            PrimaryButtonText = AppStrings.Pick("删除", "Delete"),
+            CloseButtonText = AppStrings.Pick("取消", "Cancel"),
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = XamlRoot,
             IsPrimaryButtonEnabled = false
@@ -317,7 +317,7 @@ public sealed partial class KeyPage : Page
         {
             Title = title,
             Content = content,
-            CloseButtonText = L("确定", "OK"),
+            CloseButtonText = AppStrings.Pick("确定", "OK"),
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = XamlRoot
         };
@@ -370,5 +370,5 @@ public sealed partial class KeyPage : Page
         return await picker.PickSaveFileAsync();
     }
 
-    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
+
 }

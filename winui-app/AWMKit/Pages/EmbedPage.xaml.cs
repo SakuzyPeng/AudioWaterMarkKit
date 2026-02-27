@@ -101,11 +101,11 @@ public sealed partial class EmbedPage : Page
     {
         var dialog = new ContentDialog
         {
-            Title = L("选择输入源", "Select input source"),
-            Content = L("请选择输入类型", "Choose input type"),
-            PrimaryButtonText = L("文件", "File"),
-            SecondaryButtonText = L("目录", "Folder"),
-            CloseButtonText = L("取消", "Cancel"),
+            Title = AppStrings.Pick("选择输入源", "Select input source"),
+            Content = AppStrings.Pick("请选择输入类型", "Choose input type"),
+            PrimaryButtonText = AppStrings.Pick("文件", "File"),
+            SecondaryButtonText = AppStrings.Pick("目录", "Folder"),
+            CloseButtonText = AppStrings.Pick("取消", "Cancel"),
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot,
         };
@@ -205,7 +205,7 @@ public sealed partial class EmbedPage : Page
             e.AcceptedOperation = DataPackageOperation.None;
         }
 
-        e.DragUIOverride.Caption = L("拖拽到此处添加到队列", "Drop here to add into queue");
+        e.DragUIOverride.Caption = AppStrings.Pick("拖拽到此处添加到队列", "Drop here to add into queue");
         e.DragUIOverride.IsCaptionVisible = true;
     }
 
@@ -234,5 +234,5 @@ public sealed partial class EmbedPage : Page
         ViewModel.AddDroppedFiles(dropped);
     }
 
-    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
+
 }

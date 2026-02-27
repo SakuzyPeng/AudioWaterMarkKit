@@ -61,8 +61,8 @@ public sealed partial class KeyViewModel : ObservableObject
     public bool KeyAvailable => _appViewModel.KeyAvailable;
     public InfoBarSeverity KeyStatusSeverity => KeyAvailable ? InfoBarSeverity.Success : InfoBarSeverity.Warning;
     public string KeyStatusMessage => KeyAvailable
-        ? L("密钥已配置，可正常嵌入与检测。", "Key is configured and ready for embed/detect.")
-        : L("未配置密钥。请先生成密钥后再执行嵌入/检测。", "No key configured. Generate a key before embed/detect.");
+        ? AppStrings.Pick("密钥已配置，可正常嵌入与检测。", "Key is configured and ready for embed/detect.")
+        : AppStrings.Pick("未配置密钥。请先生成密钥后再执行嵌入/检测。", "No key configured. Generate a key before embed/detect.");
     public bool SelectedSlotHasKey
     {
         get
@@ -77,14 +77,14 @@ public sealed partial class KeyViewModel : ObservableObject
     public bool CanImportKey => !IsBusy && !SelectedSlotHasKey;
     public bool CanExportKey => !IsBusy && SelectedSlotHasKey;
     public string GenerateKeyTooltip => SelectedSlotHasKey
-        ? L("当前槽位已有密钥，已禁止覆盖。请先删除后再生成。", "A key already exists in this slot. Delete it before generating.")
-        : L("在当前槽位生成新密钥", "Generate a new key in current slot");
+        ? AppStrings.Pick("当前槽位已有密钥，已禁止覆盖。请先删除后再生成。", "A key already exists in this slot. Delete it before generating.")
+        : AppStrings.Pick("在当前槽位生成新密钥", "Generate a new key in current slot");
     public int ActiveKeySlot => _appViewModel.ActiveKeySlot;
-    public string ActiveKeySlotText => L($"当前激活槽位：{ActiveKeySlot}", $"Active slot: {ActiveKeySlot}");
-    public string KeyStatusText => KeyAvailable ? L("已配置", "Configured") : L("未配置", "Not configured");
+    public string ActiveKeySlotText => AppStrings.Pick($"当前激活槽位：{ActiveKeySlot}", $"Active slot: {ActiveKeySlot}");
+    public string KeyStatusText => KeyAvailable ? AppStrings.Pick("已配置", "Configured") : AppStrings.Pick("未配置", "Not configured");
     public Brush KeyStatusBrush => KeyAvailable ? ResolveSuccessBrush() : ResolveWarningBrush();
     public KeySlotSummary? ActiveKeySummary => _allSlotSummaries.FirstOrDefault(item => item.IsActive);
-    public string ActiveSummaryTitle => L(
+    public string ActiveSummaryTitle => AppStrings.Pick(
         $"槽位 {ActiveKeySlot}（{(ActiveKeySummary?.HasKey == true ? "已配置" : "未配置")}）",
         $"Slot {ActiveKeySlot} ({(ActiveKeySummary?.HasKey == true ? "configured" : "empty")})");
     public Brush ActiveSummaryTitleBrush => ResolveSuccessBrush();
@@ -94,7 +94,7 @@ public sealed partial class KeyViewModel : ObservableObject
         {
             if (ActiveKeySummary is not { HasKey: true } summary)
             {
-                return L("未配置", "Not configured");
+                return AppStrings.Pick("未配置", "Not configured");
             }
 
             return string.IsNullOrWhiteSpace(summary.Label)
@@ -102,25 +102,25 @@ public sealed partial class KeyViewModel : ObservableObject
                 : $"Key ID: {summary.KeyId ?? "-"} · {summary.Label}";
         }
     }
-    public string ActiveSummaryEvidenceLine => L($"证据: {ActiveKeySummary?.EvidenceCount ?? 0}", $"Evidence: {ActiveKeySummary?.EvidenceCount ?? 0}");
+    public string ActiveSummaryEvidenceLine => AppStrings.Pick($"证据: {ActiveKeySummary?.EvidenceCount ?? 0}", $"Evidence: {ActiveKeySummary?.EvidenceCount ?? 0}");
     public int ConfiguredSlotCount => _allSlotSummaries.Count(item => item.HasKey);
     public bool ShowConfiguredSlotCount => ConfiguredSlotCount > 0;
     public string ConfiguredSlotCountText => ConfiguredSlotCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    public string KeyPageTitle => L("密钥管理", "Key management");
-    public string KeyStatusFieldLabel => L("密钥状态", "Key status");
-    public string KeySourceFieldLabel => L("密钥来源", "Key source");
-    public string ActiveSlotFieldLabel => L("激活槽位", "Active slot");
-    public string ApplyActionText => L("应用", "Apply");
-    public string ActiveKeySectionTitle => L("当前激活密钥", "Current active key");
-    public string GenerateActionText => L("生成", "Generate");
-    public string ImportFileActionText => L("导入(.bin)", "Import (.bin)");
-    public string ImportHexActionText => L("Hex 导入", "Hex Import");
-    public string ExportFileActionText => L("导出(.bin)", "Export (.bin)");
-    public string EditActionText => L("编辑", "Edit");
-    public string DeleteActionText => L("删除", "Delete");
-    public string RefreshActionText => L("刷新", "Refresh");
-    public string SlotSummaryTitle => L("槽位摘要", "Slot summary");
-    public string SlotSearchPlaceholder => L("搜索槽位 / Key ID / 标签 / 状态", "Search slot / Key ID / label / status");
+    public string KeyPageTitle => AppStrings.Pick("密钥管理", "Key management");
+    public string KeyStatusFieldLabel => AppStrings.Pick("密钥状态", "Key status");
+    public string KeySourceFieldLabel => AppStrings.Pick("密钥来源", "Key source");
+    public string ActiveSlotFieldLabel => AppStrings.Pick("激活槽位", "Active slot");
+    public string ApplyActionText => AppStrings.Pick("应用", "Apply");
+    public string ActiveKeySectionTitle => AppStrings.Pick("当前激活密钥", "Current active key");
+    public string GenerateActionText => AppStrings.Pick("生成", "Generate");
+    public string ImportFileActionText => AppStrings.Pick("导入(.bin)", "Import (.bin)");
+    public string ImportHexActionText => AppStrings.Pick("Hex 导入", "Hex Import");
+    public string ExportFileActionText => AppStrings.Pick("导出(.bin)", "Export (.bin)");
+    public string EditActionText => AppStrings.Pick("编辑", "Edit");
+    public string DeleteActionText => AppStrings.Pick("删除", "Delete");
+    public string RefreshActionText => AppStrings.Pick("刷新", "Refresh");
+    public string SlotSummaryTitle => AppStrings.Pick("槽位摘要", "Slot summary");
+    public string SlotSearchPlaceholder => AppStrings.Pick("搜索槽位 / Key ID / 标签 / 状态", "Search slot / Key ID / label / status");
 
     private bool _isGenerateSuccess;
     public bool IsGenerateSuccess
@@ -733,5 +733,5 @@ public sealed partial class KeyViewModel : ObservableObject
                || (ch >= 'A' && ch <= 'F');
     }
 
-    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
+
 }

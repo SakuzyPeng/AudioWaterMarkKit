@@ -30,11 +30,11 @@ final class KeyViewModel: ObservableObject {
         let lowered = keyword.lowercased()
         return slotSummaries.filter { summary in
             let searchable = [
-                "\(localized("槽位", "Slot")) \(summary.slot)",
+                "\(Localizer.pick("槽位", "Slot")) \(summary.slot)",
                 summary.keyId ?? "",
                 summary.label ?? "",
                 summary.statusText,
-                "\(localized("证据", "Evidence")) \(summary.evidenceCount)"
+                "\(Localizer.pick("证据", "Evidence")) \(summary.evidenceCount)"
             ].joined(separator: " ").lowercased()
             return searchable.contains(lowered)
         }
@@ -54,7 +54,7 @@ final class KeyViewModel: ObservableObject {
     func applySlot(appState: AppState) {
         appState.setActiveKeySlot(selectedSlot)
         sync(from: appState)
-        successMessage = "\(localized("已切换激活槽位为", "Switched active slot to")) \(selectedSlot)"
+        successMessage = "\(Localizer.pick("已切换激活槽位为", "Switched active slot to")) \(selectedSlot)"
         errorMessage = nil
         flash(\.isApplySuccess)
     }
@@ -62,7 +62,7 @@ final class KeyViewModel: ObservableObject {
     func generateKey(appState: AppState) async {
         guard !isWorking else { return }
         guard !selectedSlotHasKey else {
-            errorMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" 已有密钥，请先删除后再生成。", " already has a key. Delete it before generating a new one."))"
+            errorMessage = "\(Localizer.pick("槽位", "Slot")) \(selectedSlot)\(Localizer.pick(" 已有密钥，请先删除后再生成。", " already has a key. Delete it before generating a new one."))"
             successMessage = nil
             return
         }
@@ -72,11 +72,11 @@ final class KeyViewModel: ObservableObject {
         do {
             try await appState.generateKey(slot: selectedSlot)
             sync(from: appState)
-            successMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" 密钥已生成", " key generated"))"
+            successMessage = "\(Localizer.pick("槽位", "Slot")) \(selectedSlot)\(Localizer.pick(" 密钥已生成", " key generated"))"
             errorMessage = nil
             flash(\.isGenerateSuccess)
         } catch {
-            errorMessage = "\(localized("生成密钥失败", "Failed to generate key")): \(error.localizedDescription)"
+            errorMessage = "\(Localizer.pick("生成密钥失败", "Failed to generate key")): \(error.localizedDescription)"
             successMessage = nil
         }
     }
@@ -91,16 +91,16 @@ final class KeyViewModel: ObservableObject {
         do {
             if trimmed.isEmpty {
                 try await appState.clearSlotLabel(slot: active)
-                successMessage = "\(localized("槽位", "Slot")) \(active)\(localized(" 标签已清除", " label cleared"))"
+                successMessage = "\(Localizer.pick("槽位", "Slot")) \(active)\(Localizer.pick(" 标签已清除", " label cleared"))"
             } else {
                 try await appState.setSlotLabel(slot: active, label: trimmed)
-                successMessage = "\(localized("槽位", "Slot")) \(active)\(localized(" 标签已更新", " label updated"))"
+                successMessage = "\(Localizer.pick("槽位", "Slot")) \(active)\(Localizer.pick(" 标签已更新", " label updated"))"
             }
             sync(from: appState)
             errorMessage = nil
             flash(\.isEditSuccess)
         } catch {
-            errorMessage = "\(localized("编辑标签失败", "Failed to edit label")): \(error.localizedDescription)"
+            errorMessage = "\(Localizer.pick("编辑标签失败", "Failed to edit label")): \(error.localizedDescription)"
             successMessage = nil
         }
     }
@@ -113,11 +113,11 @@ final class KeyViewModel: ObservableObject {
         do {
             try await appState.deleteKey(slot: selectedSlot)
             sync(from: appState)
-            successMessage = localized("密钥已删除", "Key deleted")
+            successMessage = Localizer.pick("密钥已删除", "Key deleted")
             errorMessage = nil
             flash(\.isDeleteSuccess)
         } catch {
-            errorMessage = "\(localized("删除密钥失败", "Failed to delete key")): \(error.localizedDescription)"
+            errorMessage = "\(Localizer.pick("删除密钥失败", "Failed to delete key")): \(error.localizedDescription)"
             successMessage = nil
         }
     }
@@ -135,7 +135,7 @@ final class KeyViewModel: ObservableObject {
     func importKeyFromFile(appState: AppState) async {
         guard !isWorking else { return }
         guard !selectedSlotHasKey else {
-            errorMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" 已有密钥，请先删除后再导入。", " already has a key. Delete it before importing."))"
+            errorMessage = "\(Localizer.pick("槽位", "Slot")) \(selectedSlot)\(Localizer.pick(" 已有密钥，请先删除后再导入。", " already has a key. Delete it before importing."))"
             successMessage = nil
             return
         }
@@ -145,7 +145,7 @@ final class KeyViewModel: ObservableObject {
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [UTType.data]
-        panel.message = localized("选择 32 字节密钥文件（.bin）", "Select a 32-byte key file (.bin)")
+        panel.message = Localizer.pick("选择 32 字节密钥文件（.bin）", "Select a 32-byte key file (.bin)")
 
         guard panel.runModal() == .OK, let url = panel.url else {
             return
@@ -157,18 +157,18 @@ final class KeyViewModel: ObservableObject {
         do {
             let key = try Data(contentsOf: url)
             guard key.count == 32 else {
-                errorMessage = "\(localized("导入密钥失败", "Import failed")): \(localized("文件长度必须为 32 字节", "Key file must be exactly 32 bytes")) (\(key.count))"
+                errorMessage = "\(Localizer.pick("导入密钥失败", "Import failed")): \(Localizer.pick("文件长度必须为 32 字节", "Key file must be exactly 32 bytes")) (\(key.count))"
                 successMessage = nil
                 return
             }
 
             try await appState.saveKey(slot: selectedSlot, key: key)
             refreshSlotSummaries()
-            successMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" 密钥导入成功", " key imported"))"
+            successMessage = "\(Localizer.pick("槽位", "Slot")) \(selectedSlot)\(Localizer.pick(" 密钥导入成功", " key imported"))"
             errorMessage = nil
             flash(\.isImportSuccess)
         } catch {
-            errorMessage = "\(localized("导入密钥失败", "Import failed")): \(error.localizedDescription)"
+            errorMessage = "\(Localizer.pick("导入密钥失败", "Import failed")): \(error.localizedDescription)"
             successMessage = nil
         }
     }
@@ -176,7 +176,7 @@ final class KeyViewModel: ObservableObject {
     func importKeyFromHex(appState: AppState, hexInput: String) async {
         guard !isWorking else { return }
         guard !selectedSlotHasKey else {
-            errorMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" 已有密钥，请先删除后再导入。", " already has a key. Delete it before importing."))"
+            errorMessage = "\(Localizer.pick("槽位", "Slot")) \(selectedSlot)\(Localizer.pick(" 已有密钥，请先删除后再导入。", " already has a key. Delete it before importing."))"
             successMessage = nil
             return
         }
@@ -184,7 +184,7 @@ final class KeyViewModel: ObservableObject {
         guard let normalized = normalizedHexKey(hexInput),
               let key = Data(hexString: normalized),
               key.count == 32 else {
-            errorMessage = "\(localized("Hex 导入失败", "Hex import failed")): \(localized("请输入 64 位十六进制字符（可带 0x 前缀）", "Enter 64 hex characters (0x prefix allowed)"))"
+            errorMessage = "\(Localizer.pick("Hex 导入失败", "Hex import failed")): \(Localizer.pick("请输入 64 位十六进制字符（可带 0x 前缀）", "Enter 64 hex characters (0x prefix allowed)"))"
             successMessage = nil
             return
         }
@@ -195,11 +195,11 @@ final class KeyViewModel: ObservableObject {
         do {
             try await appState.saveKey(slot: selectedSlot, key: key)
             refreshSlotSummaries()
-            successMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" Hex 密钥导入成功", " hex key imported"))"
+            successMessage = "\(Localizer.pick("槽位", "Slot")) \(selectedSlot)\(Localizer.pick(" Hex 密钥导入成功", " hex key imported"))"
             errorMessage = nil
             flash(\.isHexImportSuccess)
         } catch {
-            errorMessage = "\(localized("Hex 导入失败", "Hex import failed")): \(error.localizedDescription)"
+            errorMessage = "\(Localizer.pick("Hex 导入失败", "Hex import failed")): \(error.localizedDescription)"
             successMessage = nil
         }
     }
@@ -207,7 +207,7 @@ final class KeyViewModel: ObservableObject {
     func exportKeyToFile(appState: AppState) async {
         guard !isWorking else { return }
         guard selectedSlotHasKey else {
-            errorMessage = localized("当前槽位无密钥可导出", "Selected slot has no key to export")
+            errorMessage = Localizer.pick("当前槽位无密钥可导出", "Selected slot has no key to export")
             successMessage = nil
             return
         }
@@ -221,18 +221,18 @@ final class KeyViewModel: ObservableObject {
             panel.canCreateDirectories = true
             panel.allowedContentTypes = [UTType.data]
             panel.nameFieldStringValue = "awmkit-key-slot-\(selectedSlot).bin"
-            panel.message = localized("导出 32 字节密钥文件（.bin）", "Export 32-byte key file (.bin)")
+            panel.message = Localizer.pick("导出 32 字节密钥文件（.bin）", "Export 32-byte key file (.bin)")
 
             guard panel.runModal() == .OK, let url = panel.url else {
                 return
             }
 
             try key.write(to: url, options: .atomic)
-            successMessage = "\(localized("槽位", "Slot")) \(selectedSlot)\(localized(" 密钥导出成功", " key exported"))"
+            successMessage = "\(Localizer.pick("槽位", "Slot")) \(selectedSlot)\(Localizer.pick(" 密钥导出成功", " key exported"))"
             errorMessage = nil
             flash(\.isExportSuccess)
         } catch {
-            errorMessage = "\(localized("导出密钥失败", "Export failed")): \(error.localizedDescription)"
+            errorMessage = "\(Localizer.pick("导出密钥失败", "Export failed")): \(error.localizedDescription)"
             successMessage = nil
         }
     }
@@ -250,10 +250,6 @@ final class KeyViewModel: ObservableObject {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             self[keyPath: keyPath] = false
         }
-    }
-
-    private func localized(_ zh: String, _ en: String) -> String {
-        ((try? AWMUILanguageStore.get()) ?? .zhCN) == .enUS ? en : zh
     }
 
     private func normalizedHexKey(_ input: String) -> String? {

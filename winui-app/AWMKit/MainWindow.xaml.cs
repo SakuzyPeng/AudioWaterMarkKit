@@ -164,39 +164,39 @@ public sealed partial class MainWindow : Window
 
     private void UpdateLocalizedLabels()
     {
-        SetMenuItemContent("embed", ViewModel.IsEnglishLanguage ? "Embed" : "嵌入");
-        SetMenuItemContent("detect", ViewModel.IsEnglishLanguage ? "Detect" : "检测");
-        SetMenuItemContent("tags", ViewModel.IsEnglishLanguage ? "Database" : "标签");
-        SetMenuItemContent("key", ViewModel.IsEnglishLanguage ? "Keys" : "密钥");
+        SetMenuItemContent("embed", AppStrings.Get("ui.nav.embed"));
+        SetMenuItemContent("detect", AppStrings.Get("ui.nav.detect"));
+        SetMenuItemContent("tags", AppStrings.Get("ui.nav.tags"));
+        SetMenuItemContent("key", AppStrings.Get("ui.nav.key"));
 
         if (_themeSystemItem is not null)
         {
             _themeSystemItem.Content = ViewModel.ThemeSystemLabel;
-            AutomationProperties.SetName(_themeSystemItem, ViewModel.IsEnglishLanguage ? "Switch to system theme" : "切换到系统主题");
+            AutomationProperties.SetName(_themeSystemItem, AppStrings.Get("ui.automation.theme.system"));
         }
 
         if (_themeLightItem is not null)
         {
             _themeLightItem.Content = ViewModel.ThemeLightLabel;
-            AutomationProperties.SetName(_themeLightItem, ViewModel.IsEnglishLanguage ? "Switch to light theme" : "切换到亮色主题");
+            AutomationProperties.SetName(_themeLightItem, AppStrings.Get("ui.automation.theme.light"));
         }
 
         if (_themeDarkItem is not null)
         {
             _themeDarkItem.Content = ViewModel.ThemeDarkLabel;
-            AutomationProperties.SetName(_themeDarkItem, ViewModel.IsEnglishLanguage ? "Switch to dark theme" : "切换到暗色主题");
+            AutomationProperties.SetName(_themeDarkItem, AppStrings.Get("ui.automation.theme.dark"));
         }
 
         if (_languageChineseItem is not null)
         {
             _languageChineseItem.Content = ViewModel.LanguageChineseLabel;
-            AutomationProperties.SetName(_languageChineseItem, ViewModel.IsEnglishLanguage ? "Switch language to Chinese" : "切换语言到中文");
+            AutomationProperties.SetName(_languageChineseItem, AppStrings.Get("ui.automation.language.zh"));
         }
 
         if (_languageEnglishItem is not null)
         {
             _languageEnglishItem.Content = ViewModel.LanguageEnglishLabel;
-            AutomationProperties.SetName(_languageEnglishItem, ViewModel.IsEnglishLanguage ? "Switch language to English" : "切换语言到英文");
+            AutomationProperties.SetName(_languageEnglishItem, AppStrings.Get("ui.automation.language.en"));
         }
 
         if (_keyStatusItem is not null)

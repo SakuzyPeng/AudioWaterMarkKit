@@ -29,25 +29,25 @@
         </NavigationView.Resources>
 
         <NavigationView.MenuItems>
-            <NavigationViewItem Content="嵌入" Tag="embed" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
+            <NavigationViewItem Content="ui.nav.embed" Tag="embed" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Audio" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
 
-            <NavigationViewItem Content="检测" Tag="detect" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
+            <NavigationViewItem Content="ui.nav.detect" Tag="detect" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Find" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
 
-            <NavigationViewItem Content="标签" Tag="tags" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
+            <NavigationViewItem Content="ui.nav.tags" Tag="tags" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Tag" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
 
-            <NavigationViewItem Content="密钥" Tag="key" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
+            <NavigationViewItem Content="ui.nav.key" Tag="key" Foreground="{ThemeResource TextFillColorPrimaryBrush}">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Permissions" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
                 </NavigationViewItem.Icon>

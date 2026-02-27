@@ -43,7 +43,7 @@ public sealed class EvidenceRecord
             var snr = string.Equals(SnrStatus, "ok", StringComparison.OrdinalIgnoreCase) && SnrDb.HasValue
                 ? $" · SNR {SnrDb.Value:F2} dB"
                 : string.Empty;
-            return L(
+            return AppStrings.Pick(
                 $"Tag {Tag} · 槽位 {KeySlot} · Key ID {KeyIdDisplayText}{snr}",
                 $"Tag {Tag} · Slot {KeySlot} · Key ID {KeyIdDisplayText}{snr}");
         }
@@ -54,5 +54,5 @@ public sealed class EvidenceRecord
     /// </summary>
     public bool IsSelected { get; set; }
 
-    private static string L(string zh, string en) => AppViewModel.Instance.IsEnglishLanguage ? en : zh;
+
 }

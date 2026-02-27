@@ -23,10 +23,6 @@ struct TagsView: View {
 
     @State private var errorMessage: String?
 
-    private func l(_ zh: String, _ en: String) -> String {
-        appState.tr(zh, en)
-    }
-
     private let mappingColumns = [
         GridItem(.adaptive(minimum: 180, maximum: 260), spacing: DesignSystem.Spacing.compact)
     ]
@@ -81,7 +77,7 @@ struct TagsView: View {
         .sheet(isPresented: $showingDeleteConfirm) {
             DeleteConfirmSheet(
                 expectedCount: deleteTargetCount,
-                itemLabel: deleteConfirmTarget == .mappings ? l("标签", "mapping") : l("证据", "evidence"),
+                itemLabel: deleteConfirmTarget == .mappings ? Localizer.pick("标签", "mapping") : Localizer.pick("证据", "evidence"),
                 input: $deleteConfirmInput,
                 onCancel: {
                     showingDeleteConfirm = false
@@ -92,7 +88,7 @@ struct TagsView: View {
                 }
             )
         }
-        .alert(l("操作失败", "Operation failed"), isPresented: .init(
+        .alert(Localizer.pick("操作失败", "Operation failed"), isPresented: .init(
             get: { errorMessage != nil },
             set: { isPresented in
                 if !isPresented {
@@ -100,7 +96,7 @@ struct TagsView: View {
                 }
             }
         )) {
-            Button(l("确定", "OK"), role: .cancel) {}
+            Button(Localizer.pick("确定", "OK"), role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
         }
@@ -141,11 +137,11 @@ struct TagsView: View {
 
             HStack(spacing: 8) {
                 StatusCapsule(
-                    status: "\(appState.mappingCount) \(l("映射", "mappings"))",
+                    status: "\(appState.mappingCount) \(Localizer.pick("映射", "mappings"))",
                     isHighlight: appState.mappingCount > 0
                 )
                 StatusCapsule(
-                    status: "\(appState.evidenceCount) \(l("证据", "evidence"))",
+                    status: "\(appState.evidenceCount) \(Localizer.pick("证据", "evidence"))",
                     isHighlight: appState.evidenceCount > 0
                 )
             }
@@ -158,7 +154,7 @@ struct TagsView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
 
-                TextField(l("搜索用户名 / Tag / Identity / 路径", "Search username / Tag / Identity / path"), text: $queryText)
+                TextField(Localizer.pick("搜索用户名 / Tag / Identity / 路径", "Search username / Tag / Identity / path"), text: $queryText)
                     .textFieldStyle(.plain)
 
                 if !queryText.isEmpty {
@@ -204,7 +200,7 @@ struct TagsView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.section) {
                 cardHeader(
-                    title: l("标签映射", "Tag mappings"),
+                    title: Localizer.pick("标签映射", "Tag mappings"),
                     status: "\(displayedMappings.count)/\(mappings.count)",
                     highlight: !displayedMappings.isEmpty
                 )
@@ -212,14 +208,14 @@ struct TagsView: View {
                 if mappings.isEmpty {
                     emptyState(
                         icon: "tag",
-                        title: l("暂无标签映射", "No tag mappings"),
-                        subtitle: l("点击下方按钮添加用户标签", "Use the button below to add mappings")
+                        title: Localizer.pick("暂无标签映射", "No tag mappings"),
+                        subtitle: Localizer.pick("点击下方按钮添加用户标签", "Use the button below to add mappings")
                     )
                 } else if displayedMappings.isEmpty {
                     emptyState(
                         icon: "magnifyingglass",
-                        title: l("未找到匹配映射", "No matched mappings"),
-                        subtitle: l("尝试更换关键词", "Try another keyword")
+                        title: Localizer.pick("未找到匹配映射", "No matched mappings"),
+                        subtitle: Localizer.pick("尝试更换关键词", "Try another keyword")
                     )
                 } else {
                     ScrollView {
@@ -247,7 +243,7 @@ struct TagsView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.section) {
                 cardHeader(
-                    title: l("音频证据", "Audio evidence"),
+                    title: Localizer.pick("音频证据", "Audio evidence"),
                     status: "\(displayedEvidence.count)/\(evidenceEntries.count)",
                     highlight: !displayedEvidence.isEmpty
                 )
@@ -255,14 +251,14 @@ struct TagsView: View {
                 if evidenceEntries.isEmpty {
                     emptyState(
                         icon: "waveform",
-                        title: l("暂无证据记录", "No evidence records"),
-                        subtitle: l("完成嵌入后会自动写入证据数据库", "Evidence is auto-written after embedding")
+                        title: Localizer.pick("暂无证据记录", "No evidence records"),
+                        subtitle: Localizer.pick("完成嵌入后会自动写入证据数据库", "Evidence is auto-written after embedding")
                     )
                 } else if displayedEvidence.isEmpty {
                     emptyState(
                         icon: "magnifyingglass",
-                        title: l("未找到匹配证据", "No matched evidence"),
-                        subtitle: l("尝试更换关键词", "Try another keyword")
+                        title: Localizer.pick("未找到匹配证据", "No matched evidence"),
+                        subtitle: Localizer.pick("尝试更换关键词", "Try another keyword")
                     )
                 } else {
                     ScrollView {
@@ -338,7 +334,7 @@ struct TagsView: View {
                 Button(action: { showingAddSheet = true }) {
                     HStack {
                         Image(systemName: "plus.circle")
-                        Text(l("添加标签", "Add mapping"))
+                        Text(Localizer.pick("添加标签", "Add mapping"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle(accentOn: true))
@@ -346,7 +342,7 @@ struct TagsView: View {
                 Button(action: { enterDeleteMode(.mappings) }) {
                     HStack {
                         Image(systemName: "tag")
-                        Text(l("删除标签", "Delete mappings"))
+                        Text(Localizer.pick("删除标签", "Delete mappings"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle())
@@ -355,7 +351,7 @@ struct TagsView: View {
                 Button(action: { enterDeleteMode(.evidence) }) {
                     HStack {
                         Image(systemName: "waveform")
-                        Text(l("删除证据", "Delete evidence"))
+                        Text(Localizer.pick("删除证据", "Delete evidence"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle())
@@ -365,16 +361,16 @@ struct TagsView: View {
                 Button(action: exitDeleteMode) {
                     HStack {
                         Image(systemName: "xmark.circle")
-                        Text(l("退出删除", "Exit delete"))
+                        Text(Localizer.pick("退出删除", "Exit delete"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle())
-                .accessibilityLabel(l("退出标签删除模式", "Exit mapping delete mode"))
+                .accessibilityLabel(Localizer.pick("退出标签删除模式", "Exit mapping delete mode"))
 
                 Button(action: selectAllMappings) {
                     HStack {
                         Image(systemName: "checkmark.circle")
-                        Text(l("全选", "Select all"))
+                        Text(Localizer.pick("全选", "Select all"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle())
@@ -383,7 +379,7 @@ struct TagsView: View {
                 Button(action: clearMappingSelection) {
                     HStack {
                         Image(systemName: "circle.dashed")
-                        Text(l("全不选", "Clear selection"))
+                        Text(Localizer.pick("全不选", "Clear selection"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle())
@@ -392,7 +388,7 @@ struct TagsView: View {
                 Button(action: { handleDeleteAction(target: .mappings) }) {
                     HStack {
                         Image(systemName: "trash")
-                        Text(l("执行删除", "Run delete"))
+                        Text(Localizer.pick("执行删除", "Run delete"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle(accentOn: true))
@@ -401,16 +397,16 @@ struct TagsView: View {
                 Button(action: exitDeleteMode) {
                     HStack {
                         Image(systemName: "xmark.circle")
-                        Text(l("退出删除", "Exit delete"))
+                        Text(Localizer.pick("退出删除", "Exit delete"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle())
-                .accessibilityLabel(l("退出证据删除模式", "Exit evidence delete mode"))
+                .accessibilityLabel(Localizer.pick("退出证据删除模式", "Exit evidence delete mode"))
 
                 Button(action: selectAllEvidence) {
                     HStack {
                         Image(systemName: "checkmark.circle")
-                        Text(l("全选", "Select all"))
+                        Text(Localizer.pick("全选", "Select all"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle())
@@ -419,7 +415,7 @@ struct TagsView: View {
                 Button(action: clearEvidenceSelection) {
                     HStack {
                         Image(systemName: "circle.dashed")
-                        Text(l("全不选", "Clear selection"))
+                        Text(Localizer.pick("全不选", "Clear selection"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle())
@@ -428,7 +424,7 @@ struct TagsView: View {
                 Button(action: { handleDeleteAction(target: .evidence) }) {
                     HStack {
                         Image(systemName: "trash")
-                        Text(l("执行删除", "Run delete"))
+                        Text(Localizer.pick("执行删除", "Run delete"))
                     }
                 }
                 .buttonStyle(GlassButtonStyle(accentOn: true))
@@ -445,11 +441,11 @@ struct TagsView: View {
     private func queryScopeTitle(_ scope: QueryScope) -> String {
         switch scope {
         case .all:
-            return l("全部", "All")
+            return Localizer.pick("全部", "All")
         case .mappings:
-            return l("映射", "Mappings")
+            return Localizer.pick("映射", "Mappings")
         case .evidence:
-            return l("证据", "Evidence")
+            return Localizer.pick("证据", "Evidence")
         }
     }
 
@@ -763,23 +759,19 @@ private struct AddTagSheet: View {
         DatabaseQueryStore.previewTag(username: username)
     }
 
-    private func l(_ zh: String, _ en: String) -> String {
-        localizedTagsText(zh, en)
-    }
-
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.card) {
-            Text(l("添加标签映射", "Add tag mapping"))
+            Text(Localizer.pick("添加标签映射", "Add tag mapping"))
                 .font(.title2.weight(.semibold))
 
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.section) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(l("用户名", "Username"))
+                    Text(Localizer.pick("用户名", "Username"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
                     GlassEffectContainer {
-                        TextField(l("例如: user_001", "e.g. user_001"), text: $username)
+                        TextField(Localizer.pick("例如: user_001", "e.g. user_001"), text: $username)
                             .textFieldStyle(.plain)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -793,7 +785,7 @@ private struct AddTagSheet: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(l("自动生成 Tag", "Auto generated Tag"))
+                    Text(Localizer.pick("自动生成 Tag", "Auto generated Tag"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary.opacity(0.85))
 
@@ -814,19 +806,19 @@ private struct AddTagSheet: View {
                             .stroke(DesignSystem.Colors.border(colorScheme), lineWidth: DesignSystem.BorderWidth.standard)
                     )
 
-                    Text(l("基于用户名稳定生成（预览即最终保存值）", "Stable hash from username (preview is final value)"))
+                    Text(Localizer.pick("基于用户名稳定生成（预览即最终保存值）", "Stable hash from username (preview is final value)"))
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
             }
 
             HStack(spacing: DesignSystem.Spacing.item) {
-                Button(l("取消", "Cancel")) {
+                Button(Localizer.pick("取消", "Cancel")) {
                     dismiss()
                 }
                 .buttonStyle(GlassButtonStyle())
 
-                Button(l("保存", "Save")) {
+                Button(Localizer.pick("保存", "Save")) {
                     onSave()
                 }
                 .buttonStyle(GlassButtonStyle(accentOn: true))
@@ -855,32 +847,28 @@ private struct DeleteConfirmSheet: View {
         Int(trimmedInput) == expectedCount
     }
 
-    private func l(_ zh: String, _ en: String) -> String {
-        localizedTagsText(zh, en)
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.card) {
-            Text(l("确认删除", "Confirm delete"))
+            Text(Localizer.pick("确认删除", "Confirm delete"))
                 .font(.title3.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(l("此操作不可恢复，请输入数量确认。", "This operation is irreversible. Please confirm by count."))
+                Text(Localizer.pick("此操作不可恢复，请输入数量确认。", "This operation is irreversible. Please confirm by count."))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                Text("\(l("我确认删除", "I confirm deleting")) \(expectedCount) \(itemLabel)")
+                Text("\(Localizer.pick("我确认删除", "I confirm deleting")) \(expectedCount) \(itemLabel)")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("\(l("请输入数字", "Enter number")): \(expectedCount)")
+                Text("\(Localizer.pick("请输入数字", "Enter number")): \(expectedCount)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 GlassEffectContainer {
-                    TextField("\(l("输入", "Enter")) \(expectedCount)", text: $input)
+                    TextField("\(Localizer.pick("输入", "Enter")) \(expectedCount)", text: $input)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -894,13 +882,13 @@ private struct DeleteConfirmSheet: View {
             }
 
             HStack(spacing: DesignSystem.Spacing.item) {
-                Button(l("取消", "Cancel")) {
+                Button(Localizer.pick("取消", "Cancel")) {
                     onCancel()
                     dismiss()
                 }
                 .buttonStyle(GlassButtonStyle())
 
-                Button(l("确认删除", "Confirm delete")) {
+                Button(Localizer.pick("确认删除", "Confirm delete")) {
                     onConfirm()
                     dismiss()
                 }
