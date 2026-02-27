@@ -2,8 +2,16 @@
 
 #[cfg(feature = "full-cli")]
 fn main() {
+    let verbose_requested = cli_arg_has_verbose();
+    preload_i18n_for_parser_errors();
     if let Err(err) = run() {
-        eprintln!("{}", err.user_message());
+        let rendered = err.render_user_message();
+        eprintln!("{}", rendered.user);
+        if verbose_requested {
+            if let Some(detail) = rendered.detail {
+                eprintln!("DETAIL: {detail}");
+            }
+        }
         std::process::exit(1);
     }
 }
@@ -43,10 +51,10 @@ use std::path::PathBuf;
 #[cfg(feature = "full-cli")]
 #[derive(Parser)]
 #[command(name = "awmkit")]
-#[command(about = "Audio Watermark Kit CLI", version)]
+#[command(about = "AWMKit 命令行工具（音频水印嵌入与检测）", version)]
 #[command(arg_required_else_help = true)]
 #[command(
-    after_help = "Launcher-only command (via `awmkit` wrapper):\n  cache clean [--db] --yes    Clean extracted runtime; add --db to also remove database and config"
+    after_help = "仅 launcher 包装命令支持：\n  cache clean [--db] --yes    清理运行时缓存；加 --db 时同时清理数据库与配置"
 )]
 /// Internal struct.
 struct Cli {
@@ -75,43 +83,43 @@ struct Cli {
 #[derive(Subcommand)]
 /// Internal enum.
 enum Commands {
-    /// Initialize key storage.
+    /// 初始化签名密钥。
     Init,
 
-    /// Tag mapping helpers.
+    /// 标签映射管理。
     Tag {
         #[command(subcommand)]
         /// Internal field.
         command: commands::tag::Command,
     },
 
-    /// Key management.
+    /// 密钥与槽位管理。
     Key {
         #[command(subcommand)]
         /// Internal field.
         command: KeyCommand,
     },
 
-    /// Encode a watermark message.
+    /// 编码水印消息（16 字节十六进制）。
     Encode(commands::encode::CmdArgs),
 
-    /// Decode a watermark message.
+    /// 解码水印消息。
     Decode(commands::decode::CmdArgs),
 
-    /// Embed watermark into audio files.
+    /// 向音频文件嵌入水印。
     Embed(commands::embed::CmdArgs),
 
-    /// Detect watermark from audio files.
+    /// 从音频文件检测水印。
     Detect(commands::detect::CmdArgs),
 
-    /// Query and manage evidence records.
+    /// 证据记录查询与管理。
     Evidence {
         #[command(subcommand)]
         /// Internal field.
         command: commands::evidence::Command,
     },
 
-    /// Show system status.
+    /// 查看系统状态与诊断信息。
     Status(commands::status::CmdArgs),
 }
 
@@ -119,22 +127,22 @@ enum Commands {
 #[derive(Subcommand)]
 /// Internal enum.
 enum KeyCommand {
-    /// Show key info (no key material).
+    /// 查看密钥概览（不显示密钥内容）。
     Show(commands::key::ShowArgs),
 
-    /// Import key from file (binary).
+    /// 从文件导入密钥（二进制）。
     Import(commands::key::ImportArgs),
 
-    /// Export key to file (binary).
+    /// 导出密钥到文件（二进制）。
     Export(commands::key::ExportArgs),
 
-    /// Rotate key.
+    /// 轮换密钥。
     Rotate(commands::key::RotateArgs),
 
-    /// Delete key in one slot.
+    /// 删除槽位中的密钥。
     Delete(commands::key::DeleteArgs),
 
-    /// Slot management.
+    /// 槽位管理。
     Slot {
         #[command(subcommand)]
         /// Internal field.
@@ -187,4 +195,17 @@ fn run() -> Result<()> {
         Commands::Evidence { command } => commands::evidence::run(&ctx, command),
         Commands::Status(args) => commands::status::run(&ctx, &args),
     }
+}
+
+#[cfg(feature = "full-cli")]
+fn cli_arg_has_verbose() -> bool {
+    std::env::args()
+        .skip(1)
+        .any(|arg| arg == "-v" || arg == "--verbose")
+}
+
+#[cfg(feature = "full-cli")]
+fn preload_i18n_for_parser_errors() {
+    let env_lang = i18n::env_language();
+    let _ = i18n::set_language(env_lang.as_deref());
 }

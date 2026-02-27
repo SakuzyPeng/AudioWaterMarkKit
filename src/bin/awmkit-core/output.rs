@@ -25,21 +25,42 @@ impl Output {
     }
 
     /// Internal helper method.
-    pub fn info(&self, msg: impl Display) {
+    pub fn info_user(&self, msg: impl Display) {
         if !self.quiet {
             println!("{msg}");
         }
     }
 
     /// Internal helper method.
-    pub fn warn(&self, msg: impl Display) {
+    pub fn warn_user(&self, msg: impl Display) {
         if !self.quiet {
             eprintln!("WARN: {msg}");
         }
     }
 
     /// Internal associated function.
-    pub fn error(msg: impl Display) {
-        eprintln!("{msg}");
+    pub fn error_user(msg: impl Display) {
+        eprintln!("ERROR: {msg}");
+    }
+
+    /// Internal helper method.
+    pub fn info_diag(&self, msg: impl Display) {
+        if self.verbose && !self.quiet {
+            eprintln!("DIAG: {msg}");
+        }
+    }
+
+    /// Internal helper method.
+    pub fn warn_diag(&self, msg: impl Display) {
+        if self.verbose && !self.quiet {
+            eprintln!("DIAG-WARN: {msg}");
+        }
+    }
+
+    /// Internal helper method.
+    pub fn error_diag(&self, msg: impl Display) {
+        if self.verbose {
+            eprintln!("DIAG-ERROR: {msg}");
+        }
     }
 }
