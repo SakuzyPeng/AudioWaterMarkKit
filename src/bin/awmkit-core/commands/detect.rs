@@ -105,7 +105,12 @@ pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
     let evidence_store = match EvidenceStore::load() {
         Ok(store) => Some(store),
         Err(err) => {
-            ctx.out.warn(format!("[WARN] evidence: {err}"));
+            let mut args_i18n = FluentArgs::new();
+            args_i18n.set("error", err.to_string());
+            ctx.out.warn_diag(i18n::tr_args(
+                "cli-detect-evidence-store-unavailable-detail",
+                &args_i18n,
+            ));
             None
         }
     };
@@ -194,9 +199,10 @@ fn log_parallelism(ctx: &Context) {
         let parallelism = std::thread::available_parallelism()
             .map(std::num::NonZero::get)
             .unwrap_or(1);
-        ctx.out.info(format!(
-            "[INFO] multichannel route steps use Rayon parallel execution (max workers: {parallelism})"
-        ));
+        let mut args = FluentArgs::new();
+        args.set("workers", parallelism.to_string());
+        ctx.out
+            .info_diag(i18n::tr_args("cli-detect-parallelism-detail", &args));
     }
 }
 
@@ -306,6 +312,7 @@ fn run_text_mode(
             } => {
                 stats.invalid += 1;
                 report_invalid(
+                    ctx,
                     progress,
                     input,
                     &InvalidReport {
@@ -321,7 +328,7 @@ fn run_text_mode(
             }
             DetectOutcome::Error { error } => {
                 stats.invalid += 1;
-                report_error(progress, input, &error);
+                report_error(ctx, progress, input, &error);
             }
         }
 
@@ -340,103 +347,134 @@ fn report_found(
     input: &std::path::Path,
     report: &FoundReport<'_>,
 ) {
-    if !ctx.out.verbose() || ctx.out.quiet() {
+    if ctx.out.quiet() {
         return;
     }
 
-    let score_text = report
-        .detect_score
-        .map(|score| format!(", score: {score:.3}"))
-        .unwrap_or_default();
-    let line = format!(
-        "[OK] {} (tag: {}, id: {}, clone: {}{}, slot: hint={} used={} status={} scan={})",
-        input.display(),
-        report.tag,
-        report.identity,
-        report.clone_check.summary(),
-        score_text,
-        report.decode_slot_hint,
-        report.decode_slot_used,
-        report.slot_status,
-        report.slot_scan_count
-    );
+    let mut args = FluentArgs::new();
+    args.set("path", input.display().to_string());
+    args.set("tag", report.tag);
+    args.set("identity", report.identity);
+    let line = i18n::tr_args("cli-detect-file-found", &args);
     if let Some(bar) = progress {
         bar.println(line);
     } else {
-        ctx.out.info(line);
+        ctx.out.info_user(line);
+    }
+
+    if ctx.out.verbose() {
+        let score_text = report
+            .detect_score
+            .map_or_else(|| "-".to_string(), |score| format!("{score:.3}"));
+        let mut diag_args = FluentArgs::new();
+        diag_args.set("path", input.display().to_string());
+        diag_args.set("clone", report.clone_check.summary());
+        diag_args.set("score", score_text);
+        diag_args.set("slot_hint", report.decode_slot_hint.to_string());
+        diag_args.set("slot_used", report.decode_slot_used.to_string());
+        diag_args.set("slot_status", report.slot_status);
+        diag_args.set("slot_scan_count", report.slot_scan_count.to_string());
+        ctx.out
+            .info_diag(i18n::tr_args("cli-detect-file-found-detail", &diag_args));
     }
 }
 
 /// Internal helper function.
 fn report_miss(ctx: &Context, progress: Option<&ProgressBar>, input: &std::path::Path) {
-    if !ctx.out.verbose() || ctx.out.quiet() {
+    if ctx.out.quiet() {
         return;
     }
-    let line = format!("[MISS] {}", input.display());
+    let mut args = FluentArgs::new();
+    args.set("path", input.display().to_string());
+    let line = i18n::tr_args("cli-detect-file-miss", &args);
     if let Some(bar) = progress {
         bar.println(line);
     } else {
-        ctx.out.info(line);
+        ctx.out.info_user(line);
     }
 }
 
 /// Internal helper function.
 fn report_invalid(
+    ctx: &Context,
     progress: Option<&ProgressBar>,
     input: &std::path::Path,
     report: &InvalidReport<'_>,
 ) {
-    let score_text = report
-        .detect_score
-        .map(|score| format!(" (score: {score:.3})"))
-        .unwrap_or_default();
-    let decoded_text = report.unverified.map_or_else(
-        || " (tag=- id=- time=- slot=-)".to_string(),
-        |decoded| {
-            format!(
-                " (tag={} id={} time={} slot={})",
-                decoded.tag,
-                decoded.identity(),
-                decoded.timestamp_utc,
-                decoded.key_slot
-            )
-        },
-    );
-    let slot_text = format!(
-        " (slot: hint={} used={} status={} scan={})",
-        report
-            .decode_slot_hint
-            .map_or_else(|| "-".to_string(), |value| value.to_string()),
-        report
-            .decode_slot_used
-            .map_or_else(|| "-".to_string(), |value| value.to_string()),
-        report.slot_status,
-        report.slot_scan_count
-    );
-    let line = format!(
-        "[INVALID] {}: {}{}{}{} [UNVERIFIED] {}",
-        input.display(),
-        report.error,
-        score_text,
-        decoded_text,
-        slot_text,
-        i18n::tr("cli-detect-forensic-warning")
-    );
+    let mut args = FluentArgs::new();
+    args.set("path", input.display().to_string());
+    args.set("warning", i18n::tr("cli-detect-forensic-warning"));
+    let line = i18n::tr_args("cli-detect-file-invalid", &args);
     if let Some(bar) = progress {
         bar.println(line);
     } else {
-        crate::output::Output::error(line);
+        crate::output::Output::error_user(line);
+    }
+
+    if ctx.out.verbose() {
+        let score_text = report
+            .detect_score
+            .map_or_else(|| "-".to_string(), |score| format!("{score:.3}"));
+        let (tag, identity, timestamp, slot_from_unverified) = report.unverified.map_or(
+            (
+                "-".to_string(),
+                "-".to_string(),
+                "-".to_string(),
+                "-".to_string(),
+            ),
+            |decoded| {
+                (
+                    decoded.tag.to_string(),
+                    decoded.identity().to_string(),
+                    decoded.timestamp_utc.to_string(),
+                    decoded.key_slot.to_string(),
+                )
+            },
+        );
+        let mut detail_args = FluentArgs::new();
+        detail_args.set("path", input.display().to_string());
+        detail_args.set("error", report.error);
+        detail_args.set("score", score_text);
+        detail_args.set("tag", tag);
+        detail_args.set("identity", identity);
+        detail_args.set("timestamp", timestamp);
+        detail_args.set("slot_unverified", slot_from_unverified);
+        detail_args.set(
+            "slot_hint",
+            report
+                .decode_slot_hint
+                .map_or_else(|| "-".to_string(), |value| value.to_string()),
+        );
+        detail_args.set(
+            "slot_used",
+            report
+                .decode_slot_used
+                .map_or_else(|| "-".to_string(), |value| value.to_string()),
+        );
+        detail_args.set("slot_status", report.slot_status);
+        detail_args.set("slot_scan_count", report.slot_scan_count.to_string());
+        ctx.out.error_diag(i18n::tr_args(
+            "cli-detect-file-invalid-detail",
+            &detail_args,
+        ));
     }
 }
 
 /// Internal helper function.
-fn report_error(progress: Option<&ProgressBar>, input: &std::path::Path, err: &str) {
-    let line = format!("[ERR] {}: {err}", input.display());
+fn report_error(ctx: &Context, progress: Option<&ProgressBar>, input: &std::path::Path, err: &str) {
+    let mut args = FluentArgs::new();
+    args.set("path", input.display().to_string());
+    let line = i18n::tr_args("cli-detect-file-error", &args);
     if let Some(bar) = progress {
         bar.println(line);
     } else {
-        crate::output::Output::error(line);
+        crate::output::Output::error_user(line);
     }
+    let mut detail_args = FluentArgs::new();
+    detail_args.set("path", input.display().to_string());
+    detail_args.set("error", err.to_string());
+    ctx.out
+        .error_diag(i18n::tr_args("cli-detect-file-error-detail", &detail_args));
 }
 
 /// Internal helper function.
@@ -450,32 +488,21 @@ fn report_fallback_trace(
         return;
     }
 
-    let reason = execution.fallback_reason.as_deref().unwrap_or("unknown");
-    let trigger_line = format!(
-        "[FALLBACK] {} route={} reason={}",
-        input.display(),
-        execution.detect_route,
-        reason
-    );
-    if let Some(bar) = progress {
-        bar.println(trigger_line);
-    } else {
-        ctx.out.info(trigger_line);
-    }
-
-    let status = match &execution.outcome {
+    let reason = execution.fallback_reason.as_deref().unwrap_or("-");
+    let outcome = match &execution.outcome {
         DetectOutcome::Error { .. } => "failed",
         _ => "ok",
     };
-    let outcome_line = format!(
-        "[FALLBACK-{status}] {} route={}",
-        input.display(),
-        execution.detect_route
-    );
+    let mut args = FluentArgs::new();
+    args.set("path", input.display().to_string());
+    args.set("route", execution.detect_route.as_str());
+    args.set("reason", reason);
+    args.set("outcome", outcome);
+    let line = i18n::tr_args("cli-detect-fallback-detail", &args);
     if let Some(bar) = progress {
-        bar.println(outcome_line);
+        bar.println(line);
     } else {
-        ctx.out.info(outcome_line);
+        ctx.out.info_diag(line);
     }
 }
 
@@ -486,7 +513,7 @@ fn print_detect_summary(ctx: &Context, ok: usize, miss: usize, invalid: usize) {
         args.set("ok", ok.to_string());
         args.set("miss", miss.to_string());
         args.set("invalid", invalid.to_string());
-        ctx.out.info(i18n::tr_args("cli-detect-done", &args));
+        ctx.out.info_user(i18n::tr_args("cli-detect-done", &args));
     }
 }
 

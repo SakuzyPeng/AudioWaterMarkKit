@@ -85,7 +85,7 @@ pub fn run(ctx: &Context, command: Command) -> Result<()> {
 /// Internal helper function.
 fn suggest(ctx: &Context, args: &SuggestArgs) -> Result<()> {
     let tag = TagStore::suggest(&args.username)?;
-    ctx.out.info(tag.as_str());
+    ctx.out.info_user(tag.as_str());
     Ok(())
 }
 
@@ -101,7 +101,8 @@ fn save(ctx: &Context, args: &SaveArgs) -> Result<()> {
     let mut args_i18n = FluentArgs::new();
     args_i18n.set("username", args.username.as_str());
     args_i18n.set("tag", tag.as_str());
-    ctx.out.info(i18n::tr_args("cli-tag-saved", &args_i18n));
+    ctx.out
+        .info_user(i18n::tr_args("cli-tag-saved", &args_i18n));
     Ok(())
 }
 
@@ -120,12 +121,13 @@ fn list(ctx: &Context, args: &ListArgs) -> Result<()> {
     }
 
     if store.list().is_empty() {
-        ctx.out.info(i18n::tr("cli-tag-none"));
+        ctx.out.info_user(i18n::tr("cli-tag-none"));
         return Ok(());
     }
 
     for entry in store.list() {
-        ctx.out.info(format!("{} -> {}", entry.username, entry.tag));
+        ctx.out
+            .info_user(format!("{} -> {}", entry.username, entry.tag));
     }
 
     Ok(())
@@ -137,7 +139,8 @@ fn remove(ctx: &Context, args: &RemoveArgs) -> Result<()> {
     store.remove(&args.username)?;
     let mut args_i18n = FluentArgs::new();
     args_i18n.set("username", args.username.as_str());
-    ctx.out.info(i18n::tr_args("cli-tag-removed", &args_i18n));
+    ctx.out
+        .info_user(i18n::tr_args("cli-tag-removed", &args_i18n));
     Ok(())
 }
 
@@ -145,6 +148,6 @@ fn remove(ctx: &Context, args: &RemoveArgs) -> Result<()> {
 fn clear(ctx: &Context) -> Result<()> {
     let mut store = TagStore::load()?;
     store.clear()?;
-    ctx.out.info(i18n::tr("cli-tag-cleared"));
+    ctx.out.info_user(i18n::tr("cli-tag-cleared"));
     Ok(())
 }

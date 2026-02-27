@@ -33,6 +33,6 @@ pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
         None => Message::encode_with_slot(args.version, &tag, &key, slot)?,
     };
 
-    ctx.out.info(hex::encode(message));
+    ctx.out.info_user(hex::encode(message));
     Ok(())
 }

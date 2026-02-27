@@ -214,41 +214,42 @@ fn show(ctx: &Context, args: &ShowArgs) -> Result<()> {
             },
         };
         let text = serde_json::to_string_pretty(&payload)?;
-        ctx.out.info(text);
+        ctx.out.info_user(text);
         return Ok(());
     }
 
     let mut slot_args = FluentArgs::new();
     slot_args.set("slot", slot.to_string());
-    ctx.out.info(i18n::tr_args("cli-key-slot", &slot_args));
+    ctx.out.info_user(i18n::tr_args("cli-key-slot", &slot_args));
 
     match loaded {
         Ok((key, backend)) => {
             let fingerprint = key_fingerprint(&key);
-            ctx.out.info(i18n::tr("cli-key-status_configured"));
+            ctx.out.info_user(i18n::tr("cli-key-status_configured"));
             let mut args = FluentArgs::new();
             args.set("bytes", KEY_LEN.to_string());
-            ctx.out.info(i18n::tr_args("cli-key-length", &args));
+            ctx.out.info_user(i18n::tr_args("cli-key-length", &args));
             let mut args = FluentArgs::new();
             args.set("fingerprint", fingerprint.as_str());
-            ctx.out.info(i18n::tr_args("cli-key-fingerprint", &args));
+            ctx.out
+                .info_user(i18n::tr_args("cli-key-fingerprint", &args));
             let mut args = FluentArgs::new();
             args.set("backend", backend.label());
-            ctx.out.info(i18n::tr_args("cli-key-storage", &args));
+            ctx.out.info_user(i18n::tr_args("cli-key-storage", &args));
         }
         Err(Failure::KeyNotFound) => {
-            ctx.out.info(i18n::tr("cli-status-key_not_configured"));
+            ctx.out.info_user(i18n::tr("cli-status-key_not_configured"));
         }
         Err(err) => return Err(err.into()),
     }
 
     if slot == active_slot {
-        ctx.out.info(i18n::tr("cli-key-slot-active"));
+        ctx.out.info_user(i18n::tr("cli-key-slot-active"));
     } else {
         let mut args = FluentArgs::new();
         args.set("slot", active_slot.to_string());
         ctx.out
-            .info(i18n::tr_args("cli-key-slot-current_active", &args));
+            .info_user(i18n::tr_args("cli-key-slot-current_active", &args));
     }
     Ok(())
 }
@@ -270,7 +271,8 @@ fn import(ctx: &Context, args: &ImportArgs) -> Result<()> {
 
     let mut fmt = FluentArgs::new();
     fmt.set("slot", slot.to_string());
-    ctx.out.info(i18n::tr_args("cli-key-imported-slot", &fmt));
+    ctx.out
+        .info_user(i18n::tr_args("cli-key-imported-slot", &fmt));
     Ok(())
 }
 
@@ -297,7 +299,8 @@ fn export(ctx: &Context, args: &ExportArgs) -> Result<()> {
     file.write_all(&key)?;
     let mut fmt = FluentArgs::new();
     fmt.set("slot", slot.to_string());
-    ctx.out.info(i18n::tr_args("cli-key-exported-slot", &fmt));
+    ctx.out
+        .info_user(i18n::tr_args("cli-key-exported-slot", &fmt));
     Ok(())
 }
 
@@ -311,7 +314,8 @@ fn rotate(ctx: &Context, args: &RotateArgs) -> Result<()> {
 
     let mut fmt = FluentArgs::new();
     fmt.set("slot", slot.to_string());
-    ctx.out.info(i18n::tr_args("cli-key-rotated-slot", &fmt));
+    ctx.out
+        .info_user(i18n::tr_args("cli-key-rotated-slot", &fmt));
     Ok(())
 }
 
@@ -343,12 +347,14 @@ fn delete(ctx: &Context, args: &DeleteArgs) -> Result<()> {
     if slot == active_slot && effective_active_slot != active_slot {
         let mut switch_fmt = FluentArgs::new();
         switch_fmt.set("slot", effective_active_slot.to_string());
-        ctx.out.info(i18n::tr_args("cli-key-slot-set", &switch_fmt));
+        ctx.out
+            .info_user(i18n::tr_args("cli-key-slot-set", &switch_fmt));
     }
 
     let mut fmt = FluentArgs::new();
     fmt.set("slot", slot.to_string());
-    ctx.out.info(i18n::tr_args("cli-key-deleted-slot", &fmt));
+    ctx.out
+        .info_user(i18n::tr_args("cli-key-deleted-slot", &fmt));
     Ok(())
 }
 
@@ -371,7 +377,8 @@ fn slot_current(ctx: &Context) -> Result<()> {
     let slot = store.active_key_slot()?;
     let mut args = FluentArgs::new();
     args.set("slot", slot.to_string());
-    ctx.out.info(i18n::tr_args("cli-key-slot-current", &args));
+    ctx.out
+        .info_user(i18n::tr_args("cli-key-slot-current", &args));
     Ok(())
 }
 
@@ -381,7 +388,7 @@ fn slot_use(ctx: &Context, args: &SlotUseArgs) -> Result<()> {
     store.set_active_key_slot(args.slot)?;
     let mut fmt = FluentArgs::new();
     fmt.set("slot", args.slot.to_string());
-    ctx.out.info(i18n::tr_args("cli-key-slot-set", &fmt));
+    ctx.out.info_user(i18n::tr_args("cli-key-slot-set", &fmt));
     Ok(())
 }
 
@@ -420,16 +427,15 @@ fn slot_list(ctx: &Context, args: &SlotListArgs) -> Result<()> {
     }
 
     if args.json {
-        ctx.out.info(serde_json::to_string_pretty(&summaries)?);
+        ctx.out.info_user(serde_json::to_string_pretty(&summaries)?);
         return Ok(());
     }
 
     for item in summaries {
-        let marker = if item.active { "*" } else { " " };
-        let configured = if item.configured {
-            "configured"
+        let state = if item.configured {
+            i18n::tr("cli-key-slot-state-configured")
         } else {
-            "empty"
+            i18n::tr("cli-key-slot-state-empty")
         };
         let label = item.label.unwrap_or_else(|| "-".to_string());
         let fp = item.fingerprint8.unwrap_or_else(|| "-".to_string());
@@ -437,11 +443,24 @@ fn slot_list(ctx: &Context, args: &SlotListArgs) -> Result<()> {
         let last = item
             .last_used_at
             .map_or_else(|| "-".to_string(), |value| value.to_string());
-        ctx.out.info(format!(
-            "[{slot:02}]{marker} {configured} label={label} fp={fp} backend={backend} evidence={evidence} last={last}",
-            slot = item.slot,
-            evidence = item.evidence_count,
-        ));
+        let mut args_i18n = FluentArgs::new();
+        args_i18n.set("slot", format!("{:02}", item.slot));
+        args_i18n.set(
+            "active",
+            if item.active {
+                i18n::tr("cli-key-slot-active-marker")
+            } else {
+                i18n::tr("cli-key-slot-inactive-marker")
+            },
+        );
+        args_i18n.set("state", state);
+        args_i18n.set("label", label);
+        args_i18n.set("fingerprint", fp);
+        args_i18n.set("backend", backend);
+        args_i18n.set("evidence", item.evidence_count.to_string());
+        args_i18n.set("last", last);
+        ctx.out
+            .info_user(i18n::tr_args("cli-key-slot-list-row", &args_i18n));
     }
 
     Ok(())
@@ -454,7 +473,8 @@ fn slot_label_set(ctx: &Context, args: &SlotLabelSetArgs) -> Result<()> {
     let mut fmt = FluentArgs::new();
     fmt.set("slot", args.slot.to_string());
     fmt.set("label", args.label.as_str());
-    ctx.out.info(i18n::tr_args("cli-key-slot-label-set", &fmt));
+    ctx.out
+        .info_user(i18n::tr_args("cli-key-slot-label-set", &fmt));
     Ok(())
 }
 
@@ -465,7 +485,7 @@ fn slot_label_clear(ctx: &Context, args: &SlotLabelClearArgs) -> Result<()> {
     let mut fmt = FluentArgs::new();
     fmt.set("slot", args.slot.to_string());
     ctx.out
-        .info(i18n::tr_args("cli-key-slot-label-cleared", &fmt));
+        .info_user(i18n::tr_args("cli-key-slot-label-cleared", &fmt));
     Ok(())
 }
 
@@ -544,14 +564,17 @@ fn key_fingerprint(key: &[u8]) -> String {
 
 /// Internal helper function.
 fn parse_slot_arg(raw: &str) -> std::result::Result<u8, String> {
-    let slot = raw
-        .parse::<u8>()
-        .map_err(|_| format!("invalid slot: {raw}"))?;
+    let slot = raw.parse::<u8>().map_err(|_| {
+        let mut args = FluentArgs::new();
+        args.set("input", raw.to_string());
+        i18n::tr_args("cli-key-error-invalid-slot-input", &args)
+    })?;
     if slot <= KEY_SLOT_MAX {
         Ok(slot)
     } else {
-        Err(format!(
-            "invalid slot: {slot} (expected 0..={KEY_SLOT_MAX})"
-        ))
+        let mut args = FluentArgs::new();
+        args.set("slot", slot.to_string());
+        args.set("max", KEY_SLOT_MAX.to_string());
+        Err(i18n::tr_args("cli-key-error-invalid-slot-range", &args))
     }
 }

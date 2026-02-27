@@ -25,11 +25,12 @@ pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
             if args.doctor {
                 run_doctor(ctx, &audio);
             } else {
-                ctx.out.info(i18n::tr("cli-status-audiowmark_found"));
+                ctx.out.info_user(i18n::tr("cli-status-audiowmark_found"));
             }
         }
         Err(CliError::AudiowmarkNotFound) => {
-            ctx.out.warn(i18n::tr("cli-status-audiowmark_not_found"));
+            ctx.out
+                .warn_user(i18n::tr("cli-status-audiowmark_not_found"));
         }
         Err(err) => return Err(err),
     }
@@ -41,7 +42,8 @@ pub fn run(ctx: &Context, args: &CmdArgs) -> Result<()> {
 fn print_version(ctx: &Context) {
     let mut fmt_args = FluentArgs::new();
     fmt_args.set("version", env!("CARGO_PKG_VERSION"));
-    ctx.out.info(i18n::tr_args("cli-status-version", &fmt_args));
+    ctx.out
+        .info_user(i18n::tr_args("cli-status-version", &fmt_args));
 }
 
 /// Internal helper function.
@@ -49,7 +51,7 @@ fn print_active_slot(ctx: &Context, active_slot: u8) {
     let mut slot_args = FluentArgs::new();
     slot_args.set("slot", active_slot.to_string());
     ctx.out
-        .info(i18n::tr_args("cli-key-slot-current", &slot_args));
+        .info_user(i18n::tr_args("cli-key-slot-current", &slot_args));
 }
 
 /// Internal helper function.
@@ -59,18 +61,18 @@ fn print_key_status(ctx: &Context, store: &KeyStore) -> Result<()> {
         let mut key_args = FluentArgs::new();
         key_args.set("bytes", key.len().to_string());
         ctx.out
-            .info(i18n::tr_args("cli-status-key_configured", &key_args));
+            .info_user(i18n::tr_args("cli-status-key_configured", &key_args));
 
         let mut backend_args = FluentArgs::new();
         backend_args.set("backend", backend.label());
         ctx.out
-            .info(i18n::tr_args("cli-status-key_storage", &backend_args));
+            .info_user(i18n::tr_args("cli-status-key_storage", &backend_args));
 
         if key.len() != KEY_LEN {
-            ctx.out.warn(i18n::tr("cli-status-key_len_mismatch"));
+            ctx.out.warn_user(i18n::tr("cli-status-key_len_mismatch"));
         }
     } else {
-        ctx.out.info(i18n::tr("cli-status-key_not_configured"));
+        ctx.out.info_user(i18n::tr("cli-status-key_not_configured"));
     }
     Ok(())
 }
@@ -85,10 +87,11 @@ fn run_doctor(ctx: &Context, audio: &awmkit::Audio) {
 /// Internal helper function.
 fn print_audio_health(ctx: &Context, audio: &awmkit::Audio) {
     if audio.is_available() {
-        ctx.out.info(i18n::tr("cli-status-audiowmark_available"));
+        ctx.out
+            .info_user(i18n::tr("cli-status-audiowmark_available"));
     } else {
         ctx.out
-            .warn(i18n::tr("cli-status-audiowmark_not_responding"));
+            .warn_user(i18n::tr("cli-status-audiowmark_not_responding"));
     }
 
     match audio.version() {
@@ -96,12 +99,12 @@ fn print_audio_health(ctx: &Context, audio: &awmkit::Audio) {
             let mut fmt_args = FluentArgs::new();
             fmt_args.set("version", version.as_str());
             ctx.out
-                .info(i18n::tr_args("cli-status-audiowmark_version", &fmt_args));
+                .info_user(i18n::tr_args("cli-status-audiowmark_version", &fmt_args));
         }
         Err(err) => {
             let mut fmt_args = FluentArgs::new();
             fmt_args.set("error", err.to_string());
-            ctx.out.warn(i18n::tr_args(
+            ctx.out.warn_user(i18n::tr_args(
                 "cli-status-audiowmark_version_error",
                 &fmt_args,
             ));
@@ -111,7 +114,7 @@ fn print_audio_health(ctx: &Context, audio: &awmkit::Audio) {
     let mut path_args = FluentArgs::new();
     path_args.set("path", audio.binary_path().display().to_string());
     ctx.out
-        .info(i18n::tr_args("cli-status-audiowmark_path", &path_args));
+        .info_user(i18n::tr_args("cli-status-audiowmark_path", &path_args));
 }
 
 /// Internal helper function.
@@ -121,23 +124,23 @@ fn print_audio_capabilities(ctx: &Context, audio: &awmkit::Audio) {
     let mut backend_args = FluentArgs::new();
     backend_args.set("backend", caps.backend);
     ctx.out
-        .info(i18n::tr_args("cli-status-media_backend", &backend_args));
+        .info_user(i18n::tr_args("cli-status-media_backend", &backend_args));
 
     let mut eac3_args = FluentArgs::new();
     eac3_args.set(
         "available",
         if caps.eac3_decode {
-            "available"
+            i18n::tr("cli-status-value-available")
         } else {
-            "unavailable"
+            i18n::tr("cli-status-value-unavailable")
         },
     );
     ctx.out
-        .info(i18n::tr_args("cli-status-media-eac3", &eac3_args));
+        .info_user(i18n::tr_args("cli-status-media-eac3", &eac3_args));
 
     let mut containers_args = FluentArgs::new();
     containers_args.set("containers", caps.supported_containers_csv());
-    ctx.out.info(i18n::tr_args(
+    ctx.out.info_user(i18n::tr_args(
         "cli-status-media-containers",
         &containers_args,
     ));
@@ -146,27 +149,46 @@ fn print_audio_capabilities(ctx: &Context, audio: &awmkit::Audio) {
     policy_args.set("input_policy", i18n::tr("cli-status-media-policy-input"));
     policy_args.set("output_policy", i18n::tr("cli-status-media-policy-output"));
     ctx.out
-        .info(i18n::tr_args("cli-status-media-policy", &policy_args));
+        .info_user(i18n::tr_args("cli-status-media-policy", &policy_args));
 }
 
 /// Internal helper function.
 fn print_db_status(ctx: &Context) {
     match TagStore::load() {
         Ok(tags) => {
-            ctx.out.info(format!("db.mappings={}", tags.list().len()));
+            let mut args = FluentArgs::new();
+            args.set("count", tags.list().len().to_string());
+            ctx.out
+                .info_user(i18n::tr_args("cli-status-db-mappings", &args));
         }
         Err(err) => {
-            ctx.out.warn(format!("db.mappings=unavailable ({err})"));
+            let mut args = FluentArgs::new();
+            args.set("error", err.to_string());
+            ctx.out
+                .warn_user(i18n::tr_args("cli-status-db-mappings-unavailable", &args));
         }
     }
 
     match EvidenceStore::load() {
         Ok(evidence_store) => match evidence_store.count_all() {
-            Ok(count) => ctx.out.info(format!("db.evidence={count}")),
-            Err(err) => ctx.out.warn(format!("db.evidence=unavailable ({err})")),
+            Ok(count) => {
+                let mut args = FluentArgs::new();
+                args.set("count", count.to_string());
+                ctx.out
+                    .info_user(i18n::tr_args("cli-status-db-evidence", &args));
+            }
+            Err(err) => {
+                let mut args = FluentArgs::new();
+                args.set("error", err.to_string());
+                ctx.out
+                    .warn_user(i18n::tr_args("cli-status-db-evidence-unavailable", &args));
+            }
         },
         Err(err) => {
-            ctx.out.warn(format!("db.evidence=unavailable ({err})"));
+            let mut args = FluentArgs::new();
+            args.set("error", err.to_string());
+            ctx.out
+                .warn_user(i18n::tr_args("cli-status-db-evidence-unavailable", &args));
         }
     }
 }

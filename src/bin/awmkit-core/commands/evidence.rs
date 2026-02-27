@@ -1,7 +1,8 @@
 use crate::error::{CliError, Result};
 use crate::Context;
-use awmkit::app::{AudioEvidence, EvidenceStore};
+use awmkit::app::{i18n, AudioEvidence, EvidenceStore};
 use clap::{Args, Subcommand};
+use fluent_bundle::FluentArgs;
 use serde::Serialize;
 
 #[derive(Subcommand)]
@@ -153,7 +154,7 @@ fn list(ctx: &Context, args: &ListArgs) -> Result<()> {
     }
 
     if items.is_empty() {
-        ctx.out.info("no evidence records");
+        ctx.out.info_user(i18n::tr("cli-evidence-empty"));
         return Ok(());
     }
 
@@ -161,21 +162,21 @@ fn list(ctx: &Context, args: &ListArgs) -> Result<()> {
         let sha_prefix = sha_prefix(&item.pcm_sha256);
         let short_path = shorten_middle(&item.file_path, 54);
         let snr_text = if item.snr_status == "ok" {
-            format!(" snr={:.2}dB", item.snr_db.unwrap_or_default())
+            format!("{:.2} dB", item.snr_db.unwrap_or_default())
         } else {
-            format!(" snr={}", item.snr_status)
+            item.snr_status.clone()
         };
-        ctx.out.info(format!(
-            "{} {} {} {} slot={}{} {} {}",
-            item.id,
-            item.created_at,
-            item.identity,
-            item.tag,
-            item.key_slot,
-            snr_text,
-            sha_prefix,
-            short_path
-        ));
+        let mut args = FluentArgs::new();
+        args.set("id", item.id.to_string());
+        args.set("created_at", item.created_at.to_string());
+        args.set("identity", item.identity.clone());
+        args.set("tag", item.tag.clone());
+        args.set("slot", item.key_slot.to_string());
+        args.set("snr", snr_text);
+        args.set("sha", sha_prefix.to_string());
+        args.set("path", short_path);
+        ctx.out
+            .info_user(i18n::tr_args("cli-evidence-list-row", &args));
     }
 
     Ok(())
@@ -185,9 +186,11 @@ fn list(ctx: &Context, args: &ListArgs) -> Result<()> {
 fn show(ctx: &Context, args: &ShowArgs) -> Result<()> {
     let store = EvidenceStore::load()?;
     let Some(item) = store.get_by_id(args.id)? else {
-        return Err(CliError::Message(format!(
-            "evidence not found: {}",
-            args.id
+        let mut fmt = FluentArgs::new();
+        fmt.set("id", args.id.to_string());
+        return Err(CliError::Message(i18n::tr_args(
+            "cli-evidence-not-found",
+            &fmt,
         )));
     };
 
@@ -197,27 +200,90 @@ fn show(ctx: &Context, args: &ShowArgs) -> Result<()> {
         return Ok(());
     }
 
-    ctx.out.info(format!("id={}", item.id));
-    ctx.out.info(format!("created_at={}", item.created_at));
-    ctx.out.info(format!("file_path={}", item.file_path));
-    ctx.out.info(format!("identity={}", item.identity));
-    ctx.out.info(format!("tag={}", item.tag));
-    ctx.out.info(format!("version={}", item.version));
-    ctx.out.info(format!("key_slot={}", item.key_slot));
+    let mut id_args = FluentArgs::new();
+    id_args.set("value", item.id.to_string());
     ctx.out
-        .info(format!("timestamp_minutes={}", item.timestamp_minutes));
-    ctx.out.info(format!("message_hex={}", item.message_hex));
-    ctx.out.info(format!("sample_rate={}", item.sample_rate));
-    ctx.out.info(format!("channels={}", item.channels));
-    ctx.out.info(format!("sample_count={}", item.sample_count));
-    ctx.out.info(format!("pcm_sha256={}", item.pcm_sha256));
-    ctx.out.info(format!("snr_status={}", item.snr_status));
+        .info_user(i18n::tr_args("cli-evidence-field-id", &id_args));
+    let mut created_at_args = FluentArgs::new();
+    created_at_args.set("value", item.created_at.to_string());
+    ctx.out.info_user(i18n::tr_args(
+        "cli-evidence-field-created_at",
+        &created_at_args,
+    ));
+    let mut file_path_args = FluentArgs::new();
+    file_path_args.set("value", item.file_path.clone());
+    ctx.out.info_user(i18n::tr_args(
+        "cli-evidence-field-file_path",
+        &file_path_args,
+    ));
+    let mut identity_args = FluentArgs::new();
+    identity_args.set("value", item.identity.clone());
+    ctx.out
+        .info_user(i18n::tr_args("cli-evidence-field-identity", &identity_args));
+    let mut tag_args = FluentArgs::new();
+    tag_args.set("value", item.tag.clone());
+    ctx.out
+        .info_user(i18n::tr_args("cli-evidence-field-tag", &tag_args));
+    let mut version_args = FluentArgs::new();
+    version_args.set("value", item.version.to_string());
+    ctx.out
+        .info_user(i18n::tr_args("cli-evidence-field-version", &version_args));
+    let mut slot_args = FluentArgs::new();
+    slot_args.set("value", item.key_slot.to_string());
+    ctx.out
+        .info_user(i18n::tr_args("cli-evidence-field-key_slot", &slot_args));
+    let mut ts_args = FluentArgs::new();
+    ts_args.set("value", item.timestamp_minutes.to_string());
+    ctx.out
+        .info_user(i18n::tr_args("cli-evidence-field-timestamp", &ts_args));
+    let mut hex_args = FluentArgs::new();
+    hex_args.set("value", item.message_hex.clone());
+    ctx.out
+        .info_user(i18n::tr_args("cli-evidence-field-message_hex", &hex_args));
+    let mut sample_rate_args = FluentArgs::new();
+    sample_rate_args.set("value", item.sample_rate.to_string());
+    ctx.out.info_user(i18n::tr_args(
+        "cli-evidence-field-sample_rate",
+        &sample_rate_args,
+    ));
+    let mut channels_args = FluentArgs::new();
+    channels_args.set("value", item.channels.to_string());
+    ctx.out
+        .info_user(i18n::tr_args("cli-evidence-field-channels", &channels_args));
+    let mut sample_count_args = FluentArgs::new();
+    sample_count_args.set("value", item.sample_count.to_string());
+    ctx.out.info_user(i18n::tr_args(
+        "cli-evidence-field-sample_count",
+        &sample_count_args,
+    ));
+    let mut sha_args = FluentArgs::new();
+    sha_args.set("value", item.pcm_sha256.clone());
+    ctx.out
+        .info_user(i18n::tr_args("cli-evidence-field-pcm_sha256", &sha_args));
+    let mut snr_status_args = FluentArgs::new();
+    snr_status_args.set("value", item.snr_status.clone());
+    ctx.out.info_user(i18n::tr_args(
+        "cli-evidence-field-snr_status",
+        &snr_status_args,
+    ));
     if let Some(value) = item.snr_db {
-        ctx.out.info(format!("snr_db={value:.2}"));
+        let mut snr_db_args = FluentArgs::new();
+        snr_db_args.set("value", format!("{value:.2}"));
+        ctx.out
+            .info_user(i18n::tr_args("cli-evidence-field-snr_db", &snr_db_args));
     }
-    ctx.out
-        .info(format!("fingerprint_len={}", item.chromaprint.len()));
-    ctx.out.info(format!("fp_config_id={}", item.fp_config_id));
+    let mut fp_len_args = FluentArgs::new();
+    fp_len_args.set("value", item.chromaprint.len().to_string());
+    ctx.out.info_user(i18n::tr_args(
+        "cli-evidence-field-fingerprint_len",
+        &fp_len_args,
+    ));
+    let mut fp_config_args = FluentArgs::new();
+    fp_config_args.set("value", item.fp_config_id.to_string());
+    ctx.out.info_user(i18n::tr_args(
+        "cli-evidence-field-fp_config_id",
+        &fp_config_args,
+    ));
 
     Ok(())
 }
@@ -228,13 +294,18 @@ fn remove(ctx: &Context, args: &RemoveArgs) -> Result<()> {
 
     let store = EvidenceStore::load()?;
     if !store.remove_by_id(args.id)? {
-        return Err(CliError::Message(format!(
-            "evidence not found: {}",
-            args.id
+        let mut fmt = FluentArgs::new();
+        fmt.set("id", args.id.to_string());
+        return Err(CliError::Message(i18n::tr_args(
+            "cli-evidence-not-found",
+            &fmt,
         )));
     }
 
-    ctx.out.info(format!("removed evidence id={}", args.id));
+    let mut fmt = FluentArgs::new();
+    fmt.set("id", args.id.to_string());
+    ctx.out
+        .info_user(i18n::tr_args("cli-evidence-removed", &fmt));
     Ok(())
 }
 
@@ -242,9 +313,7 @@ fn remove(ctx: &Context, args: &RemoveArgs) -> Result<()> {
 fn clear(ctx: &Context, args: &ClearArgs) -> Result<()> {
     ensure_yes(args.yes, "clear")?;
     if args.identity.is_none() && args.tag.is_none() && args.key_slot.is_none() {
-        return Err(CliError::Message(
-            "refusing to clear all evidence; provide at least one filter".to_string(),
-        ));
+        return Err(CliError::Message(i18n::tr("cli-evidence-clear-refuse-all")));
     }
 
     let store = EvidenceStore::load()?;
@@ -257,9 +326,13 @@ fn clear(ctx: &Context, args: &ClearArgs) -> Result<()> {
         .key_slot
         .map_or_else(|| "-".to_string(), |slot| slot.to_string());
 
-    ctx.out.info(format!(
-        "cleared evidence rows={removed} identity={identity} tag={tag} key_slot={key_slot}"
-    ));
+    let mut fmt = FluentArgs::new();
+    fmt.set("removed", removed.to_string());
+    fmt.set("identity", identity.to_string());
+    fmt.set("tag", tag.to_string());
+    fmt.set("key_slot", key_slot);
+    ctx.out
+        .info_user(i18n::tr_args("cli-evidence-cleared", &fmt));
 
     Ok(())
 }
@@ -269,8 +342,11 @@ fn ensure_yes(yes: bool, action: &str) -> Result<()> {
     if yes {
         Ok(())
     } else {
-        Err(CliError::Message(format!(
-            "{action} requires --yes confirmation"
+        let mut fmt = FluentArgs::new();
+        fmt.set("action", action.to_string());
+        Err(CliError::Message(i18n::tr_args(
+            "cli-evidence-requires-yes",
+            &fmt,
         )))
     }
 }

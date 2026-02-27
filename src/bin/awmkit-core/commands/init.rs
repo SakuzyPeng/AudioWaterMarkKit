@@ -13,12 +13,13 @@ pub fn run(ctx: &Context) -> Result<()> {
     }
     let slot = key::generate_for_active_slot()?;
 
-    ctx.out.info(i18n::tr("cli-init-ok_generated"));
+    ctx.out.info_user(i18n::tr("cli-init-ok_generated"));
     let mut args = FluentArgs::new();
     args.set("bytes", KEY_LEN.to_string());
-    ctx.out.info(i18n::tr_args("cli-init-ok_stored", &args));
+    ctx.out
+        .info_user(i18n::tr_args("cli-init-ok_stored", &args));
     let mut slot_args = FluentArgs::new();
     slot_args.set("slot", slot.to_string());
-    ctx.out.info(i18n::tr_args("cli-key-slot", &slot_args));
+    ctx.out.info_user(i18n::tr_args("cli-key-slot", &slot_args));
     Ok(())
 }
