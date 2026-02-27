@@ -21,23 +21,23 @@ cli-init-ok_generated = 已为当前激活槽位生成密钥。下一步：运�
 cli-init-ok_stored = 密钥已写入后端（{ $bytes } 字节）。下一步：运行 `awmkit embed ...` 开始嵌入。
 
 cli-key-status_configured = 当前激活槽位已配置密钥。下一步：运行 `awmkit key show` 查看指纹与后端信息。
-cli-key-length = 长度：{ $bytes } 字节
-cli-key-fingerprint = 指纹（SHA256）：{ $fingerprint }
-cli-key-storage = 存储：{ $backend }
+cli-key-length = 密钥长度：{ $bytes } 字节。
+cli-key-fingerprint = 密钥指纹（SHA256）：{ $fingerprint }。
+cli-key-storage = 密钥后端：{ $backend }。
 cli-key-replaced = 当前激活槽位密钥已替换。下一步：运行 `awmkit key show` 确认指纹。
 cli-key-imported = 当前激活槽位密钥已导入。下一步：运行 `awmkit key show` 确认后端与指纹。
 cli-key-exported = 当前激活槽位密钥已导出。下一步：请将导出文件安全保存。
 cli-key-rotated = 当前激活槽位密钥已轮换。下一步：如有需要，请对近期输出重新执行 `awmkit detect <file>`。
-cli-key-slot = 槽位：{ $slot }
+cli-key-slot = 密钥槽位：{ $slot }。
 cli-key-slot-active = 当前为激活槽位。下一步：如需切换请运行 `awmkit key slot use <slot>`。
-cli-key-slot-current_active = 当前激活槽位：{ $slot }
+cli-key-slot-current_active = 当前激活密钥槽位：{ $slot }。
 cli-key-imported-slot = 已导入密钥到槽位 { $slot }。下一步：若需激活该槽位，请运行 `awmkit key slot use { $slot }`。
 cli-key-exported-slot = 已从槽位 { $slot } 导出密钥。下一步：请将导出文件安全保存。
 cli-key-rotated-slot = 槽位 { $slot } 密钥已轮换。下一步：运行 `awmkit key slot list` 检查槽位状态。
 cli-key-delete-requires-yes = 未执行密钥删除。下一步：添加 `--yes` 后重试。
 cli-key-delete-slot-has-evidence = 槽位 { $slot } 仍有 { $count } 条证据记录。下一步：先清理该槽位证据，或使用 `--force` 重试。
 cli-key-deleted-slot = 已删除槽位 { $slot } 密钥。下一步：运行 `awmkit key import --slot { $slot }` 或 `awmkit key rotate --slot { $slot }` 配置新密钥。
-cli-key-slot-current = 激活槽位：{ $slot }
+cli-key-slot-current = 当前激活密钥槽位：{ $slot }。
 cli-key-slot-set = 激活槽位已切换到 { $slot }。下一步：运行 `awmkit key show` 确认该槽位密钥信息。
 cli-key-slot-label-set = 已设置槽位 { $slot } 标签为 { $label }。下一步：运行 `awmkit key slot list` 核对标签。
 cli-key-slot-label-cleared = 已清除槽位 { $slot } 标签。下一步：如需新标签，请运行 `awmkit key slot label set { $slot } <label>`。
@@ -48,7 +48,7 @@ cli-key-slot-state-configured = 已配置
 cli-key-slot-state-empty = 空
 cli-key-slot-active-marker = 激活
 cli-key-slot-inactive-marker = 未激活
-cli-key-slot-list-row = 槽位 { $slot } [{ $active }]：{ $state }，标签={ $label }，指纹={ $fingerprint }，后端={ $backend }，证据={ $evidence }，最近使用={ $last }
+cli-key-slot-list-row = 槽位 { $slot }（{ $active }）：{ $state }，标签 { $label }，指纹 { $fingerprint }，后端 { $backend }，证据记录 { $evidence }，最近使用 { $last }
 cli-key-error-invalid-slot-input = 槽位参数无效：{ $input }。下一步：请输入整数槽位编号。
 cli-key-error-invalid-slot-range = 槽位 { $slot } 超出范围。下一步：请使用 0..={ $max } 范围内的槽位。
 
@@ -59,15 +59,15 @@ cli-status-key_len_mismatch = 密钥长度与预期不符。下一步：导入�
 cli-status-key_not_configured = 密钥未配置。下一步：运行 `awmkit init` 或 `awmkit key import`。
 cli-status-audiowmark_available = audiowmark 可用。下一步：运行 `awmkit detect <file>` 验证完整链路。
 cli-status-audiowmark_not_responding = audiowmark 无响应。下一步：检查二进制权限与路径。
-cli-status-audiowmark_version = audiowmark 版本：{ $version }
-cli-status-audiowmark_version_error = audiowmark 版本错误：{ $error }
-cli-status-audiowmark_path = audiowmark 路径：{ $path }
+cli-status-audiowmark_version = audiowmark 版本：{ $version }。
+cli-status-audiowmark_version_error = 读取 audiowmark 版本失败：{ $error }。
+cli-status-audiowmark_path = audiowmark 路径：{ $path }。
 cli-status-audiowmark_found = 已找到 audiowmark 二进制。下一步：若仍有运行问题，请运行 `awmkit status --doctor`。
 cli-status-audiowmark_not_found = 未找到 audiowmark 二进制。下一步：设置 `--audiowmark <PATH>` 或加入 PATH。
-cli-status-media_backend = 媒体后端：{ $backend }
-cli-status-media-eac3 = eac3 解码：{ $available }
-cli-status-media-containers = 支持容器：{ $containers }
-cli-status-media-policy = 格式策略：输入 { $input_policy }，输出 { $output_policy }
+cli-status-media_backend = 媒体后端：{ $backend }。
+cli-status-media-eac3 = E-AC-3 解码支持：{ $available }。
+cli-status-media-containers = 支持容器：{ $containers }。
+cli-status-media-policy = 格式策略：输入 { $input_policy }，输出 { $output_policy }。
 cli-status-media-policy-input = 探测优先（WAV/FLAC 直通，其余先解码）
 cli-status-media-policy-output = 仅 WAV
 cli-status-value-available = 可用
@@ -101,7 +101,7 @@ cli-embed-mapping-autosaved = 已自动保存映射：{ $identity } -> { $tag }�
 cli-embed-mapping-save-failed-detail = 诊断：映射保存失败。error={ $error }
 cli-embed-mapping-load-failed-detail = 诊断：映射加载失败。error={ $error }
 
-cli-detect-done = 检测任务完成：{ $ok } 命中，{ $miss } 未命中，{ $invalid } 无效。下一步：先处理无效结果再做结论。
+cli-detect-done = 检测任务完成：{ $ok } 检测到，{ $miss } 未检测到，{ $invalid } 无效。下一步：先处理无效结果再做结论。
 cli-detect-failed = 有文件检测失败。下一步：使用 `--verbose` 重试查看诊断信息。
 cli-detect-forensic-warning = 此输出不适用于归属或取证。下一步：法律结论请使用正式校验流程。
 cli-detect-parallelism-detail = 诊断：多声道路由步骤使用 Rayon 并行（最大 worker：{ $workers }）。
@@ -115,13 +115,13 @@ cli-detect-file-error = 检测失败：{ $path }。下一步：使用 `--verbose
 cli-detect-file-error-detail = 诊断：{ $path } 检测失败。error={ $error }
 cli-detect-fallback-detail = 诊断：{ $path } 回退路径，route={ $route }，reason={ $reason }，outcome={ $outcome }
 
-cli-decode-version = 版本：{ $version }
-cli-decode-timestamp_minutes = 时间戳（分钟）：{ $minutes }
-cli-decode-timestamp_utc = 时间戳（UTC 秒）：{ $seconds }
-cli-decode-key_slot = 密钥槽位：{ $key_slot }
-cli-decode-tag = 标签：{ $tag }
-cli-decode-identity = 身份：{ $identity }
-cli-decode-status_valid = 状态：有效
+cli-decode-version = 水印版本：{ $version }。
+cli-decode-timestamp_minutes = 水印时间戳（分钟）：{ $minutes }。
+cli-decode-timestamp_utc = 水印时间戳（UTC 秒）：{ $seconds }。
+cli-decode-key_slot = 密钥槽位：{ $key_slot }。
+cli-decode-tag = 标签：{ $tag }。
+cli-decode-identity = 身份：{ $identity }。
+cli-decode-status_valid = 校验状态：有效。
 
 cli-tag-saved = 映射已保存：{ $username } -> { $tag }。下一步：运行 `awmkit tag list` 核对。
 cli-tag-none = 没有已保存映射。下一步：运行 `awmkit tag save --username <name> --tag <tag>` 创建映射。
@@ -129,22 +129,22 @@ cli-tag-removed = 映射已移除：{ $username }。下一步：运行 `awmkit t
 cli-tag-cleared = 已清空所有映射。下一步：使用 `awmkit tag save` 重新添加所需映射。
 
 cli-evidence-empty = 没有证据记录。下一步：运行 `awmkit embed ...` 生成新证据。
-cli-evidence-list-row = #{ $id } | { $created_at } | { $identity }/{ $tag } | 槽位 { $slot } | SNR { $snr } | SHA { $sha } | { $path }
-cli-evidence-field-id = 编号：{ $value }
+cli-evidence-list-row = 证据 #{ $id } | { $created_at } | { $identity }/{ $tag } | 密钥槽位 { $slot } | SNR { $snr } | PCM SHA256 { $sha } | { $path }
+cli-evidence-field-id = 证据编号：{ $value }
 cli-evidence-field-created_at = 创建时间：{ $value }
 cli-evidence-field-file_path = 文件路径：{ $value }
 cli-evidence-field-identity = 身份：{ $value }
 cli-evidence-field-tag = 标签：{ $value }
-cli-evidence-field-version = 版本：{ $value }
+cli-evidence-field-version = 水印版本：{ $value }
 cli-evidence-field-key_slot = 密钥槽位：{ $value }
-cli-evidence-field-timestamp = 时间戳（分钟）：{ $value }
-cli-evidence-field-message_hex = 消息十六进制：{ $value }
+cli-evidence-field-timestamp = 水印时间戳（分钟）：{ $value }
+cli-evidence-field-message_hex = 水印消息（十六进制）：{ $value }
 cli-evidence-field-sample_rate = 采样率：{ $value }
 cli-evidence-field-channels = 声道数：{ $value }
 cli-evidence-field-sample_count = 采样点数：{ $value }
 cli-evidence-field-pcm_sha256 = PCM SHA256：{ $value }
 cli-evidence-field-snr_status = SNR 状态：{ $value }
-cli-evidence-field-snr_db = SNR dB：{ $value }
+cli-evidence-field-snr_db = SNR（dB）：{ $value }
 cli-evidence-field-fingerprint_len = 指纹长度：{ $value }
 cli-evidence-field-fp_config_id = 指纹配置：{ $value }
 cli-evidence-not-found = 未找到证据记录：{ $id }。下一步：运行 `awmkit evidence list` 查找有效编号。
