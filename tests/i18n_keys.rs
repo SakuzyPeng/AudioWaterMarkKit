@@ -40,6 +40,24 @@ fn parse_ftl_pairs(path: &Path) -> BTreeMap<String, String> {
     pairs
 }
 
+fn parse_resw_ui_keys(path: &Path) -> BTreeSet<String> {
+    let content = fs::read_to_string(path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
+    let mut keys = BTreeSet::new();
+    for line in content.lines() {
+        if let Some(start) = line.find("<data name=\"") {
+            let rest = &line[start + "<data name=\"".len()..];
+            if let Some(end) = rest.find('"') {
+                let key = &rest[..end];
+                if key.starts_with("ui.") {
+                    keys.insert(key.to_string());
+                }
+            }
+        }
+    }
+    keys
+}
+
 #[test]
 fn i18n_key_sets_match_between_en_and_zh() {
     let en = parse_ftl_keys(Path::new("i18n/en-US/awmkit.ftl"));
@@ -156,4 +174,11 @@ fn glossary_terms_match_between_en_and_zh_samples() {
             "zh key {key} should contain glossary term {zh_term}"
         );
     }
+}
+
+#[test]
+fn winui_ui_resource_key_sets_match_between_en_and_zh() {
+    let en = parse_resw_ui_keys(Path::new("winui-app/AWMKit/Strings/en-US/Resources.resw"));
+    let zh = parse_resw_ui_keys(Path::new("winui-app/AWMKit/Strings/zh-CN/Resources.resw"));
+    assert_eq!(en, zh, "winui ui.* key sets must match between en-US and zh-CN");
 }
