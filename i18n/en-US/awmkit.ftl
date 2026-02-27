@@ -8,6 +8,12 @@ cli-error-input_not_found = input not found: { $path }
 cli-error-invalid_glob = invalid glob pattern: { $pattern }
 cli-error-glob = glob error: { $error }
 cli-error-mapping_exists = mapping exists for { $username }; use --force to overwrite
+cli-error-database = database operation failed
+cli-error-config = configuration operation failed
+cli-error-io = filesystem operation failed
+cli-error-hex = invalid hex input
+cli-error-audio = audio processing failed
+cli-error-json = JSON parse/serialize failed
 
 cli-util-no_input_files = no input files provided
 
@@ -38,6 +44,13 @@ cli-key-slot-label-cleared = [OK] slot { $slot } label cleared
 cli-key-conflict-slot-occupied = conflict: slot { $slot } already has a key, delete the conflicting slot first
 cli-key-conflict-slot-has-evidence = conflict: slot { $slot } has { $count } evidence rows, delete conflicting slot first
 cli-key-conflict-duplicate-fingerprint = conflict: target slot { $slot } duplicates fingerprint in slot(s) { $conflicts }, clear conflicting slot first
+cli-key-slot-state-configured = configured
+cli-key-slot-state-empty = empty
+cli-key-slot-active-marker = active
+cli-key-slot-inactive-marker = inactive
+cli-key-slot-list-row = Slot { $slot } [{ $active }]: { $state }, label={ $label }, fp={ $fingerprint }, backend={ $backend }, evidence={ $evidence }, last={ $last }
+cli-key-error-invalid-slot-input = invalid slot value: { $input }
+cli-key-error-invalid-slot-range = invalid slot { $slot }; expected 0..={ $max }
 
 cli-status-version = awmkit v{ $version }
 cli-status-key_configured = Key: configured ({ $bytes } bytes)
@@ -57,14 +70,50 @@ cli-status-media-containers = containers: { $containers }
 cli-status-media-policy = format policy: input { $input_policy }, output { $output_policy }
 cli-status-media-policy-input = probe-first (direct wav/flac, decode others)
 cli-status-media-policy-output = wav-only
+cli-status-value-available = available
+cli-status-value-unavailable = unavailable
+cli-status-db-mappings = Tag mappings: { $count }
+cli-status-db-mappings-unavailable = Tag mappings: unavailable ({ $error })
+cli-status-db-evidence = Evidence records: { $count }
+cli-status-db-evidence-unavailable = Evidence records: unavailable ({ $error })
 
 cli-embed-output_single = --output only supports a single input file
 cli-embed-done = Done: { $success } succeeded, { $failed } failed
 cli-embed-failed = one or more files failed
+cli-embed-intro-routing-detail = multichannel smart routing enabled (default LFE skip)
+cli-embed-intro-parallelism-detail = multichannel route steps use Rayon (max workers: { $workers })
+cli-embed-skip-existing = Skipped (already watermarked): { $path }
+cli-embed-precheck-adm-fallback = Precheck unavailable, continue embedding: { $path }
+cli-embed-precheck-adm-fallback-detail = ADM precheck fallback on { $path }: { $error }
+cli-embed-evidence-store-unavailable-detail = evidence store unavailable: { $error }
+cli-embed-evidence-proof-failed-detail = evidence proof failed ({ $input } -> { $output }): { $error }
+cli-embed-evidence-insert-failed-detail = evidence insert failed ({ $input } -> { $output }): { $error }
+cli-embed-file-ok-snr = Embedded: { $input } -> { $output } (SNR { $snr } dB)
+cli-embed-file-ok = Embedded: { $input } -> { $output }
+cli-embed-snr-unavailable-detail = SNR unavailable for { $input } -> { $output }: { $reason }
+cli-embed-file-failed = Embed failed: { $path }
+cli-embed-file-failed-detail = Embed failed on { $path }: { $error }
+cli-embed-skipped-count = Skipped files: { $count }
+cli-embed-failure-details-title-detail = Failed file diagnostics:
+cli-embed-failure-details-item-detail = - { $detail }
+cli-embed-failure-details-omitted-detail = - { $count } more failure details omitted
+cli-embed-mapping-autosaved = Mapping saved automatically: { $identity } -> { $tag }
+cli-embed-mapping-save-failed-detail = mapping save failed: { $error }
+cli-embed-mapping-load-failed-detail = mapping load failed: { $error }
 
 cli-detect-done = Done: { $ok } ok, { $miss } missing, { $invalid } invalid
 cli-detect-failed = one or more files failed
 cli-detect-forensic-warning = Do not use for attribution/forensics
+cli-detect-parallelism-detail = multichannel route steps use Rayon (max workers: { $workers })
+cli-detect-evidence-store-unavailable-detail = evidence store unavailable: { $error }
+cli-detect-file-found = Watermark found: { $path } (tag { $tag }, identity { $identity })
+cli-detect-file-found-detail = detect detail for { $path }: clone={ $clone }, score={ $score }, slot_hint={ $slot_hint }, slot_used={ $slot_used }, slot_status={ $slot_status }, scanned={ $slot_scan_count }
+cli-detect-file-miss = Watermark not found: { $path }
+cli-detect-file-invalid = Watermark verification failed: { $path } ({ $warning })
+cli-detect-file-invalid-detail = invalid detect detail for { $path }: error={ $error }, score={ $score }, tag={ $tag }, identity={ $identity }, timestamp={ $timestamp }, slot_unverified={ $slot_unverified }, slot_hint={ $slot_hint }, slot_used={ $slot_used }, slot_status={ $slot_status }, scanned={ $slot_scan_count }
+cli-detect-file-error = Detect failed: { $path }
+cli-detect-file-error-detail = detect failed on { $path }: { $error }
+cli-detect-fallback-detail = fallback trace for { $path }: route={ $route }, reason={ $reason }, outcome={ $outcome }
 
 cli-decode-version = Version: { $version }
 cli-decode-timestamp_minutes = Timestamp (minutes): { $minutes }
@@ -78,6 +127,31 @@ cli-tag-saved = saved: { $username } -> { $tag }
 cli-tag-none = no saved tags
 cli-tag-removed = removed: { $username }
 cli-tag-cleared = cleared all mappings
+
+cli-evidence-empty = no evidence records
+cli-evidence-list-row = #{ $id } | { $created_at } | { $identity }/{ $tag } | slot { $slot } | snr { $snr } | sha { $sha } | { $path }
+cli-evidence-field-id = ID: { $value }
+cli-evidence-field-created_at = Created At: { $value }
+cli-evidence-field-file_path = File Path: { $value }
+cli-evidence-field-identity = Identity: { $value }
+cli-evidence-field-tag = Tag: { $value }
+cli-evidence-field-version = Version: { $value }
+cli-evidence-field-key_slot = Key Slot: { $value }
+cli-evidence-field-timestamp = Timestamp Minutes: { $value }
+cli-evidence-field-message_hex = Message Hex: { $value }
+cli-evidence-field-sample_rate = Sample Rate: { $value }
+cli-evidence-field-channels = Channels: { $value }
+cli-evidence-field-sample_count = Sample Count: { $value }
+cli-evidence-field-pcm_sha256 = PCM SHA256: { $value }
+cli-evidence-field-snr_status = SNR Status: { $value }
+cli-evidence-field-snr_db = SNR dB: { $value }
+cli-evidence-field-fingerprint_len = Fingerprint Length: { $value }
+cli-evidence-field-fp_config_id = Fingerprint Config: { $value }
+cli-evidence-not-found = evidence not found: { $id }
+cli-evidence-removed = removed evidence record: { $id }
+cli-evidence-clear-refuse-all = refusing to clear all evidence; provide at least one filter
+cli-evidence-cleared = cleared evidence rows: { $removed } (identity={ $identity }, tag={ $tag }, key_slot={ $key_slot })
+cli-evidence-requires-yes = { $action } requires --yes confirmation
 
 ui-window-title = AWMKit GUI
 ui-tabs-embed = Embed

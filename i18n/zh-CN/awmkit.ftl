@@ -8,6 +8,12 @@ cli-error-input_not_found = 未找到输入文件：{ $path }
 cli-error-invalid_glob = 通配符模式无效：{ $pattern }
 cli-error-glob = 通配符匹配错误：{ $error }
 cli-error-mapping_exists = 映射已存在：{ $username }；使用 --force 覆盖
+cli-error-database = 数据库操作失败
+cli-error-config = 配置处理失败
+cli-error-io = 文件系统操作失败
+cli-error-hex = 十六进制输入无效
+cli-error-audio = 音频处理失败
+cli-error-json = JSON 处理失败
 
 cli-util-no_input_files = 未提供输入文件
 
@@ -38,6 +44,13 @@ cli-key-slot-label-cleared = [OK] 已清除槽位 { $slot } 标签
 cli-key-conflict-slot-occupied = 冲突：槽位 { $slot } 已有密钥，请先删除冲突槽位
 cli-key-conflict-slot-has-evidence = 冲突：槽位 { $slot } 已有 { $count } 条证据，请先删除冲突槽位
 cli-key-conflict-duplicate-fingerprint = 冲突：目标槽位 { $slot } 与槽位 { $conflicts } 指纹重复，请先清理冲突槽位
+cli-key-slot-state-configured = 已配置
+cli-key-slot-state-empty = 空
+cli-key-slot-active-marker = 激活
+cli-key-slot-inactive-marker = 未激活
+cli-key-slot-list-row = 槽位 { $slot } [{ $active }]：{ $state }，标签={ $label }，指纹={ $fingerprint }，后端={ $backend }，证据={ $evidence }，最近使用={ $last }
+cli-key-error-invalid-slot-input = 槽位参数无效：{ $input }
+cli-key-error-invalid-slot-range = 槽位 { $slot } 超出范围，允许 0..={ $max }
 
 cli-status-version = awmkit v{ $version }
 cli-status-key_configured = 密钥：已配置（{ $bytes } 字节）
@@ -57,14 +70,50 @@ cli-status-media-containers = 支持容器：{ $containers }
 cli-status-media-policy = 格式策略：输入 { $input_policy }，输出 { $output_policy }
 cli-status-media-policy-input = 探测优先（WAV/FLAC 直通，其余先解码）
 cli-status-media-policy-output = 仅 WAV
+cli-status-value-available = 可用
+cli-status-value-unavailable = 不可用
+cli-status-db-mappings = 标签映射数：{ $count }
+cli-status-db-mappings-unavailable = 标签映射：不可用（{ $error }）
+cli-status-db-evidence = 证据记录数：{ $count }
+cli-status-db-evidence-unavailable = 证据记录：不可用（{ $error }）
 
 cli-embed-output_single = --output 仅支持单个输入文件
 cli-embed-done = 完成：{ $success } 成功，{ $failed } 失败
 cli-embed-failed = 有文件处理失败
+cli-embed-intro-routing-detail = 已启用多声道路由（默认跳过 LFE）
+cli-embed-intro-parallelism-detail = 多声道路由步骤使用 Rayon 并行（最大 worker：{ $workers }）
+cli-embed-skip-existing = 已跳过（已含水印）：{ $path }
+cli-embed-precheck-adm-fallback = 预检不可用，继续嵌入：{ $path }
+cli-embed-precheck-adm-fallback-detail = ADM 预检回退（{ $path }）：{ $error }
+cli-embed-evidence-store-unavailable-detail = 证据库不可用：{ $error }
+cli-embed-evidence-proof-failed-detail = 证据指纹构建失败（{ $input } -> { $output }）：{ $error }
+cli-embed-evidence-insert-failed-detail = 证据写入失败（{ $input } -> { $output }）：{ $error }
+cli-embed-file-ok-snr = 嵌入成功：{ $input } -> { $output }（SNR { $snr } dB）
+cli-embed-file-ok = 嵌入成功：{ $input } -> { $output }
+cli-embed-snr-unavailable-detail = 无法计算 SNR（{ $input } -> { $output }）：{ $reason }
+cli-embed-file-failed = 嵌入失败：{ $path }
+cli-embed-file-failed-detail = 嵌入失败详情（{ $path }）：{ $error }
+cli-embed-skipped-count = 已跳过文件数：{ $count }
+cli-embed-failure-details-title-detail = 失败文件诊断详情：
+cli-embed-failure-details-item-detail = - { $detail }
+cli-embed-failure-details-omitted-detail = - 其余 { $count } 条失败详情已省略
+cli-embed-mapping-autosaved = 已自动保存映射：{ $identity } -> { $tag }
+cli-embed-mapping-save-failed-detail = 映射保存失败：{ $error }
+cli-embed-mapping-load-failed-detail = 映射加载失败：{ $error }
 
 cli-detect-done = 完成：{ $ok } 成功，{ $miss } 未发现，{ $invalid } 无效
 cli-detect-failed = 有文件处理失败
 cli-detect-forensic-warning = 不可用于归属/取证
+cli-detect-parallelism-detail = 多声道路由步骤使用 Rayon 并行（最大 worker：{ $workers }）
+cli-detect-evidence-store-unavailable-detail = 证据库不可用：{ $error }
+cli-detect-file-found = 检测到水印：{ $path }（标签 { $tag }，身份 { $identity }）
+cli-detect-file-found-detail = 检测详情（{ $path }）：clone={ $clone }，score={ $score }，slot_hint={ $slot_hint }，slot_used={ $slot_used }，slot_status={ $slot_status }，scan={ $slot_scan_count }
+cli-detect-file-miss = 未检测到水印：{ $path }
+cli-detect-file-invalid = 水印校验失败：{ $path }（{ $warning }）
+cli-detect-file-invalid-detail = 无效检测详情（{ $path }）：error={ $error }，score={ $score }，tag={ $tag }，identity={ $identity }，timestamp={ $timestamp }，slot_unverified={ $slot_unverified }，slot_hint={ $slot_hint }，slot_used={ $slot_used }，slot_status={ $slot_status }，scan={ $slot_scan_count }
+cli-detect-file-error = 检测失败：{ $path }
+cli-detect-file-error-detail = 检测失败详情（{ $path }）：{ $error }
+cli-detect-fallback-detail = 回退检测详情（{ $path }）：route={ $route }，reason={ $reason }，outcome={ $outcome }
 
 cli-decode-version = 版本：{ $version }
 cli-decode-timestamp_minutes = 时间戳（分钟）：{ $minutes }
@@ -78,6 +127,31 @@ cli-tag-saved = 已保存：{ $username } -> { $tag }
 cli-tag-none = 没有已保存的映射
 cli-tag-removed = 已移除：{ $username }
 cli-tag-cleared = 已清空所有映射
+
+cli-evidence-empty = 没有证据记录
+cli-evidence-list-row = #{ $id } | { $created_at } | { $identity }/{ $tag } | 槽位 { $slot } | SNR { $snr } | SHA { $sha } | { $path }
+cli-evidence-field-id = 编号：{ $value }
+cli-evidence-field-created_at = 创建时间：{ $value }
+cli-evidence-field-file_path = 文件路径：{ $value }
+cli-evidence-field-identity = 身份：{ $value }
+cli-evidence-field-tag = 标签：{ $value }
+cli-evidence-field-version = 版本：{ $value }
+cli-evidence-field-key_slot = 密钥槽位：{ $value }
+cli-evidence-field-timestamp = 时间戳（分钟）：{ $value }
+cli-evidence-field-message_hex = 消息十六进制：{ $value }
+cli-evidence-field-sample_rate = 采样率：{ $value }
+cli-evidence-field-channels = 声道数：{ $value }
+cli-evidence-field-sample_count = 采样点数：{ $value }
+cli-evidence-field-pcm_sha256 = PCM SHA256：{ $value }
+cli-evidence-field-snr_status = SNR 状态：{ $value }
+cli-evidence-field-snr_db = SNR dB：{ $value }
+cli-evidence-field-fingerprint_len = 指纹长度：{ $value }
+cli-evidence-field-fp_config_id = 指纹配置：{ $value }
+cli-evidence-not-found = 未找到证据记录：{ $id }
+cli-evidence-removed = 已删除证据记录：{ $id }
+cli-evidence-clear-refuse-all = 拒绝清空全部证据；请至少提供一个过滤条件
+cli-evidence-cleared = 已清理证据记录：{ $removed } 条（identity={ $identity }，tag={ $tag }，key_slot={ $key_slot }）
+cli-evidence-requires-yes = 执行 { $action } 需要 --yes 确认
 
 ui-window-title = AWMKit GUI
 ui-tabs-embed = 水印嵌入
@@ -160,13 +234,13 @@ ui-detect-summary-title = 检测摘要
 ui-detect-detail-title = 结果详情
 ui-detect-detail-file = 文件
 ui-detect-detail-status = 状态
-ui-detect-detail-tag = Tag
+ui-detect-detail-tag = 标签
 ui-detect-detail-identity = 身份
 ui-detect-detail-version = 版本
 ui-detect-detail-timestamp = 时间戳
-ui-detect-detail-pattern = Pattern
-ui-detect-detail-bit_errors = Bit errors
-ui-detect-detail-match_found = Match found
+ui-detect-detail-pattern = 检测模式
+ui-detect-detail-bit_errors = 比特错误数
+ui-detect-detail-match_found = 是否匹配
 ui-detect-detail-error = 错误
 ui-detect-status-ok = 正常
 ui-detect-status-found = 已发现
