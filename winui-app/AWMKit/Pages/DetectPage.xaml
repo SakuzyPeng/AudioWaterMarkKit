@@ -487,7 +487,7 @@
                                                    Text="{x:Bind DiagnosticDetail}"
                                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                                                    TextWrapping="WrapWholeWords"
-                                                   Visibility="{x:Bind RootPage.ViewModel.ShowDiagnostics, Mode=OneWay, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                                   Visibility="{Binding ViewModel.ShowDiagnostics, ElementName=RootPage, Converter={StaticResource BoolToVisibilityConverter}}"/>
                                     </Grid>
                                 </Border>
                             </Button>
