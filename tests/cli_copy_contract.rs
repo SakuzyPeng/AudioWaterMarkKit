@@ -1,11 +1,20 @@
+#![cfg(feature = "full-cli")]
+
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use std::process::Command;
 
 fn maybe_bin() -> Option<Command> {
-    let path = std::path::PathBuf::from(assert_cmd::cargo::cargo_bin!("awmkit-core"));
-    if !path.exists() {
-        eprintln!("skip cli_copy_contract: awmkit-core binary is not built in this feature set");
+    let Some(raw_path) = std::env::var_os("CARGO_BIN_EXE_awmkit-core") else {
+        eprintln!("skip cli_copy_contract: missing CARGO_BIN_EXE_awmkit-core");
+        return None;
+    };
+    let path = std::path::PathBuf::from(raw_path);
+    if !path.is_file() {
+        eprintln!(
+            "skip cli_copy_contract: awmkit-core binary path is unavailable: {}",
+            path.display()
+        );
         return None;
     }
     Some(Command::new(path))
